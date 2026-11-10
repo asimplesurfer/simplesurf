@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -73,8 +73,6 @@ jobs:
           ls -la build/web
 
       - name: Probar en navegador (Chromium)
-        env:
-          PRINT_SCREENSHOTS: "1"
         run: |
           npm install --no-save --silent playwright@1.49.1
           npx playwright install --with-deps chromium > /dev/null
@@ -89,6 +87,15 @@ jobs:
           name: capturas
           path: screens
           if-no-files-found: ignore
+
+      - name: TEMP subir capturas a rama
+        if: always()
+        run: |
+          cd screens
+          git init -q -b ci-screens
+          git add .
+          git -c user.name=ci -c user.email=ci@example.invalid commit -qm capturas
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-screens
 
       - name: Guardar el build (descargable desde la pestaña Actions)
         uses: actions/upload-artifact@v4
