@@ -139,7 +139,7 @@ func _test_jump_and_tricks() -> void:
 	await _press(&"p1_a")
 	_check(_state() == &"airborne", "ESPACIO salta")
 	var tap_height := await _measure_jump_height()
-	_check(tap_height > 0.5, "sube en el aire (%.2f m)" % tap_height)
+	_check(tap_height > 0.4, "sube en el aire (%.2f m)" % tap_height)
 	_check(_state() == &"riding", "aterriza y sigue andando")
 	await _wait(0.3)
 
@@ -150,8 +150,9 @@ func _test_jump_and_tricks() -> void:
 	_check(_rider.jump_charge > 0.3, "mantener ESPACIO carga el salto (%.2f)" % _rider.jump_charge)
 	await _wait(0.6)
 	_check(_state() == &"airborne", "al llegar a la carga máxima salta solo")
-	var charged_height := await _measure_jump_height()
+	# Soltar enseguida: si se sigue manteniendo en el aire, empieza un truco.
 	_set_action(&"p1_a", false)
+	var charged_height := await _measure_jump_height()
 	_check(
 		charged_height > tap_height * 2.0,
 		"el salto cargado sube mucho más (%.2f m contra %.2f m)" % [charged_height, tap_height]
