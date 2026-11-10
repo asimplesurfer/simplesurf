@@ -17,7 +17,7 @@ extends Resource
 @export var steer_response: float = 3.5
 
 @export_group("Salto y olas")
-@export var gravity: float = 16.0
+@export var gravity: float = 20.0
 ## Velocidad hacia arriba de un salto sin cargar (toque rápido) (m/s).
 @export var jump_speed_min: float = 4.2
 ## Velocidad hacia arriba con el salto cargado al máximo (m/s).
@@ -25,9 +25,9 @@ extends Resource
 ## Tiempo manteniendo ESPACIO para cargar el salto al máximo (s). Al llegar, salta solo.
 @export var jump_charge_time: float = 1.0
 ## Velocidad hacia arriba en el modo "tocar para saltar" (m/s).
-@export var jump_speed_tap: float = 6.0
+@export var jump_speed_tap: float = 6.5
 ## Modo olas: velocidad del saltito en agua plana (m/s); ~40 cm de alto.
-@export var hop_speed: float = 3.6
+@export var hop_speed: float = 4.0
 ## Modo olas: el "pop" multiplica el impulso con el que te lanza la ola.
 @export var pop_mult: float = 1.35
 ## Modo olas: velocidad hacia arriba que suma el pop además del multiplicador (m/s).
