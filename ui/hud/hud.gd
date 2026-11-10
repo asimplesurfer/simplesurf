@@ -18,6 +18,12 @@ var race_manager: RaceManager
 var show_help: bool = true
 ## Demo: muestra "DEMO" y cómo salir.
 var demo: bool = false
+## Vista chica (pantalla en 4): todo el HUD se dibuja más chico.
+var compact: bool = false
+
+const COMPACT_SCALE := 0.6
+
+var _root: Control
 
 var _mash_box: VBoxContainer
 var _mash_title: Label
@@ -138,6 +144,10 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
+	if compact and _root:
+		# Más chico: se escala la capa y se agranda la raíz para que ocupe toda la vista.
+		scale = Vector2.ONE * COMPACT_SCALE
+		_root.size = get_viewport().get_visible_rect().size / COMPACT_SCALE
 	if rider == null:
 		return
 	_update_mash(delta)
@@ -227,6 +237,7 @@ func _update_help() -> void:
 
 func _build() -> void:
 	var root := Control.new()
+	_root = root
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)

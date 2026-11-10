@@ -119,7 +119,8 @@ func _test_demo() -> void:
 		if ai == null or ai.difficulty.display_name != "Difícil":
 			hard = false
 	_check(hard, "en la dificultad máxima")
-	_check(split.views.size() == 2, "con pantalla dividida (una vista por bot)")
+	_check(split.views.size() == 4, "con la pantalla en 4 (una vista por bot)")
+	_check(split.get_child(0) is GridContainer, "en grilla de 2x2")
 	var weights: Array[float] = []
 	for r in race.racers:
 		weights.append((r.get_node("Visual") as RiderVisual).character.weight)

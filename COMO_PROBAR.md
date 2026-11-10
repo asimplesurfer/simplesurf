@@ -94,5 +94,5 @@ Si el teclado no responde, haz clic dentro del juego.
   está en `assets/audio/source/`). Sube de volumen cuando alguien pasa mucho tiempo en el
   aire. En el navegador empieza a sonar después de tocar una tecla o la pantalla.
 - **Demo:** si nadie toca el menú por 10 s, arranca una carrera de 4 bots en Difícil
-  con pantalla dividida (sirve para mirarlo en una tablet). Cualquier toque vuelve al menú.
+  con la pantalla en 4 (una vista por bot) (sirve para mirarlo en una tablet). Cualquier toque vuelve al menú.
 - Los valores de balance están en `core/rider/rider_stats.tres`.
