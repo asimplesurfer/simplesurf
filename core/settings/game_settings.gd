@@ -6,6 +6,10 @@ enum JumpMode { CHARGE, TAP }
 ## WAVES: la altura la dan las olas (A en el agua: saltito; A en la ola: "pop").
 ## FREE: A salta alto en cualquier lado (como antes).
 enum JumpStyle { WAVES, FREE }
+## SURGES: olas grandes que aparecen solas (casi siempre vienen de frente).
+## CONSTANT_LEFT: una ola constante a la izquierda (lado de afuera de la pista).
+enum WaveMode { SURGES, CONSTANT_LEFT }
+const WAVE_MODE_NAMES := ["grandes que aparecen", "constante a la izquierda"]
 
 const PATH := "user://settings.cfg"
 const JUMP_MODE_NAMES := ["mantener para cargar", "tocar para saltar"]
@@ -16,6 +20,7 @@ const JUMP_MODE_NAMES := ["mantener para cargar", "tocar para saltar"]
 ## para probarlo más adelante; no se carga de la configuración guardada).
 static var jump_mode: JumpMode = JumpMode.TAP
 static var jump_style: JumpStyle = JumpStyle.WAVES
+static var wave_mode: WaveMode = WaveMode.SURGES
 ## Cuántas personas juegan (pantalla dividida). Se cambia con las teclas 1 / 2.
 static var player_count: int = 1
 ## Avance: true = avanza solo (stick atrás frena); false = stick adelante para avanzar.
@@ -42,6 +47,7 @@ static func load_settings() -> void:
 		split_vertical = bool(cfg.get_value("gameplay", "split_vertical", true))
 		auto_forward = bool(cfg.get_value("gameplay", "auto_forward", true))
 		jump_style = int(cfg.get_value("gameplay", "jump_style", JumpStyle.WAVES)) as JumpStyle
+		wave_mode = clampi(int(cfg.get_value("gameplay", "wave_mode", WaveMode.SURGES)), 0, 1) as WaveMode
 		bot_count = clampi(int(cfg.get_value("gameplay", "bot_count", 1)), 0, 3)
 		bot_level = clampi(int(cfg.get_value("gameplay", "bot_level", 1)), 0, 2)
 		for i in 2:
@@ -61,6 +67,7 @@ static func save_settings() -> void:
 	cfg.set_value("gameplay", "split_vertical", split_vertical)
 	cfg.set_value("gameplay", "auto_forward", auto_forward)
 	cfg.set_value("gameplay", "jump_style", jump_style)
+	cfg.set_value("gameplay", "wave_mode", wave_mode)
 	cfg.set_value("gameplay", "bot_count", bot_count)
 	cfg.set_value("gameplay", "bot_level", bot_level)
 	for i in characters:
@@ -100,3 +107,12 @@ static func toggle_jump_style() -> void:
 
 static func jump_style_name() -> String:
 	return "olas (saltito + pop en la ola)" if jump_style == JumpStyle.WAVES else "libre"
+
+
+static func toggle_wave_mode() -> void:
+	wave_mode = WaveMode.CONSTANT_LEFT if wave_mode == WaveMode.SURGES else WaveMode.SURGES
+	save_settings()
+
+
+static func wave_mode_name() -> String:
+	return WAVE_MODE_NAMES[wave_mode]

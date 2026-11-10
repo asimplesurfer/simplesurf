@@ -40,6 +40,10 @@ func _run() -> void:
 		GameSettings.jump_style == GameSettings.JumpStyle.WAVES,
 		"por defecto el salto es de olas (saltito + pop)"
 	)
+	_check(
+		GameSettings.wave_mode == GameSettings.WaveMode.SURGES,
+		"por defecto las olas son grandes que aparecen solas"
+	)
 	# Los tests de salto libre van primero; el modo olas se prueba aparte.
 	GameSettings.jump_style = GameSettings.JumpStyle.FREE
 	_test_avatar()
@@ -79,6 +83,7 @@ func _run() -> void:
 	await _test_drift()
 	await _test_swells()
 	await _test_wave_jump()
+	await _test_constant_wave()
 	await _test_course()
 	await _test_turbo_and_wrong_way()
 	await _test_laps()
@@ -187,6 +192,14 @@ func _test_menu() -> void:
 	var head := avatar.get_node("head") as MeshInstance3D
 	var mat := head.material_override as StandardMaterial3D
 	_check(mat.albedo_color == data.skin_color(), "el personaje del menú muestra la piel elegida")
+	# Fila "Olas" (la última del jugador 1): cambia el modo de olas.
+	for i in 5:
+		await _press(&"p1_down")
+	var mode_before := GameSettings.wave_mode
+	await _press(&"p1_right")
+	_check(GameSettings.wave_mode != mode_before, "en el menú, la fila Olas cambia el modo de olas")
+	await _press(&"p1_right")
+	_check(GameSettings.wave_mode == mode_before, "y vuelve al anterior")
 	_check(not started[0], "todavía no empieza")
 	await _press(&"p1_a")
 	_check(started[0], "ESPACIO / A: listo y empieza la carrera")
@@ -233,6 +246,98 @@ func _test_wave_jump() -> void:
 		"A al subir la ola (pop) lanza mucho más alto (%.1f m contra %.1f m)" % [popped, plain]
 	)
 	_water.clear_swells()
+	GameSettings.jump_style = GameSettings.JumpStyle.FREE
+
+
+func _test_constant_wave() -> void:
+	print("Ola constante a la izquierda:")
+	# La fórmula de las derivadas coincide con la altura (diferencias finitas).
+	var rw := RingWave.new()
+	rw.settle()
+	rw.phase = 0.7
+	var grad_ok := true
+	for p in [Vector2(94.0, 3.0), Vector2(-60.0, 70.0), Vector2(20.0, -97.0), Vector2(5.0, 91.5)]:
+		var e := 0.01
+		var num := Vector2(
+			(rw.height_at(p + Vector2(e, 0.0)) - rw.height_at(p - Vector2(e, 0.0))) / (2.0 * e),
+			(rw.height_at(p + Vector2(0.0, e)) - rw.height_at(p - Vector2(0.0, e))) / (2.0 * e)
+		)
+		if num.distance_to(rw.gradient_at(p)) > 0.01:
+			grad_ok = false
+			print("    gradiente %s: %s contra %s" % [p, num, rw.gradient_at(p)])
+	_check(grad_ok, "la pendiente de la ola constante coincide con su altura")
+
+	_waves.set_mode(GameSettings.WaveMode.CONSTANT_LEFT)
+	_check(_water.ring_wave != null, "modo constante: hay una ola constante")
+	_water.ring_wave.settle()
+	var track := _course.track
+	var angle := 2.0
+	var pos := track.position_at(angle)
+	_teleport(pos)
+	_rider.heading = track.heading_at(angle)
+	var left := -_rider.right()
+	var lat := _water.ring_wave.radius - track.radius
+	var on_left := _water.swell_height_at(pos.x + left.x * lat, pos.z + left.z * lat)
+	var on_right := _water.swell_height_at(pos.x - left.x * lat, pos.z - left.z * lat)
+	var at_center := _water.swell_height_at(pos.x, pos.z)
+	_check(
+		on_left > 1.5 and on_right < 0.05 and at_center < 0.5,
+		"la ola está a la izquierda del que corre (izq %.2f m, centro %.2f m, der %.2f m)"
+		% [on_left, at_center, on_right]
+	)
+	var inside := lat > 0.0 and lat < track.half_width
+	_check(inside, "la cresta está dentro de la pista, del lado de afuera (%.1f m)" % lat)
+
+	_waves.enabled = true
+	await _wait(3.0)
+	_check(_water.swells.is_empty(), "en modo constante no aparecen otras olas grandes")
+	_waves.enabled = false
+
+	# Los picos vienen de frente: andar por la cresta lo lanza al aire.
+	GameSettings.jump_style = GameSettings.JumpStyle.WAVES
+	var start_angle := 2.5
+	_teleport(track.position_at(start_angle, lat - 0.5))
+	if _rider.is_fallen():
+		await _mash_until_standing(8.0, 4.0)
+	_set_action(&"p1_up", true)
+	var launched := false
+	var prompt := false
+	var max_height := 0.0
+	for i in int(10.0 * FPS):
+		# Sigue la curva de la cresta.
+		if _rider.grounded:
+			_rider.heading = track.heading_at(track.angle_of(_rider.position))
+		if _rider.pop_ready():
+			prompt = true
+		if _state() == &"airborne":
+			launched = true
+			max_height = maxf(max_height, _rider.global_position.y - _water_height_here())
+		elif launched:
+			break
+		await process_frame
+	_set_action(&"p1_up", false)
+	_check(launched, "andando por la ola constante, un pico lo lanza al aire")
+	_check(prompt, "en la ola constante también aparece el botón del pop")
+	_check(max_height > 0.5, "salta alto (%.1f m)" % max_height)
+	await _wait_until_state(&"riding", 3.0)
+	await _wait(0.5)
+
+	# El bot va a la cresta a buscar los picos.
+	var ai := AIController.new()
+	ai.course = _course
+	ai._water = _water
+	ai.difficulty = AIDifficulty.preset(2)
+	ai.difficulty.wave_seek = 1.0
+	var bot_targets := 0
+	for i in 40:
+		var t := ai._ring_wave_target(i * 0.15, 0.0)
+		if not is_nan(t) and absf(t - lat) < 1.5:
+			bot_targets += 1
+	_check(bot_targets > 5, "el bot va a la cresta a usar los picos (%d de 40)" % bot_targets)
+	ai.free()
+
+	_waves.set_mode(GameSettings.WaveMode.SURGES)
+	_check(_water.ring_wave == null, "modo olas grandes: sin ola constante")
 	GameSettings.jump_style = GameSettings.JumpStyle.FREE
 
 

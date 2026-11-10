@@ -92,6 +92,12 @@ Si el teclado no responde, haz clic dentro del juego.
   pista, sumando vueltas: con una vuelta de atraso, el handicap es el máximo). La barra muestra "NITRO ×1.8" cuando hay ayuda.
 - **Motivación:** mini sprint automático al pasar por un círculo o tirar a alguien.
 - **Rocas:** chocarlas tira de la tabla (saltando se esquivan). Chocar la isla también.
+- **Modo de olas** (fila **Olas** en el menú, con flechas o el mando):
+  - **Grandes que aparecen** (por defecto): ver abajo.
+  - **Constante a la izquierda:** una ola que da toda la vuelta por el lado de afuera de la
+    pista (a tu izquierda). Por su cresta vienen picos de frente: andá por arriba de la ola
+    (o subila en diagonal) y cuando llega un pico te lanza; apretá A al subir para el pop.
+    Ojo: por afuera la vuelta es más larga, así que conviene ir a buscarla solo para saltar.
 - **Olas grandes:** la mayoría nacen adelante tuyo (por la pista) y vienen de frente hacia vos, para usarlas de rampa; el resto aparecen al azar. Subirlas rápido te lanza al aire.
 - Rayas de velocidad con turbo o motivación.
 - **Música** de fondo (`assets/audio/simple_surf.ogg`, convertida del WAV original que

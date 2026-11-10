@@ -56,6 +56,9 @@ var _path_phase: float = 0.0
 var _pop_tried: bool = false
 ## Decisión de ir o no a cada ola grande.
 var _wave_choice: Dictionary = {}
+## Ola constante: pico al que está mirando y si decidió ir a usarlo.
+var _ring_peak_angle: float = NAN
+var _ring_peak_choice: bool = false
 var _water: Water
 var _last_lap: int = -1
 
@@ -199,6 +202,9 @@ func _think(angle: float, lateral: float) -> void:
 		var swell := _next_swell(angle, lateral)
 		if swell:
 			target = track.lateral_of(Vector3(swell.center.x, 0.0, swell.center.y))
+		var ring_target := _ring_wave_target(angle, lateral)
+		if not is_nan(ring_target):
+			target = ring_target
 
 	# Llegando a la meta: derecho al punto más cercano de la línea.
 	var to_line := _arc_ahead(angle, 0.0, lateral)
@@ -300,6 +306,23 @@ func _next_swell(angle: float, lateral: float) -> Swell:
 			best = s
 			best_d = d
 	return best
+
+
+## Ola constante: si decidió usar el próximo pico que viene de frente,
+## el desvío lateral de la cresta; si no, NAN.
+func _ring_wave_target(angle: float, lateral: float) -> float:
+	if _water == null or _water.ring_wave == null:
+		return NAN
+	var rw := _water.ring_wave
+	var peak := rw.next_peak_angle(angle)
+	# Pico nuevo (el anterior ya pasó): decidir si va a buscarlo.
+	if is_nan(_ring_peak_angle) or absf(wrapf(peak - _ring_peak_angle, -PI, PI)) > PI / rw.lobes:
+		_ring_peak_choice = _rng.randf() < difficulty.wave_seek
+	_ring_peak_angle = peak
+	var d := _arc_ahead(angle, peak, lateral)
+	if _ring_peak_choice and d > 4.0 and d < 45.0:
+		return rw.radius - course.track.radius - 0.5
+	return NAN
 
 
 func _clear_ahead(angle: float, lateral: float, distance: float) -> bool:
