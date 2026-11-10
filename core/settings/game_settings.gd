@@ -9,9 +9,13 @@ const JUMP_MODE_NAMES := ["mantener para cargar", "tocar para saltar"]
 
 ## CHARGE: mantener carga el salto (salta solo al llegar al máximo).
 ## TAP: tocar salta enseguida, con una altura fija.
-static var jump_mode: JumpMode = JumpMode.CHARGE
+## Por ahora el salto es solo "tocar para saltar" (el cargado queda en el código
+## para probarlo más adelante; no se carga de la configuración guardada).
+static var jump_mode: JumpMode = JumpMode.TAP
 ## Cuántas personas juegan (pantalla dividida). Se cambia con las teclas 1 / 2.
 static var player_count: int = 1
+## Pantalla dividida: true = un jugador a cada lado; false = uno arriba del otro.
+static var split_vertical: bool = true
 ## Bots en la carrera (0 a 3) y su dificultad (0 Fácil, 1 Normal, 2 Difícil).
 static var bot_count: int = 1
 static var bot_level: int = 1
@@ -28,8 +32,8 @@ static func load_settings() -> void:
 	_loaded = true
 	var cfg := ConfigFile.new()
 	if cfg.load(PATH) == OK:
-		jump_mode = int(cfg.get_value("gameplay", "jump_mode", JumpMode.CHARGE)) as JumpMode
 		player_count = clampi(int(cfg.get_value("gameplay", "player_count", 1)), 1, 2)
+		split_vertical = bool(cfg.get_value("gameplay", "split_vertical", true))
 		bot_count = clampi(int(cfg.get_value("gameplay", "bot_count", 1)), 0, 3)
 		bot_level = clampi(int(cfg.get_value("gameplay", "bot_level", 1)), 0, 2)
 		for i in 2:
@@ -43,6 +47,7 @@ static func save_settings() -> void:
 	cfg.load(PATH)
 	cfg.set_value("gameplay", "jump_mode", jump_mode)
 	cfg.set_value("gameplay", "player_count", player_count)
+	cfg.set_value("gameplay", "split_vertical", split_vertical)
 	cfg.set_value("gameplay", "bot_count", bot_count)
 	cfg.set_value("gameplay", "bot_level", bot_level)
 	for i in characters:

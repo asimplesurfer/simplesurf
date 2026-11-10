@@ -78,7 +78,8 @@ func _build() -> void:
 	root.add_child(_footer)
 	_footer.text = (
 		"Arriba / abajo: elegir  ·  Izquierda / derecha: cambiar  ·  ESPACIO / A: ¡listo!  ·  E / B: volver\n"
-		+ "Jugadores: teclas 1 / 2 o Select  ·  J2 usa flechas y ENTER"
+		+ "Jugadores: teclas 1 / 2 o Select  ·  J2 usa flechas y ENTER  ·  "
+		+ "Pantalla dividida (V): %s" % ("lado a lado" if GameSettings.split_vertical else "arriba y abajo")
 	)
 	_refresh_all()
 
@@ -256,6 +257,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		if key.physical_keycode == KEY_2:
 			_set_player_count(2)
+			return
+		if key.physical_keycode == KEY_V:
+			GameSettings.split_vertical = not GameSettings.split_vertical
+			_build()
 			return
 	for p in _panels:
 		var prefix := InputSetup.prefix(p.player)

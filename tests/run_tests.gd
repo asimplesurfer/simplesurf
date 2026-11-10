@@ -70,6 +70,7 @@ func _run() -> void:
 	await _test_laps()
 	await _test_music()
 	await _test_split_screen()
+	_test_bot_paths()
 	await _test_bot_race()
 	await _test_demo()
 	_finish()
@@ -169,6 +170,26 @@ func _test_menu() -> void:
 	await process_frame
 
 
+func _test_bot_paths() -> void:
+	print("Caminos de los bots:")
+	var ai := AIController.new()
+	var values: Array[float] = []
+	for i in AIController.PATHS.size():
+		ai.path_index = i
+		values.append(ai.path_lateral(1.0, 30.0))
+	var distinct := 0
+	for i in values.size():
+		var unique := true
+		for j in i:
+			if absf(values[i] - values[j]) < 1.0:
+				unique = false
+		if unique:
+			distinct += 1
+	_check(AIController.PATHS.size() == 5, "hay 5 caminos")
+	_check(distinct >= 4, "los caminos van por lugares distintos (%d distintos)" % distinct)
+	ai.free()
+
+
 func _test_bot_race() -> void:
 	print("Carrera de bots (Fácil, Normal y Difícil):")
 	var config := RaceConfig.new()
@@ -207,6 +228,7 @@ func _test_bot_race() -> void:
 		r.trick_failed.connect(func() -> void: failed[r] += 1)
 		r.drift_hit.connect(func(_v: Rider) -> void: hits[r] += 1)
 	_check(race.racers.size() == 3 and not race.racers[0].is_human, "3 bots en la carrera")
+	_check(RaceConfig.new().laps == 5, "las carreras son de 5 vueltas")
 	race.skip_countdown()
 
 	var max_seconds := 300.0
@@ -410,9 +432,11 @@ func _test_music() -> void:
 	await _wait(1.0)
 	_check(not audio.epic, "en el agua, volumen normal")
 	# Salto cargado al máximo: mucho tiempo en el aire.
+	GameSettings.jump_mode = GameSettings.JumpMode.CHARGE
 	_set_action(&"p1_a", true)
 	await _wait(1.05)
 	_set_action(&"p1_a", false)
+	GameSettings.jump_mode = GameSettings.JumpMode.TAP
 	await _wait(0.6)
 	_check(not _rider.grounded and audio.epic, "mucho tiempo en el aire: música épica")
 	await _wait_until_state(&"riding", 2.0)
@@ -436,6 +460,7 @@ func _test_split_screen() -> void:
 	_check(race.racers.size() == 3, "2 jugadores + 1 bot: 3 corredores")
 	_check(race.humans().size() == 2, "2 personas")
 	_check(split.views.size() == 2, "2 jugadores: 2 pantallas")
+	_check(split.get_child(0) is HBoxContainer, "por defecto la pantalla se divide lado a lado")
 	var bit0 := 1 << Water.FOLLOWER_LAYER_BASE
 	var bit1 := 1 << (Water.FOLLOWER_LAYER_BASE + 1)
 	var m0 := split.cameras[0].cull_mask
@@ -550,6 +575,9 @@ func _test_throttle_and_steer() -> void:
 
 func _test_jump_and_tricks() -> void:
 	print("Salto y trucos:")
+	_check(GameSettings.jump_mode == GameSettings.JumpMode.TAP, "por defecto el salto es tocar")
+	# El salto cargado sigue en el código: se prueba igual.
+	GameSettings.jump_mode = GameSettings.JumpMode.CHARGE
 	# Salto simple: toca y suelta.
 	await _press(&"p1_a")
 	_check(_state() == &"airborne", "ESPACIO salta")
@@ -622,6 +650,7 @@ func _test_jump_and_tricks() -> void:
 	await _mash_until_standing(8.0, 5.0)
 	_check(not _rider.is_fallen(), "se vuelve a levantar")
 	await _wait(3.0)
+	GameSettings.jump_mode = GameSettings.JumpMode.TAP
 
 
 func _test_drift() -> void:

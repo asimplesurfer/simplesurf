@@ -37,7 +37,7 @@ Ojo: ese zip no funciona con doble clic en `index.html`, necesita un servidor we
 |---|---|---|---|
 | Acelerar / frenar | W / S | ↑ / ↓ | Stick o cruceta |
 | Girar | A / D | ← / → | Stick o cruceta |
-| Saltar · truco (en el aire) | Espacio | Enter | Botón de abajo (A / ✕) |
+| Saltar · truco (en el aire, mantener) | Espacio | Enter | Botón de abajo (A / ✕) |
 | Derrapar (mantener) | Shift | . | Botón izquierdo (X / □) o RB |
 | Turbo (gasta nitro) | E | - | Botón derecho (B / ○) |
 | Levantarse (spamear) | Espacio | Enter | Botón de abajo |
@@ -49,7 +49,7 @@ Con 1 jugador, J1 también puede usar las flechas.
 |---|---|
 | 1 / 2 | Cantidad de jugadores (reinicia la carrera). Con mando: Select |
 | R | Otra carrera (al terminar). Con mando: Start |
-| T | Salto: "mantener para cargar" o "tocar para saltar" |
+| V | Pantalla dividida: lado a lado (por defecto) o arriba y abajo |
 | M | Distribución del mando: estándar o genérico (tipo PlayStation) |
 | H | Ocultar la ayuda |
 
@@ -62,7 +62,7 @@ Si el teclado no responde, haz clic dentro del juego.
    - Arriba / abajo: elegir fila · Izquierda / derecha: cambiar · E / B: volver a editar.
    - Peso: de Musculoso a Cervecero (6 etapas). Piel: incluye alien verde y azul.
    - Teclas 1 / 2 (o Select): 1 o 2 jugadores (pantalla dividida).
-2. **Carrera**: cuenta regresiva, 2 vueltas alrededor de la isla.
+2. **Carrera**: cuenta regresiva, 5 vueltas alrededor de la isla.
 3. **Resultados**: R o Start para otra carrera; C o Esc para volver al menú.
 
 ## Qué hay por ahora
@@ -71,12 +71,14 @@ Si el teclado no responde, haz clic dentro del juego.
   agitar los brazos al caer, mantenerse a flote, subirse a la tabla, remar, pararse,
   equilibrio al girar, agacharse para saltar, truco, derrape, festejo y saludo en el menú.
 - **Bots** con dificultad Fácil / Normal / Difícil: se levantan, esquivan rocas, buscan
-  círculos, derrapan al que tienen detrás, hacen trucos y usan turbo.
-- **Carrera:** isla en el medio, 2 vueltas alrededor. Cuenta regresiva, vueltas,
+  círculos, derrapan al que tienen detrás, hacen trucos y usan turbo. Cada uno sigue uno
+  de 5 caminos distintos (cambia en cada vuelta) y llegando a la meta va derecho al punto
+  más cercano de la línea.
+- **Carrera:** isla en el medio, 5 vueltas alrededor. Cuenta regresiva, vueltas,
   posición, aviso de "¡Al revés!", llegada y resultados.
 - **Largada en el agua:** al "¡YA!" hay que spamear para subirse a la tabla y pararse.
 - **Pantalla dividida** para 2 jugadores (teclas 1 / 2).
-- **Salto:** mantener carga (salta solo al máximo) o, con T, tocar para saltar.
+- **Salto:** tocar para saltar (el salto cargado está guardado en el código, desactivado por ahora).
 - **Truco:** en el aire, mantener gira la tabla y carga nitro. Si toca el agua girando: se cae y pierde el nitro.
 - **Derrape:** tabla de costado, frena y tira una cortina de agua hacia atrás que hace caer a quien esté detrás.
 - **Nitro y turbo:** los círculos de velocidad y los trucos cargan nitro; el turbo lo gasta.

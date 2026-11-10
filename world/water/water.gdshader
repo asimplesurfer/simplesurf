@@ -17,6 +17,8 @@ uniform vec4 swell_a2; uniform vec4 swell_b2;
 uniform vec4 swell_a3; uniform vec4 swell_b3;
 uniform vec4 swell_a4; uniform vec4 swell_b4;
 uniform vec4 swell_a5; uniform vec4 swell_b5;
+uniform vec4 swell_a6; uniform vec4 swell_b6;
+uniform vec4 swell_a7; uniform vec4 swell_b7;
 // Isla (x, z, radio): las olas grandes se apagan cerca de la orilla. Radio 0 = sin isla.
 uniform vec3 island = vec3(0.0);
 
@@ -100,6 +102,8 @@ void vertex() {
 	add_swell(swell_a3, swell_b3, world.xz, sh, sg, crest);
 	add_swell(swell_a4, swell_b4, world.xz, sh, sg, crest);
 	add_swell(swell_a5, swell_b5, world.xz, sh, sg, crest);
+	add_swell(swell_a6, swell_b6, world.xz, sh, sg, crest);
+	add_swell(swell_a7, swell_b7, world.xz, sh, sg, crest);
 	float fade = island_fade(world.xz);
 	h += sh * fade;
 	g += sg * fade;

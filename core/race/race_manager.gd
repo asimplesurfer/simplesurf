@@ -276,6 +276,12 @@ func _unhandled_input(event: InputEvent) -> void:
 					restart()
 			KEY_C, KEY_ESCAPE:
 				back_to_menu()
+			KEY_V:
+				# Pantalla dividida: lado a lado <-> arriba y abajo.
+				GameSettings.split_vertical = not GameSettings.split_vertical
+				GameSettings.save_settings()
+				if humans().size() > 1 or humans().is_empty():
+					restart()
 		return
 	for slot in config.slots:
 		var p := InputSetup.prefix(slot.player_index)
