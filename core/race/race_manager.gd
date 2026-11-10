@@ -60,6 +60,9 @@ func _ready() -> void:
 
 	_spawn_racers()
 	_countdown = countdown_time
+	var audio := get_node_or_null("/root/AudioManager")
+	if audio:
+		audio.race_started()
 	for r in racers:
 		r.controls_locked = true
 

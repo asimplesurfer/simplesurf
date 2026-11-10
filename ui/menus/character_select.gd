@@ -37,6 +37,9 @@ func _ready() -> void:
 		InputSetup.ensure_player_actions(i)
 	InputSetup.apply_keyboard_layout(GameSettings.player_count)
 	_build()
+	var audio := get_node_or_null("/root/AudioManager")
+	if audio:
+		audio.menu_opened()
 
 
 func _build() -> void:
