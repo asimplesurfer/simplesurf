@@ -45,7 +45,10 @@ static func load_settings() -> void:
 		bot_count = clampi(int(cfg.get_value("gameplay", "bot_count", 1)), 0, 3)
 		bot_level = clampi(int(cfg.get_value("gameplay", "bot_level", 1)), 0, 2)
 		for i in 2:
-			var d: Variant = cfg.get_value("characters", "player_%d" % i, null)
+			var key := "player_%d" % i
+			if not cfg.has_section_key("characters", key):
+				continue
+			var d: Variant = cfg.get_value("characters", key)
 			if d is Dictionary:
 				characters[i] = CharacterData.from_dict(d)
 
