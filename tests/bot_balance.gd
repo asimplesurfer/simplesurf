@@ -1,6 +1,8 @@
 extends SceneTree
 ## Compara carreras de bots con y sin handicap (no es un test que falle: mide).
 ##   godot --headless --fixed-fps 60 --script res://tests/bot_balance.gd
+## Último resultado (5 vueltas -> 2 vueltas, 4 carreras por tipo): sin handicap
+## 21,2 s de diferencia entre el primero y el último; con handicap 4,5 s.
 ## Corre RACES carreras de cada tipo con 3 bots (Fácil, Normal, Difícil) y
 ## muestra la diferencia de tiempo entre el primero y el último.
 

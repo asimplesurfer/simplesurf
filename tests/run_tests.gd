@@ -319,6 +319,9 @@ func _test_bot_race() -> void:
 	var main3: Node = load("res://main.tscn").instantiate()
 	var race := main3.get_node("RaceManager") as RaceManager
 	race.config = config
+	# Sin handicap, para comparar las dificultades entre sí (con handicap
+	# llegan casi juntos y el orden es casi azar).
+	race.catchup_enabled = false
 	root.add_child(main3)
 	await process_frame
 	await process_frame

@@ -64,9 +64,6 @@ jobs:
           fi
           grep -q "TESTS OK" tests.log
 
-      - name: TEMP comparar bots con y sin handicap
-        run: timeout 1200 godot --headless --path . --fixed-fps 60 --script res://tests/bot_balance.gd 2>&1 | grep -v "^\[" | tail -20
-
       - name: Exportar para web
         run: |
           mkdir -p build/web
