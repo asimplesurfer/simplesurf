@@ -42,16 +42,21 @@ func _process(delta: float) -> void:
 			_water.add_swell(s)
 
 
-## Elige al azar un jugador humano alrededor del cual crear la ola.
+## Elige al azar un jugador humano alrededor del cual crear la ola
+## (si solo hay bots, como en la demo, cualquiera).
 func _pick_target() -> Rider:
 	var humans: Array[Rider] = []
+	var everyone: Array[Rider] = []
 	for node in get_tree().get_nodes_in_group("riders"):
 		var r := node as Rider
-		if r and r.is_human:
-			humans.append(r)
-	if humans.is_empty():
+		if r:
+			everyone.append(r)
+			if r.is_human:
+				humans.append(r)
+	var pool := humans if not humans.is_empty() else everyone
+	if pool.is_empty():
 		return null
-	return humans[_rng.randi() % humans.size()]
+	return pool[_rng.randi() % pool.size()]
 
 
 ## Crea una ola en una posición válida (o null si no encontró lugar).

@@ -10,6 +10,10 @@ config/description="Friend slop de surf en 3D."
 run/main_scene="res://ui/menus/character_select.tscn"
 config/features=PackedStringArray("4.5", "GL Compatibility")
 
+[autoload]
+
+AudioManager="*res://autoload/audio_manager.gd"
+
 [display]
 
 window/size/viewport_width=1280

@@ -24,7 +24,12 @@ func _ready() -> void:
 	box.add_theme_constant_override("separation", 4)
 	add_child(box)
 
+	# Una vista por persona; si no hay personas (demo), una por cada uno de los
+	# primeros 2 corredores.
 	var humans := race_manager.humans()
+	var spectating := humans.is_empty()
+	if spectating:
+		humans = race_manager.racers.slice(0, 2)
 	for i in humans.size():
 		var rider := humans[i]
 		var container := SubViewportContainer.new()
@@ -51,7 +56,8 @@ func _ready() -> void:
 		var hud := Hud.new()
 		hud.rider = rider
 		hud.race_manager = race_manager
-		hud.show_help = humans.size() == 1
+		hud.show_help = humans.size() == 1 and not spectating
+		hud.demo = spectating
 		vp.add_child(hud)
 		huds.append(hud)
 

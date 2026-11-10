@@ -17,19 +17,29 @@ const REPEAT_DELAY := 0.35
 const REPEAT_RATE := 0.1
 const YELLOW := Color(1.0, 0.86, 0.2)
 
+## Segundos sin tocar nada para que arranque la demo (carrera de bots).
+const IDLE_DEMO_TIME := 10.0
+
 ## Si es false, no cambia de escena al empezar (para tests); solo emite la señal.
 var auto_start: bool = true
+
+var _idle_time: float = 0.0
+var _demo_label: Label
 
 var _panels: Array[Dictionary] = []
 var _footer: Label
 
 
 func _ready() -> void:
+	GameSettings.demo_mode = false
 	GameSettings.load_settings()
 	for i in 2:
 		InputSetup.ensure_player_actions(i)
 	InputSetup.apply_keyboard_layout(GameSettings.player_count)
 	_build()
+	var audio := get_node_or_null("/root/AudioManager")
+	if audio:
+		audio.menu_opened()
 
 
 func _build() -> void:
@@ -62,6 +72,8 @@ func _build() -> void:
 	for i in GameSettings.player_count:
 		columns.add_child(_build_panel(i))
 
+	_demo_label = _label("", 16, Color(0.85, 0.95, 1.0))
+	root.add_child(_demo_label)
 	_footer = _label("", 18, Color.WHITE)
 	root.add_child(_footer)
 	_footer.text = (
@@ -162,7 +174,21 @@ func _build_panel(player: int) -> Control:
 	return panel
 
 
+func _input(event: InputEvent) -> void:
+	# Cualquier cosa que toque el jugador reinicia la espera de la demo.
+	var moved := event is InputEventJoypadMotion and absf(event.axis_value) > 0.5
+	if RaceManager.is_any_press(event) or moved:
+		_idle_time = 0.0
+
+
 func _process(delta: float) -> void:
+	_idle_time += delta
+	var left := IDLE_DEMO_TIME - _idle_time
+	if _demo_label:
+		_demo_label.text = "Demo en %d s" % ceili(left) if left < 6.0 else ""
+	if left <= 0.0:
+		_start_demo()
+		return
 	for p in _panels:
 		var pivot: Node3D = p.pivot
 		pivot.rotation.y += delta * 0.8
@@ -250,6 +276,14 @@ func _set_player_count(count: int) -> void:
 	GameSettings.player_count = count
 	InputSetup.apply_keyboard_layout(count)
 	_build()
+
+
+func _start_demo() -> void:
+	_idle_time = -1e9
+	GameSettings.demo_mode = true
+	start_requested.emit()
+	if auto_start:
+		get_tree().change_scene_to_file(RACE_SCENE)
 
 
 func _check_start() -> void:

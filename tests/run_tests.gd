@@ -21,6 +21,11 @@ func _initialize() -> void:
 
 
 func _run() -> void:
+	# En modo --script el autoload puede no estar: se crea a mano.
+	if root.get_node_or_null("AudioManager") == null:
+		var audio: Node = load("res://autoload/audio_manager.gd").new()
+		audio.name = "AudioManager"
+		root.add_child(audio)
 	GameSettings.load_settings()
 	GameSettings.player_count = 1
 	GameSettings.bot_count = 0
@@ -63,9 +68,55 @@ func _run() -> void:
 	await _test_course()
 	await _test_turbo_and_wrong_way()
 	await _test_laps()
+	await _test_music()
 	await _test_split_screen()
 	await _test_bot_race()
+	await _test_demo()
 	_finish()
+
+
+func _test_demo() -> void:
+	print("Demo (menú sin tocar nada):")
+	var menu: CharacterSelect = load("res://ui/menus/character_select.tscn").instantiate()
+	menu.auto_start = false
+	var started := [false]
+	menu.start_requested.connect(func() -> void: started[0] = true)
+	root.add_child(menu)
+	await _wait(9.0)
+	_check(not started[0], "a los 9 s sin tocar nada todavía no arranca")
+	await _press(&"p1_down")
+	await _wait(9.0)
+	_check(not started[0], "tocar algo reinicia la espera")
+	await _wait(1.5)
+	_check(started[0] and GameSettings.demo_mode, "a los 10 s sin tocar nada arranca la demo")
+	menu.queue_free()
+	await process_frame
+
+	var demo: Node = load("res://main.tscn").instantiate()
+	root.add_child(demo)
+	await process_frame
+	await process_frame
+	var race := demo.get_node("RaceManager") as RaceManager
+	var split := demo.get_node("Views") as SplitScreen
+	_check(race.racers.size() == 2, "la demo tiene 2 corredores")
+	_check(race.humans().is_empty(), "son bots")
+	var hard := true
+	for r in race.racers:
+		var ai := r.controller as AIController
+		if ai == null or ai.difficulty.display_name != "Difícil":
+			hard = false
+	_check(hard, "en la dificultad máxima")
+	_check(split.views.size() == 2, "con pantalla dividida (una vista por bot)")
+	race.skip_countdown()
+	await _wait(5.0)
+	var moving := true
+	for r in race.racers:
+		if r.speed < 5.0:
+			moving = false
+	_check(moving, "los bots arrancan solos")
+	GameSettings.demo_mode = false
+	demo.queue_free()
+	await process_frame
 
 
 func _test_avatar() -> void:
@@ -343,6 +394,30 @@ func _test_laps() -> void:
 	_check(_race.state == RaceManager.State.FINISHED, "termina la carrera")
 	var results := _main.get_node("Results") as ResultsPanel
 	_check(results != null and results._panel.visible, "se muestran los resultados")
+
+
+func _test_music() -> void:
+	print("Música:")
+	var audio := root.get_node("AudioManager")
+	var player: AudioStreamPlayer = audio.player
+	_check(player.stream != null and player.playing, "suena la música durante la carrera")
+	_check((player.stream as AudioStreamOggVorbis).loop, "la música está en bucle")
+	_course.hazards_enabled = false
+	_course.bounds_enabled = false
+	_teleport(Vector3(0.0, 0.0, 900.0))
+	if _rider.is_fallen():
+		await _mash_until_standing(8.0, 4.0)
+	await _wait(1.0)
+	_check(not audio.epic, "en el agua, volumen normal")
+	# Salto cargado al máximo: mucho tiempo en el aire.
+	_set_action(&"p1_a", true)
+	await _wait(1.05)
+	_set_action(&"p1_a", false)
+	await _wait(0.6)
+	_check(not _rider.grounded and audio.epic, "mucho tiempo en el aire: música épica")
+	await _wait_until_state(&"riding", 2.0)
+	await _wait(0.1)
+	_check(not audio.epic, "al volver al agua, vuelve a la normalidad")
 
 
 func _test_split_screen() -> void:
