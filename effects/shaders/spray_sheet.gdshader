@@ -20,6 +20,9 @@ void fragment() {
 	// Se va rompiendo más hacia la punta.
 	float breakup = smoothstep(0.15 + 0.55 * s, 0.35 + 0.55 * s, streaks * 0.7 + spots * 0.5);
 	float a = side * along * mix(0.5, 1.0, streaks) * mix(1.0, breakup, 0.75);
+	// Más transparente en el medio, para ver al surfista a través del agua
+	// (la cámara está detrás); los bordes del abanico se ven más.
+	a *= mix(0.3, 1.0, smoothstep(0.1, 0.7, t));
 	ALBEDO = color * (0.88 + 0.12 * spots);
 	ALPHA = clamp(a * intensity * 1.5, 0.0, 0.95);
 }

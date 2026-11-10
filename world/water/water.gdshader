@@ -21,6 +21,9 @@ uniform vec4 swell_a6; uniform vec4 swell_b6;
 uniform vec4 swell_a7; uniform vec4 swell_b7;
 // Isla (x, z, radio): las olas grandes se apagan cerca de la orilla. Radio 0 = sin isla.
 uniform vec3 island = vec3(0.0);
+// Pista (centro x, centro z, radio de adentro, radio de afuera). 0 = sin pista.
+uniform vec4 track_band = vec4(0.0);
+uniform vec3 outside_color : source_color = vec3(0.02, 0.17, 0.34);
 
 uniform vec3 deep_color : source_color = vec3(0.02, 0.24, 0.48);
 uniform vec3 shallow_color : source_color = vec3(0.08, 0.48, 0.7);
@@ -129,6 +132,15 @@ void fragment() {
 	float line = 1.0 - clamp(min(gl.x, gl.y), 0.0, 1.0);
 	float fade = 1.0 - smoothstep(grid_fade_distance * 0.5, grid_fade_distance, distance(v_world, CAMERA_POSITION_WORLD));
 	col = mix(col, grid_color, line * grid_strength * fade);
+
+	// Fuera de la pista, el agua más oscura (con un borde suave).
+	if (track_band.w > 0.0) {
+		float d = distance(v_world.xz, track_band.xy);
+		float out_inner = 1.0 - smoothstep(track_band.z - 3.0, track_band.z - 0.5, d);
+		float out_outer = smoothstep(track_band.w + 0.5, track_band.w + 3.0, d);
+		float outside = max(out_inner, out_outer);
+		col = mix(col, outside_color, outside * 0.55);
+	}
 
 	ALBEDO = col;
 	ROUGHNESS = 0.55;

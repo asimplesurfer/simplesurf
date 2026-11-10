@@ -12,7 +12,7 @@ const SHEET_SHADER := preload("res://effects/shaders/spray_sheet.gdshader")
 ## Apertura a cada lado (grados). Igual que RiderStats.drift_cone_half_angle.
 @export var half_angle: float = 30.0
 ## Altura máxima de la cortina (m).
-@export var height: float = 2.4
+@export var height: float = 1.4
 
 var _sheet: MeshInstance3D
 var _sheet_material := ShaderMaterial.new()

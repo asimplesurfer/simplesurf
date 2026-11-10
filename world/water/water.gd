@@ -145,6 +145,11 @@ func _island_fade(p: Vector2) -> float:
 	return smoothstep(island.z + 4.0, island.z + 28.0, d)
 
 
+## Pista (anillo): el agua de afuera se ve más oscura, para que se note el borde.
+func set_track(center: Vector2, inner: float, outer: float) -> void:
+	_material.set_shader_parameter("track_band", Vector4(center.x, center.y, inner, outer))
+
+
 func set_island(center: Vector2, radius: float) -> void:
 	island = Vector3(center.x, center.y, radius)
 	_material.set_shader_parameter("island", island)

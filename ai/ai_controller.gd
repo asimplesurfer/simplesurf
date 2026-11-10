@@ -148,14 +148,16 @@ func _pick_path() -> void:
 ## Desvío lateral del camino actual en ese ángulo.
 func path_lateral(angle: float, lane: float) -> float:
 	var p: Dictionary = PATHS[path_index]
-	var lat: float = -lane + p.base + p.amp * sin(p.waves * angle + _path_phase)
+	# Los valores de PATHS están pensados para una pista de 30 m de mitad útil.
+	var k := lane / 30.0
+	var lat: float = -lane + p.base * k + p.amp * k * sin(p.waves * angle + _path_phase)
 	return clampf(lat, -lane + 2.0, lane - 2.0)
 
 
 ## Decide a qué desvío lateral apuntar.
 func _think(angle: float, lateral: float) -> void:
 	var track := course.track
-	var lane := track.half_width - 6.0
+	var lane := track.half_width - 3.0
 	_noise = _rng.randf_range(-1.0, 1.0) * difficulty.steer_noise * 4.0
 
 	# Cada vuelta, otro camino (así no van siempre por el mismo lado).
