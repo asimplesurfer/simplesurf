@@ -12,8 +12,9 @@ extends Node3D
 ##       └── BodyPivot   (está en los pies del personaje; se anima entre poses)
 ##           └── Body    (la pastilla)
 ##               └── ojos
-##   ├── Wake            (estela al girar)
-##   └── Spray           (cono de agua del derrape)
+##   ├── Trail           (estela sobre el agua que sigue a la tabla; en coordenadas del mundo)
+##   ├── Wake            (salpicadura al girar)
+##   └── Spray           (cortina de agua del derrape)
 
 @export var body_color: Color = Color(0.98, 0.5, 0.32)
 @export var board_color: Color = Color(1.0, 0.86, 0.3)
@@ -28,7 +29,6 @@ const BOARD_TOP := 0.06
 const LEAN_ANGLE := 0.35
 ## Cuánto se pone de costado la tabla al derrapar (radianes).
 const DRIFT_YAW := 1.15
-const WATER_COLOR := Color(0.9, 0.97, 1.0)
 
 var rider: Rider
 
@@ -51,8 +51,9 @@ var _lean: float = 0.0
 var _drift_yaw: float = 0.0
 var _time: float = 0.0
 
+var _trail: BoardTrail
 var _wake: CPUParticles3D
-var _spray: CPUParticles3D
+var _spray: DriftSpray
 
 
 func _ready() -> void:
@@ -63,6 +64,7 @@ func setup(p_rider: Rider) -> void:
 	rider = p_rider
 	rider.recovery_stage_changed.connect(_on_recovery_stage_changed)
 	rider.mash_pressed.connect(_on_mash_pressed)
+	_trail.setup(rider)
 	_snap_to(rider.recovery_stage)
 
 
@@ -125,45 +127,21 @@ func _build() -> void:
 		eye.position = Vector3(0.12 * side, 0.42, -BODY_RADIUS + 0.03)
 		_body.add_child(eye)
 
-	# Partículas de agua. No están dentro de Tilt para controlar su dirección a mano.
-	_wake = _make_particles(70, 0.6, 0.11)
+	# Efectos de agua. No están dentro de Tilt para controlar su dirección a mano.
+	_trail = BoardTrail.new()
+	_trail.name = "Trail"
+	add_child(_trail)
+
+	_wake = WaterFx.soft_particles(50, 0.6, 0.45)
 	_wake.name = "Wake"
 	_wake.initial_velocity_min = 2.0
 	_wake.initial_velocity_max = 4.0
 	_wake.spread = 18.0
 	add_child(_wake)
 
-	_spray = _make_particles(160, 0.75, 0.16)
+	_spray = DriftSpray.new()
 	_spray.name = "Spray"
-	_spray.initial_velocity_min = 5.0
-	_spray.initial_velocity_max = 8.5
-	_spray.spread = 22.0
 	add_child(_spray)
-
-
-func _make_particles(amount: int, lifetime: float, size: float) -> CPUParticles3D:
-	var mesh := SphereMesh.new()
-	mesh.radius = size
-	mesh.height = size * 2.0
-	mesh.radial_segments = 8
-	mesh.rings = 4
-	mesh.material = ToonMaterial.flat(WATER_COLOR)
-	var p := CPUParticles3D.new()
-	p.mesh = mesh
-	p.amount = amount
-	p.lifetime = lifetime
-	p.local_coords = false
-	p.emitting = false
-	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	p.emission_sphere_radius = 0.2
-	p.gravity = Vector3(0.0, -14.0, 0.0)
-	p.scale_amount_min = 0.5
-	p.scale_amount_max = 1.3
-	var curve := Curve.new()
-	curve.add_point(Vector2(0.0, 1.0))
-	curve.add_point(Vector2(1.0, 0.0))
-	p.scale_amount_curve = curve
-	return p
 
 
 ## Pose del personaje (transform del BodyPivot) para cada etapa.
@@ -262,7 +240,7 @@ func _process(delta: float) -> void:
 	_board_pivot.quaternion = (
 		_board_from.slerp(_board_to, t) * Quaternion(Vector3.UP, -rider.trick_angle)
 	)
-	_update_particles()
+	_update_particles(delta)
 
 	# "Golpe" de cada pulsación: la pastilla se aplasta un poco.
 	_punch = move_toward(_punch, 0.0, delta * 5.0)
@@ -281,20 +259,18 @@ func _idle_offset(stage: Rider.RecoveryStage) -> Vector3:
 			return Vector3(0.0, sin(_time * 3.0) * 0.02, 0.0)
 
 
-func _update_particles() -> void:
+func _update_particles(delta: float) -> void:
 	var on_water := rider.grounded and rider.recovery_stage == Rider.RecoveryStage.STANDING
 
-	# Cono de agua del derrape: sale de la cola de la tabla, hacia atrás y afuera.
-	var drifting := on_water and rider.drift_side != 0
-	_spray.emitting = drifting
-	if drifting:
-		var side := float(rider.drift_side)
-		_spray.position = Vector3(-side * 0.5, 0.15, 0.9)
-		_spray.direction = Vector3(-side * 0.35, 0.55, 1.0).normalized()
+	# Cortina de agua del derrape: sale de la cola de la tabla, hacia atrás y afuera.
+	var drift_side := rider.drift_side if on_water else 0
+	if drift_side != 0:
+		_spray.position = Vector3(-drift_side * 0.45, 0.05, 0.8)
+	_spray.update_spray(drift_side, clampf(rider.speed / 8.0, 0.5, 1.0), delta)
 
-	# Estela al girar: sale del borde de afuera de la curva.
+	# Salpicadura al girar: sale del borde de afuera de la curva.
 	var turn := absf(rider.steer_amount) * rider.speed
-	var turning := on_water and not drifting and turn > 3.0
+	var turning := on_water and drift_side == 0 and turn > 3.0
 	_wake.emitting = turning
 	if turning:
 		var outside := -signf(rider.steer_amount)
