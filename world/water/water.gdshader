@@ -10,6 +10,14 @@ uniform vec4 wave_3;
 uniform float speed_scale = 1.0;
 uniform float wave_time = 0.0; // lo actualiza water.gd cada frame
 
+// Olas grandes (ver swell.gd). a = (centro.x, centro.z, dir.x, dir.z); b = (amplitud, ancho, medio largo, borde)
+uniform vec4 swell_a0; uniform vec4 swell_b0;
+uniform vec4 swell_a1; uniform vec4 swell_b1;
+uniform vec4 swell_a2; uniform vec4 swell_b2;
+uniform vec4 swell_a3; uniform vec4 swell_b3;
+uniform vec4 swell_a4; uniform vec4 swell_b4;
+uniform vec4 swell_a5; uniform vec4 swell_b5;
+
 uniform vec3 deep_color : source_color = vec3(0.02, 0.24, 0.48);
 uniform vec3 shallow_color : source_color = vec3(0.08, 0.48, 0.7);
 uniform vec3 foam_color : source_color = vec3(0.93, 0.98, 1.0);
@@ -34,6 +42,33 @@ void add_wave(vec4 w, vec2 p, inout float h, inout vec2 g) {
 	g += w.xy * (w.z * k * cos(phase));
 }
 
+void add_swell(vec4 a, vec4 b, vec2 p, inout float h, inout vec2 g) {
+	float amp = b.x;
+	if (amp <= 0.0) {
+		return;
+	}
+	vec2 dir = a.zw;
+	vec2 perp = vec2(-dir.y, dir.x);
+	vec2 rel = p - a.xy;
+	float u = dot(rel, dir);
+	float w = dot(rel, perp);
+	float aw = abs(w);
+	float width = b.y;
+	float half_len = b.z;
+	float edge = b.w;
+	if (aw >= half_len || abs(u) > width * 4.0) {
+		return;
+	}
+	float gauss = exp(-(u * u) / (width * width));
+	float t = clamp((aw - (half_len - edge)) / edge, 0.0, 1.0);
+	float e = 1.0 - t * t * (3.0 - 2.0 * t);
+	float de = -6.0 * t * (1.0 - t) / edge;
+	h += amp * gauss * e;
+	float dh_du = amp * (-2.0 * u / (width * width)) * gauss * e;
+	float dh_dw = amp * gauss * de * sign(w);
+	g += dir * dh_du + perp * dh_dw;
+}
+
 void vertex() {
 	vec3 world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	float h = 0.0;
@@ -42,6 +77,12 @@ void vertex() {
 	add_wave(wave_1, world.xz, h, g);
 	add_wave(wave_2, world.xz, h, g);
 	add_wave(wave_3, world.xz, h, g);
+	add_swell(swell_a0, swell_b0, world.xz, h, g);
+	add_swell(swell_a1, swell_b1, world.xz, h, g);
+	add_swell(swell_a2, swell_b2, world.xz, h, g);
+	add_swell(swell_a3, swell_b3, world.xz, h, g);
+	add_swell(swell_a4, swell_b4, world.xz, h, g);
+	add_swell(swell_a5, swell_b5, world.xz, h, g);
 	VERTEX.y += h;
 	NORMAL = normalize(vec3(-g.x, 1.0, -g.y));
 	v_height = h;

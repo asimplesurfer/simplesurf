@@ -3,8 +3,8 @@ extends RefCounted
 ## Registra las acciones de entrada de cada jugador por código.
 ##
 ## Cada jugador tiene sus acciones con prefijo: p1_left, p1_right, p1_a, p1_b...
-## Los botones se nombran por el botón físico (A, B), no por lo que hacen,
-## porque A sirve para varias cosas (derrapar, truco, levantarse).
+## A sirve para varias cosas según el estado: saltar, truco (mantener en el aire)
+## y levantarse (spamear). El derrape tiene su propio botón.
 
 const STICK_DEADZONE := 0.2
 const BUTTON_DEADZONE := 0.5
@@ -22,7 +22,10 @@ static func ensure_player_actions(player_index: int) -> void:
 
 	_add(p + "left", STICK_DEADZONE)
 	_add(p + "right", STICK_DEADZONE)
+	_add(p + "up", STICK_DEADZONE)
+	_add(p + "down", STICK_DEADZONE)
 	_add(p + "a", BUTTON_DEADZONE)
+	_add(p + "drift", BUTTON_DEADZONE)
 	_add(p + "b", BUTTON_DEADZONE)
 	_add(p + "debug_fall", BUTTON_DEADZONE)
 
@@ -32,7 +35,13 @@ static func ensure_player_actions(player_index: int) -> void:
 	_joy_axis(p + "right", device, JOY_AXIS_LEFT_X, 1.0)
 	_joy_button(p + "left", device, JOY_BUTTON_DPAD_LEFT)
 	_joy_button(p + "right", device, JOY_BUTTON_DPAD_RIGHT)
+	_joy_axis(p + "up", device, JOY_AXIS_LEFT_Y, -1.0)
+	_joy_axis(p + "down", device, JOY_AXIS_LEFT_Y, 1.0)
+	_joy_button(p + "up", device, JOY_BUTTON_DPAD_UP)
+	_joy_button(p + "down", device, JOY_BUTTON_DPAD_DOWN)
 	_joy_button(p + "a", device, JOY_BUTTON_A)
+	_joy_button(p + "drift", device, JOY_BUTTON_X)
+	_joy_button(p + "drift", device, JOY_BUTTON_RIGHT_SHOULDER)
 	_joy_button(p + "b", device, JOY_BUTTON_B)
 	_joy_button(p + "debug_fall", device, JOY_BUTTON_Y)
 
@@ -42,9 +51,14 @@ static func ensure_player_actions(player_index: int) -> void:
 		_key(p + "left", KEY_LEFT)
 		_key(p + "right", KEY_D)
 		_key(p + "right", KEY_RIGHT)
+		_key(p + "up", KEY_W)
+		_key(p + "up", KEY_UP)
+		_key(p + "down", KEY_S)
+		_key(p + "down", KEY_DOWN)
 		_key(p + "a", KEY_SPACE)
 		_key(p + "a", KEY_J)
-		_key(p + "b", KEY_SHIFT)
+		_key(p + "drift", KEY_SHIFT)
+		_key(p + "drift", KEY_L)
 		_key(p + "b", KEY_K)
 		_key(p + "debug_fall", KEY_R)
 

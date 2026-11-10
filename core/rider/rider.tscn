@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://core/rider/rider.gd" id="1_rider"]
 [ext_resource type="Resource" path="res://core/rider/rider_stats.tres" id="2_stats"]
@@ -7,6 +7,8 @@
 [ext_resource type="Script" path="res://core/rider/states/state_machine.gd" id="5_machine"]
 [ext_resource type="Script" path="res://core/rider/states/state_riding.gd" id="6_riding"]
 [ext_resource type="Script" path="res://core/rider/states/state_fallen.gd" id="7_fallen"]
+[ext_resource type="Script" path="res://core/rider/states/state_drifting.gd" id="8_drifting"]
+[ext_resource type="Script" path="res://core/rider/states/state_airborne.gd" id="9_airborne"]
 
 [node name="Rider" type="Node3D"]
 script = ExtResource("1_rider")
@@ -27,3 +29,9 @@ script = ExtResource("6_riding")
 
 [node name="Fallen" type="Node" parent="StateMachine"]
 script = ExtResource("7_fallen")
+
+[node name="Drifting" type="Node" parent="StateMachine"]
+script = ExtResource("8_drifting")
+
+[node name="Airborne" type="Node" parent="StateMachine"]
+script = ExtResource("9_airborne")

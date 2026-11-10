@@ -1,11 +1,13 @@
 class_name Hud
 extends CanvasLayer
-## HUD de un jugador. Por ahora: cartel de "spamea" con barra, velocidad y ayuda.
+## HUD de un jugador: cartel de "spamea" con barra, nitro, mensajes de truco,
+## velocidad y ayuda.
 ## Se construye por código para que sea fácil de leer y cambiar.
 
 @export var rider_path: NodePath
 
 const PROMPT_COLOR := Color(1.0, 0.86, 0.2)
+const NITRO_COLOR := Color(0.25, 0.85, 1.0)
 
 var rider: Rider
 
@@ -14,6 +16,9 @@ var _mash_title: Label
 var _mash_hint: Label
 var _mash_bar: ProgressBar
 var _speed_label: Label
+var _nitro_bar: ProgressBar
+var _message: Label
+var _message_time: float = 0.0
 var _flash: float = 0.0
 
 
@@ -22,6 +27,23 @@ func _ready() -> void:
 	rider = get_node_or_null(rider_path) as Rider
 	if rider:
 		rider.mash_pressed.connect(func() -> void: _flash = 1.0)
+		rider.nitro_changed.connect(func(value: float, max_value: float) -> void:
+			_nitro_bar.value = value / max_value
+		)
+		rider.trick_landed.connect(_on_trick_landed)
+		rider.trick_failed.connect(func() -> void: show_message("¡Truco fallido!", Color(1.0, 0.4, 0.35)))
+		rider.drift_hit.connect(func(_victim: Rider) -> void: show_message("¡Lo tiraste!", PROMPT_COLOR))
+
+
+func show_message(text: String, color: Color) -> void:
+	_message.text = text
+	_message.add_theme_color_override("font_color", color)
+	_message_time = 1.4
+
+
+func _on_trick_landed(spins: int) -> void:
+	var text := "¡Truco!" if spins <= 1 else "¡Truco x%d!" % spins
+	show_message(text, NITRO_COLOR)
 
 
 func _process(delta: float) -> void:
@@ -48,6 +70,10 @@ func _process(delta: float) -> void:
 		_mash_title.scale = Vector2.ONE * (1.0 + 0.15 * _flash)
 
 	_speed_label.text = "%d km/h" % roundi(rider.speed * 3.6)
+
+	_message_time = maxf(0.0, _message_time - delta)
+	_message.visible = _message_time > 0.0
+	_message.modulate.a = clampf(_message_time / 0.4, 0.0, 1.0)
 
 
 func _button_name() -> String:
@@ -83,24 +109,35 @@ func _build() -> void:
 	_mash_title = _make_label(48, PROMPT_COLOR)
 	_mash_box.add_child(_mash_title)
 
-	_mash_bar = ProgressBar.new()
-	_mash_bar.min_value = 0.0
-	_mash_bar.max_value = 1.0
-	_mash_bar.show_percentage = false
-	_mash_bar.custom_minimum_size = Vector2(0.0, 26.0)
-	var bg := StyleBoxFlat.new()
-	bg.bg_color = Color(0.0, 0.0, 0.0, 0.55)
-	bg.set_corner_radius_all(13)
-	bg.set_border_width_all(3)
-	bg.border_color = Color.BLACK
-	var fill := StyleBoxFlat.new()
-	fill.bg_color = PROMPT_COLOR
-	fill.set_corner_radius_all(13)
-	fill.set_border_width_all(3)
-	fill.border_color = Color.BLACK
-	_mash_bar.add_theme_stylebox_override("background", bg)
-	_mash_bar.add_theme_stylebox_override("fill", fill)
+	_mash_bar = _make_bar(PROMPT_COLOR, 26.0)
 	_mash_box.add_child(_mash_bar)
+
+	# Nitro, abajo a la izquierda.
+	var nitro_box := VBoxContainer.new()
+	nitro_box.anchor_top = 1.0
+	nitro_box.anchor_bottom = 1.0
+	nitro_box.offset_left = 24.0
+	nitro_box.offset_right = 284.0
+	nitro_box.offset_top = -86.0
+	nitro_box.offset_bottom = -24.0
+	nitro_box.alignment = BoxContainer.ALIGNMENT_END
+	root.add_child(nitro_box)
+	var nitro_label := _make_label(22, NITRO_COLOR)
+	nitro_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	nitro_label.text = "NITRO"
+	nitro_box.add_child(nitro_label)
+	_nitro_bar = _make_bar(NITRO_COLOR, 20.0)
+	nitro_box.add_child(_nitro_bar)
+
+	# Mensajes (truco, etc.), arriba al centro.
+	_message = _make_label(44, NITRO_COLOR)
+	_message.anchor_left = 0.5
+	_message.anchor_right = 0.5
+	_message.offset_left = -300.0
+	_message.offset_right = 300.0
+	_message.offset_top = 90.0
+	_message.visible = false
+	root.add_child(_message)
 
 	# Velocidad, arriba a la derecha.
 	_speed_label = _make_label(28, Color.WHITE)
@@ -117,7 +154,10 @@ func _build() -> void:
 	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	help.position = Vector2(20.0, 16.0)
 	help.text = (
-		"Girar: A / D, flechas o stick\n"
+		"Acelerar / frenar: W / S o stick\n"
+		+ "Girar: A / D o stick\n"
+		+ "Saltar: ESPACIO o (A)  ·  mantener en el aire: truco\n"
+		+ "Derrapar: SHIFT o (X) / (RB)\n"
 		+ "Levantarse: spamear ESPACIO o (A)\n"
 		+ "Caerse (prueba): R o (Y)\n"
 		+ "Si no responde, haz clic en el juego"
@@ -134,3 +174,24 @@ func _make_label(font_size: int, color: Color) -> Label:
 	label.add_theme_color_override("font_outline_color", Color.BLACK)
 	label.add_theme_constant_override("outline_size", maxi(6, font_size / 5))
 	return label
+
+
+func _make_bar(color: Color, height: float) -> ProgressBar:
+	var bar := ProgressBar.new()
+	bar.min_value = 0.0
+	bar.max_value = 1.0
+	bar.show_percentage = false
+	bar.custom_minimum_size = Vector2(0.0, height)
+	var bg := StyleBoxFlat.new()
+	bg.bg_color = Color(0.0, 0.0, 0.0, 0.55)
+	bg.set_corner_radius_all(int(height * 0.5))
+	bg.set_border_width_all(3)
+	bg.border_color = Color.BLACK
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = color
+	fill.set_corner_radius_all(int(height * 0.5))
+	fill.set_border_width_all(3)
+	fill.border_color = Color.BLACK
+	bar.add_theme_stylebox_override("background", bg)
+	bar.add_theme_stylebox_override("fill", fill)
+	return bar

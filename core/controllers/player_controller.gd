@@ -38,10 +38,11 @@ func _unhandled_input(event: InputEvent) -> void:
 func get_input(_delta: float) -> RiderInput:
 	var input := RiderInput.new()
 	input.steer = Input.get_axis(_prefix + "left", _prefix + "right")
-	var a_held := Input.is_action_pressed(_prefix + "a")
-	input.drift = a_held
-	input.trick = a_held
+	input.throttle = Input.get_axis(_prefix + "down", _prefix + "up")
+	input.trick = Input.is_action_pressed(_prefix + "a")
+	input.drift = Input.is_action_pressed(_prefix + "drift")
 	input.turbo = Input.is_action_pressed(_prefix + "b")
+	input.jump_pressed = _pending_mash > 0
 	input.mash_presses = _pending_mash
 	input.debug_fall = _pending_debug_fall
 	_pending_mash = 0

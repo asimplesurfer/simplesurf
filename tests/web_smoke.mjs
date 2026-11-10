@@ -62,13 +62,32 @@ await mash(14, 100);
 await shot('2_acostado');
 
 await mash(25, 100);
-await sleep(1500);
+await sleep(600);
 await shot('3_parado');
 
+await page.keyboard.down('KeyW');
+await sleep(3000);
+await shot('4_andando');
+
 await page.keyboard.down('KeyD');
-await sleep(1200);
+await sleep(500);
+await shot('5_estela');
+await page.keyboard.down('ShiftLeft');
+await sleep(450);
+await shot('6_derrape');
+await page.keyboard.up('ShiftLeft');
 await page.keyboard.up('KeyD');
-await shot('4_girando');
+await sleep(1500);
+
+await page.keyboard.down('Space');
+await sleep(350);
+await shot('7_truco');
+await page.keyboard.up('Space');
+await sleep(2000);
+
+await sleep(6000);
+await shot('8_olas');
+await page.keyboard.up('KeyW');
 
 await browser.close();
 
