@@ -71,10 +71,15 @@ func _connect_rider() -> void:
 	rider.drift_hit.connect(func(_victim: Rider) -> void: show_message("¡Lo tiraste!", PROMPT_COLOR))
 	rider.ring_collected.connect(func() -> void: show_message("+ NITRO", NITRO_COLOR))
 	rider.crashed.connect(func() -> void: show_message("¡Pum!", BAD_COLOR))
+	rider.popped.connect(func() -> void: show_message("¡POP!", PROMPT_COLOR))
 	var pc := rider.controller as PlayerController
 	if pc:
 		pc.pad_layout_changed.connect(func(layout_name: String) -> void:
 			show_message("Mando: " + layout_name, Color.WHITE)
+			_update_help()
+		)
+		pc.jump_style_changed.connect(func(style_name: String) -> void:
+			show_message("Salto: " + style_name, Color.WHITE)
 			_update_help()
 		)
 		pc.forward_mode_changed.connect(func(mode_name: String) -> void:
@@ -201,7 +206,7 @@ func _update_help() -> void:
 		layout = (rider.controller as PlayerController).layout_name()
 	_help.text = (
 		"Avance: %s (G cambia)   ·   Girar: A / D o stick\n" % GameSettings.forward_mode_name()
-		+ "Saltar: ESPACIO o botón de abajo   ·   Pantalla dividida: V cambia\n"
+		+ "Salto: %s (O cambia)   ·   Pantalla dividida: V\n" % GameSettings.jump_style_name()
 		+ "Truco: en el aire, mantener ESPACIO / botón de abajo\n"
 		+ "Derrapar: SHIFT o botón izquierdo / RB   ·   Turbo: E o botón derecho\n"
 		+ "Levantarse: spamear ESPACIO o botón de abajo   ·   Caerse (prueba): F\n"

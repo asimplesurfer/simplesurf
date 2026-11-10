@@ -7,6 +7,7 @@ extends BaseController
 signal pad_layout_changed(layout_name: String)
 signal jump_mode_changed(mode_name: String)
 signal forward_mode_changed(mode_name: String)
+signal jump_style_changed(style_name: String)
 
 const SETTINGS_PATH := "user://settings.cfg"
 
@@ -78,6 +79,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif player_index == 0 and key.pressed and not key.echo and key.physical_keycode == KEY_G:
 			GameSettings.toggle_auto_forward()
 			forward_mode_changed.emit(GameSettings.forward_mode_name())
+		elif player_index == 0 and key.pressed and not key.echo and key.physical_keycode == KEY_O:
+			GameSettings.toggle_jump_style()
+			jump_style_changed.emit(GameSettings.jump_style_name())
 	elif event is InputEventJoypadButton:
 		using_joypad = true
 	elif event is InputEventJoypadMotion and absf(event.axis_value) > 0.5:

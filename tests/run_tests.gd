@@ -33,6 +33,12 @@ func _run() -> void:
 	# Los tests de movimiento usan el modo manual (W acelera); el automático
 	# se prueba aparte.
 	GameSettings.auto_forward = false
+	_check(
+		GameSettings.jump_style == GameSettings.JumpStyle.WAVES,
+		"por defecto el salto es de olas (saltito + pop)"
+	)
+	# Los tests de salto libre van primero; el modo olas se prueba aparte.
+	GameSettings.jump_style = GameSettings.JumpStyle.FREE
 	_test_avatar()
 	await _test_menu()
 	_main = load("res://main.tscn").instantiate()
@@ -69,6 +75,7 @@ func _run() -> void:
 	await _test_jump_and_tricks()
 	await _test_drift()
 	await _test_swells()
+	await _test_wave_jump()
 	await _test_course()
 	await _test_turbo_and_wrong_way()
 	await _test_laps()
@@ -183,6 +190,75 @@ func _test_menu() -> void:
 	await process_frame
 
 
+func _test_wave_jump() -> void:
+	print("Salto de olas (saltito y pop):")
+	GameSettings.jump_style = GameSettings.JumpStyle.WAVES
+	_water.clear_swells()
+	_teleport(Vector3(400.0, 0.0, 900.0))
+	if _rider.is_fallen():
+		await _mash_until_standing(8.0, 4.0)
+	_set_action(&"p1_up", true)
+	await _wait(2.0)
+	await _press(&"p1_a")
+	_check(_state() == &"airborne", "en agua plana, A hace un saltito")
+	var hop := await _measure_air()
+	_check(hop.x < 0.8, "el saltito es bajo, no alcanza para trucos (%.2f m)" % hop.x)
+	await _wait_until_state(&"riding", 2.0)
+	await _wait(0.5)
+
+	var plain := await _ride_into_swell(false, Vector3(800.0, 0.0, 900.0))
+	var popped := await _ride_into_swell(true, Vector3(1200.0, 0.0, 900.0))
+	_check(plain > 0.5, "la ola lanza al aire (%.1f m)" % plain)
+	_check(
+		popped > plain * 1.3,
+		"A al subir la ola (pop) lanza mucho más alto (%.1f m contra %.1f m)" % [popped, plain]
+	)
+	_water.clear_swells()
+	GameSettings.jump_style = GameSettings.JumpStyle.FREE
+
+
+## Anda hacia una ola grande y devuelve la altura máxima del salto.
+## Con press = true, aprieta A mientras sube la ola (pop).
+func _ride_into_swell(press: bool, at: Vector3) -> float:
+	_water.clear_swells()
+	_teleport(at)
+	_rider.heading = 0.0
+	await _wait(1.5)
+	var s := Swell.new()
+	var f := _rider.forward()
+	var ahead := _rider.global_position + f * 25.0
+	s.center = Vector2(ahead.x, ahead.z)
+	s.direction = -Vector2(f.x, f.z)
+	s.speed = 0.0
+	s.max_amplitude = 3.0
+	s.width = 5.5
+	s.half_length = 20.0
+	s.lifetime = 100.0
+	s.grow_time = 0.01
+	_water.add_swell(s)
+	var pressed := false
+	var release_next := false
+	var max_height := 0.0
+	var was_airborne := false
+	for i in int(5.0 * FPS):
+		if release_next:
+			_set_action(&"p1_a", false)
+			release_next = false
+		if press and not pressed and _rider.grounded and _rider.vertical_speed > 2.5:
+			_set_action(&"p1_a", true)
+			pressed = true
+			release_next = true
+		if _state() == &"airborne":
+			was_airborne = true
+			max_height = maxf(max_height, _rider.global_position.y - _water_height_here())
+		elif was_airborne:
+			break
+		await process_frame
+	_set_action(&"p1_a", false)
+	await _wait(0.5)
+	return max_height
+
+
 func _test_bot_paths() -> void:
 	print("Caminos de los bots:")
 	var ai := AIController.new()
@@ -216,6 +292,8 @@ func _test_bot_race() -> void:
 		slot.character = CharacterData.random(rng)
 		slot.difficulty = AIDifficulty.preset(level)
 		config.slots.append(slot)
+	# Los bots juegan con el salto de olas (por defecto).
+	GameSettings.jump_style = GameSettings.JumpStyle.WAVES
 	var main3: Node = load("res://main.tscn").instantiate()
 	var race := main3.get_node("RaceManager") as RaceManager
 	race.config = config

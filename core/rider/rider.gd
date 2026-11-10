@@ -21,6 +21,7 @@ signal drift_started(side: int)
 signal drift_ended
 signal drift_hit(victim: Rider)
 signal motivation_started
+signal popped
 signal ring_collected
 signal crashed
 
@@ -63,6 +64,12 @@ var motivation_timer: float = 0.0
 var turbo_active: bool = false
 ## true cuando ya cruzó la meta (festeja).
 var race_finished: bool = false
+## Modo olas: tiempo que queda del A apretado subiendo la ola (para el pop).
+var pop_buffer: float = 0.0
+## Tiempo desde que una ola lo lanzó (-1 si no fue una ola).
+var wave_air_time: float = -1.0
+## Si ya hizo el pop en este salto.
+var did_pop: bool = false
 var water: Water
 
 var _steer_smoothed: float = 0.0
@@ -91,6 +98,9 @@ func _process(delta: float) -> void:
 	if controls_locked:
 		input = RiderInput.new()
 	motivation_timer = maxf(0.0, motivation_timer - delta)
+	pop_buffer = maxf(0.0, pop_buffer - delta)
+	if wave_air_time >= 0.0:
+		wave_air_time += delta
 	turbo_active = false
 	if input.debug_fall and not is_fallen():
 		fall()
@@ -183,6 +193,10 @@ func stick_to_water(delta: float, allow_launch: bool = true) -> bool:
 		vertical_speed = (vertical_speed - stats.gravity * delta) * boost
 		jump_charge = 0.0
 		grounded = false
+		wave_air_time = 0.0
+		did_pop = false
+		if pop_buffer > 0.0:
+			do_pop()
 		return true
 	vertical_speed = clampf((h - position.y) / delta, -30.0, 30.0)
 	position.y = h
@@ -204,6 +218,25 @@ func jump() -> void:
 	jumped.emit()
 
 
+## Modo olas: saltito en agua plana (no alcanza para un truco).
+func hop() -> void:
+	vertical_speed = maxf(vertical_speed, 0.0) + stats.hop_speed
+	grounded = false
+	wave_air_time = -1.0
+	did_pop = false
+	jumped.emit()
+
+
+## Modo olas: apretar A en la ola hace salir mucho más alto.
+func do_pop() -> void:
+	if did_pop:
+		return
+	did_pop = true
+	pop_buffer = 0.0
+	vertical_speed = maxf(vertical_speed, 0.0) * stats.pop_mult + 2.0
+	popped.emit()
+
+
 ## Mueve en el aire. Devuelve true cuando toca el agua.
 func update_air(delta: float) -> bool:
 	vertical_speed -= stats.gravity * delta
@@ -212,6 +245,7 @@ func update_air(delta: float) -> bool:
 	if position.y <= h and vertical_speed <= 0.0:
 		position.y = h
 		grounded = true
+		wave_air_time = -1.0
 		landed.emit()
 		return true
 	return false

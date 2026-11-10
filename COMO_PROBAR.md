@@ -51,6 +51,7 @@ Con 1 jugador, J1 también puede usar las flechas.
 | R | Otra carrera (al terminar). Con mando: Start |
 | V | Pantalla dividida: lado a lado (por defecto) o arriba y abajo |
 | G | Avance: automático (por defecto; atrás frena) o manual (adelante acelera) |
+| O | Salto: de olas (por defecto) o libre |
 | M | Distribución del mando: estándar o genérico (tipo PlayStation) |
 | H | Ocultar la ayuda |
 
@@ -79,7 +80,9 @@ Si el teclado no responde, haz clic dentro del juego.
   posición, aviso de "¡Al revés!", llegada y resultados.
 - **Largada:** todos parados en la tabla. Si te caés (choque, truco fallido, derrape de otro), una sola barra: la primera mitad te sube a la tabla y la segunda te para.
 - **Pantalla dividida** para 2 jugadores (teclas 1 / 2).
-- **Salto:** tocar para saltar (el salto cargado está guardado en el código, desactivado por ahora).
+- **Salto (modo olas, por defecto):** la altura la dan las olas. En agua plana, A hace un
+  saltito; apretando A al subir una ola (o justo al salir) hacés el **pop** y salís mucho
+  más alto. Con O se cambia al salto libre (A salta alto en cualquier lado).
 - **Truco:** en el aire, mantener gira la tabla y carga nitro. Si toca el agua girando: se cae y pierde el nitro.
 - **Derrape:** tabla de costado, frena y tira una cortina de agua hacia atrás que hace caer a quien esté detrás.
 - **Nitro y turbo:** los círculos de velocidad y los trucos cargan nitro; el turbo lo gasta. Si una ola te lanza con el turbo puesto, salís mucho más alto, y en el aire el turbo te sigue subiendo (cada vez más fuerte) para tener más tiempo de trucos.

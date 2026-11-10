@@ -24,6 +24,14 @@ func exit() -> void:
 
 func update(delta: float, input: RiderInput) -> void:
 	var stats := rider.stats
+	# Pop tardío: A apenas la ola lo lanzó.
+	if (
+		input.jump_pressed
+		and GameSettings.jump_style == GameSettings.JumpStyle.WAVES
+		and rider.wave_air_time >= 0.0
+		and rider.wave_air_time < stats.pop_window
+	):
+		rider.do_pop()
 	rider.apply_steer(input.steer, delta, stats.air_turn_factor)
 	rider.move_forward(delta)
 

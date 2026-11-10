@@ -52,6 +52,11 @@ var _rock_side: Dictionary = {}
 ## Frenar un poco (hay una roca cerca).
 var _brake: bool = false
 var _path_phase: float = 0.0
+## Modo olas: ya intentó el pop en esta subida.
+var _pop_tried: bool = false
+## Decisión de ir o no a cada ola grande.
+var _wave_choice: Dictionary = {}
+var _water: Water
 var _last_lap: int = -1
 
 
@@ -62,6 +67,7 @@ func _ready() -> void:
 	_rng.randomize()
 	_pick_path()
 	course = get_tree().get_first_node_in_group("course") as Course
+	_water = get_tree().get_first_node_in_group("water") as Water
 	race = get_tree().get_first_node_in_group("race_manager") as RaceManager
 
 
@@ -126,6 +132,15 @@ func _drive(delta: float, input: RiderInput) -> void:
 			input.mash_presses = 1
 			_jump_started = true
 		_jump_hold -= delta
+	elif GameSettings.jump_style == GameSettings.JumpStyle.WAVES:
+		# Modo olas: no salta en las rectas; hace el pop al subir una ola.
+		if rider.vertical_speed > rider.stats.pop_min_climb + 1.0 and not _pop_tried:
+			_pop_tried = true
+			if _rng.randf() < difficulty.pop_skill:
+				input.jump_pressed = true
+				input.mash_presses = 1
+		elif rider.vertical_speed < 0.5:
+			_pop_tried = false
 	elif _drift_timer <= 0.0 and _clear_ahead(angle, lateral, 22.0):
 		if _rng.randf() < difficulty.trick_jump_rate * delta:
 			_start_jump()
@@ -178,6 +193,12 @@ func _think(angle: float, lateral: float) -> void:
 			_ring_choice[id] = _rng.randf() < difficulty.ring_seek
 		if _ring_choice[id]:
 			target = track.lateral_of(ring.position)
+
+	# Modo olas: ir a buscar una ola grande que tiene adelante.
+	if GameSettings.jump_style == GameSettings.JumpStyle.WAVES:
+		var swell := _next_swell(angle, lateral)
+		if swell:
+			target = track.lateral_of(Vector3(swell.center.x, 0.0, swell.center.y))
 
 	# Llegando a la meta: derecho al punto más cercano de la línea.
 	var to_line := _arc_ahead(angle, 0.0, lateral)
@@ -254,6 +275,30 @@ func _next_ring(angle: float) -> NitroRing:
 		if d > 4.0 and d < 70.0 and d < best_d:
 			best_d = d
 			best = ring
+	return best
+
+
+## Ola grande más cercana adelante que decidió ir a buscar (o null).
+func _next_swell(angle: float, lateral: float) -> Swell:
+	if _water == null:
+		return null
+	var best: Swell = null
+	var best_d := 1e9
+	for s in _water.swells:
+		if s.amplitude < 1.5:
+			continue
+		var pos := Vector3(s.center.x, 0.0, s.center.y)
+		if absf(course.track.lateral_of(pos)) > course.track.half_width:
+			continue
+		var d := _arc_ahead(angle, course.track.angle_of(pos), lateral)
+		if d < 12.0 or d > 55.0 or d >= best_d:
+			continue
+		var id := s.get_instance_id()
+		if not _wave_choice.has(id):
+			_wave_choice[id] = _rng.randf() < difficulty.wave_seek
+		if _wave_choice[id]:
+			best = s
+			best_d = d
 	return best
 
 
