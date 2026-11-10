@@ -72,6 +72,8 @@ var wave_air_time: float = -1.0
 var did_pop: bool = false
 ## Si en este salto se puede hacer truco (en el saltito no: no daría el tiempo).
 var can_trick: bool = true
+## Handicap (0..1): cuánto ayuda el juego por ir atrás. Lo calcula RaceManager.
+var catchup: float = 0.0
 var water: Water
 
 var _steer_smoothed: float = 0.0
@@ -101,6 +103,8 @@ func _process(delta: float) -> void:
 		input = RiderInput.new()
 	motivation_timer = maxf(0.0, motivation_timer - delta)
 	pop_buffer = maxf(0.0, pop_buffer - delta)
+	if catchup > 0.0 and not controls_locked:
+		add_nitro(stats.catchup_nitro_trickle * catchup * delta)
 	if wave_air_time >= 0.0:
 		wave_air_time += delta
 	turbo_active = false
@@ -189,7 +193,7 @@ func stick_to_water(delta: float, allow_launch: bool = true) -> bool:
 	var ballistic_y := position.y + vertical_speed * delta - 0.5 * stats.gravity * delta * delta
 	if allow_launch and vertical_speed > stats.min_launch_speed and ballistic_y > h:
 		position.y = ballistic_y
-		var boost := stats.wave_launch_boost
+		var boost := stats.wave_launch_boost * jump_mult()
 		if turbo_active:
 			boost *= stats.turbo_launch_mult
 		vertical_speed = (vertical_speed - stats.gravity * delta) * boost
@@ -215,7 +219,7 @@ func jump() -> void:
 	var jump_speed := lerpf(stats.jump_speed_min, stats.jump_speed_max, jump_charge)
 	if GameSettings.jump_mode == GameSettings.JumpMode.TAP:
 		jump_speed = stats.jump_speed_tap
-	vertical_speed = maxf(vertical_speed, 0.0) + jump_speed
+	vertical_speed = maxf(vertical_speed, 0.0) + jump_speed * jump_mult()
 	jump_charge = 0.0
 	grounded = false
 	can_trick = true
@@ -235,7 +239,7 @@ func pop_ready() -> bool:
 
 ## Modo olas: saltito en agua plana (no alcanza para un truco).
 func hop() -> void:
-	vertical_speed = maxf(vertical_speed, 0.0) + stats.hop_speed
+	vertical_speed = maxf(vertical_speed, 0.0) + stats.hop_speed * jump_mult()
 	grounded = false
 	wave_air_time = -1.0
 	did_pop = false
@@ -267,7 +271,20 @@ func update_air(delta: float) -> bool:
 	return false
 
 
+## Multiplicador del nitro que se gana por el handicap.
+func nitro_gain_mult() -> float:
+	return 1.0 + catchup * (stats.catchup_nitro_mult - 1.0)
+
+
+## Multiplicador de la altura de los saltos por el handicap.
+func jump_mult() -> float:
+	return 1.0 + catchup * stats.catchup_jump_bonus
+
+
+## Suma nitro. Lo que se gana se multiplica por el handicap (lo que se gasta no).
 func add_nitro(amount: float) -> void:
+	if amount > 0.0:
+		amount *= nitro_gain_mult()
 	nitro = clampf(nitro + amount, 0.0, NITRO_MAX)
 	nitro_changed.emit(nitro, NITRO_MAX)
 

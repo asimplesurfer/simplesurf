@@ -606,6 +606,27 @@ func _test_split_screen() -> void:
 	var p0 := race.racers[0].position
 	var p1 := race.racers[1].position
 	_check(p0.distance_to(p1) > 4.0, "largan uno al lado del otro")
+
+	# Handicap: el de atrás carga más nitro y salta más alto; el primero no.
+	race.skip_countdown()
+	var first := race.racers[0]
+	var last := race.racers[1]
+	race._progress[last] = race.progress_of(first) - 200.0 / race.course.track.radius
+	await process_frame
+	await process_frame
+	_check(first.catchup < 0.05, "el que va adelante casi no tiene handicap (%.3f)" % first.catchup)
+	_check(last.catchup > 0.99, "el que va 200 m atrás tiene el handicap al máximo")
+	last.reset_nitro()
+	last.add_nitro(0.1)
+	_check(last.nitro > 0.2, "con handicap, el nitro que gana rinde más (%.2f)" % last.nitro)
+	first.reset_nitro()
+	first.add_nitro(0.1)
+	_check(absf(first.nitro - 0.1) < 0.02, "sin handicap, el nitro rinde normal")
+	_check(last.jump_mult() > 1.3 and first.jump_mult() < 1.02, "con handicap salta más alto")
+	_check(
+		split.huds[1]._nitro_label.text.begins_with("NITRO ×"),
+		"el HUD muestra el multiplicador de nitro"
+	)
 	main2.queue_free()
 	GameSettings.player_count = 1
 	GameSettings.bot_count = 0

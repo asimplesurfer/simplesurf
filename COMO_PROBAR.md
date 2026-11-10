@@ -86,6 +86,9 @@ Si el teclado no responde, haz clic dentro del juego.
 - **Truco:** en el aire, mantener gira la tabla y carga nitro. Si toca el agua girando: se cae y pierde el nitro.
 - **Derrape:** tabla de costado, frena y tira una cortina de agua hacia atrás que hace caer a quien esté detrás.
 - **Nitro y turbo:** los círculos de velocidad y los trucos cargan nitro; el turbo lo gasta. Si una ola te lanza con el turbo puesto, salís mucho más alto, y en el aire el turbo te sigue subiendo (cada vez más fuerte) para tener más tiempo de trucos.
+- **Handicap:** cuanto más lejos del primero, el nitro se carga más rápido (hasta ×2,5,
+  y muy atrás también se carga solo) y los saltos son más altos (hasta +35%). El tope es
+  a 120 m del primero. La barra muestra "NITRO ×1.8" cuando hay ayuda.
 - **Motivación:** mini sprint automático al pasar por un círculo o tirar a alguien.
 - **Rocas:** chocarlas tira de la tabla (saltando se esquivan). Chocar la isla también.
 - **Olas grandes** al azar: subirlas rápido te lanza al aire.
