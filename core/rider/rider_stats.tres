@@ -36,6 +36,7 @@ air_turbo_lift = 12.0
 air_turbo_growth = 1.6
 air_turbo_max_up = 9.0
 air_turbo_drain = 0.6
+air_max_height = 15.0
 catchup_full_gap = 120.0
 catchup_nitro_mult = 2.5
 catchup_nitro_trickle = 0.04
