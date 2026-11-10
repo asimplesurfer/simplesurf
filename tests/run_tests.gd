@@ -108,6 +108,9 @@ func _test_throttle_and_steer() -> void:
 	_check(turned > 0.4, "derecha gira a la derecha (%.2f rad)" % turned)
 	_check(turned < 1.3, "girar cuesta más que antes (%.2f rad en 1 s)" % turned)
 	_check(start_pos.distance_to(_rider.global_position) > 8.0, "se desplaza por el agua")
+	var trail := _rider.get_node("Visual/Trail") as BoardTrail
+	_check(trail != null and trail._points.size() > 5, "la tabla deja estela")
+	_check(trail != null and trail.mesh.get_surface_count() > 0, "la estela se dibuja")
 
 	var expected_y := _water.height_at(_rider.global_position.x, _rider.global_position.z)
 	_check(absf(_rider.global_position.y - expected_y) < 0.001, "flota a la altura de la ola")
@@ -213,6 +216,8 @@ func _test_drift() -> void:
 	victim.position.y = _water_height_here()
 	await _wait(0.3)
 	_check(_rider.speed < speed_before, "derrapar frena")
+	var sheet := _rider.get_node("Visual/Spray/Sheet") as MeshInstance3D
+	_check(sheet != null and sheet.visible, "derrapar levanta la cortina de agua")
 	_check(victim.is_fallen(), "el agua del derrape tira al rival que está detrás")
 
 	_set_action(&"p1_drift", false)
