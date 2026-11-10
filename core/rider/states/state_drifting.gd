@@ -57,3 +57,4 @@ func _hit_riders_in_cone() -> void:
 		if absf(rel.dot(side)) <= 0.8 + dist_back * tan_half:
 			other.fall()
 			rider.drift_hit.emit(other)
+			rider.trigger_motivation()

@@ -33,34 +33,40 @@ Ojo: ese zip no funciona con doble clic en `index.html`, necesita un servidor we
 
 ## Controles
 
-| Acción | Teclado | Mando |
-|---|---|---|
-| Acelerar / frenar | W / S o flechas | Stick izquierdo o cruceta |
-| Girar | A / D o flechas | Stick izquierdo o cruceta |
-| Saltar (mantener = cargar, hasta 1 s) | Espacio | Botón de abajo (A / ✕) |
-| Truco (en el aire, mantener) | Espacio | Botón de abajo |
-| Derrapar (mantener) | Shift | Botón izquierdo (X / □) o RB |
-| Levantarse (spamear) | Espacio | Botón de abajo |
-| Caerse (para probar) | R | Botón de arriba (Y / △) |
-| Cambiar distribución del mando | M | — |
+| Acción | J1 teclado | J2 teclado (con 2 jugadores) | Mando |
+|---|---|---|---|
+| Acelerar / frenar | W / S | ↑ / ↓ | Stick o cruceta |
+| Girar | A / D | ← / → | Stick o cruceta |
+| Saltar · truco (en el aire) | Espacio | Enter | Botón de abajo (A / ✕) |
+| Derrapar (mantener) | Shift | . | Botón izquierdo (X / □) o RB |
+| Turbo (gasta nitro) | E | - | Botón derecho (B / ○) |
+| Levantarse (spamear) | Espacio | Enter | Botón de abajo |
+| Caerse (para probar) | F | Retroceso | Botón de arriba (Y / △) |
+
+Con 1 jugador, J1 también puede usar las flechas.
+
+| Tecla | Qué hace |
+|---|---|
+| 1 / 2 | Cantidad de jugadores (reinicia la carrera). Con mando: Select |
+| R | Otra carrera (al terminar). Con mando: Start |
+| T | Salto: "mantener para cargar" o "tocar para saltar" |
+| M | Distribución del mando: estándar o genérico (tipo PlayStation) |
+| H | Ocultar la ayuda |
 
 Si el teclado no responde, haz clic dentro del juego.
 
-**Mandos genéricos:** algunos mandos USB genéricos, en el navegador, tienen los botones
-en otro orden. El juego intenta detectarlo solo; si los botones no coinciden, apreta **M**
-para cambiar entre "estándar" y "genérico (tipo PlayStation)". La elección se guarda.
-
 ## Qué hay por ahora
 
-- La "pastilla" (personaje) sobre una tabla, en un mar con olas que se mueve.
-- El juego empieza con el jugador **caído en el agua**. Spameando A:
-  1. se sube a la tabla y queda **acostado** (spameando también rema un poco);
-  2. si sigue spameando, **se para**. Con W / stick arriba avanza.
-- Si se pulsa lento (menos de ~3,5 veces por segundo) la barra no sube.
-- **Salto:** mantener carga (se agacha) y al soltar salta; más carga, más alto.
-- **Truco:** en el aire, mantener el botón gira la tabla y carga nitro. Al soltar
-  termina el giro. Si toca el agua girando: se cae y pierde el nitro.
-- **Derrape:** la tabla se pone de costado, frena y tira un cono de agua hacia atrás.
-  Si alcanza a otro jugador, lo tira de la tabla.
-- **Olas grandes:** aparecen al azar (nunca encima del jugador). Subirlas rápido te lanza al aire.
+- **Carrera:** isla en el medio, 2 vueltas alrededor. Cuenta regresiva, vueltas,
+  posición, aviso de "¡Al revés!", llegada y resultados.
+- **Largada en el agua:** al "¡YA!" hay que spamear para subirse a la tabla y pararse.
+- **Pantalla dividida** para 2 jugadores (teclas 1 / 2).
+- **Salto:** mantener carga (salta solo al máximo) o, con T, tocar para saltar.
+- **Truco:** en el aire, mantener gira la tabla y carga nitro. Si toca el agua girando: se cae y pierde el nitro.
+- **Derrape:** tabla de costado, frena y tira una cortina de agua hacia atrás que hace caer a quien esté detrás.
+- **Nitro y turbo:** los círculos de velocidad y los trucos cargan nitro; el turbo lo gasta.
+- **Motivación:** mini sprint automático al pasar por un círculo o tirar a alguien.
+- **Rocas:** chocarlas tira de la tabla (saltando se esquivan). Chocar la isla también.
+- **Olas grandes** al azar: subirlas rápido te lanza al aire.
+- Rayas de velocidad con turbo o motivación.
 - Los valores de balance están en `core/rider/rider_stats.tres`.

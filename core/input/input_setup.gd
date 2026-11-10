@@ -27,6 +27,8 @@ const PAD_BUTTONS := {
 		"left": JOY_BUTTON_X,
 		"top": JOY_BUTTON_Y,
 		"rb": JOY_BUTTON_RIGHT_SHOULDER,
+		"start": JOY_BUTTON_START,
+		"select": JOY_BUTTON_BACK,
 	},
 	PadLayout.GENERIC: {
 		"bottom": 2,
@@ -34,6 +36,8 @@ const PAD_BUTTONS := {
 		"left": 3,
 		"top": 0,
 		"rb": 5,
+		"start": 9,
+		"select": 8,
 	},
 }
 
@@ -43,6 +47,44 @@ const BUTTON_ROLES := {
 	"b": ["right"],
 	"drift": ["left", "rb"],
 	"debug_fall": ["top"],
+	"start": ["start"],
+	"select": ["select"],
+}
+
+## Teclado según cuántos juegan. Con 1 jugador, J1 usa todo; con 2, se reparte.
+const KEYBOARD_1P := {
+	0: {
+		"left": [KEY_A, KEY_LEFT],
+		"right": [KEY_D, KEY_RIGHT],
+		"up": [KEY_W, KEY_UP],
+		"down": [KEY_S, KEY_DOWN],
+		"a": [KEY_SPACE, KEY_J],
+		"drift": [KEY_SHIFT, KEY_L],
+		"b": [KEY_E, KEY_K],
+		"debug_fall": [KEY_F],
+	},
+}
+const KEYBOARD_2P := {
+	0: {
+		"left": [KEY_A],
+		"right": [KEY_D],
+		"up": [KEY_W],
+		"down": [KEY_S],
+		"a": [KEY_SPACE],
+		"drift": [KEY_SHIFT],
+		"b": [KEY_E],
+		"debug_fall": [KEY_F],
+	},
+	1: {
+		"left": [KEY_LEFT],
+		"right": [KEY_RIGHT],
+		"up": [KEY_UP],
+		"down": [KEY_DOWN],
+		"a": [KEY_ENTER, KEY_KP_0],
+		"drift": [KEY_PERIOD, KEY_KP_1],
+		"b": [KEY_SLASH, KEY_KP_2],
+		"debug_fall": [KEY_BACKSPACE],
+	},
 }
 
 static var _layouts: Dictionary = {}
@@ -75,22 +117,27 @@ static func ensure_player_actions(player_index: int) -> void:
 	_joy_button(p + "down", device, JOY_BUTTON_DPAD_DOWN)
 	set_pad_layout(player_index, PadLayout.STANDARD)
 
-	# Teclado: por ahora solo el jugador 1.
 	if player_index == 0:
-		_key(p + "left", KEY_A)
-		_key(p + "left", KEY_LEFT)
-		_key(p + "right", KEY_D)
-		_key(p + "right", KEY_RIGHT)
-		_key(p + "up", KEY_W)
-		_key(p + "up", KEY_UP)
-		_key(p + "down", KEY_S)
-		_key(p + "down", KEY_DOWN)
-		_key(p + "a", KEY_SPACE)
-		_key(p + "a", KEY_J)
-		_key(p + "drift", KEY_SHIFT)
-		_key(p + "drift", KEY_L)
-		_key(p + "b", KEY_K)
-		_key(p + "debug_fall", KEY_R)
+		apply_keyboard_layout(1)
+
+
+## Reparte el teclado según la cantidad de jugadores (borra y vuelve a poner las teclas).
+static func apply_keyboard_layout(player_count: int) -> void:
+	var layout: Dictionary = KEYBOARD_2P if player_count >= 2 else KEYBOARD_1P
+	for player in [0, 1]:
+		var p := prefix(player)
+		if not InputMap.has_action(p + "a"):
+			continue
+		for action in InputMap.get_actions():
+			if not String(action).begins_with(p):
+				continue
+			for ev in InputMap.action_get_events(action):
+				if ev is InputEventKey:
+					InputMap.action_erase_event(action, ev)
+		if layout.has(player):
+			for action in layout[player]:
+				for key in layout[player][action]:
+					_key(p + action, key)
 
 
 static func get_pad_layout(player_index: int) -> PadLayout:

@@ -20,6 +20,9 @@ signal nitro_changed(value: float, max_value: float)
 signal drift_started(side: int)
 signal drift_ended
 signal drift_hit(victim: Rider)
+signal motivation_started
+signal ring_collected
+signal crashed
 
 ## En qué punto de la recuperación está: en el agua, acostado sobre la tabla o parado.
 enum RecoveryStage { IN_WATER, PRONE, STANDING }
@@ -28,6 +31,10 @@ const NITRO_MAX := 1.0
 
 @export var player_index: int = 0
 @export var stats: RiderStats
+## Nombre que se muestra (J1, J2, Bot...).
+@export var display_name: String = "J1"
+## true si lo controla una persona (los bots no cuentan para el volumen épico, etc.).
+@export var is_human: bool = true
 
 ## Rumbo en radianes (rotación alrededor de Y). 0 = mirando hacia -Z.
 var heading: float = 0.0
@@ -48,6 +55,12 @@ var trick_angle: float = 0.0
 var drift_side: int = 0
 ## Entrada del frame actual (la leen los estados al entrar).
 var input: RiderInput = RiderInput.new()
+## Si es true, el Rider ignora los controles (cuenta regresiva, por ejemplo).
+var controls_locked: bool = false
+## Tiempo que le queda al mini sprint automático (motivación).
+var motivation_timer: float = 0.0
+## true mientras el turbo está empujando (para efectos visuales).
+var turbo_active: bool = false
 var water: Water
 
 var _steer_smoothed: float = 0.0
@@ -73,6 +86,10 @@ func _process(delta: float) -> void:
 	# cualquier tasa de refresco. Se limita delta para evitar saltos grandes.
 	delta = minf(delta, 1.0 / 20.0)
 	input = controller.get_input(delta)
+	if controls_locked:
+		input = RiderInput.new()
+	motivation_timer = maxf(0.0, motivation_timer - delta)
+	turbo_active = false
 	if input.debug_fall and not is_fallen():
 		fall()
 	state_machine.update(delta, input)
@@ -109,12 +126,39 @@ func current_steer() -> float:
 	return _steer_smoothed
 
 
-func apply_throttle(throttle: float, delta: float) -> void:
+## Acelera / frena según el acelerador. El turbo (si hay nitro) y la
+## motivación suben la velocidad máxima.
+func apply_throttle(throttle: float, delta: float, turbo: bool = false) -> void:
 	var target := stats.max_speed * maxf(throttle, 0.0)
 	var rate := stats.acceleration
+	if motivation_timer > 0.0:
+		target = maxf(target, stats.max_speed * stats.motivation_speed_mult)
+		rate *= 2.0
+	if turbo and nitro > 0.0:
+		turbo_active = true
+		target = maxf(target, stats.max_speed * stats.turbo_speed_mult)
+		rate = stats.acceleration * stats.turbo_accel_mult
+		add_nitro(-stats.turbo_drain * delta)
 	if speed > target:
 		rate = stats.brake_decel if throttle < -0.1 else stats.coast_decel
 	speed = move_toward(speed, target, rate * delta)
+
+
+## Mini sprint automático tras pasar por un círculo o tirar a alguien.
+func trigger_motivation() -> void:
+	if motivation_timer <= 0.0:
+		motivation_started.emit()
+	motivation_timer = stats.motivation_time
+
+
+## Choque (roca, isla): se cae y queda en `safe_position`, fuera del obstáculo.
+func crash(safe_position: Vector3) -> void:
+	position.x = safe_position.x
+	position.z = safe_position.z
+	speed = minf(speed, 3.0)
+	crashed.emit()
+	if not is_fallen():
+		fall()
 
 
 func water_height() -> float:

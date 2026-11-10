@@ -45,7 +45,7 @@ func update(delta: float, input: RiderInput) -> void:
 		state_machine.transition_to(&"drifting")
 		return
 
-	rider.apply_throttle(input.throttle, delta)
+	rider.apply_throttle(input.throttle, delta, input.turbo)
 	rider.apply_steer(input.steer, delta)
 	rider.move_forward(delta)
 	if rider.stick_to_water(delta):

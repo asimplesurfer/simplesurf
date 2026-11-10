@@ -11,13 +11,18 @@ extends Camera3D
 @export var fallen_height: float = 3.2
 @export var follow_sharpness: float = 5.0
 
+## Se puede asignar antes de agregar la cámara al árbol (lo hace SplitScreen).
 var target: Rider
+
+const BASE_FOV := 70.0
+const BOOST_FOV := 82.0
 
 
 func _ready() -> void:
 	# Después del Rider, para seguir su posición de este frame.
 	process_priority = 10
-	target = get_node_or_null(target_path) as Rider
+	if target == null:
+		target = get_node_or_null(target_path) as Rider
 	if target:
 		global_position = _desired_position()
 		look_at(_look_point(), Vector3.UP)
@@ -29,6 +34,9 @@ func _process(delta: float) -> void:
 	var w := 1.0 - exp(-follow_sharpness * minf(delta, 0.1))
 	global_position = global_position.lerp(_desired_position(), w)
 	look_at(_look_point(), Vector3.UP)
+	# Más ángulo de visión con turbo / motivación: sensación de velocidad.
+	var boosting := target.turbo_active or target.motivation_timer > 0.0
+	fov = lerpf(fov, BOOST_FOV if boosting else BASE_FOV, 1.0 - exp(-4.0 * delta))
 
 
 func _desired_position() -> Vector3:
