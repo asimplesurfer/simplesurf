@@ -51,11 +51,30 @@ async function mash(times, intervalMs) {
   }
 }
 
+async function tap(key, times = 1) {
+  for (let i = 0; i < times; i++) {
+    await page.keyboard.down(key);
+    await sleep(60);
+    await page.keyboard.up(key);
+    await sleep(120);
+  }
+}
+
 await page.goto(url);
 await page.waitForSelector('canvas');
-// Esperar a que cargue el motor y arranque la escena.
+// Esperar a que cargue el motor y arranque el menú.
 await sleep(12000);
 await page.mouse.click(480, 270);
+await shot('0_menu');
+// Más peso, piel alien verde, y listo.
+await tap('ArrowRight', 6);
+await tap('ArrowDown');
+await tap('ArrowRight', 3);
+await sleep(500);
+await shot('0b_menu_personalizado');
+await tap('Space');
+// Carga de la carrera y cuenta regresiva.
+await sleep(6000);
 await shot('1_caido');
 
 await mash(14, 100);

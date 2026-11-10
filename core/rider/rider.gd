@@ -61,6 +61,8 @@ var controls_locked: bool = false
 var motivation_timer: float = 0.0
 ## true mientras el turbo está empujando (para efectos visuales).
 var turbo_active: bool = false
+## true cuando ya cruzó la meta (festeja).
+var race_finished: bool = false
 var water: Water
 
 var _steer_smoothed: float = 0.0

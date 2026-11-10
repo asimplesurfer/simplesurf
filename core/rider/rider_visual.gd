@@ -10,18 +10,20 @@ extends Node3D
 ##       │   ├── Board
 ##       │   └── Stripe
 ##       └── BodyPivot   (está en los pies del personaje; se anima entre poses)
-##           └── Body    (la pastilla)
-##               └── ojos
+##           └── Body    (el personaje: Avatar armado con AvatarCore)
 ##   ├── Trail           (estela sobre el agua que sigue a la tabla; en coordenadas del mundo)
 ##   ├── Wake            (salpicadura al girar)
 ##   └── Spray           (cortina de agua del derrape)
 
-@export var body_color: Color = Color(0.98, 0.5, 0.32)
-@export var board_color: Color = Color(1.0, 0.86, 0.3)
+## Cómo se ve el personaje. Se asigna antes de agregar el Rider al árbol.
+@export var character: CharacterData
 @export var stripe_color: Color = Color(0.2, 0.55, 0.95)
 
-const BODY_HEIGHT := 1.6
-const BODY_RADIUS := 0.34
+## Escala del avatar (AvatarCore mide ~2.7 de alto; así queda de ~1.75 m).
+const AVATAR_SCALE := 0.65
+const BODY_HEIGHT := AvatarCore.HEIGHT * AVATAR_SCALE
+## Mitad del grosor del cuerpo acostado.
+const BODY_RADIUS := 0.24
 const BOARD_LENGTH := 2.4
 const BOARD_WIDTH := 0.66
 const BOARD_THICKNESS_SCALE := 0.18
@@ -35,7 +37,7 @@ var rider: Rider
 var _tilt: Node3D
 var _board_pivot: Node3D
 var _body_pivot: Node3D
-var _body: MeshInstance3D
+var _body: Avatar
 
 var _pose_from: Transform3D
 var _pose_to: Transform3D
@@ -53,10 +55,14 @@ var _time: float = 0.0
 
 var _trail: BoardTrail
 var _wake: CPUParticles3D
+## Tiempo desde el último cambio de etapa (caída, subida, parada).
+var _stage_time: float = 0.0
 var _spray: DriftSpray
 
 
 func _ready() -> void:
+	if character == null:
+		character = CharacterData.new()
 	_build()
 
 
@@ -82,7 +88,7 @@ func _build() -> void:
 	var board_mesh := CapsuleMesh.new()
 	board_mesh.radius = BOARD_WIDTH * 0.5
 	board_mesh.height = BOARD_LENGTH
-	board_mesh.material = ToonMaterial.make(board_color, 0.04)
+	board_mesh.material = ToonMaterial.make(character.board_color(), 0.04)
 	var board := MeshInstance3D.new()
 	board.name = "Board"
 	board.mesh = board_mesh
@@ -106,26 +112,13 @@ func _build() -> void:
 	_body_pivot.name = "BodyPivot"
 	_tilt.add_child(_body_pivot)
 
-	var body_mesh := CapsuleMesh.new()
-	body_mesh.radius = BODY_RADIUS
-	body_mesh.height = BODY_HEIGHT
-	body_mesh.material = ToonMaterial.make(body_color, 0.035)
-	_body = MeshInstance3D.new()
+	# El avatar mira hacia +Z; el Rider avanza hacia -Z, así que se gira.
+	_body = Avatar.new()
 	_body.name = "Body"
-	_body.mesh = body_mesh
-	_body.position.y = BODY_HEIGHT * 0.5
+	_body.data = character
+	_body.scale = Vector3.ONE * AVATAR_SCALE
+	_body.rotation.y = PI
 	_body_pivot.add_child(_body)
-
-	# Ojos para saber hacia dónde mira.
-	var eye_mesh := SphereMesh.new()
-	eye_mesh.radius = 0.055
-	eye_mesh.height = 0.13
-	eye_mesh.material = ToonMaterial.flat(Color.BLACK)
-	for side in [-1.0, 1.0]:
-		var eye := MeshInstance3D.new()
-		eye.mesh = eye_mesh
-		eye.position = Vector3(0.12 * side, 0.42, -BODY_RADIUS + 0.03)
-		_body.add_child(eye)
 
 	# Efectos de agua. No están dentro de Tilt para controlar su dirección a mano.
 	_trail = BoardTrail.new()
@@ -148,9 +141,10 @@ func _build() -> void:
 static func body_pose(stage: Rider.RecoveryStage) -> Transform3D:
 	match stage:
 		Rider.RecoveryStage.IN_WATER:
-			# Flotando al costado de la tabla, medio hundido, agarrado del borde.
-			var b := Basis(Vector3.FORWARD, 0.35) * Basis(Vector3.RIGHT, -PI / 2.0 + 0.25)
-			return Transform3D(b, Vector3(0.8, -0.1, 0.75))
+			# En el agua al costado de la tabla, casi parado y hundido hasta el
+			# pecho (así se ven la cabeza y los brazos agitándose).
+			var b := Basis(Vector3.FORWARD, 0.25) * Basis(Vector3.RIGHT, -0.35)
+			return Transform3D(b, Vector3(1.0, -BODY_HEIGHT * 0.62, 0.3))
 		Rider.RecoveryStage.PRONE:
 			# Acostado boca abajo sobre la tabla, con la cabeza hacia adelante.
 			var b := Basis(Vector3.RIGHT, -PI / 2.0)
@@ -186,6 +180,7 @@ func _on_recovery_stage_changed(stage: Rider.RecoveryStage) -> void:
 	_board_from = _board_pivot.quaternion
 	_board_to = board_pose(stage)
 	_pose_t = 0.0
+	_stage_time = 0.0
 	match stage:
 		Rider.RecoveryStage.IN_WATER:  # Sale volando de la tabla.
 			_pose_duration = 0.35
@@ -241,18 +236,49 @@ func _process(delta: float) -> void:
 		_board_from.slerp(_board_to, t) * Quaternion(Vector3.UP, -rider.trick_angle)
 	)
 	_update_particles(delta)
+	_update_avatar_anim(delta)
 
 	# "Golpe" de cada pulsación: la pastilla se aplasta un poco.
 	_punch = move_toward(_punch, 0.0, delta * 5.0)
 	var squash := maxf(_punch * 0.15, rider.jump_charge * 0.3)
-	_body.scale = Vector3(1.0 + squash * 1.1, 1.0 - squash, 1.0 + squash * 1.1)
-	_body.position.y = BODY_HEIGHT * 0.5 * (1.0 - squash)
+	_body.scale = (
+		Vector3(1.0 + squash * 1.1, 1.0 - squash, 1.0 + squash * 1.1) * AVATAR_SCALE
+	)
+
+
+## Elige la animación del personaje según lo que está haciendo el Rider.
+func _update_avatar_anim(delta: float) -> void:
+	_stage_time += delta
+	var stage := rider.recovery_stage
+	var a: StringName = &"ride"
+	_body.effort = clampf(_punch * 1.5, 0.0, 1.0)
+	_body.charge = rider.jump_charge
+	_body.steer = rider.steer_amount
+	match stage:
+		Rider.RecoveryStage.IN_WATER:
+			a = &"flail" if _stage_time < 1.4 or _punch > 0.3 else &"tread"
+		Rider.RecoveryStage.PRONE:
+			a = &"climb" if _stage_time < rider.stats.climb_time else &"paddle"
+			_body.effort = maxf(_body.effort, clampf(rider.speed / 3.0, 0.0, 1.0))
+		_:
+			if _stage_time < 0.3 and _pose_t < 1.0:
+				a = &"pop_up"
+			elif not rider.grounded:
+				a = &"trick" if rider.trick_angle > 0.0 else &"air"
+			elif rider.drift_side != 0:
+				a = &"drift"
+				_body.drift_side = rider.drift_side
+			elif rider.race_finished:
+				a = &"celebrate"
+	_body.anim = a
 
 
 func _idle_offset(stage: Rider.RecoveryStage) -> Vector3:
 	match stage:
 		Rider.RecoveryStage.IN_WATER:
-			return Vector3(0.0, sin(_time * 2.5) * 0.06, 0.0)
+			# Al caer se hunde un poco y vuelve a salir.
+			var dip := -0.35 * sin(clampf(_stage_time / 1.2, 0.0, 1.0) * PI)
+			return Vector3(0.0, sin(_time * 2.5) * 0.06 + dip, 0.0)
 		Rider.RecoveryStage.PRONE:
 			return Vector3(0.0, absf(sin(_time * 7.0)) * 0.03 * minf(rider.speed, 1.0), 0.0)
 		_:

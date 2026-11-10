@@ -55,8 +55,23 @@ Con 1 jugador, J1 también puede usar las flechas.
 
 Si el teclado no responde, haz clic dentro del juego.
 
+## Cómo se juega una carrera
+
+1. **Menú de personaje** (pantalla inicial): cada jugador arma su surfista y aprieta
+   ESPACIO / A para marcar "listo". J1 también elige cuántos bots (0 a 3) y su dificultad.
+   - Arriba / abajo: elegir fila · Izquierda / derecha: cambiar · E / B: volver a editar.
+   - Peso: de Musculoso a Cervecero (6 etapas). Piel: incluye alien verde y azul.
+   - Teclas 1 / 2 (o Select): 1 o 2 jugadores (pantalla dividida).
+2. **Carrera**: cuenta regresiva, 2 vueltas alrededor de la isla.
+3. **Resultados**: R o Start para otra carrera; C o Esc para volver al menú.
+
 ## Qué hay por ahora
 
+- **Personajes** armados por piezas (AvatarCore), con animaciones que comparten todos:
+  agitar los brazos al caer, mantenerse a flote, subirse a la tabla, remar, pararse,
+  equilibrio al girar, agacharse para saltar, truco, derrape, festejo y saludo en el menú.
+- **Bots** con dificultad Fácil / Normal / Difícil: se levantan, esquivan rocas, buscan
+  círculos, derrapan al que tienen detrás, hacen trucos y usan turbo.
 - **Carrera:** isla en el medio, 2 vueltas alrededor. Cuenta regresiva, vueltas,
   posición, aviso de "¡Al revés!", llegada y resultados.
 - **Largada en el agua:** al "¡YA!" hay que spamear para subirse a la tabla y pararse.

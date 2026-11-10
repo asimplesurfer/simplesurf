@@ -1,6 +1,6 @@
 class_name RacerSlot
 extends Resource
-## Un lugar en la carrera: quién corre y con qué colores.
+## Un lugar en la carrera: quién corre (persona o bot) y cómo se ve.
 
 enum Kind { HUMAN, BOT }
 
@@ -8,5 +8,6 @@ enum Kind { HUMAN, BOT }
 ## Jugador (mando / teclado) que lo controla. Solo para humanos.
 @export var player_index: int = 0
 @export var display_name: String = "J1"
-@export var body_color: Color = Color(0.98, 0.5, 0.32)
-@export var board_color: Color = Color(1.0, 0.86, 0.3)
+@export var character: CharacterData
+## Solo para bots.
+@export var difficulty: AIDifficulty

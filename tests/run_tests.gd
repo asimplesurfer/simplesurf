@@ -23,6 +23,9 @@ func _initialize() -> void:
 func _run() -> void:
 	GameSettings.load_settings()
 	GameSettings.player_count = 1
+	GameSettings.bot_count = 0
+	_test_avatar()
+	await _test_menu()
 	_main = load("res://main.tscn").instantiate()
 	root.add_child(_main)
 	await process_frame
@@ -61,7 +64,141 @@ func _run() -> void:
 	await _test_turbo_and_wrong_way()
 	await _test_laps()
 	await _test_split_screen()
+	await _test_bot_race()
 	_finish()
+
+
+func _test_avatar() -> void:
+	print("Personaje:")
+	var parts := AvatarCore.get_avatar(0.0)
+	_check(parts.size() == 12, "el personaje tiene 12 piezas (%d)" % parts.size())
+	_check(AvatarCore.stage_name(0.0) == "Musculoso", "t=0 es Musculoso")
+	_check(AvatarCore.stage_name(1.0) == "Cervecero", "t=1 es Cervecero")
+	_check(AvatarCore.stage_name(0.45) == "Delgado", "t=0.45 es Delgado")
+	var fat := AvatarCore.get_avatar(1.0)
+	var delt_hidden := false
+	var belly_big := false
+	for p in fat:
+		var r: Vector3 = p.radii
+		if p.id == "delt_L" and minf(r.x, minf(r.y, r.z)) < 0.05:
+			delt_hidden = true
+		if p.id == "belly" and r.z > 0.3:
+			belly_big = true
+	_check(delt_hidden, "Cervecero: los hombros desaparecen")
+	_check(belly_big, "Cervecero: panza grande")
+	var green := AvatarCore.get_avatar(0.5, CharacterData.SKIN_COLORS[5])
+	_check(green[0].color == CharacterData.SKIN_COLORS[5], "se puede cambiar el color de piel")
+
+
+func _test_menu() -> void:
+	print("Menú de personaje:")
+	var menu: CharacterSelect = load("res://ui/menus/character_select.tscn").instantiate()
+	menu.auto_start = false
+	var started := [false]
+	menu.start_requested.connect(func() -> void: started[0] = true)
+	root.add_child(menu)
+	await process_frame
+	await process_frame
+	var data := GameSettings.character_for(0)
+	var w := data.weight
+	await _press(&"p1_right")
+	_check(data.weight > w, "derecha cambia el peso (%.2f -> %.2f)" % [w, data.weight])
+	var skin := data.skin_index
+	await _press(&"p1_down")
+	await _press(&"p1_right")
+	_check(data.skin_index != skin, "abajo y derecha cambian la piel")
+	var avatar := menu._panels[0].avatar as Avatar
+	var head := avatar.get_node("head") as MeshInstance3D
+	var mat := head.material_override as StandardMaterial3D
+	_check(mat.albedo_color == data.skin_color(), "el personaje del menú muestra la piel elegida")
+	_check(not started[0], "todavía no empieza")
+	await _press(&"p1_a")
+	_check(started[0], "ESPACIO / A: listo y empieza la carrera")
+	menu.queue_free()
+	await process_frame
+
+
+func _test_bot_race() -> void:
+	print("Carrera de bots (Fácil, Normal y Difícil):")
+	var config := RaceConfig.new()
+	config.laps = 2
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	for level in 3:
+		var slot := RacerSlot.new()
+		slot.kind = RacerSlot.Kind.BOT
+		slot.display_name = AIDifficulty.NAMES[level]
+		slot.character = CharacterData.random(rng)
+		slot.difficulty = AIDifficulty.preset(level)
+		config.slots.append(slot)
+	var main3: Node = load("res://main.tscn").instantiate()
+	var race := main3.get_node("RaceManager") as RaceManager
+	race.config = config
+	root.add_child(main3)
+	await process_frame
+	await process_frame
+	var falls := {}
+	var tricks := {}
+	var crashes := {}
+	var failed := {}
+	var hits := {}
+	var air := {}
+	for r in race.racers:
+		falls[r] = 0
+		tricks[r] = 0
+		crashes[r] = 0
+		failed[r] = 0
+		hits[r] = 0
+		air[r] = 0.0
+		r.fell.connect(func() -> void: falls[r] += 1)
+		r.trick_landed.connect(func(_s: int) -> void: tricks[r] += 1)
+		r.crashed.connect(func() -> void: crashes[r] += 1)
+		r.trick_failed.connect(func() -> void: failed[r] += 1)
+		r.drift_hit.connect(func(_v: Rider) -> void: hits[r] += 1)
+	_check(race.racers.size() == 3 and not race.racers[0].is_human, "3 bots en la carrera")
+	race.skip_countdown()
+
+	var max_seconds := 300.0
+	var frames := 0
+	var stood_up_by := -1.0
+	while race.state != RaceManager.State.FINISHED and frames < int(max_seconds * FPS):
+		await process_frame
+		frames += 1
+		if stood_up_by < 0.0 and not race.racers[0].is_fallen():
+			stood_up_by = frames / float(FPS)
+		for r in race.racers:
+			if not r.grounded:
+				air[r] += 1.0 / FPS
+	var t := frames / float(FPS)
+	_check(stood_up_by > 0.0 and stood_up_by < 3.0, "los bots se levantan solos (%.1f s)" % stood_up_by)
+	_check(race.state == RaceManager.State.FINISHED, "los bots terminan la carrera (%.0f s)" % t)
+	for r in race.ranking():
+		var time_text := "no llegó"
+		if race.finish_times.has(r):
+			time_text = "%.1f s" % race.finish_times[r]
+		print(
+			(
+				"        %dº %-8s %-9s caídas: %d (choques %d, trucos fallidos %d)"
+				+ "  trucos: %d  derribó: %d  aire: %.1f s"
+			)
+			% [
+				race.place_of(r), r.display_name, time_text, falls[r], crashes[r], failed[r],
+				tricks[r], hits[r], air[r]
+			]
+		)
+	var easy: Rider = race.racers[0]
+	var hard: Rider = race.racers[2]
+	if race.finish_times.has(easy) and race.finish_times.has(hard):
+		_check(
+			race.finish_times[hard] < race.finish_times[easy],
+			"Difícil le gana a Fácil"
+		)
+	var total_tricks := 0
+	for r in tricks:
+		total_tricks += tricks[r]
+	_check(total_tricks > 0, "los bots hacen trucos (%d)" % total_tricks)
+	main3.queue_free()
+	await process_frame
 
 
 func _teleport(pos: Vector3) -> void:
@@ -214,13 +351,15 @@ func _test_split_screen() -> void:
 	await process_frame
 	await process_frame
 	GameSettings.player_count = 2
+	GameSettings.bot_count = 1
 	var main2: Node = load("res://main.tscn").instantiate()
 	root.add_child(main2)
 	await process_frame
 	await process_frame
 	var race := main2.get_node("RaceManager") as RaceManager
 	var split := main2.get_node("Views") as SplitScreen
-	_check(race.racers.size() == 2, "2 jugadores: 2 corredores")
+	_check(race.racers.size() == 3, "2 jugadores + 1 bot: 3 corredores")
+	_check(race.humans().size() == 2, "2 personas")
 	_check(split.views.size() == 2, "2 jugadores: 2 pantallas")
 	var bit0 := 1 << Water.FOLLOWER_LAYER_BASE
 	var bit1 := 1 << (Water.FOLLOWER_LAYER_BASE + 1)
@@ -235,6 +374,7 @@ func _test_split_screen() -> void:
 	_check(p0.distance_to(p1) > 4.0, "largan uno al lado del otro")
 	main2.queue_free()
 	GameSettings.player_count = 1
+	GameSettings.bot_count = 0
 	await process_frame
 
 

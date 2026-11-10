@@ -57,7 +57,7 @@ func _build() -> void:
 	box.add_child(_label("Resultados", 44, Color(1.0, 0.86, 0.2)))
 	_list = _label("", 30, Color.WHITE)
 	box.add_child(_list)
-	box.add_child(_label("R o Start: otra carrera\n1 / 2: cantidad de jugadores", 18, Color(0.8, 0.9, 1.0)))
+	box.add_child(_label("R o Start: otra carrera\nC o Esc: cambiar personaje", 18, Color(0.8, 0.9, 1.0)))
 
 
 func _label(text: String, font_size: int, color: Color) -> Label:

@@ -57,7 +57,7 @@ jobs:
 
       - name: Tests
         run: |
-          godot --headless --path . --fixed-fps 60 --script res://tests/run_tests.gd 2>&1 | tee tests.log
+          timeout 900 godot --headless --path . --fixed-fps 60 --script res://tests/run_tests.gd 2>&1 | tee tests.log
           if grep -E "SCRIPT ERROR|Parse Error|Failed to load script|Compile Error" tests.log import.log; then
             echo "::error::Hay errores de scripts (ver arriba)"
             exit 1
