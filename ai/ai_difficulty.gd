@@ -25,6 +25,9 @@ extends Resource
 @export var uses_turbo: bool = true
 ## Cuánto nitro junta antes de usar el turbo.
 @export_range(0.0, 1.0) var turbo_threshold: float = 0.6
+## Hasta cuánto giro usa el turbo (bajo = solo en recta; alto = también en curvas,
+## o sea, lo desperdicia).
+@export_range(0.0, 1.0) var turbo_steer_limit: float = 0.35
 ## Distancia a la que ve las rocas (m).
 @export var look_ahead: float = 26.0
 ## Pulsaciones por segundo al spamear para levantarse (siempre al máximo).
@@ -45,7 +48,10 @@ static func preset(level: int) -> AIDifficulty:
 			d.trick_fail_chance = 0.45
 			d.trick_jump_rate = 0.08
 			d.aggression = 0.1
-			d.uses_turbo = false
+			# Usa el turbo tarde (con la barra casi llena) y mal (también en curvas).
+			d.uses_turbo = true
+			d.turbo_threshold = 0.9
+			d.turbo_steer_limit = 0.9
 			d.look_ahead = 18.0
 			d.pop_skill = 0.25
 			d.wave_seek = 0.3

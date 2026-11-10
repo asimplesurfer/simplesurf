@@ -319,6 +319,9 @@ func _test_bot_race() -> void:
 	var main3: Node = load("res://main.tscn").instantiate()
 	var race := main3.get_node("RaceManager") as RaceManager
 	race.config = config
+	# Sin handicap, para comparar las dificultades entre sí (con handicap
+	# llegan casi juntos y el orden es casi azar).
+	race.catchup_enabled = false
 	root.add_child(main3)
 	await process_frame
 	await process_frame
@@ -623,6 +626,12 @@ func _test_split_screen() -> void:
 	first.add_nitro(0.1)
 	_check(absf(first.nitro - 0.1) < 0.02, "sin handicap, el nitro rinde normal")
 	_check(last.jump_mult() > 1.3 and first.jump_mult() < 1.02, "con handicap salta más alto")
+	_check(last.speed_mult() > 1.19 and first.speed_mult() < 1.01, "con handicap va hasta 20% más rápido")
+	# Una vuelta de atraso: handicap al máximo.
+	race._progress[last] = race.progress_of(first) - TAU
+	await process_frame
+	_check(last.catchup > 0.99, "con una vuelta de atraso el handicap es el máximo")
+	_check(last.trick_grace() > 1.0, "con handicap hay tolerancia al caer de un truco")
 	_check(
 		split.huds[1]._nitro_label.text.begins_with("NITRO ×"),
 		"el HUD muestra el multiplicador de nitro"
@@ -906,6 +915,29 @@ func _test_swells() -> void:
 		if s and not _waves.is_clear_of(s, player):
 			all_clear = false
 	_check(all_clear, "las olas nunca nacen encima del jugador")
+
+	# Olas de frente: adelante (por la pista) y viniendo hacia el jugador.
+	_course.bounds_enabled = false
+	var saved_pos := _rider.position
+	var saved_heading := _rider.heading
+	_teleport(_course.track.position_at(1.0))
+	_rider.heading = _course.track.heading_at(1.0)
+	_waves.incoming_chance = 1.0
+	var incoming_ok := 0
+	var me := Vector2(_rider.position.x, _rider.position.z)
+	var fwd := Vector2(_rider.forward().x, _rider.forward().z)
+	for i in 20:
+		var s := _waves.make_swell()
+		if s == null:
+			continue
+		var to_me := (me - s.center).normalized()
+		var ahead := (s.center - me).dot(fwd)
+		if s.direction.dot(to_me) > 0.75 and ahead > 30.0:
+			incoming_ok += 1
+	_check(incoming_ok >= 18, "las olas nacen adelante y vienen de frente (%d de 20)" % incoming_ok)
+	_waves.incoming_chance = 0.75
+	_rider.position = saved_pos
+	_rider.heading = saved_heading
 
 	_waves.random_seed = 1234
 	_waves._ready()

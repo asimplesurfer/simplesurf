@@ -15,6 +15,12 @@ extends Node
 @export var clearance: float = 12.0
 @export var amplitude_min: float = 2.5
 @export var amplitude_max: float = 4.0
+## Probabilidad de que la ola nazca adelante del jugador (por la pista) y venga
+## de frente hacia él: lo mejor para usarla de rampa y hacer trucos.
+@export_range(0.0, 1.0) var incoming_chance: float = 0.75
+## Distancia por la pista a la que nacen las olas que vienen de frente (m).
+@export var incoming_distance_min: float = 40.0
+@export var incoming_distance_max: float = 75.0
 
 var _rng := RandomNumberGenerator.new()
 var _timer: float = 1.0
@@ -67,6 +73,10 @@ func make_swell() -> Swell:
 	var player := Vector2(target.global_position.x, target.global_position.z)
 	var f := target.forward()
 	var forward := Vector2(f.x, f.z)
+	if _rng.randf() < incoming_chance:
+		var incoming := _make_incoming(target, player)
+		if incoming:
+			return incoming
 	for attempt in 12:
 		var s := Swell.new()
 		# Más seguido adelante del jugador, para que las vea venir.
@@ -85,6 +95,38 @@ func make_swell() -> Swell:
 		s.fade_time = 4.0
 		if is_clear_of(s, player) and _far_from_island(s):
 			return s
+	return null
+
+
+## Ola que nace adelante del jugador, siguiendo la pista, y viene de frente
+## hacia él (cruza todo el ancho de la pista).
+func _make_incoming(target: Rider, player: Vector2) -> Swell:
+	var course := get_tree().get_first_node_in_group("course") as Course
+	var s := Swell.new()
+	var dist := _rng.randf_range(incoming_distance_min, incoming_distance_max)
+	if course:
+		var track := course.track
+		var angle := track.angle_of(target.global_position)
+		var lateral := track.lateral_of(target.global_position)
+		var ahead_angle := angle + dist / maxf(track.radius + lateral, 10.0)
+		var pos := track.position_at(ahead_angle, lateral + _rng.randf_range(-4.0, 4.0))
+		var t := track.tangent_at(ahead_angle)
+		s.center = Vector2(pos.x, pos.z)
+		s.direction = -Vector2(t.x, t.z).normalized().rotated(_rng.randf_range(-0.15, 0.15))
+		s.half_length = course.half_width + 10.0
+	else:
+		var f := target.forward()
+		s.center = player + Vector2(f.x, f.z) * dist
+		s.direction = (player - s.center).normalized()
+		s.half_length = 30.0
+	s.speed = _rng.randf_range(4.0, 6.5)
+	s.max_amplitude = _rng.randf_range(amplitude_min, amplitude_max)
+	s.width = s.max_amplitude * _rng.randf_range(1.6, 2.0)
+	s.lifetime = _rng.randf_range(18.0, 26.0)
+	s.grow_time = 2.0
+	s.fade_time = 4.0
+	if is_clear_of(s, player) and _far_from_island(s):
+		return s
 	return null
 
 

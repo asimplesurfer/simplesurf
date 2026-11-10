@@ -29,11 +29,6 @@ uniform vec3 deep_color : source_color = vec3(0.02, 0.24, 0.48);
 uniform vec3 shallow_color : source_color = vec3(0.08, 0.48, 0.7);
 uniform vec3 foam_color : source_color = vec3(0.93, 0.98, 1.0);
 uniform float foam_height = 0.42;
-// Cuadrícula sutil para que se note la malla y la velocidad.
-uniform vec3 grid_color : source_color = vec3(0.55, 0.85, 0.95);
-uniform float grid_size = 4.0;
-uniform float grid_strength = 0.3;
-uniform float grid_fade_distance = 60.0;
 
 varying float v_height;
 // 0..1: qué tan cerca de la cresta de una ola grande está el punto (para la espuma).
@@ -125,13 +120,6 @@ void fragment() {
 	col = mix(col, shallow_color * 1.15, v_crest * 0.6);
 	foam = max(foam, smoothstep(0.82, 0.95, v_crest));
 	col = mix(col, foam_color, foam * 0.7);
-
-	vec2 gp = v_world.xz / grid_size;
-	vec2 gw = max(fwidth(gp), vec2(0.0001));
-	vec2 gl = abs(fract(gp - 0.5) - 0.5) / gw;
-	float line = 1.0 - clamp(min(gl.x, gl.y), 0.0, 1.0);
-	float fade = 1.0 - smoothstep(grid_fade_distance * 0.5, grid_fade_distance, distance(v_world, CAMERA_POSITION_WORLD));
-	col = mix(col, grid_color, line * grid_strength * fade);
 
 	// Fuera de la pista, el agua más oscura (con un borde suave).
 	if (track_band.w > 0.0) {

@@ -87,11 +87,12 @@ Si el teclado no responde, haz clic dentro del juego.
 - **Derrape:** tabla de costado, frena y tira una cortina de agua hacia atrás que hace caer a quien esté detrás.
 - **Nitro y turbo:** los círculos de velocidad y los trucos cargan nitro; el turbo lo gasta. Si una ola te lanza con el turbo puesto, salís mucho más alto, y en el aire el turbo te sigue subiendo (cada vez más fuerte) para tener más tiempo de trucos.
 - **Handicap:** cuanto más lejos del primero, el nitro se carga más rápido (hasta ×2,5,
-  y muy atrás también se carga solo) y los saltos son más altos (hasta +35%). El tope es
-  a 120 m del primero. La barra muestra "NITRO ×1.8" cuando hay ayuda.
+  y muy atrás también se carga solo) los saltos son más altos (hasta +35%), va hasta un 20% más rápido y
+  hay tolerancia al caer de un truco. El tope es a 120 m del primero (medido por la
+  pista, sumando vueltas: con una vuelta de atraso, el handicap es el máximo). La barra muestra "NITRO ×1.8" cuando hay ayuda.
 - **Motivación:** mini sprint automático al pasar por un círculo o tirar a alguien.
 - **Rocas:** chocarlas tira de la tabla (saltando se esquivan). Chocar la isla también.
-- **Olas grandes** al azar: subirlas rápido te lanza al aire.
+- **Olas grandes:** la mayoría nacen adelante tuyo (por la pista) y vienen de frente hacia vos, para usarlas de rampa; el resto aparecen al azar. Subirlas rápido te lanza al aire.
 - Rayas de velocidad con turbo o motivación.
 - **Música** de fondo (`assets/audio/simple_surf.ogg`, convertida del WAV original que
   está en `assets/audio/source/`). Sube de volumen cuando alguien pasa mucho tiempo en el

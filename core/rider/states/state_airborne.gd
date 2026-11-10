@@ -68,6 +68,12 @@ func update(delta: float, input: RiderInput) -> void:
 		_air_turbo_time = 0.0
 
 	if rider.update_air(delta):
+		# Handicap: si al giro le falta poco, cuenta como terminado.
+		if rider.trick_angle > 0.0:
+			var target := ceilf(rider.trick_angle / TAU - 0.001) * TAU
+			if target - rider.trick_angle <= rider.trick_grace():
+				_spins += roundi(target / TAU)
+				rider.trick_angle = 0.0
 		if rider.trick_angle > 0.0:
 			rider.reset_nitro()
 			rider.trick_failed.emit()

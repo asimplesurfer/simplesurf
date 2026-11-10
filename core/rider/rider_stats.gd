@@ -75,7 +75,9 @@ extends Resource
 @export var air_turbo_drain: float = 0.6
 
 @export_group("Handicap (los de atrás se acercan)")
-## Distancia al primero (m) a la que el handicap llega al máximo.
+## Distancia al primero (m, medida por la pista sumando las vueltas) a la que el
+## handicap llega al máximo. Una vuelta mide ~515 m: con una vuelta de atraso
+## ya es el máximo.
 @export var catchup_full_gap: float = 120.0
 ## Multiplicador máximo del nitro que se gana (círculos y trucos).
 @export var catchup_nitro_mult: float = 2.5
@@ -83,6 +85,11 @@ extends Resource
 @export var catchup_nitro_trickle: float = 0.04
 ## Cuánto más alto salta (olas, pop, saltito) con el handicap al máximo (0.35 = +35%).
 @export var catchup_jump_bonus: float = 0.35
+## Velocidad máxima extra con el handicap al máximo (0.2 = +20%).
+@export var catchup_speed_bonus: float = 0.2
+## Tolerancia al caer de un truco con el handicap al máximo (radianes que le
+## pueden faltar al giro para que igual cuente como bien hecho; ~70°).
+@export var catchup_trick_grace: float = 1.2
 
 @export_group("Derrape")
 ## Velocidad mínima para poder derrapar (m/s).
