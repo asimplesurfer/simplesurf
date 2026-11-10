@@ -365,7 +365,10 @@ func _ride_into_swell(press: bool, at: Vector3) -> float:
 	var max_height := 0.0
 	var was_airborne := false
 	var hud := (_main.get_node("Views") as SplitScreen).huds[0]
+	var max_climb := 0.0
 	for i in int(5.0 * FPS):
+		if _rider.grounded:
+			max_climb = maxf(max_climb, _rider.vertical_speed)
 		if hud._pop_label.visible:
 			_pop_prompt_seen = true
 		if release_next:
@@ -382,6 +385,11 @@ func _ride_into_swell(press: bool, at: Vector3) -> float:
 			break
 		await process_frame
 	_set_action(&"p1_a", false)
+	print(
+		"    ola: subida máx %.2f m/s (mín %.1f), amplitud %.2f, vel %.1f, catchup %.2f, turbo %s, nitro %.2f, ola en %s, rider en %s"
+		% [max_climb, _rider.stats.min_launch_speed, s.amplitude, _rider.speed, _rider.catchup,
+			_rider.turbo_active, _rider.nitro, s.center, _rider.global_position]
+	)
 	await _wait(0.5)
 	return max_height
 
