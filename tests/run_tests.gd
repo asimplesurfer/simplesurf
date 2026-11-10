@@ -103,7 +103,7 @@ func _test_demo() -> void:
 	await process_frame
 	var race := demo.get_node("RaceManager") as RaceManager
 	var split := demo.get_node("Views") as SplitScreen
-	_check(race.racers.size() == 2, "la demo tiene 2 corredores")
+	_check(race.racers.size() == 4, "la demo tiene 4 corredores")
 	_check(race.humans().is_empty(), "son bots")
 	var hard := true
 	for r in race.racers:
@@ -112,11 +112,20 @@ func _test_demo() -> void:
 			hard = false
 	_check(hard, "en la dificultad máxima")
 	_check(split.views.size() == 2, "con pantalla dividida (una vista por bot)")
+	var weights: Array[float] = []
+	for r in race.racers:
+		weights.append((r.get_node("Visual") as RiderVisual).character.weight)
+	var spread := true
+	for i in weights.size():
+		for j in i:
+			if absf(weights[i] - weights[j]) < 0.08:
+				spread = false
+	_check(spread, "los bots tienen pesos distintos %s" % str(weights))
 	race.skip_countdown()
-	await _wait(5.0)
+	await _wait(8.0)
 	var moving := true
 	for r in race.racers:
-		if r.speed < 5.0:
+		if race.progress_of(r) < 0.3:
 			moving = false
 	_check(moving, "los bots arrancan solos")
 	GameSettings.demo_mode = false
@@ -242,12 +251,12 @@ func _test_bot_race() -> void:
 		await process_frame
 		frames += 1
 		if stood_up_by < 0.0 and not race.racers[0].is_fallen():
-			stood_up_by = frames / float(FPS)
+			stood_up_by = (frames - 1) / float(FPS)
 		for r in race.racers:
 			if not r.grounded:
 				air[r] += 1.0 / FPS
 	var t := frames / float(FPS)
-	_check(stood_up_by > 0.0 and stood_up_by < 3.0, "los bots se levantan solos (%.1f s)" % stood_up_by)
+	_check(stood_up_by == 0.0, "los bots largan parados en la tabla")
 	_check(race.state == RaceManager.State.FINISHED, "los bots terminan la carrera (%.0f s)" % t)
 	for r in race.ranking():
 		var time_text := "no llegó"
@@ -287,15 +296,19 @@ func _test_race_start() -> void:
 	print("Largada:")
 	_check(_race.state == RaceManager.State.COUNTDOWN, "empieza con cuenta regresiva")
 	_check(_rider.controls_locked, "durante la cuenta no se puede jugar")
-	_check(_rider.is_fallen(), "en la largada está caído en el agua")
+	_check(
+		not _rider.is_fallen() and _state() == &"riding", "en la largada está parado en la tabla"
+	)
 	var split := _main.get_node("Views") as SplitScreen
 	_check(split != null and split.views.size() == 1, "1 jugador: una sola pantalla")
 	var start_angle := _course.track.angle_of(_rider.global_position)
 	_check(absf(start_angle) < 0.1, "larga en la meta (ángulo %.2f)" % start_angle)
+	_set_action(&"p1_up", true)
 	await _mash(8.0, 1.0)
+	_set_action(&"p1_up", false)
 	_check(
-		_rider.recovery_stage == Rider.RecoveryStage.IN_WATER,
-		"spamear durante la cuenta no hace nada"
+		_state() == &"riding" and _rider.speed < 0.5,
+		"durante la cuenta no se mueve ni salta"
 	)
 	_race.skip_countdown()
 	await process_frame
@@ -510,8 +523,9 @@ func _has_button(action: StringName, button: int) -> bool:
 
 func _test_get_up() -> void:
 	print("Levantarse:")
-	_check(_rider.is_fallen(), "el juego empieza con el jugador caído")
-	_check(_rider.recovery_stage == Rider.RecoveryStage.IN_WATER, "empieza en el agua")
+	await _press(&"p1_debug_fall")
+	_check(_rider.is_fallen(), "F tira al jugador al agua")
+	_check(_rider.recovery_stage == Rider.RecoveryStage.IN_WATER, "cae al agua")
 
 	await _wait(1.0)
 	_check(_rider.is_fallen(), "sin pulsar nada sigue caído")
@@ -528,6 +542,12 @@ func _test_get_up() -> void:
 		"spamear rápido lo sube acostado a la tabla en ~1 s"
 	)
 	_check(_rider.is_fallen(), "acostado todavía no está parado")
+	var hud := (_main.get_node("Views") as SplitScreen).huds[0]
+	await process_frame
+	_check(
+		hud._mash_bar.value >= 0.5 and hud._mash_bar.value < 1.0,
+		"una sola barra: acostado ya está por la mitad (%.2f)" % hud._mash_bar.value
+	)
 
 	await _wait(3.0)
 	_check(_rider.is_fallen(), "si deja de spamear se queda acostado")
@@ -668,6 +688,28 @@ func _test_jump_and_tricks() -> void:
 	await _wait(3.0)
 	GameSettings.jump_mode = GameSettings.JumpMode.TAP
 
+	# Turbo en el aire: sigue subiendo y queda más tiempo en el aire.
+	await _press(&"p1_a")
+	var plain := await _measure_air()
+	await _wait(0.5)
+	_rider.reset_nitro()
+	_rider.add_nitro(1.0)
+	await _press(&"p1_a")
+	_set_action(&"p1_b", true)
+	var boosted := await _measure_air()
+	_set_action(&"p1_b", false)
+	_check(
+		boosted.x > plain.x * 2.0,
+		"turbo en el aire: sube mucho más (%.1f m contra %.1f m)" % [boosted.x, plain.x]
+	)
+	_check(
+		boosted.y > plain.y + 0.5,
+		"turbo en el aire: más tiempo para trucos (%.1f s contra %.1f s)" % [boosted.y, plain.y]
+	)
+	_check(_rider.nitro < 1.0, "el turbo en el aire gasta nitro")
+	await _wait_until_state(&"riding", 3.0)
+	await _wait(0.3)
+
 
 func _test_drift() -> void:
 	print("Derrape:")
@@ -759,6 +801,20 @@ func _charged_jump(seconds: float) -> void:
 	_set_action(&"p1_a", false)
 	await process_frame
 	await process_frame
+
+
+## (altura máxima, segundos en el aire) hasta aterrizar.
+func _measure_air() -> Vector2:
+	var max_height := 0.0
+	var frames := 0
+	for i in int(6.0 * FPS):
+		var h := _rider.global_position.y - _water_height_here()
+		max_height = maxf(max_height, h)
+		if _state() != &"airborne":
+			break
+		frames += 1
+		await process_frame
+	return Vector2(max_height, frames / float(FPS))
 
 
 ## Altura máxima sobre el agua hasta aterrizar.

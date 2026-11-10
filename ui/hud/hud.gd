@@ -167,11 +167,13 @@ func _update_mash(delta: float) -> void:
 	_mash_box.visible = fallen
 	if not fallen:
 		return
+	# Una sola barra: la primera mitad sube a la tabla, la segunda te para.
 	var meter := 0.0
 	var state := rider.state_machine.current
 	if "meter" in state:
 		meter = state.meter
-	_mash_bar.value = meter
+	var half := 0.5 if rider.recovery_stage == Rider.RecoveryStage.PRONE else 0.0
+	_mash_bar.value = half + meter * 0.5
 
 	_mash_title.text = "¡Spamea %s!" % _button_name()
 	if rider.recovery_stage == Rider.RecoveryStage.IN_WATER:

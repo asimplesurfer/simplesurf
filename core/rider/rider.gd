@@ -177,7 +177,10 @@ func stick_to_water(delta: float, allow_launch: bool = true) -> bool:
 	var ballistic_y := position.y + vertical_speed * delta - 0.5 * stats.gravity * delta * delta
 	if allow_launch and vertical_speed > stats.min_launch_speed and ballistic_y > h:
 		position.y = ballistic_y
-		vertical_speed = (vertical_speed - stats.gravity * delta) * stats.wave_launch_boost
+		var boost := stats.wave_launch_boost
+		if turbo_active:
+			boost *= stats.turbo_launch_mult
+		vertical_speed = (vertical_speed - stats.gravity * delta) * boost
 		jump_charge = 0.0
 		grounded = false
 		return true

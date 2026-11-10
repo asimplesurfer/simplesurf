@@ -294,6 +294,10 @@ func _air(_delta: float, input: RiderInput) -> void:
 	var spin := stats.trick_spin_speed
 	var full_turn := TAU / spin
 	var t_land := _time_to_land()
+	# Turbo en el aire para subir más y tener tiempo para más vueltas.
+	if difficulty.uses_turbo and rider.nitro > difficulty.turbo_threshold and rider.vertical_speed > -2.0:
+		input.turbo = true
+		t_land += 0.5
 	if _trick_will_fail:
 		input.trick = true
 		return
