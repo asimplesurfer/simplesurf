@@ -1,0 +1,8 @@
+# Godot
+.godot/
+*.tmp
+# Builds locales
+build/
+# Pruebas en navegador
+node_modules/
+screens/

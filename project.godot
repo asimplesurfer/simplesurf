@@ -1,0 +1,25 @@
+; Archivo de configuración del proyecto de Godot 4.
+; Se puede editar desde Godot (Proyecto > Configuración del proyecto) o a mano.
+
+config_version=5
+
+[application]
+
+config/name="SimpleSurf"
+config/description="Friend slop de surf en 3D."
+run/main_scene="res://main.tscn"
+config/features=PackedStringArray("4.5", "GL Compatibility")
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
+[rendering]
+
+; La web solo soporta el renderer "Compatibility" (WebGL 2).
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true
