@@ -22,6 +22,8 @@ const FOLLOWER_LAYER_BASE := 10
 ## Tiempo de las olas; se comparte con el shader.
 var time: float = 0.0
 var swells: Array[Swell] = []
+## Modo "ola constante a la izquierda" (null = sin ola constante).
+var ring_wave: RingWave = null
 ## Isla: las olas grandes se apagan cerca de la orilla. (x, z, radio); radio 0 = sin isla.
 var island := Vector3.ZERO
 
@@ -89,6 +91,8 @@ func _process(delta: float) -> void:
 		swells[i].update(delta)
 		if swells[i].is_dead():
 			swells.remove_at(i)
+	if ring_wave:
+		ring_wave.update(delta)
 	_push_swells()
 
 	for f in _followers:
@@ -117,13 +121,14 @@ func clear_swells() -> void:
 	_push_swells()
 
 
+## Pone (o saca, con null) la ola constante.
+func set_ring_wave(rw: RingWave) -> void:
+	ring_wave = rw
+	_push_swells()
+
+
 func height_at(x: float, z: float) -> float:
-	var h := waves.height_at(x, z, time)
-	var p := Vector2(x, z)
-	var swell_h := 0.0
-	for s in swells:
-		swell_h += s.height_at(p)
-	return h + swell_h * _island_fade(p)
+	return waves.height_at(x, z, time) + swell_height_at(x, z)
 
 
 ## Altura que aportan solo las olas grandes (para saber si está sobre una).
@@ -132,6 +137,8 @@ func swell_height_at(x: float, z: float) -> float:
 	var h := 0.0
 	for s in swells:
 		h += s.height_at(p)
+	if ring_wave:
+		h += ring_wave.height_at(p)
 	return h * _island_fade(p)
 
 
@@ -141,6 +148,8 @@ func normal_at(x: float, z: float) -> Vector3:
 	var swell_g := Vector2.ZERO
 	for s in swells:
 		swell_g += s.gradient_at(p)
+	if ring_wave:
+		swell_g += ring_wave.gradient_at(p)
 	g += swell_g * _island_fade(p)
 	return Vector3(-g.x, 1.0, -g.y).normalized()
 
@@ -173,3 +182,10 @@ func _push_swells() -> void:
 			b = swells[i].shader_b()
 		_material.set_shader_parameter("swell_a%d" % i, a)
 		_material.set_shader_parameter("swell_b%d" % i, b)
+	var ra := Vector4(0.0, 0.0, 1.0, 1.0)
+	var rb := Vector4.ZERO
+	if ring_wave:
+		ra = ring_wave.shader_a()
+		rb = ring_wave.shader_b()
+	_material.set_shader_parameter("ring_a", ra)
+	_material.set_shader_parameter("ring_b", rb)

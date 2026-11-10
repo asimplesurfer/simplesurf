@@ -19,6 +19,9 @@ uniform vec4 swell_a4; uniform vec4 swell_b4;
 uniform vec4 swell_a5; uniform vec4 swell_b5;
 uniform vec4 swell_a6; uniform vec4 swell_b6;
 uniform vec4 swell_a7; uniform vec4 swell_b7;
+// Ola constante (ver ring_wave.gd). a = (centro.x, centro.z, radio, ancho); b = (amplitud, base, lóbulos, fase)
+uniform vec4 ring_a = vec4(0.0, 0.0, 1.0, 1.0);
+uniform vec4 ring_b = vec4(0.0);
 // Isla (x, z, radio): las olas grandes se apagan cerca de la orilla. Radio 0 = sin isla.
 uniform vec3 island = vec3(0.0);
 // Pista (centro x, centro z, radio de adentro, radio de afuera). 0 = sin pista.
@@ -74,6 +77,36 @@ void add_swell(vec4 a, vec4 b, vec2 p, inout float h, inout vec2 g, inout float 
 	g += dir * dh_du + perp * dh_dw;
 }
 
+void add_ring(vec2 p, inout float h, inout vec2 g, inout float crest) {
+	float amp = ring_b.x;
+	if (amp <= 0.0) {
+		return;
+	}
+	vec2 rel = p - ring_a.xy;
+	float r = length(rel);
+	float width = ring_a.w;
+	float d = r - ring_a.z;
+	if (abs(d) > width * 4.0 || r < 0.001) {
+		return;
+	}
+	float base = ring_b.y;
+	float lobes = ring_b.z;
+	float x = lobes * atan(rel.y, rel.x) + ring_b.w;
+	float c = 0.5 + 0.5 * cos(x);
+	float c5 = c * c * c * c * c;
+	float peak = c5 * c;            // SHARPNESS = 6 (igual que ring_wave.gd)
+	float dpeak = 6.0 * c5 * (-0.5 * sin(x)) * lobes;
+	float gauss = exp(-(d * d) / (width * width));
+	float m = base + (1.0 - base) * peak;
+	h += amp * m * gauss;
+	crest = max(crest, gauss * m * smoothstep(0.3, 1.2, amp));
+	vec2 radial = rel / r;
+	vec2 tangential = vec2(-radial.y, radial.x);
+	float dh_dr = amp * m * (-2.0 * d / (width * width)) * gauss;
+	float dh_da = amp * (1.0 - base) * dpeak * gauss;
+	g += radial * dh_dr + tangential * (dh_da / r);
+}
+
 float island_fade(vec2 p) {
 	if (island.z <= 0.0) {
 		return 1.0;
@@ -102,6 +135,7 @@ void vertex() {
 	add_swell(swell_a5, swell_b5, world.xz, sh, sg, crest);
 	add_swell(swell_a6, swell_b6, world.xz, sh, sg, crest);
 	add_swell(swell_a7, swell_b7, world.xz, sh, sg, crest);
+	add_ring(world.xz, sh, sg, crest);
 	float fade = island_fade(world.xz);
 	h += sh * fade;
 	g += sg * fade;

@@ -1,7 +1,10 @@
 class_name WaveManager
 extends Node
-## Hace aparecer olas grandes al azar alrededor del jugador (modo "oleadas").
-## Nunca aparecen encima del jugador: nacen lejos de él y crecen de a poco.
+## Maneja las olas grandes según el modo (GameSettings.WaveMode):
+## - SURGES: hace aparecer olas grandes al azar alrededor del jugador. Nunca
+##   aparecen encima del jugador: nacen lejos de él y crecen de a poco.
+## - CONSTANT_LEFT: una ola constante a la izquierda (lado de afuera de la
+##   pista), con picos que vienen de frente. No aparecen otras olas grandes.
 
 @export var enabled: bool = true
 ## 0 = distinto cada partida.
@@ -21,6 +24,11 @@ extends Node
 ## Distancia por la pista a la que nacen las olas que vienen de frente (m).
 @export var incoming_distance_min: float = 40.0
 @export var incoming_distance_max: float = 75.0
+## Ola constante: a cuántos metros del centro de la pista va la cresta
+## (+ = hacia afuera, que es la izquierda de quien corre).
+@export var constant_lateral: float = 12.0
+
+var mode: GameSettings.WaveMode = GameSettings.WaveMode.SURGES
 
 var _rng := RandomNumberGenerator.new()
 var _timer: float = 1.0
@@ -33,10 +41,34 @@ func _ready() -> void:
 	else:
 		_rng.randomize()
 	_water = get_tree().get_first_node_in_group("water") as Water
+	GameSettings.load_settings()
+	set_mode(GameSettings.wave_mode)
+
+
+## Cambia el modo de olas (saca las olas del modo anterior).
+func set_mode(new_mode: GameSettings.WaveMode) -> void:
+	mode = new_mode
+	if _water == null:
+		return
+	_water.clear_swells()
+	if mode == GameSettings.WaveMode.CONSTANT_LEFT:
+		_water.set_ring_wave(make_ring_wave())
+	else:
+		_water.set_ring_wave(null)
+
+
+## La ola constante, alrededor de la isla por el lado de afuera de la pista.
+func make_ring_wave() -> RingWave:
+	var rw := RingWave.new()
+	var course := get_tree().get_first_node_in_group("course") as Course
+	if course:
+		rw.center = course.track.center
+		rw.radius = course.track.radius + constant_lateral
+	return rw
 
 
 func _process(delta: float) -> void:
-	if not enabled or _water == null:
+	if not enabled or _water == null or mode != GameSettings.WaveMode.SURGES:
 		return
 	_timer -= delta
 	if _timer > 0.0:

@@ -72,6 +72,9 @@ await shot('0_menu');
 await tap('ArrowRight', 6);
 await tap('ArrowDown');
 await tap('ArrowRight', 3);
+// Fila "Olas" (5 más abajo): ola constante a la izquierda.
+await tap('ArrowDown', 5);
+await tap('ArrowRight');
 await sleep(500);
 await shot('0b_menu_personalizado');
 await tap('Space');

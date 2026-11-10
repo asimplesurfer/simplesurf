@@ -234,6 +234,7 @@ func _update_help() -> void:
 		+ "Derrapar: SHIFT o botón izquierdo / RB   ·   Turbo: E o botón derecho\n"
 		+ "Levantarse: spamear ESPACIO o botón de abajo   ·   Caerse (prueba): F\n"
 		+ "J2: flechas, ENTER salta, . derrapa, - turbo   ·   Esc: menú\n"
+		+ "Olas: %s (se cambia en el menú)\n" % GameSettings.wave_mode_name()
 		+ "Mando: %s (M cambia)   ·   H: ocultar ayuda\n" % layout
 		+ "Si no responde, haz clic en el juego"
 	)
