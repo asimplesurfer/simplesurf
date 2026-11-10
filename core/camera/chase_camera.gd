@@ -13,6 +13,10 @@ extends Camera3D
 
 ## Se puede asignar antes de agregar la cámara al árbol (lo hace SplitScreen).
 var target: Rider
+## Altura mínima de la cámara sobre el agua (para no quedar adentro de una ola grande).
+const MIN_ABOVE_WATER := 1.5
+
+var _water: Water
 
 const BASE_FOV := 70.0
 const BOOST_FOV := 82.0
@@ -23,6 +27,7 @@ func _ready() -> void:
 	process_priority = 10
 	if target == null:
 		target = get_node_or_null(target_path) as Rider
+	_water = get_tree().get_first_node_in_group("water") as Water
 	if target:
 		global_position = _desired_position()
 		look_at(_look_point(), Vector3.UP)
@@ -33,6 +38,11 @@ func _process(delta: float) -> void:
 		return
 	var w := 1.0 - exp(-follow_sharpness * minf(delta, 0.1))
 	global_position = global_position.lerp(_desired_position(), w)
+	# Nunca debajo del agua (con olas grandes, la cámara podía quedar adentro).
+	if _water:
+		var h := _water.height_at(global_position.x, global_position.z) + MIN_ABOVE_WATER
+		if global_position.y < h:
+			global_position.y = h
 	look_at(_look_point(), Vector3.UP)
 	# Más ángulo de visión con turbo / motivación: sensación de velocidad.
 	var boosting := target.turbo_active or target.motivation_timer > 0.0

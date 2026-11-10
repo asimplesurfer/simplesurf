@@ -478,6 +478,23 @@ func _test_split_screen() -> void:
 	_check(race.humans().size() == 2, "2 personas")
 	_check(split.views.size() == 2, "2 jugadores: 2 pantallas")
 	_check(split.get_child(0) is HBoxContainer, "por defecto la pantalla se divide lado a lado")
+	# La cámara nunca queda debajo del agua (olas grandes).
+	var water2 := main2.get_node("Water") as Water
+	var s := Swell.new()
+	var p0r := race.racers[0].position
+	s.center = Vector2(p0r.x, p0r.z) - Vector2(race.racers[0].forward().x, race.racers[0].forward().z) * 7.0
+	s.direction = Vector2.RIGHT
+	s.speed = 0.0
+	s.max_amplitude = 4.0
+	s.width = 6.0
+	s.half_length = 30.0
+	s.lifetime = 100.0
+	s.grow_time = 0.01
+	water2.add_swell(s)
+	await _wait(1.0)
+	var cam := split.cameras[0]
+	var under := cam.global_position.y - water2.height_at(cam.global_position.x, cam.global_position.z)
+	_check(under >= 1.4, "la cámara queda arriba del agua aunque haya una ola grande (%.1f m)" % under)
 	var bit0 := 1 << Water.FOLLOWER_LAYER_BASE
 	var bit1 := 1 << (Water.FOLLOWER_LAYER_BASE + 1)
 	var m0 := split.cameras[0].cull_mask

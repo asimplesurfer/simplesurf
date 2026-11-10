@@ -52,8 +52,8 @@ func _ready() -> void:
 	_help.visible = show_help
 	_update_help()
 	if demo:
-		var tag := _make_label(22, PROMPT_COLOR)
-		tag.text = "DEMO · %s  ·  tocá la pantalla o apretá cualquier botón para jugar" % (
+		var tag := _make_label(18, PROMPT_COLOR)
+		tag.text = "DEMO · %s\nTocá o apretá un botón para jugar" % (
 			rider.display_name if rider else ""
 		)
 		tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
