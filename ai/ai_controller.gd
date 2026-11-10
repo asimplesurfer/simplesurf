@@ -32,6 +32,10 @@ var _trick_will_fail: bool = false
 var _was_airborne: bool = false
 ## Decisión de ir o no a cada círculo (para no cambiar de idea a cada rato).
 var _ring_choice: Dictionary = {}
+## Lado elegido para esquivar cada roca (-1 / 1), hasta pasarla.
+var _rock_side: Dictionary = {}
+## Frenar un poco (hay una roca cerca).
+var _brake: bool = false
 
 
 func _ready() -> void:
@@ -81,7 +85,7 @@ func _drive(delta: float, input: RiderInput) -> void:
 		_think(angle, lateral)
 
 	input.steer = _steer_towards(angle, lateral, _target_lateral)
-	input.throttle = difficulty.max_throttle
+	input.throttle = difficulty.max_throttle * (0.6 if _brake else 1.0)
 
 	# Derrape (para tirar al de atrás).
 	if _drift_timer > 0.0:
@@ -149,24 +153,45 @@ func _think(angle: float, lateral: float) -> void:
 			if rider.speed > rider.stats.drift_min_speed + 1.0 and _rng.randf() < difficulty.aggression:
 				_drift_timer = 0.6
 
-	# Rocas adelante: correrse al costado con más lugar.
+	# Rocas: la más cercana que quede en el camino (entre donde está y adonde
+	# va) se esquiva por el lado elegido, y se mantiene ese lado hasta pasarla.
+	_brake = false
+	var nearest: Rock = null
+	var nearest_ahead := 1e9
 	for rock in course.rocks:
+		var id := rock.get_instance_id()
 		var ahead := _arc_ahead(angle, track.angle_of(rock.position), lateral)
+		if ahead < -3.0:
+			_rock_side.erase(id)
+			continue
 		if ahead <= 0.0 or ahead > difficulty.look_ahead:
 			continue
 		var rock_lat := track.lateral_of(rock.position)
 		var clearance := rock.radius + 2.6
-		var blocks_target := absf(rock_lat - target) < clearance
-		var blocks_path := absf(rock_lat - lateral) < clearance and ahead < 14.0
-		if blocks_target or blocks_path:
-			var left := rock_lat - clearance - 0.5
-			var right := rock_lat + clearance + 0.5
-			if left < -lane:
-				target = right
-			elif right > lane:
-				target = left
-			else:
-				target = left if absf(left - lateral) < absf(right - lateral) else right
+		var lo := minf(lateral, target) - clearance
+		var hi := maxf(lateral, target) + clearance
+		var in_path := rock_lat > lo and rock_lat < hi
+		if (in_path or _rock_side.has(id)) and ahead < nearest_ahead:
+			nearest = rock
+			nearest_ahead = ahead
+	if nearest:
+		var id := nearest.get_instance_id()
+		var rock_lat := track.lateral_of(nearest.position)
+		var clearance := nearest.radius + 3.0
+		if not _rock_side.has(id):
+			var left := rock_lat - clearance
+			var right := rock_lat + clearance
+			var side := -1 if absf(left - lateral) < absf(right - lateral) else 1
+			# Si de ese lado no hay lugar (borde de la pista), el otro.
+			if side < 0 and left < -lane:
+				side = 1
+			elif side > 0 and right > lane:
+				side = -1
+			_rock_side[id] = side
+		target = rock_lat + clearance * _rock_side[id]
+		# Cerca y todavía no está al costado: aflojar para poder girar más cerrado.
+		if nearest_ahead < 14.0 and absf(rock_lat - lateral) < clearance:
+			_brake = true
 
 	_target_lateral = clampf(target, -lane, lane)
 

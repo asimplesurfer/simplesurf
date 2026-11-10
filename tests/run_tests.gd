@@ -102,11 +102,11 @@ func _test_menu() -> void:
 	var data := GameSettings.character_for(0)
 	var w := data.weight
 	await _press(&"p1_right")
-	_check(data.weight > w, "→ cambia el peso (%.2f -> %.2f)" % [w, data.weight])
+	_check(data.weight > w, "derecha cambia el peso (%.2f -> %.2f)" % [w, data.weight])
 	var skin := data.skin_index
 	await _press(&"p1_down")
 	await _press(&"p1_right")
-	_check(data.skin_index != skin, "↓ y → cambian la piel")
+	_check(data.skin_index != skin, "abajo y derecha cambian la piel")
 	var avatar := menu._panels[0].avatar as Avatar
 	var head := avatar.get_node("head") as MeshInstance3D
 	var mat := head.material_override as StandardMaterial3D

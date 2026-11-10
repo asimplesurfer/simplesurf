@@ -65,7 +65,7 @@ func _build() -> void:
 	_footer = _label("", 18, Color.WHITE)
 	root.add_child(_footer)
 	_footer.text = (
-		"↑↓ elegir  ·  ←→ cambiar  ·  ESPACIO / A: ¡listo!  ·  E / B: volver\n"
+		"Arriba / abajo: elegir  ·  Izquierda / derecha: cambiar  ·  ESPACIO / A: ¡listo!  ·  E / B: volver\n"
 		+ "Jugadores: teclas 1 / 2 o Select  ·  J2 usa flechas y ENTER"
 	)
 	_refresh_all()
@@ -111,10 +111,20 @@ func _build_panel(player: int) -> Control:
 	board.position.y = -0.06
 	pivot.add_child(board)
 	var cam := Camera3D.new()
-	cam.position = Vector3(0.0, 1.5, 6.2)
+	cam.transform = Transform3D(Basis.IDENTITY, Vector3(0.0, 1.5, 6.2)).looking_at(
+		Vector3(0.0, 1.3, 0.0), Vector3.UP
+	)
 	cam.fov = 38.0
 	vp.add_child(cam)
-	cam.look_at(Vector3(0.0, 1.3, 0.0), Vector3.UP)
+	var sun := DirectionalLight3D.new()
+	sun.rotation = Vector3(-0.8, 0.5, 0.0)
+	vp.add_child(sun)
+	var env := WorldEnvironment.new()
+	env.environment = Environment.new()
+	env.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.environment.ambient_light_color = Color(0.8, 0.9, 1.0)
+	env.environment.ambient_light_energy = 0.6
+	vp.add_child(env)
 
 	var right := VBoxContainer.new()
 	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
