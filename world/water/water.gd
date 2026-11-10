@@ -7,8 +7,8 @@ extends Node3D
 ## Ofrece height_at() / normal_at() para que las cosas floten justo sobre lo que se ve.
 
 const SHADER := preload("res://world/water/water.gdshader")
-## Cantidad de olas grandes que entiende el shader (swell_a0..swell_a5).
-const MAX_SWELLS := 6
+## Cantidad de olas grandes que entiende el shader (swell_a0..swell_a7).
+const MAX_SWELLS := 8
 
 ## Primera capa de render (índice desde 0) para los planos de cada jugador.
 const FOLLOWER_LAYER_BASE := 10

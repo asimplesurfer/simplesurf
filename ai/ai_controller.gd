@@ -9,11 +9,26 @@ extends BaseController
 ##   3. No quedar justo detrás de un rival cercano (puede derraparle encima).
 ##   4. Derrapar si tiene un rival justo detrás (según agresividad).
 ##   5. Ir al próximo círculo de velocidad (según dificultad).
-##   6. Si no, ir por el lado de adentro (el camino más corto).
+##   6. Si no, seguir su "camino" (hay 5 distintos; cambia en cada vuelta).
+## Llegando a la meta va derecho al punto de la línea que tiene más cerca.
 ## En el aire hace trucos: mantiene mientras le da el tiempo para completar el
 ## giro antes de tocar el agua (a veces se equivoca, según la dificultad).
 
+## Caminos posibles: desvío = base + amplitud * sin(ondas * ángulo + fase).
+## base se mide desde el borde de adentro de la pista (m).
+const PATHS := [
+	{"name": "pegado a la isla", "base": 3.0, "amp": 2.0, "waves": 3.0},
+	{"name": "adentro ondulado", "base": 8.0, "amp": 6.0, "waves": 2.0},
+	{"name": "por el medio", "base": 22.0, "amp": 8.0, "waves": 3.0},
+	{"name": "curva abierta", "base": 14.0, "amp": 11.0, "waves": 1.0},
+	{"name": "zigzag", "base": 11.0, "amp": 7.0, "waves": 5.0},
+]
+## Metros antes de la meta en los que va derecho al punto más cercano de la línea.
+const FINISH_APPROACH := 35.0
+
 var difficulty: AIDifficulty
+## Camino actual (índice en PATHS).
+var path_index: int = 0
 
 var rider: Rider
 var course: Course
@@ -36,6 +51,8 @@ var _ring_choice: Dictionary = {}
 var _rock_side: Dictionary = {}
 ## Frenar un poco (hay una roca cerca).
 var _brake: bool = false
+var _path_phase: float = 0.0
+var _last_lap: int = -1
 
 
 func _ready() -> void:
@@ -43,6 +60,7 @@ func _ready() -> void:
 	if difficulty == null:
 		difficulty = AIDifficulty.preset(1)
 	_rng.randomize()
+	_pick_path()
 	course = get_tree().get_first_node_in_group("course") as Course
 	race = get_tree().get_first_node_in_group("race_manager") as RaceManager
 
@@ -122,14 +140,33 @@ func _start_jump() -> void:
 		_jump_hold = _rng.randf_range(0.6, 1.1)
 
 
+func _pick_path() -> void:
+	path_index = _rng.randi() % PATHS.size()
+	_path_phase = _rng.randf_range(0.0, TAU)
+
+
+## Desvío lateral del camino actual en ese ángulo.
+func path_lateral(angle: float, lane: float) -> float:
+	var p: Dictionary = PATHS[path_index]
+	var lat: float = -lane + p.base + p.amp * sin(p.waves * angle + _path_phase)
+	return clampf(lat, -lane + 2.0, lane - 2.0)
+
+
 ## Decide a qué desvío lateral apuntar.
 func _think(angle: float, lateral: float) -> void:
 	var track := course.track
 	var lane := track.half_width - 6.0
 	_noise = _rng.randf_range(-1.0, 1.0) * difficulty.steer_noise * 4.0
 
-	# Por defecto: el lado de adentro (vuelta más corta), sin pegarse a las boyas.
-	var target := -lane + 3.0 + _noise
+	# Cada vuelta, otro camino (así no van siempre por el mismo lado).
+	if race:
+		var lap := race.lap_of(rider)
+		if lap != _last_lap:
+			if _last_lap >= 0:
+				_pick_path()
+			_last_lap = lap
+
+	var target := path_lateral(angle, lane) + _noise
 
 	# Círculo de velocidad próximo.
 	var ring := _next_ring(angle)
@@ -139,6 +176,11 @@ func _think(angle: float, lateral: float) -> void:
 			_ring_choice[id] = _rng.randf() < difficulty.ring_seek
 		if _ring_choice[id]:
 			target = track.lateral_of(ring.position)
+
+	# Llegando a la meta: derecho al punto más cercano de la línea.
+	var to_line := _arc_ahead(angle, 0.0, lateral)
+	if to_line > 0.0 and to_line < FINISH_APPROACH:
+		target = lateral
 
 	# Rival adelante y cerca: no quedarse justo detrás (puede derrapar).
 	# Rival justo detrás: derraparle encima.

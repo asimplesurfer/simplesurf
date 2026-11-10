@@ -3,7 +3,7 @@ extends Resource
 ## Configuración de una carrera: vueltas y corredores.
 ## Reiniciar es recargar la escena con la misma configuración.
 
-@export var laps: int = 2
+@export var laps: int = 5
 @export var slots: Array[RacerSlot] = []
 
 

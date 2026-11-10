@@ -195,7 +195,7 @@ func _update_help() -> void:
 		layout = (rider.controller as PlayerController).layout_name()
 	_help.text = (
 		"Acelerar / frenar: W / S o stick   ·   Girar: A / D o stick\n"
-		+ "Saltar: ESPACIO o botón de abajo (%s · T cambia)\n" % GameSettings.jump_mode_name()
+		+ "Saltar: ESPACIO o botón de abajo   ·   Pantalla dividida: V cambia\n"
 		+ "Truco: en el aire, mantener ESPACIO / botón de abajo\n"
 		+ "Derrapar: SHIFT o botón izquierdo / RB   ·   Turbo: E o botón derecho\n"
 		+ "Levantarse: spamear ESPACIO o botón de abajo   ·   Caerse (prueba): F\n"

@@ -6,11 +6,11 @@ extends Node
 @export var enabled: bool = true
 ## 0 = distinto cada partida.
 @export var random_seed: int = 0
-@export var spawn_interval_min: float = 1.5
-@export var spawn_interval_max: float = 3.5
+@export var spawn_interval_min: float = 0.8
+@export var spawn_interval_max: float = 2.0
 ## Distancia al jugador a la que pueden nacer (m).
-@export var spawn_distance_min: float = 35.0
-@export var spawn_distance_max: float = 85.0
+@export var spawn_distance_min: float = 30.0
+@export var spawn_distance_max: float = 70.0
 ## Distancia mínima entre el jugador y cualquier parte de la ola al nacer (m).
 @export var clearance: float = 12.0
 @export var amplitude_min: float = 2.5
@@ -80,7 +80,7 @@ func make_swell() -> Swell:
 		# Más alta = más ancha, para que se pueda subir.
 		s.width = s.max_amplitude * _rng.randf_range(1.6, 2.0)
 		s.half_length = _rng.randf_range(22.0, 40.0)
-		s.lifetime = _rng.randf_range(30.0, 45.0)
+		s.lifetime = _rng.randf_range(22.0, 32.0)
 		s.grow_time = 3.0
 		s.fade_time = 4.0
 		if is_clear_of(s, player) and _far_from_island(s):

@@ -1,6 +1,7 @@
 class_name SplitScreen
 extends Control
-## Pantalla dividida: una vista por jugador humano, una arriba de la otra.
+## Pantalla dividida: una vista por jugador humano. Por defecto lado a lado
+## (vertical); con GameSettings.split_vertical = false, una arriba de la otra.
 ## Cada vista es un SubViewport sobre el mismo mundo, con su cámara, su HUD,
 ## sus rayas de velocidad y su propio plano de agua.
 
@@ -18,7 +19,7 @@ func _ready() -> void:
 	var race_manager := get_node(race_manager_path) as RaceManager
 	var water := get_node_or_null(water_path) as Water
 
-	var box := VBoxContainer.new()
+	var box: BoxContainer = HBoxContainer.new() if GameSettings.split_vertical else VBoxContainer.new()
 	box.set_anchors_preset(Control.PRESET_FULL_RECT)
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_theme_constant_override("separation", 4)

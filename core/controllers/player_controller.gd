@@ -74,10 +74,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		var key := event as InputEventKey
 		if key.pressed and not key.echo and key.physical_keycode == KEY_M:
 			toggle_pad_layout()
-		elif player_index == 0 and key.pressed and not key.echo:
-			if key.physical_keycode == KEY_T:
-				GameSettings.toggle_jump_mode()
-				jump_mode_changed.emit(GameSettings.jump_mode_name())
 	elif event is InputEventJoypadButton:
 		using_joypad = true
 	elif event is InputEventJoypadMotion and absf(event.axis_value) > 0.5:
