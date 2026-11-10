@@ -1,0 +1,86 @@
+class_name Swell
+extends RefCounted
+## Una ola grande y localizada: una "loma" alargada que avanza, crece al nacer
+## y se desvanece al morir. La misma fórmula está en water.gdshader (add_swell).
+##
+## En su sistema local: u = a lo largo de la dirección de avance, w = a lo ancho.
+## altura = amplitud * exp(-(u/ancho)²) * borde(w)
+
+var center: Vector2 = Vector2.ZERO
+## Dirección de avance (normalizada).
+var direction: Vector2 = Vector2.RIGHT
+var speed: float = 5.0
+var max_amplitude: float = 1.8
+## Ancho de la loma (m). Más chico = más empinada.
+var width: float = 4.0
+## Mitad del largo de la cresta (m).
+var half_length: float = 18.0
+## Distancia en la que se suavizan las puntas (m).
+var edge: float = 8.0
+var lifetime: float = 12.0
+var grow_time: float = 2.0
+var fade_time: float = 2.5
+
+var age: float = 0.0
+var amplitude: float = 0.0
+
+
+func update(delta: float) -> void:
+	age += delta
+	center += direction * speed * delta
+	var k := minf(age / grow_time, 1.0) * clampf((lifetime - age) / fade_time, 0.0, 1.0)
+	amplitude = max_amplitude * smoothstep(0.0, 1.0, k)
+
+
+func is_dead() -> bool:
+	return age >= lifetime
+
+
+## Distancias en el sistema local de la ola: (u a lo largo, w a lo ancho).
+func local_coords(p: Vector2) -> Vector2:
+	var rel := p - center
+	return Vector2(rel.dot(direction), rel.dot(Vector2(-direction.y, direction.x)))
+
+
+func height_at(p: Vector2) -> float:
+	if amplitude <= 0.0:
+		return 0.0
+	var uw := local_coords(p)
+	var aw := absf(uw.y)
+	if aw >= half_length or absf(uw.x) > width * 4.0:
+		return 0.0
+	return amplitude * exp(-(uw.x * uw.x) / (width * width)) * _edge(aw)
+
+
+## Derivadas de la altura en el mundo: (dh/dx, dh/dz).
+func gradient_at(p: Vector2) -> Vector2:
+	if amplitude <= 0.0:
+		return Vector2.ZERO
+	var uw := local_coords(p)
+	var aw := absf(uw.y)
+	if aw >= half_length or absf(uw.x) > width * 4.0:
+		return Vector2.ZERO
+	var g := exp(-(uw.x * uw.x) / (width * width))
+	var e := _edge(aw)
+	var dh_du := amplitude * (-2.0 * uw.x / (width * width)) * g * e
+	var dh_dw := amplitude * g * _edge_derivative(aw) * signf(uw.y)
+	var perp := Vector2(-direction.y, direction.x)
+	return direction * dh_du + perp * dh_dw
+
+
+func _edge(aw: float) -> float:
+	return 1.0 - smoothstep(half_length - edge, half_length, aw)
+
+
+func _edge_derivative(aw: float) -> float:
+	var t := clampf((aw - (half_length - edge)) / edge, 0.0, 1.0)
+	return -6.0 * t * (1.0 - t) / edge
+
+
+## Parámetros empaquetados para el shader.
+func shader_a() -> Vector4:
+	return Vector4(center.x, center.y, direction.x, direction.y)
+
+
+func shader_b() -> Vector4:
+	return Vector4(amplitude, width, half_length, edge)

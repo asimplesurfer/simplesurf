@@ -14,7 +14,7 @@ var _climb_timer: float = 0.0
 func enter(_previous: StringName) -> void:
 	meter = 0.0
 	_climb_timer = 0.0
-	rider.steer_amount = 0.0
+	rider.reset_steer()
 	rider.set_recovery_stage(Rider.RecoveryStage.IN_WATER)
 	rider.fell.emit()
 	rider.mash_progress_changed.emit(meter, rider.recovery_stage)
@@ -29,9 +29,9 @@ func update(delta: float, input: RiderInput) -> void:
 	rider.speed = move_toward(rider.speed, 0.0, drag * delta)
 
 	if prone:
-		rider.steer(input.steer, delta, stats.prone_turn_factor)
+		rider.apply_steer(input.steer, delta, stats.prone_turn_factor)
 	else:
-		rider.steer_amount = 0.0
+		rider.reset_steer()
 
 	if _climb_timer > 0.0:
 		_climb_timer -= delta
@@ -45,6 +45,7 @@ func update(delta: float, input: RiderInput) -> void:
 
 	meter = maxf(0.0, meter - stats.mash_decay_per_second * delta)
 	rider.move_forward(delta)
+	rider.stick_to_water(delta, false)
 
 	if meter >= 1.0:
 		_advance_stage()

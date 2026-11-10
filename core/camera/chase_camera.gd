@@ -36,7 +36,7 @@ func _desired_position() -> Vector3:
 	var dist := fallen_distance if fallen else distance
 	var h := fallen_height if fallen else height
 	var base := target.global_position
-	base.y = 0.0  # no seguir el sube y baja de las olas (marea)
+	base.y *= 0.6  # seguir solo en parte el sube y baja (olas, saltos)
 	return base - target.forward() * dist + Vector3.UP * h
 
 
