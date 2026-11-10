@@ -623,7 +623,11 @@ func _test_split_screen() -> void:
 	first.add_nitro(0.1)
 	_check(absf(first.nitro - 0.1) < 0.02, "sin handicap, el nitro rinde normal")
 	_check(last.jump_mult() > 1.3 and first.jump_mult() < 1.02, "con handicap salta más alto")
-	_check(last.speed_mult() > 1.05 and first.speed_mult() < 1.01, "con handicap va un poco más rápido")
+	_check(last.speed_mult() > 1.19 and first.speed_mult() < 1.01, "con handicap va hasta 20% más rápido")
+	# Una vuelta de atraso: handicap al máximo.
+	race._progress[last] = race.progress_of(first) - TAU
+	await process_frame
+	_check(last.catchup > 0.99, "con una vuelta de atraso el handicap es el máximo")
 	_check(last.trick_grace() > 1.0, "con handicap hay tolerancia al caer de un truco")
 	_check(
 		split.huds[1]._nitro_label.text.begins_with("NITRO ×"),
