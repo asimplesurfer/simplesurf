@@ -10,7 +10,7 @@ const SHEET_SHADER := preload("res://effects/shaders/spray_sheet.gdshader")
 ## Largo de la cortina hacia atrás (m).
 @export var length: float = 4.2
 ## Altura máxima de la cortina (m).
-@export var height: float = 2.0
+@export var height: float = 2.4
 
 var _sheet: MeshInstance3D
 var _sheet_material := ShaderMaterial.new()

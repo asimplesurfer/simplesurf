@@ -15,11 +15,11 @@ void fragment() {
 	float flow = TIME * 7.0;
 	float streaks = fx_noise(vec2(UV.x * 16.0, s * 3.0 - flow));
 	float spots = fx_noise(vec2(UV.x * 34.0, s * 11.0 - flow * 1.6));
-	float side = 1.0 - smoothstep(0.45, 1.0, t);
+	float side = 1.0 - smoothstep(0.55, 1.0, t);
 	float along = smoothstep(0.0, 0.1, s) * (1.0 - smoothstep(0.5, 1.0, s));
 	// Se va rompiendo más hacia la punta.
 	float breakup = smoothstep(0.15 + 0.55 * s, 0.35 + 0.55 * s, streaks * 0.7 + spots * 0.5);
 	float a = side * along * mix(0.5, 1.0, streaks) * mix(1.0, breakup, 0.75);
 	ALBEDO = color * (0.88 + 0.12 * spots);
-	ALPHA = clamp(a * intensity, 0.0, 0.92);
+	ALPHA = clamp(a * intensity * 1.5, 0.0, 0.95);
 }
