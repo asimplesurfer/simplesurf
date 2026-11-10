@@ -88,7 +88,7 @@ func _apply_to_rider(rider: Rider) -> void:
 
 	for rock in rocks:
 		if not rider.is_fallen() and rock.is_hitting(rider):
-			_crash(rider, rock.safe_position_for(rider))
+			_crash(rider, _safe_position_beside(rock, rider))
 			return
 
 	if not rider.is_fallen():
@@ -101,6 +101,16 @@ func _apply_to_rider(rider: Rider) -> void:
 func _crash(rider: Rider, safe_position: Vector3) -> void:
 	rider.crash(safe_position)
 	rider.heading = track.heading_at(track.angle_of(rider.position))
+
+
+## Al lado de la roca, hacia adentro o afuera de la pista (del lado donde estaba
+## el Rider). Así, al seguir en el sentido de la carrera, se aleja de la roca.
+func _safe_position_beside(rock: Rock, rider: Rider) -> Vector3:
+	var radial := (Vector2(rock.position.x, rock.position.z) - track.center).normalized()
+	var rel := Vector2(rider.position.x - rock.position.x, rider.position.z - rock.position.z)
+	var side := 1.0 if rel.dot(radial) >= 0.0 else -1.0
+	var p := Vector2(rock.position.x, rock.position.z) + radial * side * (rock.radius + 2.0)
+	return Vector3(p.x, rider.position.y, p.y)
 
 
 func _water_height(x: float, z: float) -> float:
