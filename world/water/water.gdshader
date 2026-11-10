@@ -10,12 +10,12 @@ uniform vec4 wave_3;
 uniform float speed_scale = 1.0;
 uniform float wave_time = 0.0; // lo actualiza water.gd cada frame
 
-uniform vec3 deep_color : source_color = vec3(0.04, 0.36, 0.62);
-uniform vec3 shallow_color : source_color = vec3(0.16, 0.64, 0.82);
+uniform vec3 deep_color : source_color = vec3(0.02, 0.24, 0.48);
+uniform vec3 shallow_color : source_color = vec3(0.08, 0.48, 0.7);
 uniform vec3 foam_color : source_color = vec3(0.93, 0.98, 1.0);
-uniform float foam_height = 0.36;
+uniform float foam_height = 0.42;
 // Cuadrícula sutil para que se note la malla y la velocidad.
-uniform vec3 grid_color : source_color = vec3(0.62, 0.9, 0.98);
+uniform vec3 grid_color : source_color = vec3(0.55, 0.85, 0.95);
 uniform float grid_size = 4.0;
 uniform float grid_strength = 0.3;
 uniform float grid_fade_distance = 60.0;
@@ -51,7 +51,7 @@ void vertex() {
 void fragment() {
 	vec3 col = mix(deep_color, shallow_color, smoothstep(-0.5, 0.5, v_height));
 	float foam = smoothstep(foam_height, foam_height + 0.1, v_height);
-	col = mix(col, foam_color, foam * 0.85);
+	col = mix(col, foam_color, foam * 0.7);
 
 	vec2 gp = v_world.xz / grid_size;
 	vec2 gw = max(fwidth(gp), vec2(0.0001));
@@ -61,6 +61,6 @@ void fragment() {
 	col = mix(col, grid_color, line * grid_strength * fade);
 
 	ALBEDO = col;
-	ROUGHNESS = 0.3;
-	SPECULAR = 0.4;
+	ROUGHNESS = 0.55;
+	SPECULAR = 0.2;
 }

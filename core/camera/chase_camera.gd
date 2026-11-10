@@ -3,12 +3,12 @@ extends Camera3D
 ## Cámara que sigue al Rider desde atrás. Una por jugador (player_index).
 
 @export var target_path: NodePath
-@export var distance: float = 7.5
-@export var height: float = 3.3
+@export var distance: float = 6.0
+@export var height: float = 2.7
 @export var look_height: float = 1.0
 ## Cámara más cerca cuando está caído, para ver bien la animación.
-@export var fallen_distance: float = 5.0
-@export var fallen_height: float = 2.4
+@export var fallen_distance: float = 4.5
+@export var fallen_height: float = 3.2
 @export var follow_sharpness: float = 5.0
 
 var target: Rider
