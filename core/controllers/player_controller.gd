@@ -5,6 +5,7 @@ extends BaseController
 ## y la elección se guarda para la próxima vez.
 
 signal pad_layout_changed(layout_name: String)
+signal jump_mode_changed(mode_name: String)
 
 const SETTINGS_PATH := "user://settings.cfg"
 
@@ -21,6 +22,7 @@ var _manual_layout: int = -1
 
 
 func _ready() -> void:
+	GameSettings.load_settings()
 	var rider := get_parent() as Rider
 	if rider:
 		player_index = rider.player_index
@@ -70,8 +72,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey:
 		using_joypad = false
 		var key := event as InputEventKey
-		if player_index == 0 and key.pressed and not key.echo and key.physical_keycode == KEY_M:
-			toggle_pad_layout()
+		if player_index == 0 and key.pressed and not key.echo:
+			if key.physical_keycode == KEY_M:
+				toggle_pad_layout()
+			elif key.physical_keycode == KEY_T:
+				GameSettings.toggle_jump_mode()
+				jump_mode_changed.emit(GameSettings.jump_mode_name())
 	elif event is InputEventJoypadButton:
 		using_joypad = true
 	elif event is InputEventJoypadMotion and absf(event.axis_value) > 0.5:

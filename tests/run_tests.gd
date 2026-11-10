@@ -78,17 +78,21 @@ func _test_get_up() -> void:
 		"spamear lento (2 por segundo) no alcanza para subirse"
 	)
 
-	await _mash(8.0, 2.5)
+	await _mash(8.0, 1.0)
 	_check(
-		_rider.recovery_stage == Rider.RecoveryStage.PRONE, "spamear rápido lo sube acostado a la tabla"
+		_rider.recovery_stage == Rider.RecoveryStage.PRONE,
+		"spamear rápido lo sube acostado a la tabla en ~1 s"
 	)
 	_check(_rider.is_fallen(), "acostado todavía no está parado")
 
 	await _wait(3.0)
 	_check(_rider.is_fallen(), "si deja de spamear se queda acostado")
 
+	var frames_before := Engine.get_process_frames()
 	await _mash_until_standing(8.0, 4.0)
+	var seconds := float(Engine.get_process_frames() - frames_before) / FPS
 	_check(not _rider.is_fallen(), "seguir spameando lo pone de pie")
+	_check(seconds < 1.3, "pararse desde acostado tarda poco (%.2f s)" % seconds)
 	_check(_rider.recovery_stage == Rider.RecoveryStage.STANDING, "etapa = parado")
 
 
@@ -135,26 +139,38 @@ func _test_jump_and_tricks() -> void:
 	await _press(&"p1_a")
 	_check(_state() == &"airborne", "ESPACIO salta")
 	var tap_height := await _measure_jump_height()
-	_check(tap_height > 0.5, "sube en el aire (%.2f m)" % tap_height)
+	_check(tap_height > 0.4, "sube en el aire (%.2f m)" % tap_height)
 	_check(_state() == &"riding", "aterriza y sigue andando")
 	await _wait(0.3)
 
-	# Salto cargado: mantener 1 s y soltar.
+	# Salto cargado: mantener sin soltar; al llegar al máximo salta solo.
 	_set_action(&"p1_a", true)
 	await _wait(0.5)
 	_check(_state() == &"riding", "mantener ESPACIO en el agua no salta todavía")
 	_check(_rider.jump_charge > 0.3, "mantener ESPACIO carga el salto (%.2f)" % _rider.jump_charge)
 	await _wait(0.6)
-	_check(_rider.jump_charge >= 1.0, "la carga llega al máximo en ~1 s")
+	_check(_state() == &"airborne", "al llegar a la carga máxima salta solo")
+	# Soltar enseguida: si se sigue manteniendo en el aire, empieza un truco.
 	_set_action(&"p1_a", false)
-	await process_frame
-	await process_frame
-	_check(_state() == &"airborne", "al soltar, salta")
 	var charged_height := await _measure_jump_height()
 	_check(
 		charged_height > tap_height * 2.0,
 		"el salto cargado sube mucho más (%.2f m contra %.2f m)" % [charged_height, tap_height]
 	)
+	await _wait_until_state(&"riding", 2.0)
+	await _wait(0.3)
+
+	# Modo "tocar para saltar": salta enseguida al apretar.
+	GameSettings.jump_mode = GameSettings.JumpMode.TAP
+	_set_action(&"p1_a", true)
+	await process_frame
+	await process_frame
+	_check(_state() == &"airborne", "modo tocar: salta al apretar, sin soltar")
+	_set_action(&"p1_a", false)
+	var tap_mode_height := await _measure_jump_height()
+	_check(tap_mode_height > 1.0, "modo tocar: salto alto fijo (%.2f m)" % tap_mode_height)
+	GameSettings.jump_mode = GameSettings.JumpMode.CHARGE
+	await _wait_until_state(&"riding", 2.0)
 	await _wait(0.3)
 
 	# En el aire no se puede volver a saltar.

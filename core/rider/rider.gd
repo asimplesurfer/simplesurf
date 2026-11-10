@@ -144,8 +144,11 @@ func stick_to_water(delta: float, allow_launch: bool = true) -> bool:
 
 
 ## Salta con la fuerza que indica jump_charge (0 = toque, 1 = cargado al máximo).
+## En el modo "tocar para saltar" la altura es fija.
 func jump() -> void:
 	var jump_speed := lerpf(stats.jump_speed_min, stats.jump_speed_max, jump_charge)
+	if GameSettings.jump_mode == GameSettings.JumpMode.TAP:
+		jump_speed = stats.jump_speed_tap
 	vertical_speed = maxf(vertical_speed, 0.0) + jump_speed
 	jump_charge = 0.0
 	grounded = false

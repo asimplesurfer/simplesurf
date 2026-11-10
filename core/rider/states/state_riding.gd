@@ -1,6 +1,9 @@
 extends RiderState
 ## Movimiento normal sobre la tabla: W / stick arriba acelera, el stick gira.
-## Mantener A carga el salto (se agacha) y al soltarlo salta: más carga, más alto.
+## Salto según GameSettings.jump_mode:
+##   CHARGE: mantener A carga el salto (se agacha); al soltar, o al llegar al
+##           máximo, salta. Más carga, más alto.
+##   TAP: tocar A salta enseguida.
 ## El botón de derrape pasa a `drifting`. Una ola con velocidad lo lanza al aire.
 
 ## Tras pararse, A no salta por un momento (el spam para levantarse no debe hacerte saltar).
@@ -23,12 +26,16 @@ func update(delta: float, input: RiderInput) -> void:
 	if _charging:
 		if input.trick:
 			rider.jump_charge = minf(1.0, rider.jump_charge + delta / rider.stats.jump_charge_time)
-		else:
+		if not input.trick or rider.jump_charge >= 1.0:
 			_charging = false
 			rider.jump()
 			state_machine.transition_to(&"airborne")
 			return
 	elif input.jump_pressed and _jump_lock <= 0.0:
+		if GameSettings.jump_mode == GameSettings.JumpMode.TAP:
+			rider.jump()
+			state_machine.transition_to(&"airborne")
+			return
 		_charging = true
 		rider.jump_charge = 0.0
 
