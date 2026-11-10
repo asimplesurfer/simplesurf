@@ -83,17 +83,24 @@ func _apply_to_rider(rider: Rider) -> void:
 
 	if r < island_crash_radius() and not rider.is_fallen():
 		var safe := track.center + flat.normalized() * (island_crash_radius() + 2.0)
-		rider.crash(Vector3(safe.x, rider.position.y, safe.y))
+		_crash(rider, Vector3(safe.x, rider.position.y, safe.y))
 		return
 
 	for rock in rocks:
 		if not rider.is_fallen() and rock.is_hitting(rider):
-			rider.crash(rock.safe_position_for(rider))
+			_crash(rider, rock.safe_position_for(rider))
 			return
 
 	if not rider.is_fallen():
 		for ring in rings:
 			ring.try_collect(rider, _time)
+
+
+## Choque: se cae, queda fuera del obstáculo y mirando en el sentido de la
+## carrera (para no volver a chocarlo apenas se levanta).
+func _crash(rider: Rider, safe_position: Vector3) -> void:
+	rider.crash(safe_position)
+	rider.heading = track.heading_at(track.angle_of(rider.position))
 
 
 func _water_height(x: float, z: float) -> float:

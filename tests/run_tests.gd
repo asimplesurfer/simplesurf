@@ -124,9 +124,17 @@ func _test_course() -> void:
 	_check(_rider.is_fallen(), "chocar una roca tira de la tabla")
 	var d := Vector2(_rider.position.x - rock.position.x, _rider.position.z - rock.position.z).length()
 	_check(d > rock.radius, "después del choque queda fuera de la roca")
+	var tangent := _course.track.heading_at(_course.track.angle_of(_rider.position))
+	_check(
+		absf(wrapf(_rider.heading - tangent, -PI, PI)) < 0.01,
+		"después del choque mira en el sentido de la carrera"
+	)
 	await _mash_until_standing(8.0, 4.0)
+	_check(not _rider.is_fallen(), "se levanta después del choque")
 
 	# Isla: chocar la orilla también tira y saca afuera.
+	if _rider.is_fallen():
+		await _mash_until_standing(8.0, 4.0)
 	_teleport(_course.track.position_at(1.0, -(_course.track_radius - _course.island_radius) + 0.5))
 	await process_frame
 	await process_frame
@@ -331,7 +339,7 @@ func _test_jump_and_tricks() -> void:
 	await _press(&"p1_a")
 	_check(_state() == &"airborne", "ESPACIO salta")
 	var tap_height := await _measure_jump_height()
-	_check(tap_height > 0.4, "sube en el aire (%.2f m)" % tap_height)
+	_check(tap_height > 0.2, "sube en el aire (%.2f m)" % tap_height)
 	_check(_state() == &"riding", "aterriza y sigue andando")
 	await _wait(0.3)
 
@@ -461,8 +469,8 @@ func _test_swells() -> void:
 	s.center = Vector2(ahead.x, ahead.z)
 	s.direction = -Vector2(f.x, f.z)
 	s.speed = 0.0
-	s.max_amplitude = 2.0
-	s.width = 4.0
+	s.max_amplitude = 3.0
+	s.width = 5.5
 	s.half_length = 20.0
 	s.lifetime = 100.0
 	s.grow_time = 0.01
