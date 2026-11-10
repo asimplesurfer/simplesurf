@@ -54,6 +54,12 @@ func _on_trick_landed(spins: int) -> void:
 	show_message(text, NITRO_COLOR)
 
 
+func _unhandled_input(event: InputEvent) -> void:
+	var key := event as InputEventKey
+	if key and key.pressed and not key.echo and key.physical_keycode == KEY_H:
+		_help.visible = not _help.visible
+
+
 func _process(delta: float) -> void:
 	if rider == null:
 		return
@@ -104,7 +110,7 @@ func _update_help() -> void:
 		+ "Levantarse: spamear ESPACIO o botón de abajo\n"
 		+ "Caerse (prueba): R o botón de arriba\n"
 		+ "Mando: %s (M para cambiar)\n" % layout
-		+ "Si no responde, haz clic en el juego"
+		+ "H: ocultar esta ayuda  ·  Si no responde, haz clic en el juego"
 	)
 
 

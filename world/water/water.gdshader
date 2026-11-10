@@ -29,6 +29,8 @@ uniform float grid_strength = 0.3;
 uniform float grid_fade_distance = 60.0;
 
 varying float v_height;
+// 0..1: qué tan cerca de la cresta de una ola grande está el punto (para la espuma).
+varying float v_crest;
 varying vec3 v_world;
 
 void add_wave(vec4 w, vec2 p, inout float h, inout vec2 g) {
@@ -42,7 +44,7 @@ void add_wave(vec4 w, vec2 p, inout float h, inout vec2 g) {
 	g += w.xy * (w.z * k * cos(phase));
 }
 
-void add_swell(vec4 a, vec4 b, vec2 p, inout float h, inout vec2 g) {
+void add_swell(vec4 a, vec4 b, vec2 p, inout float h, inout vec2 g, inout float crest) {
 	float amp = b.x;
 	if (amp <= 0.0) {
 		return;
@@ -64,6 +66,7 @@ void add_swell(vec4 a, vec4 b, vec2 p, inout float h, inout vec2 g) {
 	float e = 1.0 - t * t * (3.0 - 2.0 * t);
 	float de = -6.0 * t * (1.0 - t) / edge;
 	h += amp * gauss * e;
+	crest = max(crest, gauss * e * smoothstep(0.3, 1.2, amp));
 	float dh_du = amp * (-2.0 * u / (width * width)) * gauss * e;
 	float dh_dw = amp * gauss * de * sign(w);
 	g += dir * dh_du + perp * dh_dw;
@@ -73,25 +76,31 @@ void vertex() {
 	vec3 world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	float h = 0.0;
 	vec2 g = vec2(0.0);
+	float crest = 0.0;
 	add_wave(wave_0, world.xz, h, g);
 	add_wave(wave_1, world.xz, h, g);
 	add_wave(wave_2, world.xz, h, g);
 	add_wave(wave_3, world.xz, h, g);
-	add_swell(swell_a0, swell_b0, world.xz, h, g);
-	add_swell(swell_a1, swell_b1, world.xz, h, g);
-	add_swell(swell_a2, swell_b2, world.xz, h, g);
-	add_swell(swell_a3, swell_b3, world.xz, h, g);
-	add_swell(swell_a4, swell_b4, world.xz, h, g);
-	add_swell(swell_a5, swell_b5, world.xz, h, g);
+	float ambient_h = h;
+	add_swell(swell_a0, swell_b0, world.xz, h, g, crest);
+	add_swell(swell_a1, swell_b1, world.xz, h, g, crest);
+	add_swell(swell_a2, swell_b2, world.xz, h, g, crest);
+	add_swell(swell_a3, swell_b3, world.xz, h, g, crest);
+	add_swell(swell_a4, swell_b4, world.xz, h, g, crest);
+	add_swell(swell_a5, swell_b5, world.xz, h, g, crest);
 	VERTEX.y += h;
 	NORMAL = normalize(vec3(-g.x, 1.0, -g.y));
-	v_height = h;
+	v_height = ambient_h;
+	v_crest = crest;
 	v_world = world + vec3(0.0, h, 0.0);
 }
 
 void fragment() {
 	vec3 col = mix(deep_color, shallow_color, smoothstep(-0.5, 0.5, v_height));
 	float foam = smoothstep(foam_height, foam_height + 0.1, v_height);
+	// Olas grandes: un poco más claras y con espuma solo arriba de la cresta.
+	col = mix(col, shallow_color * 1.15, v_crest * 0.6);
+	foam = max(foam, smoothstep(0.82, 0.95, v_crest));
 	col = mix(col, foam_color, foam * 0.7);
 
 	vec2 gp = v_world.xz / grid_size;
