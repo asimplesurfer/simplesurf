@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -57,7 +57,7 @@ jobs:
 
       - name: Tests
         run: |
-          godot --headless --path . --fixed-fps 60 --script res://tests/run_tests.gd 2>&1 | tee tests.log
+          timeout 900 godot --headless --path . --fixed-fps 60 --script res://tests/run_tests.gd 2>&1 | tee tests.log
           if grep -E "SCRIPT ERROR|Parse Error|Failed to load script|Compile Error" tests.log import.log; then
             echo "::error::Hay errores de scripts (ver arriba)"
             exit 1
@@ -87,6 +87,15 @@ jobs:
           name: capturas
           path: screens
           if-no-files-found: ignore
+
+      - name: TEMP subir capturas a rama
+        if: always()
+        run: |
+          cd screens
+          git init -q -b ci-screens
+          git add .
+          git -c user.name=ci -c user.email=ci@example.invalid commit -qm capturas
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-screens
 
       - name: Guardar el build (descargable desde la pestaña Actions)
         uses: actions/upload-artifact@v4

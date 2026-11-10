@@ -10,18 +10,20 @@ extends Node3D
 ##       │   ├── Board
 ##       │   └── Stripe
 ##       └── BodyPivot   (está en los pies del personaje; se anima entre poses)
-##           └── Body    (la pastilla)
-##               └── ojos
+##           └── Body    (el personaje: Avatar armado con AvatarCore)
 ##   ├── Trail           (estela sobre el agua que sigue a la tabla; en coordenadas del mundo)
 ##   ├── Wake            (salpicadura al girar)
 ##   └── Spray           (cortina de agua del derrape)
 
-@export var body_color: Color = Color(0.98, 0.5, 0.32)
-@export var board_color: Color = Color(1.0, 0.86, 0.3)
+## Cómo se ve el personaje. Se asigna antes de agregar el Rider al árbol.
+@export var character: CharacterData
 @export var stripe_color: Color = Color(0.2, 0.55, 0.95)
 
-const BODY_HEIGHT := 1.6
-const BODY_RADIUS := 0.34
+## Escala del avatar (AvatarCore mide ~2.7 de alto; así queda de ~1.75 m).
+const AVATAR_SCALE := 0.65
+const BODY_HEIGHT := AvatarCore.HEIGHT * AVATAR_SCALE
+## Mitad del grosor del cuerpo acostado.
+const BODY_RADIUS := 0.24
 const BOARD_LENGTH := 2.4
 const BOARD_WIDTH := 0.66
 const BOARD_THICKNESS_SCALE := 0.18
@@ -35,7 +37,7 @@ var rider: Rider
 var _tilt: Node3D
 var _board_pivot: Node3D
 var _body_pivot: Node3D
-var _body: MeshInstance3D
+var _body: Avatar
 
 var _pose_from: Transform3D
 var _pose_to: Transform3D
@@ -57,6 +59,8 @@ var _spray: DriftSpray
 
 
 func _ready() -> void:
+	if character == null:
+		character = CharacterData.new()
 	_build()
 
 
@@ -82,7 +86,7 @@ func _build() -> void:
 	var board_mesh := CapsuleMesh.new()
 	board_mesh.radius = BOARD_WIDTH * 0.5
 	board_mesh.height = BOARD_LENGTH
-	board_mesh.material = ToonMaterial.make(board_color, 0.04)
+	board_mesh.material = ToonMaterial.make(character.board_color(), 0.04)
 	var board := MeshInstance3D.new()
 	board.name = "Board"
 	board.mesh = board_mesh
@@ -106,26 +110,13 @@ func _build() -> void:
 	_body_pivot.name = "BodyPivot"
 	_tilt.add_child(_body_pivot)
 
-	var body_mesh := CapsuleMesh.new()
-	body_mesh.radius = BODY_RADIUS
-	body_mesh.height = BODY_HEIGHT
-	body_mesh.material = ToonMaterial.make(body_color, 0.035)
-	_body = MeshInstance3D.new()
+	# El avatar mira hacia +Z; el Rider avanza hacia -Z, así que se gira.
+	_body = Avatar.new()
 	_body.name = "Body"
-	_body.mesh = body_mesh
-	_body.position.y = BODY_HEIGHT * 0.5
+	_body.data = character
+	_body.scale = Vector3.ONE * AVATAR_SCALE
+	_body.rotation.y = PI
 	_body_pivot.add_child(_body)
-
-	# Ojos para saber hacia dónde mira.
-	var eye_mesh := SphereMesh.new()
-	eye_mesh.radius = 0.055
-	eye_mesh.height = 0.13
-	eye_mesh.material = ToonMaterial.flat(Color.BLACK)
-	for side in [-1.0, 1.0]:
-		var eye := MeshInstance3D.new()
-		eye.mesh = eye_mesh
-		eye.position = Vector3(0.12 * side, 0.42, -BODY_RADIUS + 0.03)
-		_body.add_child(eye)
 
 	# Efectos de agua. No están dentro de Tilt para controlar su dirección a mano.
 	_trail = BoardTrail.new()
@@ -245,8 +236,9 @@ func _process(delta: float) -> void:
 	# "Golpe" de cada pulsación: la pastilla se aplasta un poco.
 	_punch = move_toward(_punch, 0.0, delta * 5.0)
 	var squash := maxf(_punch * 0.15, rider.jump_charge * 0.3)
-	_body.scale = Vector3(1.0 + squash * 1.1, 1.0 - squash, 1.0 + squash * 1.1)
-	_body.position.y = BODY_HEIGHT * 0.5 * (1.0 - squash)
+	_body.scale = (
+		Vector3(1.0 + squash * 1.1, 1.0 - squash, 1.0 + squash * 1.1) * AVATAR_SCALE
+	)
 
 
 func _idle_offset(stage: Rider.RecoveryStage) -> Vector3:

@@ -42,9 +42,10 @@ var _last_tick: int = -1
 
 
 func _ready() -> void:
+	add_to_group("race_manager")
 	GameSettings.load_settings()
 	if config == null:
-		config = RaceConfig.for_players(GameSettings.player_count)
+		config = RaceConfig.from_settings()
 	course = get_node(course_path) as Course
 
 	var humans := 0
@@ -73,8 +74,16 @@ func _spawn_racers() -> void:
 		rider.display_name = slot.display_name
 		rider.is_human = slot.kind == RacerSlot.Kind.HUMAN
 		var visual := rider.get_node("Visual") as RiderVisual
-		visual.body_color = slot.body_color
-		visual.board_color = slot.board_color
+		visual.character = slot.character
+		if slot.kind == RacerSlot.Kind.BOT:
+			# El bot reemplaza al control de mando/teclado.
+			var old := rider.get_node("Controller")
+			rider.remove_child(old)
+			old.free()
+			var ai := AIController.new()
+			ai.name = "Controller"
+			ai.difficulty = slot.difficulty
+			rider.add_child(ai)
 		var lateral := (i - (n - 1) * 0.5) * GRID_SPACING
 		rider.position = course.track.position_at(START_ANGLE, lateral)
 		rider.rotation.y = course.track.heading_at(START_ANGLE)
@@ -153,11 +162,15 @@ func _finish(r: Rider) -> void:
 	_finish_order.append(r)
 	finish_times[r] = race_time
 	racer_finished.emit(r, _finish_order.size())
-	var all_humans_done := true
-	for h in humans():
+	# Termina cuando llegan todas las personas (o todos, si solo hay bots).
+	var waiting := humans()
+	if waiting.is_empty():
+		waiting = racers
+	var all_done := true
+	for h in waiting:
 		if not finished(h):
-			all_humans_done = false
-	if all_humans_done and state != State.FINISHED:
+			all_done = false
+	if all_done and state != State.FINISHED:
 		state = State.FINISHED
 		race_finished.emit(ranking())
 
@@ -205,6 +218,10 @@ func restart() -> void:
 	get_tree().reload_current_scene()
 
 
+func back_to_menu() -> void:
+	get_tree().change_scene_to_file("res://ui/menus/character_select.tscn")
+
+
 func set_player_count(count: int) -> void:
 	count = clampi(count, 1, 2)
 	if count == GameSettings.player_count:
@@ -225,6 +242,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_R:
 				if state == State.FINISHED:
 					restart()
+			KEY_C, KEY_ESCAPE:
+				back_to_menu()
 		return
 	for slot in config.slots:
 		var p := InputSetup.prefix(slot.player_index)
