@@ -79,7 +79,8 @@ func _build() -> void:
 	_footer.text = (
 		"Arriba / abajo: elegir  ·  Izquierda / derecha: cambiar  ·  ESPACIO / A: ¡listo!  ·  E / B: volver\n"
 		+ "Jugadores: teclas 1 / 2 o Select  ·  J2 usa flechas y ENTER  ·  "
-		+ "Pantalla dividida (V): %s" % ("lado a lado" if GameSettings.split_vertical else "arriba y abajo")
+		+ "Pantalla dividida (V): %s\n" % ("lado a lado" if GameSettings.split_vertical else "arriba y abajo")
+		+ "Avance (G): %s" % GameSettings.forward_mode_name()
 	)
 	_refresh_all()
 
@@ -260,6 +261,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		if key.physical_keycode == KEY_V:
 			GameSettings.split_vertical = not GameSettings.split_vertical
+			_build()
+			return
+		if key.physical_keycode == KEY_G:
+			GameSettings.toggle_auto_forward()
 			_build()
 			return
 	for p in _panels:

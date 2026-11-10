@@ -35,7 +35,7 @@ Ojo: ese zip no funciona con doble clic en `index.html`, necesita un servidor we
 
 | Acción | J1 teclado | J2 teclado (con 2 jugadores) | Mando |
 |---|---|---|---|
-| Acelerar / frenar | W / S | ↑ / ↓ | Stick o cruceta |
+| Frenar (automático) · acelerar/frenar (manual) | S · W / S | ↓ · ↑ / ↓ | Stick o cruceta |
 | Girar | A / D | ← / → | Stick o cruceta |
 | Saltar · truco (en el aire, mantener) | Espacio | Enter | Botón de abajo (A / ✕) |
 | Derrapar (mantener) | Shift | . | Botón izquierdo (X / □) o RB |
@@ -50,6 +50,7 @@ Con 1 jugador, J1 también puede usar las flechas.
 | 1 / 2 | Cantidad de jugadores (reinicia la carrera). Con mando: Select |
 | R | Otra carrera (al terminar). Con mando: Start |
 | V | Pantalla dividida: lado a lado (por defecto) o arriba y abajo |
+| G | Avance: automático (por defecto; atrás frena) o manual (adelante acelera) |
 | M | Distribución del mando: estándar o genérico (tipo PlayStation) |
 | H | Ocultar la ayuda |
 

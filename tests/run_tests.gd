@@ -29,6 +29,10 @@ func _run() -> void:
 	GameSettings.load_settings()
 	GameSettings.player_count = 1
 	GameSettings.bot_count = 0
+	_check(GameSettings.auto_forward, "por defecto el avance es automático")
+	# Los tests de movimiento usan el modo manual (W acelera); el automático
+	# se prueba aparte.
+	GameSettings.auto_forward = false
 	_test_avatar()
 	await _test_menu()
 	_main = load("res://main.tscn").instantiate()
@@ -562,6 +566,18 @@ func _test_throttle_and_steer() -> void:
 	_set_action(&"p1_up", false)
 	await _wait(1.0)
 	_check(_rider.speed < 11.5, "al soltar W frena de a poco (velocidad %.1f)" % _rider.speed)
+
+	# Modo automático: avanza solo y atrás frena.
+	GameSettings.auto_forward = true
+	await _wait(2.5)
+	_check(_rider.speed > 12.0, "automático: avanza solo sin tocar nada (%.1f)" % _rider.speed)
+	_set_action(&"p1_down", true)
+	await _wait(1.5)
+	_check(_rider.speed < 3.0, "automático: atrás frena (%.1f)" % _rider.speed)
+	_set_action(&"p1_down", false)
+	await _wait(2.5)
+	_check(_rider.speed > 10.0, "automático: al soltar vuelve a avanzar (%.1f)" % _rider.speed)
+	GameSettings.auto_forward = false
 	_set_action(&"p1_up", true)
 	await _wait(1.5)
 
