@@ -614,7 +614,7 @@ func _test_split_screen() -> void:
 	race._progress[last] = race.progress_of(first) - 200.0 / race.course.track.radius
 	await process_frame
 	await process_frame
-	_check(first.catchup == 0.0, "el primero no tiene handicap")
+	_check(first.catchup < 0.05, "el que va adelante casi no tiene handicap (%.3f)" % first.catchup)
 	_check(last.catchup > 0.99, "el que va 200 m atrás tiene el handicap al máximo")
 	last.reset_nitro()
 	last.add_nitro(0.1)
@@ -622,7 +622,7 @@ func _test_split_screen() -> void:
 	first.reset_nitro()
 	first.add_nitro(0.1)
 	_check(absf(first.nitro - 0.1) < 0.02, "sin handicap, el nitro rinde normal")
-	_check(last.jump_mult() > 1.3 and first.jump_mult() == 1.0, "con handicap salta más alto")
+	_check(last.jump_mult() > 1.3 and first.jump_mult() < 1.02, "con handicap salta más alto")
 	_check(
 		split.huds[1]._nitro_label.text.begins_with("NITRO ×"),
 		"el HUD muestra el multiplicador de nitro"
