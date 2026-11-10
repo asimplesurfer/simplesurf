@@ -139,11 +139,22 @@ func _test_bot_race() -> void:
 	await process_frame
 	var falls := {}
 	var tricks := {}
+	var crashes := {}
+	var failed := {}
+	var hits := {}
+	var air := {}
 	for r in race.racers:
 		falls[r] = 0
 		tricks[r] = 0
+		crashes[r] = 0
+		failed[r] = 0
+		hits[r] = 0
+		air[r] = 0.0
 		r.fell.connect(func() -> void: falls[r] += 1)
 		r.trick_landed.connect(func(_s: int) -> void: tricks[r] += 1)
+		r.crashed.connect(func() -> void: crashes[r] += 1)
+		r.trick_failed.connect(func() -> void: failed[r] += 1)
+		r.drift_hit.connect(func(_v: Rider) -> void: hits[r] += 1)
 	_check(race.racers.size() == 3 and not race.racers[0].is_human, "3 bots en la carrera")
 	race.skip_countdown()
 
@@ -155,6 +166,9 @@ func _test_bot_race() -> void:
 		frames += 1
 		if stood_up_by < 0.0 and not race.racers[0].is_fallen():
 			stood_up_by = frames / float(FPS)
+		for r in race.racers:
+			if not r.grounded:
+				air[r] += 1.0 / FPS
 	var t := frames / float(FPS)
 	_check(stood_up_by > 0.0 and stood_up_by < 3.0, "los bots se levantan solos (%.1f s)" % stood_up_by)
 	_check(race.state == RaceManager.State.FINISHED, "los bots terminan la carrera (%.0f s)" % t)
@@ -163,8 +177,14 @@ func _test_bot_race() -> void:
 		if race.finish_times.has(r):
 			time_text = "%.1f s" % race.finish_times[r]
 		print(
-			"        %dº %-8s %-9s caídas: %d  trucos: %d  nitro: %.2f"
-			% [race.place_of(r), r.display_name, time_text, falls[r], tricks[r], r.nitro]
+			(
+				"        %dº %-8s %-9s caídas: %d (choques %d, trucos fallidos %d)"
+				+ "  trucos: %d  derribó: %d  aire: %.1f s"
+			)
+			% [
+				race.place_of(r), r.display_name, time_text, falls[r], crashes[r], failed[r],
+				tricks[r], hits[r], air[r]
+			]
 		)
 	var easy: Rider = race.racers[0]
 	var hard: Rider = race.racers[2]
