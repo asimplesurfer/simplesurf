@@ -30,6 +30,11 @@ static func create(player_count: int, bot_count: int, bot_level: int) -> RaceCon
 	return config
 
 
+## Demo: 2 bots en la dificultad máxima.
+static func demo() -> RaceConfig:
+	return create(0, 2, 2)
+
+
 ## Configuración según lo elegido en el menú (GameSettings).
 static func from_settings() -> RaceConfig:
 	return create(GameSettings.player_count, GameSettings.bot_count, GameSettings.bot_level)

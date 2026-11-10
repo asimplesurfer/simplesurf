@@ -62,9 +62,11 @@ async function tap(key, times = 1) {
 
 await page.goto(url);
 await page.waitForSelector('canvas');
-// Esperar a que cargue el motor y arranque el menú.
+// Esperar a que cargue el motor y arranque el menú. Si ya arrancó la demo
+// (10 s sin tocar nada), el clic vuelve al menú.
 await sleep(12000);
 await page.mouse.click(480, 270);
+await sleep(2500);
 await shot('0_menu');
 // Más peso, piel alien verde, y listo.
 await tap('ArrowRight', 6);
@@ -111,6 +113,11 @@ await sleep(2000);
 await sleep(6000);
 await shot('8_olas');
 await page.keyboard.up('KeyW');
+
+// Volver al menú y no tocar nada: arranca la demo de bots con pantalla dividida.
+await tap('Escape');
+await sleep(14000);
+await shot('9_demo');
 
 await browser.close();
 

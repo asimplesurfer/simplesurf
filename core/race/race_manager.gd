@@ -19,6 +19,8 @@ enum State { COUNTDOWN, RACING, FINISHED }
 const RIDER_SCENE := preload("res://core/rider/rider.tscn")
 ## Un poco antes de la meta, para que la largada cuente como el inicio de la vuelta 1.
 const START_ANGLE := -0.03
+## Demo: segundos entre que termina una carrera y empieza la siguiente.
+const DEMO_RESTART_DELAY := 6.0
 ## Separación lateral entre corredores en la largada (m).
 const GRID_SPACING := 7.0
 
@@ -38,6 +40,7 @@ var _last_angle: Dictionary = {}
 var _wrong_way_time: Dictionary = {}
 var _finish_order: Array[Rider] = []
 var _countdown: float = 0.0
+var _demo_restart_timer: float = -1.0
 var _last_tick: int = -1
 
 
@@ -45,7 +48,7 @@ func _ready() -> void:
 	add_to_group("race_manager")
 	GameSettings.load_settings()
 	if config == null:
-		config = RaceConfig.from_settings()
+		config = RaceConfig.demo() if GameSettings.demo_mode else RaceConfig.from_settings()
 	course = get_node(course_path) as Course
 
 	var humans := 0
@@ -130,6 +133,13 @@ func _process(delta: float) -> void:
 	race_time += delta
 	for r in racers:
 		_update_progress(r, delta)
+
+	if GameSettings.demo_mode and state == State.FINISHED:
+		if _demo_restart_timer < 0.0:
+			_demo_restart_timer = DEMO_RESTART_DELAY
+		_demo_restart_timer -= delta
+		if _demo_restart_timer <= 0.0:
+			restart()
 
 
 func _update_progress(r: Rider, delta: float) -> void:
@@ -220,7 +230,17 @@ func restart() -> void:
 
 
 func back_to_menu() -> void:
+	GameSettings.demo_mode = false
 	get_tree().change_scene_to_file("res://ui/menus/character_select.tscn")
+
+
+## En la demo, cualquier tecla, botón o toque vuelve al menú.
+static func is_any_press(event: InputEvent) -> bool:
+	if event is InputEventKey or event is InputEventJoypadButton:
+		return event.is_pressed() and not event.is_echo()
+	if event is InputEventScreenTouch or event is InputEventMouseButton:
+		return event.is_pressed()
+	return false
 
 
 func set_player_count(count: int) -> void:
@@ -230,6 +250,12 @@ func set_player_count(count: int) -> void:
 	GameSettings.player_count = count
 	GameSettings.save_settings()
 	restart()
+
+
+func _input(event: InputEvent) -> void:
+	if GameSettings.demo_mode and is_any_press(event):
+		get_viewport().set_input_as_handled()
+		back_to_menu()
 
 
 func _unhandled_input(event: InputEvent) -> void:

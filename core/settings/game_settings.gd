@@ -15,6 +15,8 @@ static var player_count: int = 1
 ## Bots en la carrera (0 a 3) y su dificultad (0 Fácil, 1 Normal, 2 Difícil).
 static var bot_count: int = 1
 static var bot_level: int = 1
+## Modo demo: carrera de bots que arranca sola si nadie toca el menú (no se guarda).
+static var demo_mode: bool = false
 ## Personaje de cada jugador (índice -> CharacterData).
 static var characters: Dictionary = {}
 static var _loaded: bool = false

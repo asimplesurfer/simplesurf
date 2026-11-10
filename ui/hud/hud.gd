@@ -16,6 +16,8 @@ var rider: Rider
 var race_manager: RaceManager
 ## Mostrar la ayuda al empezar.
 var show_help: bool = true
+## Demo: muestra "DEMO" y cómo salir.
+var demo: bool = false
 
 var _mash_box: VBoxContainer
 var _mash_title: Label
@@ -49,6 +51,14 @@ func _ready() -> void:
 		race_manager.racer_finished.connect(_on_racer_finished)
 	_help.visible = show_help
 	_update_help()
+	if demo:
+		var tag := _make_label(22, PROMPT_COLOR)
+		tag.text = "DEMO · %s  ·  tocá la pantalla o apretá cualquier botón para jugar" % (
+			rider.display_name if rider else ""
+		)
+		tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		tag.position = Vector2(16.0, 12.0)
+		add_child(tag)
 
 
 func _connect_rider() -> void:
@@ -149,7 +159,7 @@ func _process(delta: float) -> void:
 
 
 func _update_mash(delta: float) -> void:
-	var fallen := rider.is_fallen() and not rider.controls_locked
+	var fallen := rider.is_fallen() and not rider.controls_locked and rider.is_human
 	_mash_box.visible = fallen
 	if not fallen:
 		return
