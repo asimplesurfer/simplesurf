@@ -202,7 +202,21 @@ func _test_wave_jump() -> void:
 	await _press(&"p1_a")
 	_check(_state() == &"airborne", "en agua plana, A hace un saltito")
 	var hop := await _measure_air()
-	_check(hop.x < 0.8, "el saltito es bajo, no alcanza para trucos (%.2f m)" % hop.x)
+	_check(hop.x < 0.8, "el saltito es bajo (%.2f m)" % hop.x)
+	await _wait_until_state(&"riding", 2.0)
+	await _wait(0.5)
+
+	# Mantener A en el saltito no hace truco (así nadie se cae por no llegar).
+	_set_action(&"p1_a", true)
+	var spun := false
+	for i in int(1.2 * FPS):
+		if _rider.trick_angle > 0.0:
+			spun = true
+		await process_frame
+	_set_action(&"p1_a", false)
+	await _wait(0.3)
+	_check(not spun, "en el saltito no se puede hacer truco")
+	_check(not _rider.is_fallen(), "mantener A en el saltito no te tira")
 	await _wait_until_state(&"riding", 2.0)
 	await _wait(0.5)
 

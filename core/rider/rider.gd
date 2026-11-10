@@ -70,6 +70,8 @@ var pop_buffer: float = 0.0
 var wave_air_time: float = -1.0
 ## Si ya hizo el pop en este salto.
 var did_pop: bool = false
+## Si en este salto se puede hacer truco (en el saltito no: no daría el tiempo).
+var can_trick: bool = true
 var water: Water
 
 var _steer_smoothed: float = 0.0
@@ -195,6 +197,7 @@ func stick_to_water(delta: float, allow_launch: bool = true) -> bool:
 		grounded = false
 		wave_air_time = 0.0
 		did_pop = false
+		can_trick = true
 		if pop_buffer > 0.0:
 			do_pop()
 		return true
@@ -215,6 +218,7 @@ func jump() -> void:
 	vertical_speed = maxf(vertical_speed, 0.0) + jump_speed
 	jump_charge = 0.0
 	grounded = false
+	can_trick = true
 	jumped.emit()
 
 
@@ -224,6 +228,7 @@ func hop() -> void:
 	grounded = false
 	wave_air_time = -1.0
 	did_pop = false
+	can_trick = false
 	jumped.emit()
 
 

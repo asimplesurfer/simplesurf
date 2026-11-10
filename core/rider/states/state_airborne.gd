@@ -35,12 +35,13 @@ func update(delta: float, input: RiderInput) -> void:
 	rider.apply_steer(input.steer, delta, stats.air_turn_factor)
 	rider.move_forward(delta)
 
-	if input.trick:
+	# En el saltito no se puede hacer truco (no daría el tiempo).
+	if input.trick and rider.can_trick:
 		_hold_time += delta
 	else:
 		_hold_time = 0.0
 
-	if input.trick and _hold_time >= stats.trick_hold_delay:
+	if input.trick and rider.can_trick and _hold_time >= stats.trick_hold_delay:
 		# Girando: la tabla rota y se carga nitro.
 		rider.trick_angle += stats.trick_spin_speed * delta
 		rider.add_nitro(stats.trick_nitro_rate * delta)
