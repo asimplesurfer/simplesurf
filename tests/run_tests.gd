@@ -707,8 +707,10 @@ func _test_jump_and_tricks() -> void:
 		"turbo en el aire: más tiempo para trucos (%.1f s contra %.1f s)" % [boosted.y, plain.y]
 	)
 	_check(_rider.nitro < 1.0, "el turbo en el aire gasta nitro")
-	await _wait_until_state(&"riding", 3.0)
-	await _wait(0.3)
+	await _wait_until_state(&"riding", 4.0)
+	# Volver a la velocidad normal antes del próximo test.
+	_rider.reset_nitro()
+	await _wait(4.0)
 
 
 func _test_drift() -> void:
