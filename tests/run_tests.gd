@@ -118,6 +118,13 @@ func _test_throttle_and_steer() -> void:
 	_set_action(&"p1_up", true)
 	await _wait(1.5)
 
+	var launched := false
+	for i in int(8.0 * FPS):
+		if _state() != &"riding":
+			launched = true
+		await process_frame
+	_check(not launched, "las olas chicas de fondo no lo lanzan al aire")
+
 
 func _test_jump_and_tricks() -> void:
 	print("Salto y trucos:")
@@ -292,6 +299,18 @@ func _check(ok: bool, description: String) -> void:
 		print("  OK    ", description)
 	else:
 		print("  FALLA ", description)
+		if _rider:
+			print(
+				"        estado=%s vel=%.1f vel_vert=%.2f en_agua=%s carga=%.2f a=%s"
+				% [
+					_state(),
+					_rider.speed,
+					_rider.vertical_speed,
+					_rider.grounded,
+					_rider.jump_charge,
+					Input.is_action_pressed(&"p1_a"),
+				]
+			)
 		_failures.append(description)
 
 

@@ -25,7 +25,7 @@ extends Resource
 ## Tiempo manteniendo ESPACIO para cargar el salto al máximo (s).
 @export var jump_charge_time: float = 1.0
 ## Velocidad vertical mínima para que una ola te lance al aire (m/s).
-@export var min_launch_speed: float = 3.0
+@export var min_launch_speed: float = 4.5
 ## Multiplica la velocidad hacia arriba al salir despedido de una ola.
 @export var wave_launch_boost: float = 1.5
 ## Multiplicador de giro en el aire.
