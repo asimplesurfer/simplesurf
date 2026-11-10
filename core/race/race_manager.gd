@@ -240,6 +240,8 @@ static func is_any_press(event: InputEvent) -> bool:
 		return event.is_pressed() and not event.is_echo()
 	if event is InputEventScreenTouch or event is InputEventMouseButton:
 		return event.is_pressed()
+	if event is InputEventAction:
+		return event.is_pressed()
 	return false
 
 
