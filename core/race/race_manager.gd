@@ -30,6 +30,8 @@ const GRID_SPACING := 7.0
 @export var riders_path: NodePath
 
 var state: State = State.COUNTDOWN
+## Handicap para los que van atrás (se puede apagar para comparar).
+var catchup_enabled: bool = true
 var racers: Array[Rider] = []
 var course: Course
 var race_time: float = 0.0
@@ -181,7 +183,7 @@ func _update_catchup() -> void:
 		if not finished(r):
 			leader = maxf(leader, progress_of(r))
 	for r in racers:
-		if finished(r) or leader <= -1e8:
+		if finished(r) or leader <= -1e8 or not catchup_enabled:
 			r.catchup = 0.0
 			continue
 		var gap_m := (leader - progress_of(r)) * course.track.radius
