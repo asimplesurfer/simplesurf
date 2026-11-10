@@ -77,12 +77,18 @@ await shot('0b_menu_personalizado');
 await tap('Space');
 // Carga de la carrera y cuenta regresiva.
 await sleep(6000);
-await shot('1_caido');
+await shot('1_largada');
 
-await mash(14, 100);
+// Caerse a propósito (F) para ver el agua y la barra de levantarse.
+await tap('KeyF');
+await sleep(1200);
+await shot('1b_caido');
+
+await mash(5, 100);
+await sleep(300);
 await shot('2_acostado');
 
-await mash(25, 100);
+await mash(12, 100);
 await sleep(600);
 await shot('3_parado');
 

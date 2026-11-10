@@ -126,6 +126,15 @@ func height_at(x: float, z: float) -> float:
 	return h + swell_h * _island_fade(p)
 
 
+## Altura que aportan solo las olas grandes (para saber si está sobre una).
+func swell_height_at(x: float, z: float) -> float:
+	var p := Vector2(x, z)
+	var h := 0.0
+	for s in swells:
+		h += s.height_at(p)
+	return h * _island_fade(p)
+
+
 func normal_at(x: float, z: float) -> Vector3:
 	var g := waves.gradient_at(x, z, time)
 	var p := Vector2(x, z)
@@ -143,6 +152,11 @@ func _island_fade(p: Vector2) -> float:
 		return 1.0
 	var d := p.distance_to(Vector2(island.x, island.y))
 	return smoothstep(island.z + 4.0, island.z + 28.0, d)
+
+
+## Pista (anillo): el agua de afuera se ve más oscura, para que se note el borde.
+func set_track(center: Vector2, inner: float, outer: float) -> void:
+	_material.set_shader_parameter("track_band", Vector4(center.x, center.y, inner, outer))
 
 
 func set_island(center: Vector2, radius: float) -> void:

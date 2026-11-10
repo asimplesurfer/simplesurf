@@ -18,6 +18,12 @@ var race_manager: RaceManager
 var show_help: bool = true
 ## Demo: muestra "DEMO" y cómo salir.
 var demo: bool = false
+## Vista chica (pantalla en 4): todo el HUD se dibuja más chico.
+var compact: bool = false
+
+const COMPACT_SCALE := 0.6
+
+var _root: Control
 
 var _mash_box: VBoxContainer
 var _mash_title: Label
@@ -32,6 +38,7 @@ var _help: Label
 var _nitro_bar: ProgressBar
 var _message: Label
 var _speed_lines: ColorRect
+var _pop_label: Label
 var _speed_lines_material: ShaderMaterial
 var _message_time: float = 0.0
 var _center_time: float = 0.0
@@ -52,8 +59,8 @@ func _ready() -> void:
 	_help.visible = show_help
 	_update_help()
 	if demo:
-		var tag := _make_label(22, PROMPT_COLOR)
-		tag.text = "DEMO · %s  ·  tocá la pantalla o apretá cualquier botón para jugar" % (
+		var tag := _make_label(18, PROMPT_COLOR)
+		tag.text = "DEMO · %s\nTocá o apretá un botón para jugar" % (
 			rider.display_name if rider else ""
 		)
 		tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
@@ -71,10 +78,19 @@ func _connect_rider() -> void:
 	rider.drift_hit.connect(func(_victim: Rider) -> void: show_message("¡Lo tiraste!", PROMPT_COLOR))
 	rider.ring_collected.connect(func() -> void: show_message("+ NITRO", NITRO_COLOR))
 	rider.crashed.connect(func() -> void: show_message("¡Pum!", BAD_COLOR))
+	rider.popped.connect(func() -> void: show_message("¡POP!", PROMPT_COLOR))
 	var pc := rider.controller as PlayerController
 	if pc:
 		pc.pad_layout_changed.connect(func(layout_name: String) -> void:
 			show_message("Mando: " + layout_name, Color.WHITE)
+			_update_help()
+		)
+		pc.jump_style_changed.connect(func(style_name: String) -> void:
+			show_message("Salto: " + style_name, Color.WHITE)
+			_update_help()
+		)
+		pc.forward_mode_changed.connect(func(mode_name: String) -> void:
+			show_message("Avance: " + mode_name, Color.WHITE)
 			_update_help()
 		)
 		pc.jump_mode_changed.connect(func(mode_name: String) -> void:
@@ -128,9 +144,21 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
+	if compact and _root:
+		# Más chico: se escala la capa y se agranda la raíz para que ocupe toda la vista.
+		scale = Vector2.ONE * COMPACT_SCALE
+		_root.size = get_viewport().get_visible_rect().size / COMPACT_SCALE
 	if rider == null:
 		return
 	_update_mash(delta)
+
+	# Momento justo para el pop: el botón aparece en grande y late.
+	var pop := rider.is_human and rider.pop_ready()
+	_pop_label.visible = pop
+	if pop:
+		_pop_label.text = _button_name()
+		_pop_label.pivot_offset = _pop_label.size * 0.5
+		_pop_label.scale = Vector2.ONE * (1.0 + 0.12 * sin(Time.get_ticks_msec() * 0.025))
 
 	_speed_label.text = "%d km/h" % roundi(rider.speed * 3.6)
 	_name_label.text = rider.display_name
@@ -163,11 +191,13 @@ func _update_mash(delta: float) -> void:
 	_mash_box.visible = fallen
 	if not fallen:
 		return
+	# Una sola barra: la primera mitad sube a la tabla, la segunda te para.
 	var meter := 0.0
 	var state := rider.state_machine.current
 	if "meter" in state:
 		meter = state.meter
-	_mash_bar.value = meter
+	var half := 0.5 if rider.recovery_stage == Rider.RecoveryStage.PRONE else 0.0
+	_mash_bar.value = half + meter * 0.5
 
 	_mash_title.text = "¡Spamea %s!" % _button_name()
 	if rider.recovery_stage == Rider.RecoveryStage.IN_WATER:
@@ -194,8 +224,8 @@ func _update_help() -> void:
 	if rider and rider.controller is PlayerController:
 		layout = (rider.controller as PlayerController).layout_name()
 	_help.text = (
-		"Acelerar / frenar: W / S o stick   ·   Girar: A / D o stick\n"
-		+ "Saltar: ESPACIO o botón de abajo   ·   Pantalla dividida: V cambia\n"
+		"Avance: %s (G cambia)   ·   Girar: A / D o stick\n" % GameSettings.forward_mode_name()
+		+ "Salto: %s (O cambia)   ·   Pantalla dividida: V\n" % GameSettings.jump_style_name()
 		+ "Truco: en el aire, mantener ESPACIO / botón de abajo\n"
 		+ "Derrapar: SHIFT o botón izquierdo / RB   ·   Turbo: E o botón derecho\n"
 		+ "Levantarse: spamear ESPACIO o botón de abajo   ·   Caerse (prueba): F\n"
@@ -207,6 +237,7 @@ func _update_help() -> void:
 
 func _build() -> void:
 	var root := Control.new()
+	_root = root
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
@@ -299,6 +330,16 @@ func _build() -> void:
 	_message.offset_top = 70.0
 	_message.visible = false
 	root.add_child(_message)
+
+	# Botón del pop (en la cresta de la ola), un poco abajo del centro.
+	_pop_label = _make_label(64, PROMPT_COLOR)
+	_pop_label.set_anchors_preset(Control.PRESET_CENTER)
+	_pop_label.offset_left = -250.0
+	_pop_label.offset_right = 250.0
+	_pop_label.offset_top = 40.0
+	_pop_label.offset_bottom = 130.0
+	_pop_label.visible = false
+	root.add_child(_pop_label)
 
 	# Cartel grande al centro (cuenta regresiva, vuelta, llegada, al revés).
 	_center_label = _make_label(84, Color.WHITE)

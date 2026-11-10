@@ -26,6 +26,15 @@ extends Resource
 @export var jump_charge_time: float = 1.0
 ## Velocidad hacia arriba en el modo "tocar para saltar" (m/s).
 @export var jump_speed_tap: float = 8.0
+## Modo olas: velocidad del saltito en agua plana (m/s); ~40 cm de alto.
+@export var hop_speed: float = 4.0
+## Modo olas: el "pop" multiplica el impulso con el que te lanza la ola.
+@export var pop_mult: float = 1.7
+## Modo olas: segundos que se recuerda el A apretado subiendo la ola (y
+## después del lanzamiento en los que todavía vale el pop).
+@export var pop_window: float = 0.35
+## Velocidad hacia arriba subiendo una ola para que A cuente como pop (m/s).
+@export var pop_min_climb: float = 1.5
 ## Velocidad vertical mínima para que una ola te lance al aire (m/s).
 @export var min_launch_speed: float = 4.5
 ## Multiplica la velocidad hacia arriba al salir despedido de una ola.
@@ -54,6 +63,16 @@ extends Resource
 @export var motivation_speed_mult: float = 1.3
 ## Nitro que da pasar por un círculo de velocidad.
 @export var ring_nitro: float = 0.25
+## Si una ola te lanza mientras usás el turbo, el impulso hacia arriba se multiplica.
+@export var turbo_launch_mult: float = 1.6
+## Turbo en el aire: empuje hacia arriba al empezar (m/s²); crece exponencialmente.
+@export var air_turbo_lift: float = 12.0
+## Qué tan rápido crece el empuje en el aire (por segundo, exponencial).
+@export var air_turbo_growth: float = 1.6
+## Velocidad máxima hacia arriba con el turbo en el aire (m/s).
+@export var air_turbo_max_up: float = 9.0
+## Nitro que gasta el turbo por segundo en el aire.
+@export var air_turbo_drain: float = 0.6
 
 @export_group("Derrape")
 ## Velocidad mínima para poder derrapar (m/s).

@@ -22,7 +22,10 @@ func exit() -> void:
 func update(delta: float, input: RiderInput) -> void:
 	var stats := rider.stats
 	if input.jump_pressed:
-		rider.jump()
+		if GameSettings.jump_style == GameSettings.JumpStyle.WAVES:
+			rider.hop()
+		else:
+			rider.jump()
 		state_machine.transition_to(&"airborne")
 		return
 	if not input.drift or rider.speed < stats.drift_end_speed:

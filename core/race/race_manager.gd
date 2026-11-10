@@ -81,6 +81,8 @@ func _spawn_racers() -> void:
 		rider.is_human = slot.kind == RacerSlot.Kind.HUMAN
 		var visual := rider.get_node("Visual") as RiderVisual
 		visual.character = slot.character
+		# La carrera empieza con todos parados en la tabla.
+		(rider.get_node("StateMachine") as RiderStateMachine).initial_state = &"riding"
 		if slot.kind == RacerSlot.Kind.BOT:
 			# El bot reemplaza al control de mando/teclado.
 			var old := rider.get_node("Controller")

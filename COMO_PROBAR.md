@@ -35,7 +35,7 @@ Ojo: ese zip no funciona con doble clic en `index.html`, necesita un servidor we
 
 | Acción | J1 teclado | J2 teclado (con 2 jugadores) | Mando |
 |---|---|---|---|
-| Acelerar / frenar | W / S | ↑ / ↓ | Stick o cruceta |
+| Frenar (automático) · acelerar/frenar (manual) | S · W / S | ↓ · ↑ / ↓ | Stick o cruceta |
 | Girar | A / D | ← / → | Stick o cruceta |
 | Saltar · truco (en el aire, mantener) | Espacio | Enter | Botón de abajo (A / ✕) |
 | Derrapar (mantener) | Shift | . | Botón izquierdo (X / □) o RB |
@@ -50,6 +50,8 @@ Con 1 jugador, J1 también puede usar las flechas.
 | 1 / 2 | Cantidad de jugadores (reinicia la carrera). Con mando: Select |
 | R | Otra carrera (al terminar). Con mando: Start |
 | V | Pantalla dividida: lado a lado (por defecto) o arriba y abajo |
+| G | Avance: automático (por defecto; atrás frena) o manual (adelante acelera) |
+| O | Salto: de olas (por defecto) o libre |
 | M | Distribución del mando: estándar o genérico (tipo PlayStation) |
 | H | Ocultar la ayuda |
 
@@ -76,12 +78,14 @@ Si el teclado no responde, haz clic dentro del juego.
   más cercano de la línea.
 - **Carrera:** isla en el medio, 5 vueltas alrededor. Cuenta regresiva, vueltas,
   posición, aviso de "¡Al revés!", llegada y resultados.
-- **Largada en el agua:** al "¡YA!" hay que spamear para subirse a la tabla y pararse.
+- **Largada:** todos parados en la tabla. Si te caés (choque, truco fallido, derrape de otro), una sola barra: la primera mitad te sube a la tabla y la segunda te para.
 - **Pantalla dividida** para 2 jugadores (teclas 1 / 2).
-- **Salto:** tocar para saltar (el salto cargado está guardado en el código, desactivado por ahora).
+- **Salto (modo olas, por defecto):** la altura la dan las olas. En agua plana, A hace un
+  saltito; apretando A al subir una ola (o justo al salir) hacés el **pop** y salís mucho
+  más alto. Con O se cambia al salto libre (A salta alto en cualquier lado).
 - **Truco:** en el aire, mantener gira la tabla y carga nitro. Si toca el agua girando: se cae y pierde el nitro.
 - **Derrape:** tabla de costado, frena y tira una cortina de agua hacia atrás que hace caer a quien esté detrás.
-- **Nitro y turbo:** los círculos de velocidad y los trucos cargan nitro; el turbo lo gasta.
+- **Nitro y turbo:** los círculos de velocidad y los trucos cargan nitro; el turbo lo gasta. Si una ola te lanza con el turbo puesto, salís mucho más alto, y en el aire el turbo te sigue subiendo (cada vez más fuerte) para tener más tiempo de trucos.
 - **Motivación:** mini sprint automático al pasar por un círculo o tirar a alguien.
 - **Rocas:** chocarlas tira de la tabla (saltando se esquivan). Chocar la isla también.
 - **Olas grandes** al azar: subirlas rápido te lanza al aire.
@@ -89,6 +93,6 @@ Si el teclado no responde, haz clic dentro del juego.
 - **Música** de fondo (`assets/audio/simple_surf.ogg`, convertida del WAV original que
   está en `assets/audio/source/`). Sube de volumen cuando alguien pasa mucho tiempo en el
   aire. En el navegador empieza a sonar después de tocar una tecla o la pantalla.
-- **Demo:** si nadie toca el menú por 10 s, arranca una carrera de 2 bots en Difícil
-  con pantalla dividida (sirve para mirarlo en una tablet). Cualquier toque vuelve al menú.
+- **Demo:** si nadie toca el menú por 10 s, arranca una carrera de 4 bots en Difícil
+  con la pantalla en 4 (una vista por bot) (sirve para mirarlo en una tablet). Cualquier toque vuelve al menú.
 - Los valores de balance están en `core/rider/rider_stats.tres`.

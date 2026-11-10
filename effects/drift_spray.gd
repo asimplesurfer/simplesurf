@@ -1,16 +1,18 @@
 class_name DriftSpray
 extends Node3D
 ## Agua que levanta el derrape: una cortina translúcida en abanico que sale de
-## la cola de la tabla hacia atrás y afuera, más bruma de gotas.
-## La cortina está armada para tirar el agua hacia -X (afuera, derrapando a la
-## derecha); para el otro lado se espeja con scale.x = -1.
+## la cola de la tabla recta hacia atrás, más bruma de gotas.
+## El abanico tiene el mismo largo y apertura que el cono que tumba a los rivales
+## (RiderStats.drift_range y drift_cone_half_angle): lo que se ve es lo que pega.
 
 const SHEET_SHADER := preload("res://effects/shaders/spray_sheet.gdshader")
 
-## Largo de la cortina hacia atrás (m).
-@export var length: float = 4.2
+## Largo de la cortina hacia atrás (m). Igual que RiderStats.drift_range.
+@export var length: float = 6.0
+## Apertura a cada lado (grados). Igual que RiderStats.drift_cone_half_angle.
+@export var half_angle: float = 30.0
 ## Altura máxima de la cortina (m).
-@export var height: float = 2.4
+@export var height: float = 1.4
 
 var _sheet: MeshInstance3D
 var _sheet_material := ShaderMaterial.new()
@@ -32,7 +34,7 @@ func _ready() -> void:
 	_mist.name = "Mist"
 	_mist.initial_velocity_min = 4.5
 	_mist.initial_velocity_max = 8.5
-	_mist.spread = 24.0
+	_mist.spread = half_angle
 	add_child(_mist)
 
 
@@ -47,14 +49,15 @@ func update_spray(side: int, strength: float, delta: float) -> void:
 
 	_sheet.visible = _amount > 0.01
 	# Crece desde la tabla al empezar y se achica al terminar.
-	_sheet.scale = Vector3(float(_side) * (0.6 + 0.4 * _amount), _amount, 0.4 + 0.6 * _amount)
+	_sheet.scale = Vector3(0.6 + 0.4 * _amount, _amount, 0.4 + 0.6 * _amount)
 	_sheet_material.set_shader_parameter("intensity", _amount)
 
 	_mist.emitting = active
-	_mist.direction = Vector3(-_side * 0.55, 0.75, 1.0).normalized()
+	_mist.direction = Vector3(0.0, 0.7, 1.0).normalized()
 
 
-## Abanico: s = distancia desde la tabla (0..1), t = de un lado al otro (-1..1).
+## Abanico recto hacia atrás (+Z): s = distancia desde la tabla (0..1),
+## t = de un lado al otro (-1..1). El ancho crece como el cono que tumba.
 func _build_sheet_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -66,7 +69,7 @@ func _build_sheet_mesh() -> ArrayMesh:
 		var s := float(r) / rows
 		for c in cols + 1:
 			var t := float(c) / cols * 2.0 - 1.0
-			var x := -(0.5 * s + 0.9 * s * s) + t * (0.2 + 1.5 * s)
+			var x := t * (0.5 + length * s * tan(deg_to_rad(half_angle)))
 			var y := height * sin(PI * 0.85 * s) * (1.0 - 0.35 * absf(t))
 			var z := length * s
 			verts.append(Vector3(x, y, z))

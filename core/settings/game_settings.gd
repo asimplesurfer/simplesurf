@@ -3,6 +3,9 @@ extends RefCounted
 ## Opciones del juego que se eligen en partida y se guardan para la próxima vez.
 
 enum JumpMode { CHARGE, TAP }
+## WAVES: la altura la dan las olas (A en el agua: saltito; A en la ola: "pop").
+## FREE: A salta alto en cualquier lado (como antes).
+enum JumpStyle { WAVES, FREE }
 
 const PATH := "user://settings.cfg"
 const JUMP_MODE_NAMES := ["mantener para cargar", "tocar para saltar"]
@@ -12,8 +15,11 @@ const JUMP_MODE_NAMES := ["mantener para cargar", "tocar para saltar"]
 ## Por ahora el salto es solo "tocar para saltar" (el cargado queda en el código
 ## para probarlo más adelante; no se carga de la configuración guardada).
 static var jump_mode: JumpMode = JumpMode.TAP
+static var jump_style: JumpStyle = JumpStyle.WAVES
 ## Cuántas personas juegan (pantalla dividida). Se cambia con las teclas 1 / 2.
 static var player_count: int = 1
+## Avance: true = avanza solo (stick atrás frena); false = stick adelante para avanzar.
+static var auto_forward: bool = true
 ## Pantalla dividida: true = un jugador a cada lado; false = uno arriba del otro.
 static var split_vertical: bool = true
 ## Bots en la carrera (0 a 3) y su dificultad (0 Fácil, 1 Normal, 2 Difícil).
@@ -34,6 +40,8 @@ static func load_settings() -> void:
 	if cfg.load(PATH) == OK:
 		player_count = clampi(int(cfg.get_value("gameplay", "player_count", 1)), 1, 2)
 		split_vertical = bool(cfg.get_value("gameplay", "split_vertical", true))
+		auto_forward = bool(cfg.get_value("gameplay", "auto_forward", true))
+		jump_style = int(cfg.get_value("gameplay", "jump_style", JumpStyle.WAVES)) as JumpStyle
 		bot_count = clampi(int(cfg.get_value("gameplay", "bot_count", 1)), 0, 3)
 		bot_level = clampi(int(cfg.get_value("gameplay", "bot_level", 1)), 0, 2)
 		for i in 2:
@@ -48,6 +56,8 @@ static func save_settings() -> void:
 	cfg.set_value("gameplay", "jump_mode", jump_mode)
 	cfg.set_value("gameplay", "player_count", player_count)
 	cfg.set_value("gameplay", "split_vertical", split_vertical)
+	cfg.set_value("gameplay", "auto_forward", auto_forward)
+	cfg.set_value("gameplay", "jump_style", jump_style)
 	cfg.set_value("gameplay", "bot_count", bot_count)
 	cfg.set_value("gameplay", "bot_level", bot_level)
 	for i in characters:
@@ -69,3 +79,21 @@ static func character_for(player_index: int) -> CharacterData:
 	if not characters.has(player_index):
 		characters[player_index] = CharacterData.default_for_player(player_index)
 	return characters[player_index]
+
+
+static func toggle_auto_forward() -> void:
+	auto_forward = not auto_forward
+	save_settings()
+
+
+static func forward_mode_name() -> String:
+	return "automático (atrás frena)" if auto_forward else "manual (adelante acelera)"
+
+
+static func toggle_jump_style() -> void:
+	jump_style = JumpStyle.FREE if jump_style == JumpStyle.WAVES else JumpStyle.WAVES
+	save_settings()
+
+
+static func jump_style_name() -> String:
+	return "olas (saltito + pop en la ola)" if jump_style == JumpStyle.WAVES else "libre"

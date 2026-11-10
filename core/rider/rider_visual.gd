@@ -288,10 +288,11 @@ func _idle_offset(stage: Rider.RecoveryStage) -> Vector3:
 func _update_particles(delta: float) -> void:
 	var on_water := rider.grounded and rider.recovery_stage == Rider.RecoveryStage.STANDING
 
-	# Cortina de agua del derrape: sale de la cola de la tabla, hacia atrás y afuera.
+	# Cortina de agua del derrape: sale de la cola de la tabla, recta hacia atrás
+	# (justo donde el derrape tumba a los rivales).
 	var drift_side := rider.drift_side if on_water else 0
 	if drift_side != 0:
-		_spray.position = Vector3(-drift_side * 0.45, 0.05, 0.8)
+		_spray.position = Vector3(0.0, 0.05, 0.8)
 	_spray.update_spray(drift_side, clampf(rider.speed / 8.0, 0.5, 1.0), delta)
 
 	# Salpicadura al girar: sale del borde de afuera de la curva.

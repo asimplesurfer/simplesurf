@@ -15,6 +15,10 @@ extends Resource
 @export_range(0.0, 1.0) var trick_fail_chance: float = 0.2
 ## Probabilidad (por segundo) de saltar para hacer un truco en una recta.
 @export var trick_jump_rate: float = 0.15
+## Modo olas: probabilidad de hacer el pop al subir una ola.
+@export_range(0.0, 1.0) var pop_skill: float = 0.6
+## Modo olas: probabilidad de ir a buscar una ola grande que tiene adelante.
+@export_range(0.0, 1.0) var wave_seek: float = 0.6
 ## Probabilidad de derrapar cuando tiene a un rival justo detrás.
 @export_range(0.0, 1.0) var aggression: float = 0.4
 ## Si usa el turbo.
@@ -43,6 +47,8 @@ static func preset(level: int) -> AIDifficulty:
 			d.aggression = 0.1
 			d.uses_turbo = false
 			d.look_ahead = 18.0
+			d.pop_skill = 0.25
+			d.wave_seek = 0.3
 		1:
 			d.display_name = "Normal"
 		2:
@@ -56,4 +62,6 @@ static func preset(level: int) -> AIDifficulty:
 			d.aggression = 0.85
 			d.turbo_threshold = 0.35
 			d.look_ahead = 32.0
+			d.pop_skill = 0.9
+			d.wave_seek = 0.9
 	return d

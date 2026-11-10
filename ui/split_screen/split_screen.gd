@@ -19,18 +19,29 @@ func _ready() -> void:
 	var race_manager := get_node(race_manager_path) as RaceManager
 	var water := get_node_or_null(water_path) as Water
 
-	var box: BoxContainer = HBoxContainer.new() if GameSettings.split_vertical else VBoxContainer.new()
-	box.set_anchors_preset(Control.PRESET_FULL_RECT)
-	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_theme_constant_override("separation", 4)
-	add_child(box)
-
-	# Una vista por persona; si no hay personas (demo), una por cada uno de los
-	# primeros 2 corredores.
+	# Una vista por persona; si no hay personas (demo), una por corredor (hasta 4).
 	var humans := race_manager.humans()
 	var spectating := humans.is_empty()
 	if spectating:
-		humans = race_manager.racers.slice(0, 2)
+		humans = race_manager.racers.slice(0, 4)
+
+	# 3 o 4 vistas: grilla de 2x2. Si no, lado a lado o una arriba de la otra.
+	var box: Container
+	if humans.size() >= 3:
+		var grid := GridContainer.new()
+		grid.columns = 2
+		grid.add_theme_constant_override("h_separation", 4)
+		grid.add_theme_constant_override("v_separation", 4)
+		box = grid
+	elif GameSettings.split_vertical:
+		box = HBoxContainer.new()
+		box.add_theme_constant_override("separation", 4)
+	else:
+		box = VBoxContainer.new()
+		box.add_theme_constant_override("separation", 4)
+	box.set_anchors_preset(Control.PRESET_FULL_RECT)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(box)
 	for i in humans.size():
 		var rider := humans[i]
 		var container := SubViewportContainer.new()
@@ -59,6 +70,7 @@ func _ready() -> void:
 		hud.race_manager = race_manager
 		hud.show_help = humans.size() == 1 and not spectating
 		hud.demo = spectating
+		hud.compact = humans.size() >= 3
 		vp.add_child(hud)
 		huds.append(hud)
 

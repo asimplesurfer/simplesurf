@@ -5,10 +5,13 @@ extends Node3D
 ## velocidad y las rocas, y cada frame aplica los choques y los límites.
 
 @export var island_radius: float = 45.0
-@export var track_radius: float = 95.0
-@export var half_width: float = 36.0
+@export var track_radius: float = 82.0
+## Mitad del ancho de la pista (m): la pista mide el doble.
+@export var half_width: float = 20.0
 @export var ring_count: int = 10
-@export var rock_count: int = 18
+@export var rock_count: int = 12
+## Separación entre flotadores de las corcheras (m).
+@export var float_spacing: float = 2.2
 @export var layout_seed: int = 42
 ## Zona sin obstáculos alrededor de la salida (ángulos, en radianes).
 @export var start_clear_from: float = -0.12
@@ -25,6 +28,8 @@ var rings: Array[NitroRing] = []
 var rocks: Array[Rock] = []
 
 var _buoys: Array[Node3D] = []
+## Corcheras: flotadores (MultiMesh) que marcan los bordes de la pista.
+var _ropes: Array[MultiMeshInstance3D] = []
 var _water: Water
 var _time: float = 0.0
 
@@ -41,6 +46,7 @@ func _ready() -> void:
 
 	if _water:
 		_water.set_island(track.center, island_radius + 2.0)
+		_water.set_track(track.center, inner_limit(), outer_limit())
 	_build_buoys()
 	_build_finish_line()
 	_place_rings_and_rocks()
@@ -51,14 +57,26 @@ func island_crash_radius() -> float:
 	return island_radius + 2.0
 
 
+## Borde de afuera de la pista (corchera de afuera).
 func outer_limit() -> float:
-	return track_radius + half_width + 3.0
+	return track_radius + half_width
+
+
+## Borde de adentro de la pista (corchera de adentro, del lado de la isla).
+func inner_limit() -> float:
+	return track_radius - half_width
 
 
 func _process(delta: float) -> void:
 	_time += delta
 	for b in _buoys:
 		b.position.y = _water_height(b.position.x, b.position.z)
+	for rope in _ropes:
+		var mm := rope.multimesh
+		for i in mm.instance_count:
+			var xf := mm.get_instance_transform(i)
+			xf.origin.y = _water_height(xf.origin.x, xf.origin.z) + 0.05
+			mm.set_instance_transform(i, xf)
 	for ring in rings:
 		ring.position.y = _water_height(ring.position.x, ring.position.z) + ring.radius * 0.8
 
@@ -72,18 +90,21 @@ func _apply_to_rider(rider: Rider) -> void:
 	var flat := Vector2(rider.position.x, rider.position.z) - track.center
 	var r := flat.length()
 
-	if bounds_enabled and r > outer_limit():
-		var p := track.center + flat.normalized() * outer_limit()
-		rider.position.x = p.x
-		rider.position.z = p.y
-		rider.speed *= 0.97
-
-	if not hazards_enabled:
-		return
-
-	if r < island_crash_radius() and not rider.is_fallen():
+	if hazards_enabled and r < island_crash_radius() and not rider.is_fallen():
 		var safe := track.center + flat.normalized() * (island_crash_radius() + 2.0)
 		_crash(rider, Vector3(safe.x, rider.position.y, safe.y))
+		return
+
+	# Las corcheras no dejan salir de la pista (ni hacia afuera ni hacia la isla).
+	if bounds_enabled:
+		var limit := clampf(r, inner_limit() + 0.6, outer_limit() - 0.6)
+		if limit != r and r > island_crash_radius():
+			var p := track.center + flat.normalized() * limit
+			rider.position.x = p.x
+			rider.position.z = p.y
+			rider.speed *= 0.97
+
+	if not hazards_enabled:
 		return
 
 	for rock in rocks:
@@ -121,19 +142,55 @@ func _in_start_zone(angle: float) -> bool:
 	return angle > start_clear_from and angle < start_clear_to
 
 
+## Bordes de la pista: una corchera continua a cada lado (flotadores cada
+## pocos metros, de dos colores) y boyas grandes cada tanto para verlas de lejos.
 func _build_buoys() -> void:
-	var inner_r := track_radius - half_width - 1.0
-	var outer_r := track_radius + half_width + 1.0
-	_add_buoy_circle(inner_r, Color(1.0, 0.82, 0.2), 16.0)
-	_add_buoy_circle(outer_r, Color(0.95, 0.28, 0.25), 16.0)
+	var yellow := Color(1.0, 0.82, 0.2)
+	var red := Color(0.95, 0.28, 0.25)
+	_add_rope(inner_limit(), yellow)
+	_add_rope(outer_limit(), red)
+	_add_buoy_circle(inner_limit(), yellow, 24.0)
+	_add_buoy_circle(outer_limit(), red, 24.0)
+
+
+## Corchera: muchos flotadores chicos alternando color y blanco.
+func _add_rope(r: float, color: Color) -> void:
+	var count := int(TAU * r / float_spacing)
+	var mesh := SphereMesh.new()
+	mesh.radius = 0.3
+	mesh.height = 0.45
+	mesh.radial_segments = 8
+	mesh.rings = 4
+	var mat := StandardMaterial3D.new()
+	mat.vertex_color_use_as_albedo = true
+	mat.diffuse_mode = BaseMaterial3D.DIFFUSE_TOON
+	mat.roughness = 0.8
+	mesh.material = mat
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.mesh = mesh
+	mm.instance_count = count
+	for i in count:
+		var a := TAU * i / count
+		var p := track.position_at(a, r - track_radius)
+		mm.set_instance_transform(i, Transform3D(Basis.IDENTITY, p))
+		mm.set_instance_color(i, color if (i / 2) % 2 == 0 else Color(0.97, 0.97, 0.97))
+	var mmi := MultiMeshInstance3D.new()
+	mmi.name = "Rope"
+	mmi.multimesh = mm
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mmi.extra_cull_margin = 4.0
+	add_child(mmi)
+	_ropes.append(mmi)
 
 
 func _add_buoy_circle(r: float, color: Color, spacing: float) -> void:
 	var count := int(TAU * r / spacing)
 	var base_mesh := CylinderMesh.new()
-	base_mesh.top_radius = 0.3
-	base_mesh.bottom_radius = 0.5
-	base_mesh.height = 1.0
+	base_mesh.top_radius = 0.35
+	base_mesh.bottom_radius = 0.6
+	base_mesh.height = 1.6
 	base_mesh.material = ToonMaterial.make(color, 0.04)
 	var top_mesh := SphereMesh.new()
 	top_mesh.radius = 0.25
@@ -146,11 +203,11 @@ func _add_buoy_circle(r: float, color: Color, spacing: float) -> void:
 		buoy.position = p
 		var base := MeshInstance3D.new()
 		base.mesh = base_mesh
-		base.position.y = 0.25
+		base.position.y = 0.4
 		buoy.add_child(base)
 		var top := MeshInstance3D.new()
 		top.mesh = top_mesh
-		top.position.y = 0.85
+		top.position.y = 1.2
 		buoy.add_child(top)
 		add_child(buoy)
 		_buoys.append(buoy)
@@ -202,7 +259,7 @@ func _build_finish_line() -> void:
 func _place_rings_and_rocks() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = layout_seed
-	var lane := half_width - 7.0
+	var lane := half_width - 5.0
 
 	for i in ring_count:
 		var angle := TAU * (i + 0.5) / ring_count + rng.randf_range(-0.15, 0.15)
