@@ -22,8 +22,10 @@ extends Resource
 @export var jump_speed_min: float = 5.5
 ## Velocidad hacia arriba con el salto cargado al máximo (m/s).
 @export var jump_speed_max: float = 10.0
-## Tiempo manteniendo ESPACIO para cargar el salto al máximo (s).
+## Tiempo manteniendo ESPACIO para cargar el salto al máximo (s). Al llegar, salta solo.
 @export var jump_charge_time: float = 1.0
+## Velocidad hacia arriba en el modo "tocar para saltar" (m/s).
+@export var jump_speed_tap: float = 8.0
 ## Velocidad vertical mínima para que una ola te lance al aire (m/s).
 @export var min_launch_speed: float = 4.5
 ## Multiplica la velocidad hacia arriba al salir despedido de una ola.
@@ -55,10 +57,10 @@ extends Resource
 
 @export_group("Caída y levantarse")
 ## Cuánto llena la barra cada pulsación (1.0 = barra llena).
-@export var mash_fill_per_press: float = 0.16
-## Cuánto se vacía la barra por segundo. Con 0.16 y 0.55 hacen falta
+@export var mash_fill_per_press: float = 0.32
+## Cuánto se vacía la barra por segundo. Con 0.32 y 1.1 hacen falta
 ## más de ~3.5 pulsaciones por segundo para avanzar.
-@export var mash_decay_per_second: float = 0.55
+@export var mash_decay_per_second: float = 1.1
 ## Duración de la animación de subirse a la tabla (s). Durante ella no cuentan las pulsaciones.
 @export var climb_time: float = 0.45
 ## Tiempo tras pararse en el que A no salta (para que el spam no te haga saltar).

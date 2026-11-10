@@ -40,6 +40,10 @@ func _ready() -> void:
 				show_message("Mando: " + layout_name, Color.WHITE)
 				_update_help()
 			)
+			pc.jump_mode_changed.connect(func(mode_name: String) -> void:
+				show_message("Salto: " + mode_name, Color.WHITE)
+				_update_help()
+			)
 		_update_help()
 
 
@@ -104,7 +108,7 @@ func _update_help() -> void:
 	_help.text = (
 		"Acelerar / frenar: W / S o stick\n"
 		+ "Girar: A / D o stick\n"
-		+ "Saltar: ESPACIO o botón de abajo (mantener = cargar)\n"
+		+ "Saltar: ESPACIO o botón de abajo (%s · T para cambiar)\n" % GameSettings.jump_mode_name()
 		+ "Truco: en el aire, mantener ESPACIO / botón de abajo\n"
 		+ "Derrapar: SHIFT o botón izquierdo / RB\n"
 		+ "Levantarse: spamear ESPACIO o botón de abajo\n"
