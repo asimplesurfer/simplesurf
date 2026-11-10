@@ -70,6 +70,15 @@ func _run() -> void:
 	_water.clear_swells()
 	_rider.trick_landed.connect(func(_spins: int) -> void: _tricks_landed += 1)
 
+	var world_env := _main.get_node("WorldEnvironment") as WorldEnvironment
+	var env := world_env.environment
+	_check(
+		env.background_mode == Environment.BG_SKY and env.sky != null
+		and (env.sky.sky_material as ShaderMaterial).shader.resource_path.ends_with("tropical_sky.gdshader"),
+		"el cielo es el tropical"
+	)
+	_check(env.fog_sky_affect == 0.0, "la niebla no tapa el cielo")
+
 	_test_pad_layouts()
 	await _test_race_start()
 
