@@ -14,6 +14,7 @@ var _water: Water
 var _waves: WaveManager
 var _race: RaceManager
 var _course: Course
+var _pop_prompt_seen: bool = false
 
 
 func _initialize() -> void:
@@ -223,6 +224,7 @@ func _test_wave_jump() -> void:
 	var plain := await _ride_into_swell(false, Vector3(800.0, 0.0, 900.0))
 	var popped := await _ride_into_swell(true, Vector3(1200.0, 0.0, 900.0))
 	_check(plain > 0.5, "la ola lanza al aire (%.1f m)" % plain)
+	_check(_pop_prompt_seen, "en la cresta aparece el botón del pop en pantalla")
 	_check(
 		popped > plain * 1.3,
 		"A al subir la ola (pop) lanza mucho más alto (%.1f m contra %.1f m)" % [popped, plain]
@@ -254,7 +256,10 @@ func _ride_into_swell(press: bool, at: Vector3) -> float:
 	var release_next := false
 	var max_height := 0.0
 	var was_airborne := false
+	var hud := (_main.get_node("Views") as SplitScreen).huds[0]
 	for i in int(5.0 * FPS):
+		if hud._pop_label.visible:
+			_pop_prompt_seen = true
 		if release_next:
 			_set_action(&"p1_a", false)
 			release_next = false

@@ -222,6 +222,17 @@ func jump() -> void:
 	jumped.emit()
 
 
+## Modo olas: true en el momento justo para el pop (subiendo una ola grande o
+## apenas la ola lo lanzó). El HUD muestra el botón.
+func pop_ready() -> bool:
+	if GameSettings.jump_style != GameSettings.JumpStyle.WAVES or did_pop or is_fallen():
+		return false
+	if grounded:
+		var on_swell := water != null and water.swell_height_at(position.x, position.z) > 0.8
+		return on_swell and vertical_speed > stats.pop_min_climb + 1.0 and pop_buffer <= 0.0
+	return wave_air_time >= 0.0 and wave_air_time < stats.pop_window
+
+
 ## Modo olas: saltito en agua plana (no alcanza para un truco).
 func hop() -> void:
 	vertical_speed = maxf(vertical_speed, 0.0) + stats.hop_speed

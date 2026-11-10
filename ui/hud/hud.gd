@@ -32,6 +32,7 @@ var _help: Label
 var _nitro_bar: ProgressBar
 var _message: Label
 var _speed_lines: ColorRect
+var _pop_label: Label
 var _speed_lines_material: ShaderMaterial
 var _message_time: float = 0.0
 var _center_time: float = 0.0
@@ -140,6 +141,14 @@ func _process(delta: float) -> void:
 	if rider == null:
 		return
 	_update_mash(delta)
+
+	# Momento justo para el pop: el botón aparece en grande y late.
+	var pop := rider.is_human and rider.pop_ready()
+	_pop_label.visible = pop
+	if pop:
+		_pop_label.text = _button_name()
+		_pop_label.pivot_offset = _pop_label.size * 0.5
+		_pop_label.scale = Vector2.ONE * (1.0 + 0.12 * sin(Time.get_ticks_msec() * 0.025))
 
 	_speed_label.text = "%d km/h" % roundi(rider.speed * 3.6)
 	_name_label.text = rider.display_name
@@ -310,6 +319,16 @@ func _build() -> void:
 	_message.offset_top = 70.0
 	_message.visible = false
 	root.add_child(_message)
+
+	# Botón del pop (en la cresta de la ola), un poco abajo del centro.
+	_pop_label = _make_label(64, PROMPT_COLOR)
+	_pop_label.set_anchors_preset(Control.PRESET_CENTER)
+	_pop_label.offset_left = -250.0
+	_pop_label.offset_right = 250.0
+	_pop_label.offset_top = 40.0
+	_pop_label.offset_bottom = 130.0
+	_pop_label.visible = false
+	root.add_child(_pop_label)
 
 	# Cartel grande al centro (cuenta regresiva, vuelta, llegada, al revés).
 	_center_label = _make_label(84, Color.WHITE)

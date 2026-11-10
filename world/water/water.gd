@@ -126,6 +126,15 @@ func height_at(x: float, z: float) -> float:
 	return h + swell_h * _island_fade(p)
 
 
+## Altura que aportan solo las olas grandes (para saber si está sobre una).
+func swell_height_at(x: float, z: float) -> float:
+	var p := Vector2(x, z)
+	var h := 0.0
+	for s in swells:
+		h += s.height_at(p)
+	return h * _island_fade(p)
+
+
 func normal_at(x: float, z: float) -> Vector3:
 	var g := waves.gradient_at(x, z, time)
 	var p := Vector2(x, z)
