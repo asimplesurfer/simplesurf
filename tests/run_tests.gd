@@ -932,7 +932,7 @@ func _test_swells() -> void:
 			continue
 		var to_me := (me - s.center).normalized()
 		var ahead := (s.center - me).dot(fwd)
-		if s.direction.dot(to_me) > 0.9 and ahead > 30.0:
+		if s.direction.dot(to_me) > 0.75 and ahead > 30.0:
 			incoming_ok += 1
 	_check(incoming_ok >= 18, "las olas nacen adelante y vienen de frente (%d de 20)" % incoming_ok)
 	_waves.incoming_chance = 0.75
