@@ -15,6 +15,8 @@ var _waves: WaveManager
 var _race: RaceManager
 var _course: Course
 var _pop_prompt_seen: bool = false
+var _watch_camera: bool = false
+var _camera_lost: bool = false
 
 
 func _initialize() -> void:
@@ -811,8 +813,12 @@ func _test_jump_and_tricks() -> void:
 	_rider.add_nitro(1.0)
 	await _press(&"p1_a")
 	_set_action(&"p1_b", true)
+	_camera_lost = false
+	_watch_camera = true
 	var boosted := await _measure_air()
+	_watch_camera = false
 	_set_action(&"p1_b", false)
+	_check(not _camera_lost, "la cámara no pierde al personaje aunque suba mucho")
 	_check(
 		boosted.x > plain.x * 2.0,
 		"turbo en el aire: sube mucho más (%.1f m contra %.1f m)" % [boosted.x, plain.x]
@@ -927,6 +933,11 @@ func _measure_air() -> Vector2:
 	for i in int(6.0 * FPS):
 		var h := _rider.global_position.y - _water_height_here()
 		max_height = maxf(max_height, h)
+		if _watch_camera:
+			var cam := (_main.get_node("Views") as SplitScreen).cameras[0]
+			var body := _rider.global_position + Vector3.UP * 0.9
+			if not cam.is_position_in_frustum(body):
+				_camera_lost = true
 		if _state() != &"airborne":
 			break
 		frames += 1
