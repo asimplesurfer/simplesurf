@@ -344,11 +344,14 @@ func _set_action(action: StringName, pressed: bool) -> void:
 	Input.parse_input_event(ev)
 
 
+## Toca un botón. Los eventos simulados llegan al juego un frame después,
+## por eso se espera un frame extra tras soltar.
 func _press(action: StringName) -> void:
 	_set_action(action, true)
 	await process_frame
 	await process_frame
 	_set_action(action, false)
+	await process_frame
 	await process_frame
 
 
