@@ -916,6 +916,29 @@ func _test_swells() -> void:
 			all_clear = false
 	_check(all_clear, "las olas nunca nacen encima del jugador")
 
+	# Olas de frente: adelante (por la pista) y viniendo hacia el jugador.
+	_course.bounds_enabled = false
+	var saved_pos := _rider.position
+	var saved_heading := _rider.heading
+	_teleport(_course.track.position_at(1.0))
+	_rider.heading = _course.track.heading_at(1.0)
+	_waves.incoming_chance = 1.0
+	var incoming_ok := 0
+	var me := Vector2(_rider.position.x, _rider.position.z)
+	var fwd := Vector2(_rider.forward().x, _rider.forward().z)
+	for i in 20:
+		var s := _waves.make_swell()
+		if s == null:
+			continue
+		var to_me := (me - s.center).normalized()
+		var ahead := (s.center - me).dot(fwd)
+		if s.direction.dot(to_me) > 0.9 and ahead > 30.0:
+			incoming_ok += 1
+	_check(incoming_ok >= 18, "las olas nacen adelante y vienen de frente (%d de 20)" % incoming_ok)
+	_waves.incoming_chance = 0.75
+	_rider.position = saved_pos
+	_rider.heading = saved_heading
+
 	_waves.random_seed = 1234
 	_waves._ready()
 	_waves.enabled = true
