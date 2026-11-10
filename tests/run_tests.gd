@@ -351,7 +351,7 @@ func _test_constant_wave() -> void:
 
 
 ## Anda hacia una ola grande y devuelve la altura máxima del salto.
-## Con press = true, aprieta A mientras sube la ola (pop).
+## Con press = true, aprieta A apenas la ola lo lanza (pop tardío).
 func _ride_into_swell(press: bool, at: Vector3) -> float:
 	_water.clear_swells()
 	_teleport(at)
@@ -384,7 +384,7 @@ func _ride_into_swell(press: bool, at: Vector3) -> float:
 		if release_next:
 			_set_action(&"p1_a", false)
 			release_next = false
-		if press and not pressed and _rider.grounded and _rider.vertical_speed > 2.5:
+		if press and not pressed and _state() == &"airborne":
 			_set_action(&"p1_a", true)
 			pressed = true
 			release_next = true
