@@ -8,7 +8,8 @@ extends Node
 ##   tiempo lleva en el aire. Los bots no cuentan.
 ## Los Riders no conocen el audio: esto solo mira su estado.
 
-const MUSIC := preload("res://assets/audio/simple_surf.ogg")
+## Se carga al arrancar (no con preload, para no depender del orden de importación).
+const MUSIC_PATH := "res://assets/audio/simple_surf.ogg"
 const NORMAL_DB := -8.0
 const EPIC_DB := -1.0
 const MENU_DB := -16.0
@@ -28,9 +29,11 @@ var _in_race: bool = false
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	player = AudioStreamPlayer.new()
-	var stream: AudioStreamOggVorbis = MUSIC.duplicate()
-	stream.loop = true
-	player.stream = stream
+	var music := load(MUSIC_PATH) as AudioStreamOggVorbis
+	if music:
+		var stream: AudioStreamOggVorbis = music.duplicate()
+		stream.loop = true
+		player.stream = stream
 	player.volume_db = -40.0
 	add_child(player)
 
@@ -38,14 +41,14 @@ func _ready() -> void:
 ## Llamado por RaceManager al cargar una carrera.
 func race_started() -> void:
 	_in_race = true
-	if not player.playing:
+	if player.stream and not player.playing:
 		player.play()
 
 
 ## Llamado por el menú.
 func menu_opened() -> void:
 	_in_race = false
-	if not player.playing:
+	if player.stream and not player.playing:
 		player.play()
 
 
