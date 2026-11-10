@@ -254,7 +254,7 @@ func do_pop() -> void:
 		return
 	did_pop = true
 	pop_buffer = 0.0
-	vertical_speed = maxf(vertical_speed, 0.0) * stats.pop_mult + 2.0
+	vertical_speed = maxf(vertical_speed, 0.0) * stats.pop_mult + stats.pop_extra
 	popped.emit()
 
 
