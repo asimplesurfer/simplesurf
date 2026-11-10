@@ -353,7 +353,8 @@ func _ride_into_swell(press: bool, at: Vector3) -> float:
 	var ahead := _rider.global_position + f * 25.0
 	s.center = Vector2(ahead.x, ahead.z)
 	s.direction = -Vector2(f.x, f.z)
-	s.speed = 0.0
+	# Viene de frente, como las olas del juego (quieta queda justo en el límite).
+	s.speed = 4.0
 	s.max_amplitude = 3.0
 	s.width = 5.5
 	s.half_length = 20.0
