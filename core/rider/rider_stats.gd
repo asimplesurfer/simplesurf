@@ -18,10 +18,16 @@ extends Resource
 
 @export_group("Salto y olas")
 @export var gravity: float = 20.0
-## Velocidad hacia arriba que da el botón de salto (m/s).
-@export var jump_speed: float = 7.0
+## Velocidad hacia arriba de un salto sin cargar (toque rápido) (m/s).
+@export var jump_speed_min: float = 5.5
+## Velocidad hacia arriba con el salto cargado al máximo (m/s).
+@export var jump_speed_max: float = 10.0
+## Tiempo manteniendo ESPACIO para cargar el salto al máximo (s).
+@export var jump_charge_time: float = 1.0
 ## Velocidad vertical mínima para que una ola te lance al aire (m/s).
-@export var min_launch_speed: float = 3.5
+@export var min_launch_speed: float = 3.0
+## Multiplica la velocidad hacia arriba al salir despedido de una ola.
+@export var wave_launch_boost: float = 1.5
 ## Multiplicador de giro en el aire.
 @export var air_turn_factor: float = 0.5
 

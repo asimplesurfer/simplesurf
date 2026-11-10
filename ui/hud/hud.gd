@@ -16,6 +16,7 @@ var _mash_title: Label
 var _mash_hint: Label
 var _mash_bar: ProgressBar
 var _speed_label: Label
+var _help: Label
 var _nitro_bar: ProgressBar
 var _message: Label
 var _message_time: float = 0.0
@@ -33,6 +34,13 @@ func _ready() -> void:
 		rider.trick_landed.connect(_on_trick_landed)
 		rider.trick_failed.connect(func() -> void: show_message("¡Truco fallido!", Color(1.0, 0.4, 0.35)))
 		rider.drift_hit.connect(func(_victim: Rider) -> void: show_message("¡Lo tiraste!", PROMPT_COLOR))
+		var pc := rider.controller as PlayerController
+		if pc:
+			pc.pad_layout_changed.connect(func(layout_name: String) -> void:
+				show_message("Mando: " + layout_name, Color.WHITE)
+				_update_help()
+			)
+		_update_help()
 
 
 func show_message(text: String, color: Color) -> void:
@@ -79,8 +87,25 @@ func _process(delta: float) -> void:
 func _button_name() -> String:
 	var pc := rider.controller as PlayerController
 	if pc and pc.using_joypad:
-		return "(A)"
+		return "(X)" if pc.is_generic_pad() else "(A)"
 	return "ESPACIO"
+
+
+func _update_help() -> void:
+	var layout := "estándar"
+	if rider and rider.controller is PlayerController:
+		layout = (rider.controller as PlayerController).layout_name()
+	_help.text = (
+		"Acelerar / frenar: W / S o stick\n"
+		+ "Girar: A / D o stick\n"
+		+ "Saltar: ESPACIO o botón de abajo (mantener = cargar)\n"
+		+ "Truco: en el aire, mantener ESPACIO / botón de abajo\n"
+		+ "Derrapar: SHIFT o botón izquierdo / RB\n"
+		+ "Levantarse: spamear ESPACIO o botón de abajo\n"
+		+ "Caerse (prueba): R o botón de arriba\n"
+		+ "Mando: %s (M para cambiar)\n" % layout
+		+ "Si no responde, haz clic en el juego"
+	)
 
 
 func _build() -> void:
@@ -150,19 +175,10 @@ func _build() -> void:
 	root.add_child(_speed_label)
 
 	# Ayuda de controles, arriba a la izquierda.
-	var help := _make_label(18, Color.WHITE)
-	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	help.position = Vector2(20.0, 16.0)
-	help.text = (
-		"Acelerar / frenar: W / S o stick\n"
-		+ "Girar: A / D o stick\n"
-		+ "Saltar: ESPACIO o (A)  ·  mantener en el aire: truco\n"
-		+ "Derrapar: SHIFT o (X) / (RB)\n"
-		+ "Levantarse: spamear ESPACIO o (A)\n"
-		+ "Caerse (prueba): R o (Y)\n"
-		+ "Si no responde, haz clic en el juego"
-	)
-	root.add_child(help)
+	_help = _make_label(17, Color.WHITE)
+	_help.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_help.position = Vector2(20.0, 16.0)
+	root.add_child(_help)
 
 
 func _make_label(font_size: int, color: Color) -> Label:

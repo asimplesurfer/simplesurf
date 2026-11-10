@@ -36,12 +36,32 @@ func _run() -> void:
 	_water.clear_swells()
 	_rider.trick_landed.connect(func(_spins: int) -> void: _tricks_landed += 1)
 
+	_test_pad_layouts()
 	await _test_get_up()
 	await _test_throttle_and_steer()
 	await _test_jump_and_tricks()
 	await _test_drift()
 	await _test_swells()
 	_finish()
+
+
+func _test_pad_layouts() -> void:
+	print("Mandos:")
+	InputSetup.set_pad_layout(0, InputSetup.PadLayout.GENERIC)
+	_check(_has_button(&"p1_a", 2), "mando genérico: ✕ (botón 2) es A")
+	_check(_has_button(&"p1_debug_fall", 0), "mando genérico: △ (botón 0) es caerse")
+	_check(not _has_button(&"p1_a", JOY_BUTTON_A), "mando genérico: △ ya no es A")
+	InputSetup.set_pad_layout(0, InputSetup.PadLayout.STANDARD)
+	_check(_has_button(&"p1_a", JOY_BUTTON_A), "mando estándar: A es A")
+	_check(_has_button(&"p1_drift", JOY_BUTTON_X), "mando estándar: X derrapa")
+	_check(_has_button(&"p1_left", JOY_BUTTON_DPAD_LEFT), "la cruceta sigue funcionando")
+
+
+func _has_button(action: StringName, button: int) -> bool:
+	for ev in InputMap.action_get_events(action):
+		if ev is InputEventJoypadButton and ev.button_index == button:
+			return true
+	return false
 
 
 func _test_get_up() -> void:
@@ -104,15 +124,28 @@ func _test_jump_and_tricks() -> void:
 	# Salto simple: toca y suelta.
 	await _press(&"p1_a")
 	_check(_state() == &"airborne", "ESPACIO salta")
-	var max_height := 0.0
-	for i in int(1.5 * FPS):
-		var h := _rider.global_position.y - _water_height_here()
-		max_height = maxf(max_height, h)
-		if _state() == &"riding":
-			break
-		await process_frame
-	_check(max_height > 0.8, "sube en el aire (%.2f m)" % max_height)
+	var tap_height := await _measure_jump_height()
+	_check(tap_height > 0.5, "sube en el aire (%.2f m)" % tap_height)
 	_check(_state() == &"riding", "aterriza y sigue andando")
+	await _wait(0.3)
+
+	# Salto cargado: mantener 1 s y soltar.
+	_set_action(&"p1_a", true)
+	await _wait(0.5)
+	_check(_state() == &"riding", "mantener ESPACIO en el agua no salta todavía")
+	_check(_rider.jump_charge > 0.3, "mantener ESPACIO carga el salto (%.2f)" % _rider.jump_charge)
+	await _wait(0.6)
+	_check(_rider.jump_charge >= 1.0, "la carga llega al máximo en ~1 s")
+	_set_action(&"p1_a", false)
+	await process_frame
+	await process_frame
+	_check(_state() == &"airborne", "al soltar, salta")
+	var charged_height := await _measure_jump_height()
+	_check(
+		charged_height > tap_height * 2.0,
+		"el salto cargado sube mucho más (%.2f m contra %.2f m)" % [charged_height, tap_height]
+	)
+	await _wait(0.3)
 
 	# En el aire no se puede volver a saltar.
 	await _press(&"p1_a")
@@ -123,9 +156,10 @@ func _test_jump_and_tricks() -> void:
 	await _wait_until_state(&"riding", 2.0)
 	await _wait(0.3)
 
-	# Truco bien hecho: mantener un poco y soltar a tiempo.
+	# Truco bien hecho: salto cargado, en el aire mantener un poco y soltar a tiempo.
 	var tricks_before := _tricks_landed
 	var nitro_before := _rider.nitro
+	await _charged_jump(0.6)
 	_set_action(&"p1_a", true)
 	await _wait(0.3)
 	_check(_rider.trick_angle > 0.0, "mantener ESPACIO en el aire gira la tabla")
@@ -137,6 +171,7 @@ func _test_jump_and_tricks() -> void:
 	await _wait(0.3)
 
 	# Truco fallido: mantener hasta tocar el agua.
+	await _charged_jump(0.6)
 	_set_action(&"p1_a", true)
 	await _wait(1.5)
 	_set_action(&"p1_a", false)
@@ -220,6 +255,27 @@ func _test_swells() -> void:
 			break
 		await process_frame
 	_check(launched, "subir una ola grande con velocidad lo lanza al aire")
+
+
+## Mantiene A `seconds` en el agua y suelta (salto cargado).
+func _charged_jump(seconds: float) -> void:
+	_set_action(&"p1_a", true)
+	await _wait(seconds)
+	_set_action(&"p1_a", false)
+	await process_frame
+	await process_frame
+
+
+## Altura máxima sobre el agua hasta aterrizar.
+func _measure_jump_height() -> float:
+	var max_height := 0.0
+	for i in int(2.5 * FPS):
+		var h := _rider.global_position.y - _water_height_here()
+		max_height = maxf(max_height, h)
+		if _state() != &"airborne":
+			break
+		await process_frame
+	return max_height
 
 
 func _state() -> StringName:

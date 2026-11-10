@@ -1,6 +1,12 @@
 class_name PlayerController
 extends BaseController
 ## Lee mando y teclado del jugador `player_index` (acciones p1_, p2_...).
+## La distribución del mando se detecta sola; con la tecla M se cambia a mano
+## y la elección se guarda para la próxima vez.
+
+signal pad_layout_changed(layout_name: String)
+
+const SETTINGS_PATH := "user://settings.cfg"
 
 @export var player_index: int = 0
 
@@ -10,6 +16,8 @@ var using_joypad: bool = false
 var _prefix: String = ""
 var _pending_mash: int = 0
 var _pending_debug_fall: bool = false
+## Distribución elegida a mano (-1 = automática).
+var _manual_layout: int = -1
 
 
 func _ready() -> void:
@@ -18,6 +26,38 @@ func _ready() -> void:
 		player_index = rider.player_index
 	InputSetup.ensure_player_actions(player_index)
 	_prefix = InputSetup.prefix(player_index)
+
+	_manual_layout = _load_manual_layout()
+	if _manual_layout >= 0:
+		InputSetup.set_pad_layout(player_index, _manual_layout as InputSetup.PadLayout)
+	elif player_index in Input.get_connected_joypads():
+		InputSetup.set_pad_layout(player_index, InputSetup.detect_pad_layout(player_index))
+	Input.joy_connection_changed.connect(_on_joy_connection_changed)
+
+
+func layout_name() -> String:
+	return InputSetup.LAYOUT_NAMES[InputSetup.get_pad_layout(player_index)]
+
+
+func is_generic_pad() -> bool:
+	return InputSetup.get_pad_layout(player_index) == InputSetup.PadLayout.GENERIC
+
+
+## Pasa a la otra distribución de mando y la guarda.
+func toggle_pad_layout() -> void:
+	var next := InputSetup.PadLayout.GENERIC
+	if is_generic_pad():
+		next = InputSetup.PadLayout.STANDARD
+	InputSetup.set_pad_layout(player_index, next)
+	_manual_layout = next
+	_save_manual_layout(next)
+	pad_layout_changed.emit(layout_name())
+
+
+func _on_joy_connection_changed(device: int, connected: bool) -> void:
+	if connected and device == player_index and _manual_layout < 0:
+		InputSetup.set_pad_layout(player_index, InputSetup.detect_pad_layout(device))
+		pad_layout_changed.emit(layout_name())
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -29,6 +69,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	if event is InputEventKey:
 		using_joypad = false
+		var key := event as InputEventKey
+		if player_index == 0 and key.pressed and not key.echo and key.physical_keycode == KEY_M:
+			toggle_pad_layout()
 	elif event is InputEventJoypadButton:
 		using_joypad = true
 	elif event is InputEventJoypadMotion and absf(event.axis_value) > 0.5:
@@ -48,3 +91,17 @@ func get_input(_delta: float) -> RiderInput:
 	_pending_mash = 0
 	_pending_debug_fall = false
 	return input
+
+
+func _load_manual_layout() -> int:
+	var cfg := ConfigFile.new()
+	if cfg.load(SETTINGS_PATH) != OK:
+		return -1
+	return int(cfg.get_value("pad_layout", "player_%d" % player_index, -1))
+
+
+func _save_manual_layout(layout: int) -> void:
+	var cfg := ConfigFile.new()
+	cfg.load(SETTINGS_PATH)
+	cfg.set_value("pad_layout", "player_%d" % player_index, layout)
+	cfg.save(SETTINGS_PATH)

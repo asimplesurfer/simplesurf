@@ -40,6 +40,8 @@ var steer_amount: float = 0.0
 var recovery_stage: RecoveryStage = RecoveryStage.STANDING
 var water_normal: Vector3 = Vector3.UP
 var nitro: float = 0.0
+## Carga del salto (0..1) mientras se mantiene ESPACIO en el agua.
+var jump_charge: float = 0.0
 ## Giro acumulado de la tabla durante un truco (radianes).
 var trick_angle: float = 0.0
 ## Lado del derrape: -1 izquierda, 1 derecha, 0 sin derrapar.
@@ -127,9 +129,10 @@ func water_height() -> float:
 func stick_to_water(delta: float, allow_launch: bool = true) -> bool:
 	var h := water_height()
 	var ballistic_y := position.y + vertical_speed * delta - 0.5 * stats.gravity * delta * delta
-	if allow_launch and vertical_speed > stats.min_launch_speed and ballistic_y > h + 0.02:
+	if allow_launch and vertical_speed > stats.min_launch_speed and ballistic_y > h:
 		position.y = ballistic_y
-		vertical_speed -= stats.gravity * delta
+		vertical_speed = (vertical_speed - stats.gravity * delta) * stats.wave_launch_boost
+		jump_charge = 0.0
 		grounded = false
 		return true
 	vertical_speed = clampf((h - position.y) / delta, -30.0, 30.0)
@@ -140,8 +143,11 @@ func stick_to_water(delta: float, allow_launch: bool = true) -> bool:
 	return false
 
 
+## Salta con la fuerza que indica jump_charge (0 = toque, 1 = cargado al máximo).
 func jump() -> void:
-	vertical_speed = maxf(vertical_speed, 0.0) + stats.jump_speed
+	var jump_speed := lerpf(stats.jump_speed_min, stats.jump_speed_max, jump_charge)
+	vertical_speed = maxf(vertical_speed, 0.0) + jump_speed
+	jump_charge = 0.0
 	grounded = false
 	jumped.emit()
 

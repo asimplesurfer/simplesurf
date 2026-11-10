@@ -254,6 +254,9 @@ func _process(delta: float) -> void:
 	var xf := _pose_from.interpolate_with(_pose_to, t)
 	xf.origin.y += sin(_pose_t * PI) * _pose_arc
 	xf.origin += _idle_offset(stage)
+	# Cargando el salto: se agacha e inclina hacia adelante.
+	var charge := rider.jump_charge
+	xf.basis = xf.basis * Basis(Vector3.RIGHT, -0.35 * charge)
 	_body_pivot.transform = xf
 	# En el truco la tabla gira bajo el jugador.
 	_board_pivot.quaternion = (
@@ -263,7 +266,9 @@ func _process(delta: float) -> void:
 
 	# "Golpe" de cada pulsación: la pastilla se aplasta un poco.
 	_punch = move_toward(_punch, 0.0, delta * 5.0)
-	_body.scale = Vector3(1.0 + 0.18 * _punch, 1.0 - 0.15 * _punch, 1.0 + 0.18 * _punch)
+	var squash := maxf(_punch * 0.15, rider.jump_charge * 0.3)
+	_body.scale = Vector3(1.0 + squash * 1.1, 1.0 - squash, 1.0 + squash * 1.1)
+	_body.position.y = BODY_HEIGHT * 0.5 * (1.0 - squash)
 
 
 func _idle_offset(stage: Rider.RecoveryStage) -> Vector3:
