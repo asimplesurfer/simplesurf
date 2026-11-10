@@ -161,6 +161,7 @@ func _update_progress(r: Rider, delta: float) -> void:
 func _finish(r: Rider) -> void:
 	_finish_order.append(r)
 	finish_times[r] = race_time
+	r.race_finished = true
 	racer_finished.emit(r, _finish_order.size())
 	# Termina cuando llegan todas las personas (o todos, si solo hay bots).
 	var waiting := humans()

@@ -55,6 +55,8 @@ var _time: float = 0.0
 
 var _trail: BoardTrail
 var _wake: CPUParticles3D
+## Tiempo desde el último cambio de etapa (caída, subida, parada).
+var _stage_time: float = 0.0
 var _spray: DriftSpray
 
 
@@ -139,9 +141,10 @@ func _build() -> void:
 static func body_pose(stage: Rider.RecoveryStage) -> Transform3D:
 	match stage:
 		Rider.RecoveryStage.IN_WATER:
-			# Flotando al costado de la tabla, medio hundido, agarrado del borde.
-			var b := Basis(Vector3.FORWARD, 0.35) * Basis(Vector3.RIGHT, -PI / 2.0 + 0.25)
-			return Transform3D(b, Vector3(0.8, -0.1, 0.75))
+			# En el agua al costado de la tabla, casi parado y hundido hasta el
+			# pecho (así se ven la cabeza y los brazos agitándose).
+			var b := Basis(Vector3.FORWARD, 0.25) * Basis(Vector3.RIGHT, -0.35)
+			return Transform3D(b, Vector3(1.0, -BODY_HEIGHT * 0.62, 0.3))
 		Rider.RecoveryStage.PRONE:
 			# Acostado boca abajo sobre la tabla, con la cabeza hacia adelante.
 			var b := Basis(Vector3.RIGHT, -PI / 2.0)
@@ -177,6 +180,7 @@ func _on_recovery_stage_changed(stage: Rider.RecoveryStage) -> void:
 	_board_from = _board_pivot.quaternion
 	_board_to = board_pose(stage)
 	_pose_t = 0.0
+	_stage_time = 0.0
 	match stage:
 		Rider.RecoveryStage.IN_WATER:  # Sale volando de la tabla.
 			_pose_duration = 0.35
@@ -232,6 +236,7 @@ func _process(delta: float) -> void:
 		_board_from.slerp(_board_to, t) * Quaternion(Vector3.UP, -rider.trick_angle)
 	)
 	_update_particles(delta)
+	_update_avatar_anim(delta)
 
 	# "Golpe" de cada pulsación: la pastilla se aplasta un poco.
 	_punch = move_toward(_punch, 0.0, delta * 5.0)
@@ -241,10 +246,39 @@ func _process(delta: float) -> void:
 	)
 
 
+## Elige la animación del personaje según lo que está haciendo el Rider.
+func _update_avatar_anim(delta: float) -> void:
+	_stage_time += delta
+	var stage := rider.recovery_stage
+	var a: StringName = &"ride"
+	_body.effort = clampf(_punch * 1.5, 0.0, 1.0)
+	_body.charge = rider.jump_charge
+	_body.steer = rider.steer_amount
+	match stage:
+		Rider.RecoveryStage.IN_WATER:
+			a = &"flail" if _stage_time < 1.4 or _punch > 0.3 else &"tread"
+		Rider.RecoveryStage.PRONE:
+			a = &"climb" if _stage_time < rider.stats.climb_time else &"paddle"
+			_body.effort = maxf(_body.effort, clampf(rider.speed / 3.0, 0.0, 1.0))
+		_:
+			if _stage_time < 0.3 and _pose_t < 1.0:
+				a = &"pop_up"
+			elif not rider.grounded:
+				a = &"trick" if rider.trick_angle > 0.0 else &"air"
+			elif rider.drift_side != 0:
+				a = &"drift"
+				_body.drift_side = rider.drift_side
+			elif rider.race_finished:
+				a = &"celebrate"
+	_body.anim = a
+
+
 func _idle_offset(stage: Rider.RecoveryStage) -> Vector3:
 	match stage:
 		Rider.RecoveryStage.IN_WATER:
-			return Vector3(0.0, sin(_time * 2.5) * 0.06, 0.0)
+			# Al caer se hunde un poco y vuelve a salir.
+			var dip := -0.35 * sin(clampf(_stage_time / 1.2, 0.0, 1.0) * PI)
+			return Vector3(0.0, sin(_time * 2.5) * 0.06 + dip, 0.0)
 		Rider.RecoveryStage.PRONE:
 			return Vector3(0.0, absf(sin(_time * 7.0)) * 0.03 * minf(rider.speed, 1.0), 0.0)
 		_:
