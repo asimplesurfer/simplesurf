@@ -351,7 +351,7 @@ func _test_constant_wave() -> void:
 
 
 ## Anda hacia una ola grande y devuelve la altura máxima del salto.
-## Con press = true, aprieta A mientras sube la ola (pop).
+## Con press = true, aprieta A apenas la ola lo lanza (pop tardío).
 func _ride_into_swell(press: bool, at: Vector3) -> float:
 	_water.clear_swells()
 	_teleport(at)
@@ -384,7 +384,7 @@ func _ride_into_swell(press: bool, at: Vector3) -> float:
 		if release_next:
 			_set_action(&"p1_a", false)
 			release_next = false
-		if press and not pressed and _rider.grounded and _rider.vertical_speed > 2.5:
+		if press and not pressed and _state() == &"airborne":
 			_set_action(&"p1_a", true)
 			pressed = true
 			release_next = true
@@ -1010,22 +1010,32 @@ func _test_jump_and_tricks() -> void:
 		await _mash_until_standing(8.0, 5.0)
 	await _wait(1.0)
 
-	# Techo: aunque el nitro no se acabe nunca, no sube más que el límite.
+	# Aire fino: aunque el nitro no se acabe nunca, la subida se va frenando
+	# de a poco (sin chocar con un techo) y después baja.
 	await _press(&"p1_a")
 	_set_action(&"p1_b", true)
 	var top := 0.0
+	var max_dv := 0.0
+	var prev_vs := _rider.vertical_speed
+	var landed := false
 	for i in int(8.0 * FPS):
 		if _state() != &"airborne":
+			landed = true
 			break
 		_rider.add_nitro(1.0)
 		top = maxf(top, _rider.global_position.y - _water_height_here())
+		max_dv = maxf(max_dv, absf(_rider.vertical_speed - prev_vs))
+		prev_vs = _rider.vertical_speed
 		await process_frame
 	_set_action(&"p1_b", false)
+	var soft := _rider.stats.air_soft_height
 	var cap := _rider.stats.air_max_height
 	_check(
-		top <= cap + 0.5 and top > cap - 4.0,
-		"con nitro infinito sube hasta el techo y no más (%.1f m, techo %.0f m)" % [top, cap]
+		top > soft and top < cap,
+		"con nitro infinito sube alto pero no sin fin (%.1f m; aire fino desde %.0f m)" % [top, soft]
 	)
+	_check(max_dv < 1.5, "la subida se frena de a poco, sin chocar con un techo (%.2f m/s por frame)" % max_dv)
+	_check(landed, "después baja y aterriza aunque siga con turbo")
 	await _wait_until_state(&"riding", 8.0)
 	# Volver a la velocidad normal antes del próximo test.
 	_rider.reset_nitro()

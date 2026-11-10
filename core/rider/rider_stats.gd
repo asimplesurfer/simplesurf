@@ -73,9 +73,16 @@ extends Resource
 @export var air_turbo_max_up: float = 9.0
 ## Nitro que gasta el turbo por segundo en el aire.
 @export var air_turbo_drain: float = 0.6
-## Altura máxima sobre el agua (m). El turbo en el aire deja de empujar al
-## acercarse y no se puede subir más.
-@export var air_max_height: float = 15.0
+## "Aire fino": desde esta altura sobre el agua (m) el impulso hacia arriba
+## se va perdiendo de a poco y el turbo empuja cada vez menos.
+@export var air_soft_height: float = 10.0
+## Altura (m) a la que el turbo ya no empuja nada y el frenado es pleno.
+## No es un techo duro: la subida se va frenando y el salto hace la curva.
+@export var air_max_height: float = 17.0
+## Frenado extra de la subida en el aire fino (veces la gravedad, al máximo).
+@export var air_thin_gravity: float = 1.5
+## Frenado extra proporcional a la velocidad de subida (por segundo, al máximo).
+@export var air_thin_drag: float = 2.5
 
 @export_group("Handicap (los de atrás se acercan)")
 ## Distancia al primero (m, medida por la pista sumando las vueltas) a la que el
