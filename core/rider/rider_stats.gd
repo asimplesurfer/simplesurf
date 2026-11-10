@@ -73,6 +73,9 @@ extends Resource
 @export var air_turbo_max_up: float = 9.0
 ## Nitro que gasta el turbo por segundo en el aire.
 @export var air_turbo_drain: float = 0.6
+## Altura máxima sobre el agua (m). El turbo en el aire deja de empujar al
+## acercarse y no se puede subir más.
+@export var air_max_height: float = 15.0
 
 @export_group("Handicap (los de atrás se acercan)")
 ## Distancia al primero (m, medida por la pista sumando las vueltas) a la que el

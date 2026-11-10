@@ -964,6 +964,51 @@ func _test_jump_and_tricks() -> void:
 	)
 	_check(_rider.nitro < 1.0, "el turbo en el aire gasta nitro")
 	await _wait_until_state(&"riding", 4.0)
+	await _wait(0.5)
+
+	# Truco + turbo en el aire: el nitro del truco no se cobra en el aire
+	# (si no, el turbo sería infinito).
+	_rider.reset_nitro()
+	_rider.add_nitro(1.0)
+	await _press(&"p1_a")
+	_set_action(&"p1_a", true)
+	_set_action(&"p1_b", true)
+	var prev_nitro := _rider.nitro
+	var nitro_rose := false
+	var spun := false
+	for i in int(6.0 * FPS):
+		if _state() != &"airborne":
+			break
+		if _rider.trick_angle > 0.0:
+			spun = true
+		if _rider.nitro > prev_nitro + 0.0001:
+			nitro_rose = true
+		prev_nitro = _rider.nitro
+		await process_frame
+	_set_action(&"p1_a", false)
+	_set_action(&"p1_b", false)
+	_check(spun and not nitro_rose, "girando con turbo en el aire, el nitro no sube")
+	if _rider.is_fallen():
+		await _mash_until_standing(8.0, 5.0)
+	await _wait(1.0)
+
+	# Techo: aunque el nitro no se acabe nunca, no sube más que el límite.
+	await _press(&"p1_a")
+	_set_action(&"p1_b", true)
+	var top := 0.0
+	for i in int(8.0 * FPS):
+		if _state() != &"airborne":
+			break
+		_rider.add_nitro(1.0)
+		top = maxf(top, _rider.global_position.y - _water_height_here())
+		await process_frame
+	_set_action(&"p1_b", false)
+	var cap := _rider.stats.air_max_height
+	_check(
+		top <= cap + 0.5 and top > cap - 4.0,
+		"con nitro infinito sube hasta el techo y no más (%.1f m, techo %.0f m)" % [top, cap]
+	)
+	await _wait_until_state(&"riding", 8.0)
 	# Volver a la velocidad normal antes del próximo test.
 	_rider.reset_nitro()
 	await _wait(4.0)
