@@ -179,6 +179,8 @@ func _build_finish_line() -> void:
 	var banner := MeshInstance3D.new()
 	banner.name = "FinishBanner"
 	banner.mesh = banner_mesh
+	# Sin sombra: si no, deja una franja oscura enorme justo en la largada.
+	banner.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	banner.position = (inner + outer) * 0.5 + Vector3(0.0, 9.0, 0.0)
 	# El banner va a lo ancho del circuito (dirección radial en ángulo 0 = eje X).
 	add_child(banner)
