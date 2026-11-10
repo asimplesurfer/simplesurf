@@ -118,7 +118,7 @@ func _drive(delta: float, input: RiderInput) -> void:
 
 	# Turbo en línea recta cuando junta suficiente nitro.
 	if difficulty.uses_turbo:
-		if rider.nitro >= difficulty.turbo_threshold and absf(input.steer) < 0.35:
+		if rider.nitro >= difficulty.turbo_threshold and absf(input.steer) < difficulty.turbo_steer_limit:
 			_turbo_on = true
 		if rider.nitro <= 0.0 or absf(input.steer) > 0.8:
 			_turbo_on = false
@@ -333,7 +333,9 @@ func _air(_delta: float, input: RiderInput) -> void:
 	_jump_hold = 0.0
 
 	if not _was_airborne:
-		_trick_will_fail = _rng.randf() < difficulty.trick_fail_chance
+		# Con handicap se equivoca menos en los trucos.
+		var fail_chance := difficulty.trick_fail_chance * (1.0 - 0.6 * rider.catchup)
+		_trick_will_fail = _rng.randf() < fail_chance
 
 	var stats := rider.stats
 	var spin := stats.trick_spin_speed

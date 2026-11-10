@@ -147,14 +147,15 @@ func current_steer() -> float:
 ## Acelera / frena según el acelerador. El turbo (si hay nitro) y la
 ## motivación suben la velocidad máxima.
 func apply_throttle(throttle: float, delta: float, turbo: bool = false) -> void:
-	var target := stats.max_speed * maxf(throttle, 0.0)
+	var top := stats.max_speed * speed_mult()
+	var target := top * maxf(throttle, 0.0)
 	var rate := stats.acceleration
 	if motivation_timer > 0.0:
-		target = maxf(target, stats.max_speed * stats.motivation_speed_mult)
+		target = maxf(target, top * stats.motivation_speed_mult)
 		rate *= 2.0
 	if turbo and nitro > 0.0:
 		turbo_active = true
-		target = maxf(target, stats.max_speed * stats.turbo_speed_mult)
+		target = maxf(target, top * stats.turbo_speed_mult)
 		rate = stats.acceleration * stats.turbo_accel_mult
 		add_nitro(-stats.turbo_drain * delta)
 	if speed > target:
@@ -274,6 +275,16 @@ func update_air(delta: float) -> bool:
 ## Multiplicador del nitro que se gana por el handicap.
 func nitro_gain_mult() -> float:
 	return 1.0 + catchup * (stats.catchup_nitro_mult - 1.0)
+
+
+## Multiplicador de la velocidad máxima por el handicap.
+func speed_mult() -> float:
+	return 1.0 + catchup * stats.catchup_speed_bonus
+
+
+## Radianes que le pueden faltar a un truco al caer para que igual cuente (handicap).
+func trick_grace() -> float:
+	return catchup * stats.catchup_trick_grace
 
 
 ## Multiplicador de la altura de los saltos por el handicap.

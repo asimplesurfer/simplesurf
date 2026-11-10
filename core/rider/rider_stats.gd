@@ -83,6 +83,11 @@ extends Resource
 @export var catchup_nitro_trickle: float = 0.04
 ## Cuánto más alto salta (olas, pop, saltito) con el handicap al máximo (0.35 = +35%).
 @export var catchup_jump_bonus: float = 0.35
+## Velocidad máxima extra con el handicap al máximo (0.07 = +7%).
+@export var catchup_speed_bonus: float = 0.07
+## Tolerancia al caer de un truco con el handicap al máximo (radianes que le
+## pueden faltar al giro para que igual cuente como bien hecho; ~70°).
+@export var catchup_trick_grace: float = 1.2
 
 @export_group("Derrape")
 ## Velocidad mínima para poder derrapar (m/s).
