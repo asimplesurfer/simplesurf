@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=14 format=3]
 
 [ext_resource type="Script" path="res://world/water/water.gd" id="1_water"]
 [ext_resource type="Script" path="res://world/course.gd" id="2_course"]
@@ -6,15 +6,25 @@
 [ext_resource type="Script" path="res://core/race/race_manager.gd" id="4_race"]
 [ext_resource type="Script" path="res://ui/split_screen/split_screen.gd" id="5_split"]
 [ext_resource type="Script" path="res://ui/race/results_panel.gd" id="6_results"]
+[ext_resource type="Shader" path="res://world/sky/tropical_sky.gdshader" id="7_sky"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_sky"]
+shader = ExtResource("7_sky")
+
+[sub_resource type="Sky" id="Sky_tropical"]
+sky_material = SubResource("ShaderMaterial_sky")
+radiance_size = 0
 
 [sub_resource type="Environment" id="Environment_sea"]
-background_mode = 1
-background_color = Color(0.62, 0.84, 0.96, 1)
+background_mode = 2
+sky = SubResource("Sky_tropical")
 ambient_light_source = 2
 ambient_light_color = Color(0.75, 0.88, 1, 1)
 ambient_light_energy = 0.45
+reflected_light_source = 1
 fog_enabled = true
-fog_light_color = Color(0.62, 0.84, 0.96, 1)
+fog_light_color = Color(0.7, 0.9, 0.98, 1)
+fog_sky_affect = 0.0
 fog_density = 0.008
 
 [node name="Main" type="Node3D"]
