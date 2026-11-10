@@ -17,6 +17,8 @@ uniform vec4 swell_a2; uniform vec4 swell_b2;
 uniform vec4 swell_a3; uniform vec4 swell_b3;
 uniform vec4 swell_a4; uniform vec4 swell_b4;
 uniform vec4 swell_a5; uniform vec4 swell_b5;
+// Isla (x, z, radio): las olas grandes se apagan cerca de la orilla. Radio 0 = sin isla.
+uniform vec3 island = vec3(0.0);
 
 uniform vec3 deep_color : source_color = vec3(0.02, 0.24, 0.48);
 uniform vec3 shallow_color : source_color = vec3(0.08, 0.48, 0.7);
@@ -72,6 +74,14 @@ void add_swell(vec4 a, vec4 b, vec2 p, inout float h, inout vec2 g, inout float 
 	g += dir * dh_du + perp * dh_dw;
 }
 
+float island_fade(vec2 p) {
+	if (island.z <= 0.0) {
+		return 1.0;
+	}
+	float d = distance(p, island.xy);
+	return smoothstep(island.z + 4.0, island.z + 28.0, d);
+}
+
 void vertex() {
 	vec3 world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	float h = 0.0;
@@ -82,12 +92,18 @@ void vertex() {
 	add_wave(wave_2, world.xz, h, g);
 	add_wave(wave_3, world.xz, h, g);
 	float ambient_h = h;
-	add_swell(swell_a0, swell_b0, world.xz, h, g, crest);
-	add_swell(swell_a1, swell_b1, world.xz, h, g, crest);
-	add_swell(swell_a2, swell_b2, world.xz, h, g, crest);
-	add_swell(swell_a3, swell_b3, world.xz, h, g, crest);
-	add_swell(swell_a4, swell_b4, world.xz, h, g, crest);
-	add_swell(swell_a5, swell_b5, world.xz, h, g, crest);
+	float sh = 0.0;
+	vec2 sg = vec2(0.0);
+	add_swell(swell_a0, swell_b0, world.xz, sh, sg, crest);
+	add_swell(swell_a1, swell_b1, world.xz, sh, sg, crest);
+	add_swell(swell_a2, swell_b2, world.xz, sh, sg, crest);
+	add_swell(swell_a3, swell_b3, world.xz, sh, sg, crest);
+	add_swell(swell_a4, swell_b4, world.xz, sh, sg, crest);
+	add_swell(swell_a5, swell_b5, world.xz, sh, sg, crest);
+	float fade = island_fade(world.xz);
+	h += sh * fade;
+	g += sg * fade;
+	crest *= fade;
 	VERTEX.y += h;
 	NORMAL = normalize(vec3(-g.x, 1.0, -g.y));
 	v_height = ambient_h;

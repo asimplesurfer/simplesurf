@@ -68,6 +68,10 @@ await shot('3_parado');
 await page.keyboard.down('KeyW');
 await sleep(3000);
 await shot('4_andando');
+await page.keyboard.down('KeyE');
+await sleep(800);
+await shot('4b_turbo');
+await page.keyboard.up('KeyE');
 
 await page.keyboard.down('KeyD');
 await sleep(500);

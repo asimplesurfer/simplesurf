@@ -41,6 +41,20 @@ extends Resource
 ## Nitro que carga por segundo girando (1.0 = barra llena).
 @export var trick_nitro_rate: float = 0.5
 
+@export_group("Turbo y motivación")
+## Multiplica la velocidad máxima con el turbo.
+@export var turbo_speed_mult: float = 1.55
+## Multiplica la aceleración con el turbo.
+@export var turbo_accel_mult: float = 2.5
+## Nitro que gasta el turbo por segundo (1.0 = barra llena).
+@export var turbo_drain: float = 0.35
+## Duración del mini sprint automático (motivación) (s).
+@export var motivation_time: float = 1.3
+## Multiplica la velocidad máxima durante la motivación.
+@export var motivation_speed_mult: float = 1.3
+## Nitro que da pasar por un círculo de velocidad.
+@export var ring_nitro: float = 0.25
+
 @export_group("Derrape")
 ## Velocidad mínima para poder derrapar (m/s).
 @export var drift_min_speed: float = 6.0

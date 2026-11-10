@@ -10,6 +10,8 @@ const JUMP_MODE_NAMES := ["mantener para cargar", "tocar para saltar"]
 ## CHARGE: mantener carga el salto (salta solo al llegar al máximo).
 ## TAP: tocar salta enseguida, con una altura fija.
 static var jump_mode: JumpMode = JumpMode.CHARGE
+## Cuántas personas juegan (pantalla dividida). Se cambia con las teclas 1 / 2.
+static var player_count: int = 1
 static var _loaded: bool = false
 
 
@@ -20,12 +22,14 @@ static func load_settings() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load(PATH) == OK:
 		jump_mode = int(cfg.get_value("gameplay", "jump_mode", JumpMode.CHARGE)) as JumpMode
+		player_count = clampi(int(cfg.get_value("gameplay", "player_count", 1)), 1, 2)
 
 
 static func save_settings() -> void:
 	var cfg := ConfigFile.new()
 	cfg.load(PATH)
 	cfg.set_value("gameplay", "jump_mode", jump_mode)
+	cfg.set_value("gameplay", "player_count", player_count)
 	cfg.save(PATH)
 
 

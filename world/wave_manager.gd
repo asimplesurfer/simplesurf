@@ -4,8 +4,6 @@ extends Node
 ## Nunca aparecen encima del jugador: nacen lejos de él y crecen de a poco.
 
 @export var enabled: bool = true
-## Nodo alrededor del cual aparecen (normalmente el Rider).
-@export var follow_path: NodePath
 ## 0 = distinto cada partida.
 @export var random_seed: int = 0
 @export var spawn_interval_min: float = 1.5
@@ -21,7 +19,6 @@ extends Node
 var _rng := RandomNumberGenerator.new()
 var _timer: float = 1.0
 var _water: Water
-var _follow: Node3D
 
 
 func _ready() -> void:
@@ -30,11 +27,10 @@ func _ready() -> void:
 	else:
 		_rng.randomize()
 	_water = get_tree().get_first_node_in_group("water") as Water
-	_follow = get_node_or_null(follow_path) as Node3D
 
 
 func _process(delta: float) -> void:
-	if not enabled or _water == null or _follow == null:
+	if not enabled or _water == null:
 		return
 	_timer -= delta
 	if _timer > 0.0:
@@ -46,13 +42,26 @@ func _process(delta: float) -> void:
 			_water.add_swell(s)
 
 
+## Elige al azar un jugador humano alrededor del cual crear la ola.
+func _pick_target() -> Rider:
+	var humans: Array[Rider] = []
+	for node in get_tree().get_nodes_in_group("riders"):
+		var r := node as Rider
+		if r and r.is_human:
+			humans.append(r)
+	if humans.is_empty():
+		return null
+	return humans[_rng.randi() % humans.size()]
+
+
 ## Crea una ola en una posición válida (o null si no encontró lugar).
 func make_swell() -> Swell:
-	var player := Vector2(_follow.global_position.x, _follow.global_position.z)
-	var forward := Vector2.UP
-	if _follow is Rider:
-		var f := (_follow as Rider).forward()
-		forward = Vector2(f.x, f.z)
+	var target := _pick_target()
+	if target == null:
+		return null
+	var player := Vector2(target.global_position.x, target.global_position.z)
+	var f := target.forward()
+	var forward := Vector2(f.x, f.z)
 	for attempt in 12:
 		var s := Swell.new()
 		# Más seguido adelante del jugador, para que las vea venir.
@@ -69,7 +78,7 @@ func make_swell() -> Swell:
 		s.lifetime = _rng.randf_range(30.0, 45.0)
 		s.grow_time = 3.0
 		s.fade_time = 4.0
-		if is_clear_of(s, player):
+		if is_clear_of(s, player) and _far_from_island(s):
 			return s
 	return null
 
@@ -80,3 +89,12 @@ func is_clear_of(s: Swell, point: Vector2) -> bool:
 	var along := absf(uw.x) - s.width * 2.5
 	var across := absf(uw.y) - s.half_length
 	return along > clearance or across > clearance
+
+
+## Que la ola no nazca pegada a la isla.
+func _far_from_island(s: Swell) -> bool:
+	var island := get_tree().get_first_node_in_group("island") as Island
+	if island == null:
+		return true
+	var c := Vector2(island.global_position.x, island.global_position.z)
+	return s.center.distance_to(c) > island.radius + s.width * 3.0 + 10.0

@@ -12,6 +12,8 @@ var _main: Node
 var _rider: Rider
 var _water: Water
 var _waves: WaveManager
+var _race: RaceManager
+var _course: Course
 
 
 func _initialize() -> void:
@@ -19,30 +21,220 @@ func _initialize() -> void:
 
 
 func _run() -> void:
+	GameSettings.load_settings()
+	GameSettings.player_count = 1
 	_main = load("res://main.tscn").instantiate()
 	root.add_child(_main)
 	await process_frame
 	await process_frame
 
-	_rider = _main.get_node("Rider") as Rider
+	_race = _main.get_node("RaceManager") as RaceManager
+	_course = _main.get_node("Course") as Course
 	_water = _main.get_node("Water") as Water
 	_waves = _main.get_node("WaveManager") as WaveManager
-	_check(_rider != null and _water != null and _waves != null, "existen Rider, Water y WaveManager")
-	if _rider == null or _water == null or _waves == null:
+	_check(
+		_race != null and _course != null and _water != null and _waves != null,
+		"existen RaceManager, Course, Water y WaveManager"
+	)
+	if _race == null or _race.racers.is_empty():
 		_finish()
 		return
+	_rider = _race.racers[0]
 	# Sin olas grandes al azar durante los tests de movimiento.
 	_waves.enabled = false
 	_water.clear_swells()
 	_rider.trick_landed.connect(func(_spins: int) -> void: _tricks_landed += 1)
 
 	_test_pad_layouts()
+	await _test_race_start()
+
+	# Las mecánicas se prueban lejos del circuito, sin obstáculos.
+	_course.hazards_enabled = false
+	_course.bounds_enabled = false
+	_teleport(Vector3(0.0, 0.0, 900.0))
 	await _test_get_up()
 	await _test_throttle_and_steer()
 	await _test_jump_and_tricks()
 	await _test_drift()
 	await _test_swells()
+	await _test_course()
+	await _test_turbo_and_wrong_way()
+	await _test_laps()
+	await _test_split_screen()
 	_finish()
+
+
+func _teleport(pos: Vector3) -> void:
+	_rider.position = Vector3(pos.x, _water.height_at(pos.x, pos.z), pos.z)
+	_rider.vertical_speed = 0.0
+
+
+func _test_race_start() -> void:
+	print("Largada:")
+	_check(_race.state == RaceManager.State.COUNTDOWN, "empieza con cuenta regresiva")
+	_check(_rider.controls_locked, "durante la cuenta no se puede jugar")
+	_check(_rider.is_fallen(), "en la largada está caído en el agua")
+	var split := _main.get_node("Views") as SplitScreen
+	_check(split != null and split.views.size() == 1, "1 jugador: una sola pantalla")
+	var start_angle := _course.track.angle_of(_rider.global_position)
+	_check(absf(start_angle) < 0.1, "larga en la meta (ángulo %.2f)" % start_angle)
+	await _mash(8.0, 1.0)
+	_check(
+		_rider.recovery_stage == Rider.RecoveryStage.IN_WATER,
+		"spamear durante la cuenta no hace nada"
+	)
+	_race.skip_countdown()
+	await process_frame
+	_check(_race.state == RaceManager.State.RACING, "después de la cuenta empieza la carrera")
+	_check(not _rider.controls_locked, "ya se puede jugar")
+
+
+func _test_course() -> void:
+	print("Circuito:")
+	_check(_course.rings.size() > 5, "hay círculos de velocidad (%d)" % _course.rings.size())
+	_check(_course.rocks.size() > 5, "hay rocas (%d)" % _course.rocks.size())
+	_course.hazards_enabled = true
+	_course.bounds_enabled = true
+	_set_action(&"p1_up", true)
+	if _rider.is_fallen():
+		await _mash_until_standing(8.0, 4.0)
+
+	# Círculo de velocidad: nitro + motivación.
+	var ring := _course.rings[0]
+	var nitro_before := _rider.nitro
+	_teleport(ring.position)
+	await process_frame
+	await process_frame
+	_check(_rider.nitro > nitro_before + 0.2, "pasar por un círculo carga nitro")
+	_check(_rider.motivation_timer > 0.0, "pasar por un círculo da motivación")
+	await _wait(0.4)
+	_check(
+		_rider.speed > _rider.stats.max_speed + 0.5,
+		"la motivación da un mini sprint (%.1f m/s)" % _rider.speed
+	)
+
+	# Roca: chocar tira al agua y deja fuera de la roca.
+	var rock := _course.rocks[0]
+	for r in _course.rocks:
+		if r.height > rock.height:
+			rock = r
+	_teleport(rock.position)
+	await process_frame
+	await process_frame
+	_check(_rider.is_fallen(), "chocar una roca tira de la tabla")
+	var d := Vector2(_rider.position.x - rock.position.x, _rider.position.z - rock.position.z).length()
+	_check(d > rock.radius, "después del choque queda fuera de la roca")
+	await _mash_until_standing(8.0, 4.0)
+
+	# Isla: chocar la orilla también tira y saca afuera.
+	_teleport(_course.track.position_at(1.0, -(_course.track_radius - _course.island_radius) + 0.5))
+	await process_frame
+	await process_frame
+	_check(_rider.is_fallen(), "chocar la isla tira de la tabla")
+	var r_center := Vector2(_rider.position.x, _rider.position.z).length()
+	_check(r_center >= _course.island_crash_radius(), "y queda fuera de la isla")
+
+	# Límite de afuera: no deja salir del circuito.
+	_teleport(_course.track.position_at(2.0, _course.half_width + 20.0))
+	await process_frame
+	await process_frame
+	r_center = Vector2(_rider.position.x, _rider.position.z).length()
+	_check(r_center <= _course.outer_limit() + 0.5, "no se puede salir del circuito por afuera")
+	await _mash_until_standing(8.0, 4.0)
+	_course.hazards_enabled = false
+
+
+func _test_turbo_and_wrong_way() -> void:
+	print("Turbo:")
+	_course.bounds_enabled = false
+	_teleport(Vector3(0.0, 0.0, 900.0))
+	_set_action(&"p1_up", true)
+	await _wait(2.5)
+	_rider.reset_nitro()
+	_rider.add_nitro(1.0)
+	_set_action(&"p1_b", true)
+	await _wait(0.8)
+	_check(
+		_rider.speed > _rider.stats.max_speed * 1.3,
+		"el turbo acelera mucho (%.1f m/s)" % _rider.speed
+	)
+	_check(_rider.nitro < 0.8, "el turbo gasta nitro (%.2f)" % _rider.nitro)
+	await _wait(3.0)
+	_check(_rider.nitro == 0.0, "el turbo se acaba con el nitro")
+	_check(not _rider.turbo_active, "sin nitro no hay turbo")
+	_set_action(&"p1_b", false)
+
+	print("Al revés:")
+	_course.bounds_enabled = true
+	var a := 1.5
+	_teleport(_course.track.position_at(a))
+	_rider.heading = _course.track.heading_at(a) + PI
+	await _wait(2.0)
+	_check(_race.is_wrong_way(_rider), "ir al revés se detecta")
+	_rider.heading = _course.track.heading_at(_course.track.angle_of(_rider.position))
+	await _wait(0.5)
+	_check(not _race.is_wrong_way(_rider), "al enderezar se va el aviso")
+
+
+func _test_laps() -> void:
+	print("Vueltas y meta:")
+	_course.hazards_enabled = false
+	var start := RaceManager.START_ANGLE
+	_race._progress[_rider] = start
+	_race._last_angle[_rider] = start
+	var laps := _race.config.laps
+	var seen_lap_2 := false
+	var a := start
+	while a < laps * TAU + 0.2:
+		_teleport(_course.track.position_at(a))
+		await process_frame
+		if _race.lap_of(_rider) == 2:
+			seen_lap_2 = true
+		a += 0.2
+	await process_frame
+	_check(seen_lap_2, "al dar una vuelta pasa a la vuelta 2")
+	_check(_race.finished(_rider), "al completar %d vueltas llega a la meta" % laps)
+	_check(_race.place_of(_rider) == 1, "llega 1º")
+	_check(_race.state == RaceManager.State.FINISHED, "termina la carrera")
+	var results := _main.get_node("Results") as ResultsPanel
+	_check(results != null and results._panel.visible, "se muestran los resultados")
+
+
+func _test_split_screen() -> void:
+	print("Pantalla dividida:")
+	_main.queue_free()
+	await process_frame
+	await process_frame
+	GameSettings.player_count = 2
+	var main2: Node = load("res://main.tscn").instantiate()
+	root.add_child(main2)
+	await process_frame
+	await process_frame
+	var race := main2.get_node("RaceManager") as RaceManager
+	var split := main2.get_node("Views") as SplitScreen
+	_check(race.racers.size() == 2, "2 jugadores: 2 corredores")
+	_check(split.views.size() == 2, "2 jugadores: 2 pantallas")
+	var bit0 := 1 << Water.FOLLOWER_LAYER_BASE
+	var bit1 := 1 << (Water.FOLLOWER_LAYER_BASE + 1)
+	var m0 := split.cameras[0].cull_mask
+	var m1 := split.cameras[1].cull_mask
+	_check(m0 & bit0 and not m0 & bit1, "cámara 1 ve solo su agua")
+	_check(m1 & bit1 and not m1 & bit0, "cámara 2 ve solo su agua")
+	_check(_has_key(&"p2_left", KEY_LEFT), "J2 usa las flechas")
+	_check(not _has_key(&"p1_left", KEY_LEFT), "J1 ya no usa las flechas")
+	var p0 := race.racers[0].position
+	var p1 := race.racers[1].position
+	_check(p0.distance_to(p1) > 4.0, "largan uno al lado del otro")
+	main2.queue_free()
+	GameSettings.player_count = 1
+	await process_frame
+
+
+func _has_key(action: StringName, key: Key) -> bool:
+	for ev in InputMap.action_get_events(action):
+		if ev is InputEventKey and ev.physical_keycode == key:
+			return true
+	return false
 
 
 func _test_pad_layouts() -> void:

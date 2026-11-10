@@ -1,11 +1,11 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=11 format=3]
 
-[ext_resource type="PackedScene" path="res://core/rider/rider.tscn" id="1_rider"]
-[ext_resource type="Script" path="res://world/water/water.gd" id="2_water"]
-[ext_resource type="Script" path="res://world/buoy_field.gd" id="3_buoys"]
-[ext_resource type="Script" path="res://core/camera/chase_camera.gd" id="4_camera"]
-[ext_resource type="Script" path="res://ui/hud/hud.gd" id="5_hud"]
-[ext_resource type="Script" path="res://world/wave_manager.gd" id="6_waves"]
+[ext_resource type="Script" path="res://world/water/water.gd" id="1_water"]
+[ext_resource type="Script" path="res://world/course.gd" id="2_course"]
+[ext_resource type="Script" path="res://world/wave_manager.gd" id="3_waves"]
+[ext_resource type="Script" path="res://core/race/race_manager.gd" id="4_race"]
+[ext_resource type="Script" path="res://ui/split_screen/split_screen.gd" id="5_split"]
+[ext_resource type="Script" path="res://ui/race/results_panel.gd" id="6_results"]
 
 [sub_resource type="Environment" id="Environment_sea"]
 background_mode = 1
@@ -15,7 +15,7 @@ ambient_light_color = Color(0.75, 0.88, 1, 1)
 ambient_light_energy = 0.45
 fog_enabled = true
 fog_light_color = Color(0.62, 0.84, 0.96, 1)
-fog_density = 0.012
+fog_density = 0.008
 
 [node name="Main" type="Node3D"]
 
@@ -26,29 +26,36 @@ environment = SubResource("Environment_sea")
 rotation = Vector3(-0.96, 0.61, 0)
 light_energy = 1.1
 shadow_enabled = true
-directional_shadow_max_distance = 40.0
+directional_shadow_max_distance = 50.0
 
 [node name="Water" type="Node3D" parent="." groups=["water"]]
-script = ExtResource("2_water")
-follow_path = NodePath("../Rider")
+script = ExtResource("1_water")
+
+[node name="Course" type="Node3D" parent="."]
+script = ExtResource("2_course")
 
 [node name="WaveManager" type="Node" parent="."]
-script = ExtResource("6_waves")
-follow_path = NodePath("../Rider")
+script = ExtResource("3_waves")
 
-[node name="Buoys" type="Node3D" parent="."]
-script = ExtResource("3_buoys")
-follow_path = NodePath("../Rider")
+[node name="Riders" type="Node3D" parent="."]
 
-[node name="Rider" parent="." instance=ExtResource("1_rider")]
+[node name="RaceManager" type="Node" parent="."]
+script = ExtResource("4_race")
+course_path = NodePath("../Course")
+riders_path = NodePath("../Riders")
 
-[node name="Camera" type="Camera3D" parent="."]
-script = ExtResource("4_camera")
-target_path = NodePath("../Rider")
-current = true
-fov = 70.0
-far = 300.0
+[node name="Views" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("5_split")
+race_manager_path = NodePath("../RaceManager")
+water_path = NodePath("../Water")
 
-[node name="Hud" type="CanvasLayer" parent="."]
-script = ExtResource("5_hud")
-rider_path = NodePath("../Rider")
+[node name="Results" type="CanvasLayer" parent="."]
+script = ExtResource("6_results")
+race_manager_path = NodePath("../RaceManager")
