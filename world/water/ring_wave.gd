@@ -91,7 +91,7 @@ func gradient_at(p: Vector2) -> Vector2:
 ## en el sentido de la carrera (ángulo creciente).
 func next_peak_angle(angle: float) -> float:
 	# Picos donde lobes * a + phase = 2πk.
-	var k := ceil((lobes * angle + phase) / TAU)
+	var k := ceilf((lobes * angle + phase) / TAU)
 	return (TAU * k - phase) / lobes
 
 
