@@ -138,6 +138,7 @@ func _process(delta: float) -> void:
 	race_time += delta
 	for r in racers:
 		_update_progress(r, delta)
+	_update_catchup()
 
 	if GameSettings.demo_mode and state == State.FINISHED:
 		if _demo_restart_timer < 0.0:
@@ -171,6 +172,20 @@ func _update_progress(r: Rider, delta: float) -> void:
 
 	if now >= config.laps * TAU:
 		_finish(r)
+
+
+## Handicap: cuanto más lejos del primero, más ayuda (hasta un tope).
+func _update_catchup() -> void:
+	var leader := -1e9
+	for r in racers:
+		if not finished(r):
+			leader = maxf(leader, progress_of(r))
+	for r in racers:
+		if finished(r) or leader <= -1e8:
+			r.catchup = 0.0
+			continue
+		var gap_m := (leader - progress_of(r)) * course.track.radius
+		r.catchup = clampf(gap_m / r.stats.catchup_full_gap, 0.0, 1.0)
 
 
 func _finish(r: Rider) -> void:

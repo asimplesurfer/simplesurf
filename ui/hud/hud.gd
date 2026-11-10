@@ -39,6 +39,7 @@ var _nitro_bar: ProgressBar
 var _message: Label
 var _speed_lines: ColorRect
 var _pop_label: Label
+var _nitro_label: Label
 var _speed_lines_material: ShaderMaterial
 var _message_time: float = 0.0
 var _center_time: float = 0.0
@@ -161,6 +162,9 @@ func _process(delta: float) -> void:
 		_pop_label.scale = Vector2.ONE * (1.0 + 0.12 * sin(Time.get_ticks_msec() * 0.025))
 
 	_speed_label.text = "%d km/h" % roundi(rider.speed * 3.6)
+	# Handicap: muestra cuánto más rápido carga el nitro.
+	var mult := rider.nitro_gain_mult()
+	_nitro_label.text = "NITRO ×%.1f" % mult if mult >= 1.15 else "NITRO"
 	_name_label.text = rider.display_name
 
 	if race_manager:
@@ -283,6 +287,7 @@ func _build() -> void:
 	nitro_box.alignment = BoxContainer.ALIGNMENT_END
 	root.add_child(nitro_box)
 	var nitro_label := _make_label(20, NITRO_COLOR)
+	_nitro_label = nitro_label
 	nitro_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	nitro_label.text = "NITRO"
 	nitro_box.add_child(nitro_label)
