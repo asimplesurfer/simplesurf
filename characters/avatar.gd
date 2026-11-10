@@ -266,10 +266,10 @@ func _flail(o: Dictionary, t: float) -> void:
 
 
 func _tread(o: Dictionary) -> void:
-	# Se mantiene a flote: manos en círculos a la altura del pecho.
+	# Se mantiene a flote: manos en círculos a la altura del agua (sobre el pecho).
 	var ph := _time * (3.5 + effort * 6.0)
-	_add(o, "hand_L", Vector3(-0.1 + cos(ph) * 0.18, 0.05, sin(ph) * 0.22))
-	_add(o, "hand_R", Vector3(0.1 - cos(ph) * 0.18, 0.05, sin(ph + PI) * 0.22))
+	_add(o, "hand_L", Vector3(-0.05 + cos(ph) * 0.18, 0.55 + sin(ph * 2.0) * 0.05, sin(ph) * 0.25))
+	_add(o, "hand_R", Vector3(0.05 - cos(ph) * 0.18, 0.55 + sin(ph * 2.0 + 1.0) * 0.05, sin(ph + PI) * 0.25))
 	_kick(o, 6.0 + effort * 8.0, 0.1)
 
 
