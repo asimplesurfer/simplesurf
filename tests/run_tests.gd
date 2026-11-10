@@ -678,6 +678,13 @@ func _test_drift() -> void:
 	_check(_rider.speed < speed_before, "derrapar frena")
 	var sheet := _rider.get_node("Visual/Spray/Sheet") as MeshInstance3D
 	_check(sheet != null and sheet.visible, "derrapar levanta la cortina de agua")
+	if sheet:
+		var box := sheet.get_aabb()
+		var center_x := box.position.x + box.size.x * 0.5
+		_check(
+			absf(center_x) < 0.3 and box.end.z > 5.0,
+			"la cortina sale recta hacia atrás (centro x %.2f, largo %.1f m)" % [center_x, box.end.z]
+		)
 	_check(victim.is_fallen(), "el agua del derrape tira al rival que está detrás")
 
 	_set_action(&"p1_drift", false)
