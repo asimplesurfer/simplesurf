@@ -12,6 +12,8 @@ var _main: Node
 var _rider: Rider
 var _water: Water
 var _waves: WaveManager
+## Altura desde la que despegó el último salto (para medir saltos).
+var _takeoff_y: float = 0.0
 var _race: RaceManager
 var _course: Course
 var _pop_prompt_seen: bool = false
@@ -70,6 +72,7 @@ func _run() -> void:
 	_race.catchup_enabled = false
 	_water.clear_swells()
 	_rider.trick_landed.connect(func(_spins: int) -> void: _tricks_landed += 1)
+	_rider.jumped.connect(func() -> void: _takeoff_y = _rider.global_position.y)
 
 	var world_env := _main.get_node("WorldEnvironment") as WorldEnvironment
 	var env := world_env.environment
@@ -1209,10 +1212,12 @@ func _measure_air() -> Vector2:
 
 
 ## Altura máxima sobre el agua hasta aterrizar.
+## Se mide desde donde despegó (las olitas de fondo suben y bajan casi un
+## metro: medir contra el agua de abajo daba números al azar).
 func _measure_jump_height() -> float:
 	var max_height := 0.0
 	for i in int(2.5 * FPS):
-		var h := _rider.global_position.y - _water_height_here()
+		var h := _rider.global_position.y - _takeoff_y
 		max_height = maxf(max_height, h)
 		if _state() != &"airborne":
 			break
