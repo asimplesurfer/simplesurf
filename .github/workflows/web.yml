@@ -80,6 +80,13 @@ jobs:
           sleep 1
           node tests/web_smoke.mjs http://localhost:8000/index.html screens
 
+      - name: Medir rendimiento en navegador (varias carreras)
+        continue-on-error: true
+        run: |
+          python3 -m http.server 8001 --directory build/web > /dev/null 2>&1 &
+          sleep 1
+          node tests/web_perf.mjs http://localhost:8001/index.html
+
       - name: Guardar capturas del navegador
         if: always()
         uses: actions/upload-artifact@v4

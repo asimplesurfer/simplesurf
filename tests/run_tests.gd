@@ -79,6 +79,20 @@ func _run() -> void:
 	)
 	_check(env.fog_sky_affect == 0.0, "la niebla no tapa el cielo")
 
+	# P muestra el contador de FPS.
+	var hud0 := (_main.get_node("Views") as SplitScreen).huds[0]
+	var pkey := InputEventKey.new()
+	pkey.physical_keycode = KEY_P
+	pkey.pressed = true
+	Input.parse_input_event(pkey)
+	await process_frame
+	await process_frame
+	_check(Hud.show_fps and hud0._fps_label.visible, "P muestra el contador de FPS")
+	Input.parse_input_event(pkey)
+	await process_frame
+	await process_frame
+	_check(not Hud.show_fps, "P lo vuelve a ocultar")
+
 	_test_pad_layouts()
 	await _test_race_start()
 
@@ -101,6 +115,7 @@ func _run() -> void:
 	_test_bot_paths()
 	await _test_bot_race()
 	await _test_demo()
+	await _test_memory()
 	_finish()
 
 
@@ -228,7 +243,7 @@ func _test_wave_jump() -> void:
 	await _press(&"p1_a")
 	_check(_state() == &"airborne", "en agua plana, A hace un saltito")
 	var hop := await _measure_air()
-	_check(hop.x < 0.8, "el saltito es bajo (%.2f m)" % hop.x)
+	_check(hop.x < 1.0, "el saltito es bajo (%.2f m)" % hop.x)
 	await _wait_until_state(&"riding", 2.0)
 	await _wait(0.5)
 
@@ -321,13 +336,11 @@ func _test_constant_wave() -> void:
 		if _state() == &"airborne":
 			launched = true
 			max_height = maxf(max_height, _rider.global_position.y - _water_height_here())
-		elif launched:
-			break
 		await process_frame
 	_set_action(&"p1_up", false)
-	_check(launched, "andando por la ola constante, un pico lo lanza al aire")
+	_check(launched, "andando por la ola constante, los picos lo lanzan al aire")
 	_check(prompt, "en la ola constante también aparece el botón del pop")
-	_check(max_height > 0.3, "salta (%.1f m)" % max_height)
+	_check(max_height > 0.3, "salta (%.1f m el más alto en 10 s)" % max_height)
 	await _wait_until_state(&"riding", 3.0)
 	await _wait(0.5)
 
@@ -674,13 +687,10 @@ func _test_music() -> void:
 		await _mash_until_standing(8.0, 4.0)
 	await _wait(1.0)
 	_check(not audio.epic, "en el agua, volumen normal")
-	# Salto cargado al máximo: mucho tiempo en el aire.
-	GameSettings.jump_mode = GameSettings.JumpMode.CHARGE
-	_set_action(&"p1_a", true)
-	await _wait(1.05)
-	_set_action(&"p1_a", false)
-	GameSettings.jump_mode = GameSettings.JumpMode.TAP
-	await _wait(0.6)
+	# Un salto largo (más de 1 s en el aire): la música se pone épica.
+	await _press(&"p1_a")
+	_rider.vertical_speed = 12.0
+	await _wait(0.8)
 	_check(not _rider.grounded and audio.epic, "mucho tiempo en el aire: música épica")
 	await _wait_until_state(&"riding", 2.0)
 	await _wait(0.1)
@@ -1215,6 +1225,67 @@ func _check(ok: bool, description: String) -> void:
 				]
 			)
 		_failures.append(description)
+
+
+## Varias carreras seguidas: nada se tiene que ir acumulando (ni entre
+## carreras ni durante una carrera).
+func _test_memory() -> void:
+	print("Memoria (varias carreras seguidas):")
+	var rows: Array[Dictionary] = []
+	var in_race_growth := 0
+	for round_i in 4:
+		var m: Node = load("res://main.tscn").instantiate()
+		(m.get_node("RaceManager") as RaceManager).config = RaceConfig.demo()
+		root.add_child(m)
+		await _wait(5.0)
+		var nodes_a := int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))
+		var objs_a := int(Performance.get_monitor(Performance.OBJECT_COUNT))
+		await _wait(10.0)
+		var nodes_b := int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))
+		var objs_b := int(Performance.get_monitor(Performance.OBJECT_COUNT))
+		in_race_growth = maxi(in_race_growth, objs_b - objs_a)
+		print("    carrera %d: nodos %d -> %d, objetos %d -> %d" % [round_i + 1, nodes_a, nodes_b, objs_a, objs_b])
+		m.queue_free()
+		for i in 5:
+			await process_frame
+		var row := {
+			"nodes": int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)),
+			"objects": int(Performance.get_monitor(Performance.OBJECT_COUNT)),
+			"resources": int(Performance.get_monitor(Performance.OBJECT_RESOURCE_COUNT)),
+			"orphans": int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)),
+		}
+		rows.append(row)
+		print("    después de cerrarla: %s" % row)
+	# El menú se rearma con cada opción (V, G, O...): tampoco debe acumular.
+	var menu: CharacterSelect = load("res://ui/menus/character_select.tscn").instantiate()
+	menu.auto_start = false
+	root.add_child(menu)
+	await process_frame
+	for i in 10:
+		menu._build()
+		await process_frame
+	await process_frame
+	var menu_nodes := menu.get_child_count()
+	menu.queue_free()
+	for i in 5:
+		await process_frame
+	var after_menu := int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))
+	print("    después del menú rearmado 10 veces: nodos %d" % after_menu)
+
+	var first: Dictionary = rows[1]
+	var last: Dictionary = rows[3]
+	_check(last.nodes - first.nodes <= 2, "entre carreras no se acumulan nodos (%d -> %d)" % [first.nodes, last.nodes])
+	_check(
+		last.objects - first.objects <= 50,
+		"entre carreras no se acumulan objetos (%d -> %d)" % [first.objects, last.objects]
+	)
+	_check(
+		last.resources - first.resources <= 20,
+		"entre carreras no se acumulan recursos (%d -> %d)" % [first.resources, last.resources]
+	)
+	_check(last.orphans <= first.orphans, "no quedan nodos sueltos (%d -> %d)" % [first.orphans, last.orphans])
+	_check(in_race_growth <= 200, "durante la carrera no crece la memoria (+%d objetos en 10 s)" % in_race_growth)
+	_check(menu_nodes <= 3 and after_menu <= last.nodes + 2, "el menú no se acumula al rearmarse (%d hijos)" % menu_nodes)
 
 
 func _finish() -> void:

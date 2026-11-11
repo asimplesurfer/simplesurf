@@ -54,6 +54,7 @@ Con 1 jugador, J1 también puede usar las flechas.
 | O | Salto: de olas (por defecto) o libre |
 | M | Distribución del mando: estándar o genérico (tipo PlayStation) |
 | H | Ocultar la ayuda |
+| P | Mostrar u ocultar los FPS (para ver si anda lento) |
 
 Si el teclado no responde, haz clic dentro del juego.
 

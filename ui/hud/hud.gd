@@ -35,6 +35,9 @@ var _lap_label: Label
 var _name_label: Label
 var _center_label: Label
 var _help: Label
+## Contador de FPS (tecla P). Se recuerda entre carreras.
+static var show_fps: bool = false
+var _fps_label: Label
 var _nitro_bar: ProgressBar
 var _message: Label
 var _speed_lines: ColorRect
@@ -149,6 +152,14 @@ func _process(delta: float) -> void:
 		# Más chico: se escala la capa y se agranda la raíz para que ocupe toda la vista.
 		scale = Vector2.ONE * COMPACT_SCALE
 		_root.size = get_viewport().get_visible_rect().size / COMPACT_SCALE
+	if _fps_label:
+		_fps_label.visible = show_fps
+	if show_fps and _fps_label:
+		_fps_label.text = "%d FPS  (%.0f ms)  ·  %d corredores" % [
+			Engine.get_frames_per_second(),
+			Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0,
+			get_tree().get_nodes_in_group("riders").size(),
+		]
 	if rider == null:
 		return
 	_update_mash(delta)
@@ -235,7 +246,7 @@ func _update_help() -> void:
 		+ "Levantarse: spamear ESPACIO o botón de abajo   ·   Caerse (prueba): F\n"
 		+ "J2: flechas, ENTER salta, . derrapa, - turbo   ·   Esc: menú\n"
 		+ "Olas: %s (se cambia en el menú)\n" % GameSettings.wave_mode_name()
-		+ "Mando: %s (M cambia)   ·   H: ocultar ayuda\n" % layout
+		+ "Mando: %s (M cambia)   ·   H: ocultar ayuda   ·   P: FPS\n" % layout
 		+ "Si no responde, haz clic en el juego"
 	)
 
@@ -362,6 +373,16 @@ func _build() -> void:
 	_help.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_help.position = Vector2(16.0, 12.0)
 	root.add_child(_help)
+
+	# Contador de FPS (P), abajo al centro.
+	_fps_label = _make_label(16, Color(1.0, 1.0, 0.6))
+	_fps_label.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_fps_label.offset_top = -34.0
+	_fps_label.offset_bottom = -10.0
+	_fps_label.offset_left = -200.0
+	_fps_label.offset_right = 200.0
+	_fps_label.visible = false
+	root.add_child(_fps_label)
 
 
 func _make_label(font_size: int, color: Color) -> Label:

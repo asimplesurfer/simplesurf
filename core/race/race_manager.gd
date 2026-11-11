@@ -295,6 +295,9 @@ func _unhandled_input(event: InputEvent) -> void:
 					restart()
 			KEY_C, KEY_ESCAPE:
 				back_to_menu()
+			KEY_P:
+				# Contador de FPS en el HUD (para ver si anda lento).
+				Hud.show_fps = not Hud.show_fps
 			KEY_V:
 				# Pantalla dividida: lado a lado <-> arriba y abajo.
 				GameSettings.split_vertical = not GameSettings.split_vertical

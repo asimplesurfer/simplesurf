@@ -32,9 +32,13 @@ func update(delta: float, input: RiderInput) -> void:
 			state_machine.transition_to(&"airborne")
 			return
 	elif input.jump_pressed and _jump_lock <= 0.0 and GameSettings.jump_style == GameSettings.JumpStyle.WAVES:
-		# Modo olas: subiendo una ola, A se guarda para el pop al salir; en
-		# agua plana, un saltito.
-		if rider.vertical_speed > rider.stats.pop_min_climb:
+		# Modo olas: subiendo una ola grande, A se guarda para el pop al salir;
+		# en el resto (agua plana u olitas de fondo), un saltito.
+		var on_big_wave := (
+			rider.water != null
+			and rider.water.swell_height_at(rider.position.x, rider.position.z) > 0.3
+		)
+		if on_big_wave and rider.vertical_speed > rider.stats.pop_min_climb:
 			rider.pop_buffer = rider.stats.pop_window
 		else:
 			rider.hop()

@@ -240,7 +240,8 @@ func pop_ready() -> bool:
 
 ## Modo olas: saltito en agua plana (no alcanza para un truco).
 func hop() -> void:
-	vertical_speed = maxf(vertical_speed, 0.0) + stats.hop_speed * jump_mult()
+	# Siempre igual de alto (no suma lo que sube la olita de abajo).
+	vertical_speed = stats.hop_speed * jump_mult()
 	grounded = false
 	wave_air_time = -1.0
 	did_pop = false
