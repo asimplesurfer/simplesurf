@@ -146,6 +146,16 @@ func swell_height_at(x: float, z: float) -> float:
 	return h * _island_fade(p)
 
 
+## Qué tanto está rompiendo la ola grande que hay en ese punto (0 si no hay).
+func breaking_at(x: float, z: float) -> float:
+	var p := Vector2(x, z)
+	var best := 0.0
+	for s in swells:
+		if s.breaking > best and s.height_at(p) > s.max_amplitude * 0.35:
+			best = s.breaking
+	return best
+
+
 func normal_at(x: float, z: float) -> Vector3:
 	var g := waves.gradient_at(x, z, time)
 	var p := Vector2(x, z)

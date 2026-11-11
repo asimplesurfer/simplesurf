@@ -14,6 +14,10 @@ var _water: Water
 var _waves: WaveManager
 ## Altura desde la que despegó el último salto (para medir saltos).
 var _takeoff_y: float = 0.0
+## Veces que atravesó una ola que rompía, y si se vieron sus efectos.
+var _punches: int = 0
+var _splash_seen: bool = false
+var _duck_seen: bool = false
 var _race: RaceManager
 var _course: Course
 var _pop_prompt_seen: bool = false
@@ -79,6 +83,7 @@ func _run() -> void:
 	_water.clear_swells()
 	_rider.trick_landed.connect(func(_spins: int) -> void: _tricks_landed += 1)
 	_rider.jumped.connect(func() -> void: _takeoff_y = _rider.global_position.y)
+	_rider.wave_punched.connect(func() -> void: _punches += 1)
 
 	var world_env := _main.get_node("WorldEnvironment") as WorldEnvironment
 	var env := world_env.environment
@@ -281,6 +286,13 @@ func _test_wave_jump() -> void:
 		popped > plain * 1.3,
 		"A al subir la ola (pop) lanza mucho más alto (%.1f m contra %.1f m)" % [popped, plain]
 	)
+	# Las olas de prueba ya rompieron (espuma): al cruzarlas, se "atraviesan".
+	_check(_punches > 0, "atravesar una ola que rompe se detecta (%d veces)" % _punches)
+	_check(_duck_seen, "al atravesarla el personaje se agacha y se cubre")
+	_check(_splash_seen, "y la cámara queda mojada medio segundo")
+	await _wait(1.0)
+	var hud2 := (_main.get_node("Views") as SplitScreen).huds[0]
+	_check(not hud2.splash_overlay.visible, "después la cámara se aclara")
 	_water.clear_swells()
 	GameSettings.jump_style = GameSettings.JumpStyle.FREE
 
@@ -401,11 +413,16 @@ func _ride_into_swell(press: bool, at: Vector3) -> float:
 	var was_airborne := false
 	var hud := (_main.get_node("Views") as SplitScreen).huds[0]
 	var max_climb := 0.0
+	var visual := _rider.get_node("Visual") as RiderVisual
 	for i in int(5.0 * FPS):
 		if _rider.grounded:
 			max_climb = maxf(max_climb, _rider.vertical_speed)
 		if hud._pop_label.visible:
 			_pop_prompt_seen = true
+		if hud.splash_overlay.visible:
+			_splash_seen = true
+		if visual.duck_time > 0.0:
+			_duck_seen = true
 		if release_next:
 			_set_action(&"p1_a", false)
 			release_next = false

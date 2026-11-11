@@ -21,6 +21,8 @@ signal drift_started(side: int)
 signal drift_ended
 signal drift_hit(victim: Rider)
 signal motivation_started
+## Atravesó una ola que estaba rompiendo (para la animación, el chapuzón y la cámara).
+signal wave_punched
 signal popped
 signal ring_collected
 signal crashed
@@ -77,6 +79,9 @@ var catchup: float = 0.0
 var water: Water
 
 var _turbo_on: bool = false
+## Para no repetir el "atravesar la ola" seguido.
+var _punch_cooldown: float = 0.0
+var _prev_vertical_speed: float = 0.0
 var _steer_smoothed: float = 0.0
 
 @onready var controller: BaseController = $Controller
@@ -104,6 +109,7 @@ func _process(delta: float) -> void:
 		input = RiderInput.new()
 	motivation_timer = maxf(0.0, motivation_timer - delta)
 	pop_buffer = maxf(0.0, pop_buffer - delta)
+	_punch_cooldown = maxf(0.0, _punch_cooldown - delta)
 	# Handicap: nitro de a poco (no mientras se aprieta el turbo, así no se
 	# puede usar el turbo sin fin).
 	if catchup > 0.0 and not controls_locked and not input.turbo:
@@ -224,10 +230,15 @@ func stick_to_water(delta: float, allow_launch: bool = true) -> bool:
 		wave_air_time = 0.0
 		did_pop = false
 		can_trick = true
+		_check_wave_punch()
 		if pop_buffer > 0.0:
 			do_pop()
 		return true
 	vertical_speed = clampf((h - position.y) / delta, -30.0, 30.0)
+	# Pasó la cresta de una ola sin despegar (iba subiendo y ahora baja).
+	if _prev_vertical_speed > 1.5 and vertical_speed <= 0.0:
+		_check_wave_punch()
+	_prev_vertical_speed = vertical_speed
 	position.y = h
 	grounded = true
 	if water:
@@ -246,6 +257,15 @@ func jump() -> void:
 	grounded = false
 	can_trick = true
 	jumped.emit()
+
+
+## Si la ola que está cruzando rompe, "la atraviesa" (animación y chapuzón).
+func _check_wave_punch() -> void:
+	if _punch_cooldown > 0.0 or water == null:
+		return
+	if water.breaking_at(position.x, position.z) > 0.4:
+		_punch_cooldown = 1.2
+		wave_punched.emit()
 
 
 ## Modo olas: true en el momento justo para el pop (subiendo una ola grande o

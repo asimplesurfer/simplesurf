@@ -180,6 +180,8 @@ func _target_offsets() -> Dictionary:
 			_pop_up(o, t)
 		&"celebrate":
 			_celebrate(o)
+		&"duck":
+			_duck(o)
 		_:
 			_idle(o)
 	if charge > 0.0:
@@ -319,6 +321,13 @@ func _crouch(o: Dictionary, c: float) -> void:
 	_add(o, "leg_R", Vector3(-0.06 * c, -0.16 * c, 0.0))
 	_add(o, "hand_L", Vector3(0.0, -0.35 * c, 0.25 * c))
 	_add(o, "hand_R", Vector3(0.0, -0.35 * c, 0.25 * c))
+
+
+## Atravesando una ola: agachado y con los brazos cubriéndose la cabeza.
+func _duck(o: Dictionary) -> void:
+	_crouch(o, 0.9)
+	_hand_to_head(o, "hand_L", 0.05, 0.05, 0.25)
+	_hand_to_head(o, "hand_R", 0.05, 0.05, 0.25)
 
 
 ## Patada alternada de piernas.
