@@ -88,7 +88,8 @@ void add_swell(vec4 a, vec4 b, vec2 p, inout float h, inout vec2 g, inout vec2 d
 	// "Se viene": franja oscura donde va a subir la ola, desde que nace (sin
 	// altura todavía) hasta que llega a su máximo.
 	float band = exp(-(u * u) / (width * width * 2.2)) * e0;
-	grow = max(grow, band * (1.0 - breaking));
+	// Solo mientras todavía está baja: al levantarse pasa a turquesa.
+	grow = max(grow, band * (1.0 - breaking) * (1.0 - smoothstep(0.4, 1.6, b.x)));
 	float gauss = exp(-(u * u) / (width * width));
 	float e = 1.0 - t * t * (3.0 - 2.0 * t);
 	float de = -6.0 * t * (1.0 - t) / edge;
