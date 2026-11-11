@@ -56,6 +56,10 @@ var rocks: Array[Rock] = []
 var _buoys: Array[Node3D] = []
 ## Corcheras: flotadores (MultiMesh) que marcan los bordes de la pista.
 var _ropes: Array[MultiMeshInstance3D] = []
+## Altura sobre el agua de cada MultiMesh de _ropes.
+var _float_offsets: Array[float] = []
+## Posición (x, z) de cada flotador de cada MultiMesh de _ropes.
+var _float_points: Array[PackedVector2Array] = []
 var _water: Water
 var _time: float = 0.0
 
@@ -126,14 +130,25 @@ func inner_limit() -> float:
 
 func _process(delta: float) -> void:
 	_time += delta
+	# Boyas y corcheras flotan con el agua. Solo las que están cerca de algún
+	# corredor (las lejanas casi no se ven y calcular todas es caro).
+	var near: Array[Vector2] = []
+	for node in get_tree().get_nodes_in_group("riders"):
+		var r := node as Node3D
+		if r:
+			near.append(Vector2(r.position.x, r.position.z))
 	for b in _buoys:
-		b.position.y = _water_height(b.position.x, b.position.z)
-	for rope in _ropes:
-		var mm := rope.multimesh
-		for i in mm.instance_count:
-			var xf := mm.get_instance_transform(i)
-			xf.origin.y = _water_height(xf.origin.x, xf.origin.z) + 0.05
-			mm.set_instance_transform(i, xf)
+		if _is_near(near, b.position.x, b.position.z):
+			b.position.y = _water_height(b.position.x, b.position.z)
+	for k in _ropes.size():
+		var mm := _ropes[k].multimesh
+		var y_offset := _float_offsets[k]
+		var pts := _float_points[k]
+		for i in pts.size():
+			var q := pts[i]
+			if _is_near(near, q.x, q.y):
+				var y := _water_height(q.x, q.y) + y_offset
+				mm.set_instance_transform(i, Transform3D(Basis.IDENTITY, Vector3(q.x, y, q.y)))
 	for ring in rings:
 		ring.position.y = _water_height(ring.position.x, ring.position.z) + ring.radius * 0.8
 
@@ -201,6 +216,17 @@ func _safe_position_beside(rock: Rock, rider: Rider) -> Vector3:
 	return Vector3(p.x, rider.position.y, p.y)
 
 
+## Distancia a la que todavía se mueven boyas y corcheras (m).
+const FLOAT_UPDATE_DISTANCE := 90.0
+
+
+func _is_near(points: Array[Vector2], x: float, z: float) -> bool:
+	for p in points:
+		if absf(p.x - x) < FLOAT_UPDATE_DISTANCE and absf(p.y - z) < FLOAT_UPDATE_DISTANCE:
+			return true
+	return false
+
+
 func _water_height(x: float, z: float) -> float:
 	return _water.height_at(x, z) if _water else 0.0
 
@@ -256,6 +282,8 @@ func _add_rope(lateral: float, color: Color) -> void:
 	mmi.extra_cull_margin = 4.0
 	add_child(mmi)
 	_ropes.append(mmi)
+	_float_offsets.append(0.05)
+	_float_points.append(_points_of(mm))
 
 
 func _add_buoy_circle(lateral: float, color: Color, spacing: float) -> void:
@@ -264,26 +292,48 @@ func _add_buoy_circle(lateral: float, color: Color, spacing: float) -> void:
 	base_mesh.top_radius = 0.35
 	base_mesh.bottom_radius = 0.6
 	base_mesh.height = 1.6
+	base_mesh.radial_segments = 10
 	base_mesh.material = ToonMaterial.make(color, 0.04)
 	var top_mesh := SphereMesh.new()
 	top_mesh.radius = 0.25
 	top_mesh.height = 0.5
+	top_mesh.radial_segments = 8
+	top_mesh.rings = 4
 	top_mesh.material = ToonMaterial.make(Color(0.97, 0.97, 0.97), 0.03)
+	# Todas las boyas de un borde en dos MultiMesh (base y punta): pocas
+	# llamadas de dibujo. Flotan igual que las corcheras.
+	var points: Array[Vector3] = []
 	for i in count:
-		var a := TAU * i / count
-		var buoy := Node3D.new()
-		var p := track.position_at(a, lateral)
-		buoy.position = p
-		var base := MeshInstance3D.new()
-		base.mesh = base_mesh
-		base.position.y = 0.4
-		buoy.add_child(base)
-		var top := MeshInstance3D.new()
-		top.mesh = top_mesh
-		top.position.y = 1.2
-		buoy.add_child(top)
-		add_child(buoy)
-		_buoys.append(buoy)
+		points.append(track.position_at(TAU * i / count, lateral))
+	_add_floating_multimesh(base_mesh, points, 0.4, "BuoyBases")
+	_add_floating_multimesh(top_mesh, points, 1.2, "BuoyTops")
+
+
+func _add_floating_multimesh(mesh: Mesh, points: Array[Vector3], y_offset: float, node_name: String) -> void:
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = mesh
+	mm.instance_count = points.size()
+	for i in points.size():
+		mm.set_instance_transform(i, Transform3D(Basis.IDENTITY, points[i] + Vector3(0.0, y_offset, 0.0)))
+	var mmi := MultiMeshInstance3D.new()
+	mmi.name = node_name
+	mmi.multimesh = mm
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mmi.extra_cull_margin = 4.0
+	add_child(mmi)
+	_ropes.append(mmi)
+	_float_offsets.append(y_offset)
+	_float_points.append(_points_of(mm))
+
+
+func _points_of(mm: MultiMesh) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	pts.resize(mm.instance_count)
+	for i in mm.instance_count:
+		var o := mm.get_instance_transform(i).origin
+		pts[i] = Vector2(o.x, o.z)
+	return pts
 
 
 ## Meta en el ángulo 0: dos postes y una bandera a cuadros que cruza el circuito.

@@ -141,6 +141,8 @@ func swell_height_at(x: float, z: float) -> float:
 		h += s.height_at(p)
 	if ring_wave:
 		h += ring_wave.height_at(p)
+	if h == 0.0:
+		return 0.0
 	return h * _island_fade(p)
 
 
@@ -152,7 +154,8 @@ func normal_at(x: float, z: float) -> Vector3:
 		swell_g += s.gradient_at(p)
 	if ring_wave:
 		swell_g += ring_wave.gradient_at(p)
-	g += swell_g * _island_fade(p)
+	if swell_g != Vector2.ZERO:
+		g += swell_g * _island_fade(p)
 	return Vector3(-g.x, 1.0, -g.y).normalized()
 
 
