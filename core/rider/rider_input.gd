@@ -19,3 +19,6 @@ var turbo: bool = false
 var mash_presses: int = 0
 ## Tecla de prueba para tirarse de la tabla.
 var debug_fall: bool = false
+
+## Mirar hacia atrás (gatillo izquierdo / Q): solo cambia la cámara.
+var look_back: bool = false

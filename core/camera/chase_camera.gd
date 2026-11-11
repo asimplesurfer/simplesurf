@@ -21,6 +21,9 @@ var _water: Water
 ## cada ola) y todo en el aire (para no perderlo cuando sube mucho).
 var _follow_y: float = 0.6
 
+## Mirando hacia atrás (gatillo izquierdo): la cámara pasa adelante del Rider.
+var looking_back: bool = false
+
 const BASE_FOV := 70.0
 const BOOST_FOV := 82.0
 
@@ -42,7 +45,13 @@ func _process(delta: float) -> void:
 	var follow_target := 0.6 if target.grounded else 1.0
 	_follow_y = lerpf(_follow_y, follow_target, 1.0 - exp(-3.0 * delta))
 	var w := 1.0 - exp(-follow_sharpness * minf(delta, 0.1))
+	var back := target.input != null and target.input.look_back and not target.is_fallen()
 	var desired := _desired_position()
+	if back != looking_back:
+		# Corte directo (si no, la cámara atravesaría al personaje).
+		looking_back = back
+		desired = _desired_position()
+		global_position = desired
 	global_position = global_position.lerp(desired, w)
 	# En el aire, la altura se sigue más rápido para que no se escape de cuadro.
 	if not target.grounded:
@@ -65,6 +74,9 @@ func _desired_position() -> Vector3:
 	var h := fallen_height if fallen else height
 	var base := target.global_position
 	base.y *= _follow_y
+	if looking_back:
+		# Adelante del Rider, mirando hacia atrás (un poco más alta para ver a los de atrás).
+		return base + target.forward() * dist + Vector3.UP * (h + 0.4)
 	return base - target.forward() * dist + Vector3.UP * h
 
 

@@ -113,6 +113,7 @@ func _run() -> void:
 	await _test_get_up()
 	await _test_throttle_and_steer()
 	await _test_jump_and_tricks()
+	await _test_look_back()
 	await _test_drift()
 	await _test_swells()
 	await _test_wave_jump()
@@ -1082,6 +1083,33 @@ func _test_jump_and_tricks() -> void:
 	# Volver a la velocidad normal antes del próximo test.
 	_rider.reset_nitro()
 	await _wait(4.0)
+
+
+func _test_look_back() -> void:
+	print("Mirar atrás:")
+	var cam := (_main.get_node("Views") as SplitScreen).cameras[0]
+	await _wait(0.5)
+	var f := _rider.forward()
+	var behind := (cam.global_position - _rider.global_position).dot(f) < 0.0
+	_check(behind, "la cámara va detrás del personaje")
+	_set_action(&"p1_look_back", true)
+	await _wait(0.3)
+	f = _rider.forward()
+	var ahead := (cam.global_position - _rider.global_position).dot(f) > 2.0
+	_check(ahead and cam.looking_back, "con el gatillo izquierdo / Q la cámara mira hacia atrás")
+	_set_action(&"p1_look_back", false)
+	await _wait(0.3)
+	f = _rider.forward()
+	_check(
+		(cam.global_position - _rider.global_position).dot(f) < 0.0 and not cam.looking_back,
+		"al soltar vuelve a mirar hacia adelante"
+	)
+	_check(InputMap.has_action(&"p1_look_back"), "existe la acción de mirar atrás")
+	var has_trigger := false
+	for ev in InputMap.action_get_events(&"p1_look_back"):
+		if ev is InputEventJoypadMotion and (ev as InputEventJoypadMotion).axis == JOY_AXIS_TRIGGER_LEFT:
+			has_trigger = true
+	_check(has_trigger, "el gatillo izquierdo del mando mira atrás")
 
 
 func _test_drift() -> void:
