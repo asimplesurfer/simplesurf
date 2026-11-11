@@ -119,8 +119,12 @@ await shot('7_truco');
 await page.keyboard.up('Space');
 await sleep(2000);
 
-await sleep(6000);
+await sleep(3000);
 await shot('8_olas');
+await sleep(1500);
+await shot('8b_olas');
+await sleep(1500);
+await shot('8c_olas');
 await page.keyboard.up('KeyW');
 
 // Volver al menú y no tocar nada: arranca la demo de bots con pantalla dividida.

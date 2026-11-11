@@ -9,8 +9,8 @@ extends Node
 @export var enabled: bool = true
 ## 0 = distinto cada partida.
 @export var random_seed: int = 0
-@export var spawn_interval_min: float = 0.8
-@export var spawn_interval_max: float = 2.0
+@export var spawn_interval_min: float = 1.5
+@export var spawn_interval_max: float = 3.5
 ## Distancia al jugador a la que pueden nacer (m).
 @export var spawn_distance_min: float = 30.0
 @export var spawn_distance_max: float = 70.0
@@ -28,7 +28,14 @@ extends Node
 ## (+ = hacia afuera, que es la izquierda de quien corre).
 @export var constant_lateral: float = 12.0
 
+## Cada cuánto se revisa que cada jugador tenga una ola grande viniendo (s).
+@export var ensure_interval: float = 0.4
+## Tramo adelante (por la pista, m) en el que siempre tiene que haber una ola.
+@export var ahead_min: float = 10.0
+@export var ahead_max: float = 95.0
+
 var mode: GameSettings.WaveMode = GameSettings.WaveMode.SURGES
+var _ensure_timer: float = 0.0
 
 var _rng := RandomNumberGenerator.new()
 var _timer: float = 1.0
@@ -74,6 +81,19 @@ func make_ring_wave() -> RingWave:
 func _process(delta: float) -> void:
 	if not enabled or _water == null or mode != GameSettings.WaveMode.SURGES:
 		return
+	_retire_passed()
+	# Nunca un rato largo sin olas: cada jugador tiene que tener una viniendo.
+	_ensure_timer -= delta
+	if _ensure_timer <= 0.0:
+		_ensure_timer = ensure_interval
+		for target in _targets():
+			if not has_wave_ahead(target):
+				_free_slot()
+				if _water.can_add_swell():
+					var incoming := _make_incoming_retry(target)
+					if incoming:
+						_water.add_swell(incoming)
+	# Además, olas al azar (más variedad).
 	_timer -= delta
 	if _timer > 0.0:
 		return
@@ -82,6 +102,92 @@ func _process(delta: float) -> void:
 		var s := make_swell()
 		if s:
 			_water.add_swell(s)
+
+
+## Jugadores a los que se les garantizan olas: las personas (si no hay, como
+## en la demo, todos los corredores).
+func _targets() -> Array[Rider]:
+	var humans: Array[Rider] = []
+	var everyone: Array[Rider] = []
+	for node in get_tree().get_nodes_in_group("riders"):
+		var r := node as Rider
+		if r and not r.race_finished:
+			everyone.append(r)
+			if r.is_human:
+				humans.append(r)
+	return humans if not humans.is_empty() else everyone
+
+
+## Dirección de la pista donde está el corredor (o su frente, si no hay pista).
+func _track_dir(r: Rider) -> Vector2:
+	var course := get_tree().get_first_node_in_group("course") as Course
+	if course:
+		var t := course.track.tangent_at(course.track.angle_of(r.global_position))
+		return Vector2(t.x, t.z).normalized()
+	var f := r.forward()
+	return Vector2(f.x, f.z).normalized()
+
+
+## true si hay una ola grande (que no se está yendo) adelante del corredor.
+func has_wave_ahead(r: Rider) -> bool:
+	var pos := Vector2(r.global_position.x, r.global_position.z)
+	var dir := _track_dir(r)
+	var side := Vector2(-dir.y, dir.x)
+	for s in _water.swells:
+		if s.max_amplitude < amplitude_min * 0.9 or s.lifetime - s.age < 3.0:
+			continue
+		var rel := s.center - pos
+		var along := rel.dot(dir)
+		if along > ahead_min and along < ahead_max and absf(rel.dot(side)) < s.half_length + 4.0:
+			return true
+	return false
+
+
+## Las olas que ya quedaron atrás de todos se desvanecen (dejan lugar a nuevas).
+func _retire_passed() -> void:
+	var targets := _targets()
+	if targets.is_empty():
+		return
+	var points: Array[Vector2] = []
+	var dirs: Array[Vector2] = []
+	for t in targets:
+		points.append(Vector2(t.global_position.x, t.global_position.z))
+		dirs.append(_track_dir(t))
+	for s in _water.swells:
+		var useful := false
+		for i in points.size():
+			var rel := s.center - points[i]
+			if rel.dot(dirs[i]) > -s.width * 3.0 and rel.length() < 160.0:
+				useful = true
+				break
+		if not useful:
+			s.retire()
+
+
+## Si no entra otra ola, saca la menos útil (la que ya se está yendo, o la más vieja).
+func _free_slot() -> void:
+	if _water.can_add_swell() or _water.swells.is_empty():
+		return
+	var worst: Swell = null
+	var worst_score := -INF
+	for s in _water.swells:
+		var leaving := s.lifetime - s.age < s.fade_time + 0.1
+		var score := s.age + (1000.0 if leaving else 0.0) - s.amplitude
+		if score > worst_score:
+			worst_score = score
+			worst = s
+	if worst:
+		_water.swells.erase(worst)
+
+
+## Ola de frente, probando a varias distancias (puede caer cerca de una isla).
+func _make_incoming_retry(target: Rider) -> Swell:
+	var player := Vector2(target.global_position.x, target.global_position.z)
+	for attempt in 5:
+		var s := _make_incoming(target, player)
+		if s:
+			return s
+	return null
 
 
 ## Elige al azar un jugador humano alrededor del cual crear la ola
@@ -159,7 +265,8 @@ func _make_incoming(target: Rider, player: Vector2) -> Swell:
 	s.max_amplitude = _rng.randf_range(amplitude_min, amplitude_max)
 	s.width = s.max_amplitude * _rng.randf_range(1.6, 2.0)
 	s.lifetime = _rng.randf_range(18.0, 26.0)
-	s.grow_time = 2.0
+	# Crece mientras se acerca (se ve venir) y rompe más o menos cuando llega.
+	s.grow_time = 2.5
 	s.fade_time = 4.0
 	if is_clear_of(s, player) and _far_from_island(s):
 		return s
