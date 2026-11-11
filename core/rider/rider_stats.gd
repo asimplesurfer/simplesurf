@@ -34,7 +34,7 @@ extends Resource
 @export var pop_extra: float = 1.0
 ## Modo olas: segundos que se recuerda el A apretado subiendo la ola (y
 ## después del lanzamiento en los que todavía vale el pop).
-@export var pop_window: float = 0.35
+@export var pop_window: float = 0.15
 ## Velocidad hacia arriba subiendo una ola para que A cuente como pop (m/s).
 @export var pop_min_climb: float = 1.5
 ## Velocidad vertical mínima para que una ola te lance al aire (m/s).
@@ -48,7 +48,7 @@ extends Resource
 ## Tiempo manteniendo A en el aire antes de que empiece a girar la tabla (s).
 @export var trick_hold_delay: float = 0.12
 ## Velocidad de giro de la tabla en el truco (radianes por segundo).
-@export var trick_spin_speed: float = 15.0
+@export var trick_spin_speed: float = 20.0
 ## Nitro que carga por segundo girando (1.0 = barra llena).
 @export var trick_nitro_rate: float = 0.5
 
@@ -59,6 +59,8 @@ extends Resource
 @export var turbo_accel_mult: float = 2.5
 ## Nitro que gasta el turbo por segundo (1.0 = barra llena).
 @export var turbo_drain: float = 0.35
+## Nitro mínimo para arrancar el turbo (si se vacía, hay que soltar y juntar esto).
+@export var turbo_min_nitro: float = 0.15
 ## Duración del mini sprint automático (motivación) (s).
 @export var motivation_time: float = 1.3
 ## Multiplica la velocidad máxima durante la motivación.
@@ -118,12 +120,10 @@ extends Resource
 @export var drift_cone_half_angle: float = 30.0
 
 @export_group("Caída y levantarse")
-## Cuánto llena la barra cada pulsación (1.0 = barra llena).
-@export var mash_fill_per_press: float = 0.32
-## Cuánto se vacía la barra por segundo. Con 0.32 y 1.1 hacen falta
-## más de ~3.5 pulsaciones por segundo para avanzar.
-@export var mash_decay_per_second: float = 1.1
-## Duración de la animación de subirse a la tabla (s). Durante ella no cuentan las pulsaciones.
+## Cuánto llena la barra cada pulsación (1.0 = barra llena: subirse y pararse).
+## 1/6: con 6 pulsaciones estás de pie. La barra nunca baja.
+@export var mash_fill_per_press: float = 0.167
+## Duración de la animación de subirse a la tabla (s).
 @export var climb_time: float = 0.45
 ## Tiempo tras pararse en el que A no salta (para que el spam no te haga saltar).
 @export var stand_jump_lock: float = 0.4

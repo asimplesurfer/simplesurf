@@ -51,6 +51,10 @@ func set_mode(new_mode: GameSettings.WaveMode) -> void:
 	if _water == null:
 		return
 	_water.clear_swells()
+	# La ola constante da la vuelta a la isla: solo existe en el mapa Isla.
+	var course := get_tree().get_first_node_in_group("course") as Course
+	if course and course.track is PathTrack and mode == GameSettings.WaveMode.CONSTANT_LEFT:
+		mode = GameSettings.WaveMode.SURGES
 	if mode == GameSettings.WaveMode.CONSTANT_LEFT:
 		_water.set_ring_wave(make_ring_wave())
 	else:
@@ -170,10 +174,13 @@ func is_clear_of(s: Swell, point: Vector2) -> bool:
 	return along > clearance or across > clearance
 
 
-## Que la ola no nazca pegada a la isla.
+## Que la ola no nazca pegada a una isla.
 func _far_from_island(s: Swell) -> bool:
-	var island := get_tree().get_first_node_in_group("island") as Island
-	if island == null:
-		return true
-	var c := Vector2(island.global_position.x, island.global_position.z)
-	return s.center.distance_to(c) > island.radius + s.width * 3.0 + 10.0
+	for node in get_tree().get_nodes_in_group("island"):
+		var island := node as Island
+		if island == null:
+			continue
+		var c := Vector2(island.global_position.x, island.global_position.z)
+		if s.center.distance_to(c) <= island.radius + s.width * 1.5 + 6.0:
+			return false
+	return true

@@ -24,8 +24,10 @@ var time: float = 0.0
 var swells: Array[Swell] = []
 ## Modo "ola constante a la izquierda" (null = sin ola constante).
 var ring_wave: RingWave = null
-## Isla: las olas grandes se apagan cerca de la orilla. (x, z, radio); radio 0 = sin isla.
-var island := Vector3.ZERO
+## Islas: las olas grandes se apagan cerca de la orilla. Cada una (x, z, radio).
+var islands: Array[Vector3] = []
+## Islas que entiende el shader (islands[0..15]).
+const MAX_ISLANDS := 16
 
 var _plane: PlaneMesh
 var _material: ShaderMaterial
@@ -139,6 +141,8 @@ func swell_height_at(x: float, z: float) -> float:
 		h += s.height_at(p)
 	if ring_wave:
 		h += ring_wave.height_at(p)
+	if h == 0.0:
+		return 0.0
 	return h * _island_fade(p)
 
 
@@ -150,17 +154,20 @@ func normal_at(x: float, z: float) -> Vector3:
 		swell_g += s.gradient_at(p)
 	if ring_wave:
 		swell_g += ring_wave.gradient_at(p)
-	g += swell_g * _island_fade(p)
+	if swell_g != Vector2.ZERO:
+		g += swell_g * _island_fade(p)
 	return Vector3(-g.x, 1.0, -g.y).normalized()
 
 
 ## 0 pegado a la isla, 1 lejos: las olas grandes no se meten en la playa.
 ## (Igual que island_fade en water.gdshader.)
 func _island_fade(p: Vector2) -> float:
-	if island.z <= 0.0:
-		return 1.0
-	var d := p.distance_to(Vector2(island.x, island.y))
-	return smoothstep(island.z + 4.0, island.z + 28.0, d)
+	var fade := 1.0
+	for i in mini(islands.size(), MAX_ISLANDS):
+		var isl := islands[i]
+		var d := p.distance_to(Vector2(isl.x, isl.y))
+		fade *= smoothstep(isl.z + 4.0, isl.z + 28.0, d)
+	return fade
 
 
 ## Pista (anillo): el agua de afuera se ve más oscura, para que se note el borde.
@@ -169,8 +176,20 @@ func set_track(center: Vector2, inner: float, outer: float) -> void:
 
 
 func set_island(center: Vector2, radius: float) -> void:
-	island = Vector3(center.x, center.y, radius)
-	_material.set_shader_parameter("island", island)
+	var list: Array[Vector3] = [Vector3(center.x, center.y, radius)]
+	set_islands(list)
+
+
+## Islas (x, z, radio): las olas grandes se apagan cerca de cada orilla.
+## El shader entiende hasta MAX_ISLANDS (las primeras de la lista).
+func set_islands(list: Array[Vector3]) -> void:
+	islands = list.duplicate()
+	var packed := PackedVector3Array()
+	packed.resize(MAX_ISLANDS)
+	for i in MAX_ISLANDS:
+		packed[i] = list[i] if i < list.size() else Vector3.ZERO
+	_material.set_shader_parameter("islands", packed)
+	_material.set_shader_parameter("island_count", mini(list.size(), MAX_ISLANDS))
 
 
 func _push_swells() -> void:

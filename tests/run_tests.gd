@@ -12,6 +12,8 @@ var _main: Node
 var _rider: Rider
 var _water: Water
 var _waves: WaveManager
+## Altura desde la que despegó el último salto (para medir saltos).
+var _takeoff_y: float = 0.0
 var _race: RaceManager
 var _course: Course
 var _pop_prompt_seen: bool = false
@@ -44,6 +46,12 @@ func _run() -> void:
 		GameSettings.wave_mode == GameSettings.WaveMode.SURGES,
 		"por defecto las olas son grandes que aparecen solas"
 	)
+	_check(
+		GameSettings.track_layout == GameSettings.TrackLayout.ARCHIPELAGO,
+		"por defecto el mapa es el archipiélago"
+	)
+	# Las mecánicas se prueban en el mapa Isla (anillo); el archipiélago, aparte.
+	GameSettings.track_layout = GameSettings.TrackLayout.CLASSIC
 	# Los tests de salto libre van primero; el modo olas se prueba aparte.
 	GameSettings.jump_style = GameSettings.JumpStyle.FREE
 	_test_avatar()
@@ -65,10 +73,12 @@ func _run() -> void:
 		_finish()
 		return
 	_rider = _race.racers[0]
-	# Sin olas grandes al azar durante los tests de movimiento.
+	# Sin olas grandes al azar ni handicap durante los tests de movimiento.
 	_waves.enabled = false
+	_race.catchup_enabled = false
 	_water.clear_swells()
 	_rider.trick_landed.connect(func(_spins: int) -> void: _tricks_landed += 1)
+	_rider.jumped.connect(func() -> void: _takeoff_y = _rider.global_position.y)
 
 	var world_env := _main.get_node("WorldEnvironment") as WorldEnvironment
 	var env := world_env.environment
@@ -116,6 +126,7 @@ func _run() -> void:
 	await _test_bot_race()
 	await _test_demo()
 	await _test_memory()
+	await _test_archipelago()
 	_finish()
 
 
@@ -637,6 +648,18 @@ func _test_turbo_and_wrong_way() -> void:
 	_check(_rider.nitro == 0.0, "el turbo se acaba con el nitro")
 	_check(not _rider.turbo_active, "sin nitro no hay turbo")
 	_set_action(&"p1_b", false)
+	await process_frame
+	# Con gotitas de nitro (como las del handicap) no se puede sostener el turbo:
+	# hace falta un mínimo para arrancarlo.
+	_rider.reset_nitro()
+	_rider.add_nitro(0.05)
+	_check(not _rider.turbo_request(true), "con gotitas de nitro el turbo no arranca")
+	_rider.turbo_request(false)
+	_rider.reset_nitro()
+	_rider.add_nitro(0.2)
+	_check(_rider.turbo_request(true), "soltando y con nitro suficiente, el turbo vuelve")
+	_rider.turbo_request(false)
+	_rider.reset_nitro()
 
 	print("Al revés:")
 	_course.bounds_enabled = true
@@ -810,33 +833,42 @@ func _test_get_up() -> void:
 	await _wait(1.0)
 	_check(_rider.is_fallen(), "sin pulsar nada sigue caído")
 
-	await _mash(2.0, 3.0)
-	_check(
-		_rider.recovery_stage == Rider.RecoveryStage.IN_WATER,
-		"spamear lento (2 por segundo) no alcanza para subirse"
-	)
-
-	await _mash(8.0, 1.0)
-	_check(
-		_rider.recovery_stage == Rider.RecoveryStage.PRONE,
-		"spamear rápido lo sube acostado a la tabla en ~1 s"
-	)
-	_check(_rider.is_fallen(), "acostado todavía no está parado")
+	# Una sola barra que se llena con una cantidad fija de pulsaciones y no baja.
 	var hud := (_main.get_node("Views") as SplitScreen).huds[0]
+	await _press(&"p1_a")
+	await _press(&"p1_a")
 	await process_frame
+	var after_two: float = hud._mash_bar.value
+	await _wait(2.0)
+	_check(
+		after_two > 0.25 and is_equal_approx(hud._mash_bar.value, after_two),
+		"la barra no baja si dejás de spamear (%.2f -> %.2f)" % [after_two, hud._mash_bar.value]
+	)
+	_check(_rider.recovery_stage == Rider.RecoveryStage.IN_WATER, "con 2 pulsaciones sigue en el agua")
+
+	await _press(&"p1_a")
+	await process_frame
+	_check(_rider.recovery_stage == Rider.RecoveryStage.PRONE, "con 3 pulsaciones se sube a la tabla")
+	_check(_rider.is_fallen(), "acostado todavía no está parado")
 	_check(
 		hud._mash_bar.value >= 0.5 and hud._mash_bar.value < 1.0,
 		"una sola barra: acostado ya está por la mitad (%.2f)" % hud._mash_bar.value
 	)
+	# Sin pausa: se puede seguir spameando enseguida, mientras se sube.
+	await _press(&"p1_a")
+	await process_frame
+	_check(hud._mash_bar.value > 0.6, "sigue sumando mientras se sube, sin pausa (%.2f)" % hud._mash_bar.value)
 
 	await _wait(3.0)
 	_check(_rider.is_fallen(), "si deja de spamear se queda acostado")
 
 	var frames_before := Engine.get_process_frames()
-	await _mash_until_standing(8.0, 4.0)
+	await _press(&"p1_a")
+	await _press(&"p1_a")
+	await _wait(0.6)
 	var seconds := float(Engine.get_process_frames() - frames_before) / FPS
-	_check(not _rider.is_fallen(), "seguir spameando lo pone de pie")
-	_check(seconds < 1.3, "pararse desde acostado tarda poco (%.2f s)" % seconds)
+	_check(not _rider.is_fallen(), "6 pulsaciones en total: de pie")
+	_check(seconds < 1.0, "pararse tarda poco (%.2f s)" % seconds)
 	_check(_rider.recovery_stage == Rider.RecoveryStage.STANDING, "etapa = parado")
 
 
@@ -1187,10 +1219,12 @@ func _measure_air() -> Vector2:
 
 
 ## Altura máxima sobre el agua hasta aterrizar.
+## Se mide desde donde despegó (las olitas de fondo suben y bajan casi un
+## metro: medir contra el agua de abajo daba números al azar).
 func _measure_jump_height() -> float:
 	var max_height := 0.0
 	for i in int(2.5 * FPS):
-		var h := _rider.global_position.y - _water_height_here()
+		var h := _rider.global_position.y - _takeoff_y
 		max_height = maxf(max_height, h)
 		if _state() != &"airborne":
 			break
@@ -1286,6 +1320,109 @@ func _test_memory() -> void:
 	_check(last.orphans <= first.orphans, "no quedan nodos sueltos (%d -> %d)" % [first.orphans, last.orphans])
 	_check(in_race_growth <= 200, "durante la carrera no crece la memoria (+%d objetos en 10 s)" % in_race_growth)
 	_check(menu_nodes <= 3 and after_menu <= last.nodes + 2, "el menú no se acumula al rearmarse (%d hijos)" % menu_nodes)
+
+
+func _test_archipelago() -> void:
+	print("Mapa archipiélago:")
+	GameSettings.track_layout = GameSettings.TrackLayout.ARCHIPELAGO
+	GameSettings.jump_style = GameSettings.JumpStyle.WAVES
+	var config := RaceConfig.new()
+	config.laps = 1
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 3
+	for level in [2, 2, 1]:
+		var slot := RacerSlot.new()
+		slot.kind = RacerSlot.Kind.BOT
+		slot.display_name = "Bot %d" % level
+		slot.character = CharacterData.random(rng)
+		slot.difficulty = AIDifficulty.preset(level)
+		config.slots.append(slot)
+	var m: Node = load("res://main.tscn").instantiate()
+	var race := m.get_node("RaceManager") as RaceManager
+	race.config = config
+	race.catchup_enabled = false
+	root.add_child(m)
+	await process_frame
+	await process_frame
+	var course := m.get_node("Course") as Course
+	var track := course.track
+	_check(track is PathTrack, "el recorrido no es un círculo")
+	_check(course.islands.size() >= 12, "hay muchas islas (%d)" % course.islands.size())
+	_check(
+		track.length() > 700.0 and track.length() < 1000.0,
+		"una vuelta mide %.0f m" % track.length()
+	)
+	_check(config.laps == 1 and GameSettings.laps_for_layout() == 3, "en el archipiélago se corren 3 vueltas")
+
+	# Ida y vuelta: posición <-> (ángulo, lateral).
+	var roundtrip := true
+	for i in 40:
+		var a := -PI + TAU * i / 40.0
+		var lat := -15.0 + 30.0 * (i % 7) / 6.0
+		var p := track.position_at(a, lat)
+		var back := track.locate(p)
+		if absf(wrapf(back.x - a, -PI, PI)) > 0.02 or absf(back.y - lat) > 0.6:
+			roundtrip = false
+			print("    ida y vuelta: %.2f, %.1f -> %.2f, %.1f" % [a, lat, back.x, back.y])
+	_check(roundtrip, "posiciones y coordenadas de pista coinciden")
+
+	# Curvas a la izquierda y a la derecha.
+	var lefts := 0
+	var rights := 0
+	for i in 200:
+		var a := -PI + TAU * i / 200.0
+		var t0 := track.tangent_at(a)
+		var t1 := track.tangent_at(a + 0.05)
+		var turn := t0.x * t1.z - t0.z * t1.x
+		if turn > 0.01:
+			lefts += 1
+		elif turn < -0.01:
+			rights += 1
+	_check(lefts > 10 and rights > 10, "hay curvas a los dos lados (%d / %d)" % [lefts, rights])
+
+	# Ninguna isla pisa la pista.
+	var clear := true
+	for isl in course.islands:
+		var lat := absf(track.lateral_of(isl.position))
+		if lat < track.half_width + isl.radius + 4.0:
+			clear = false
+			print("    isla en %s muy cerca (%.1f m)" % [isl.position, lat])
+	_check(clear, "las islas no pisan la pista")
+	# Desde cualquier lugar de la pista se ven islas cerca.
+	var always_islands := true
+	for i in 30:
+		var p := track.position_at(-PI + TAU * i / 30.0)
+		var near := 0
+		for isl in course.islands:
+			if Vector2(p.x - isl.position.x, p.z - isl.position.z).length() < 130.0:
+				near += 1
+		if near < 2:
+			always_islands = false
+	_check(always_islands, "siempre hay islas a la vista")
+
+	# Los bots dan la vuelta sin chocar islas.
+	var island_crashes := [0]
+	for r in race.racers:
+		r.crashed.connect(func() -> void:
+			for isl in course.islands:
+				if Vector2(r.position.x - isl.position.x, r.position.z - isl.position.z).length() < isl.radius + 8.0:
+					island_crashes[0] += 1
+		)
+	var finished := false
+	for i in int(150.0 * FPS):
+		if race.state == RaceManager.State.FINISHED:
+			finished = true
+			break
+		await process_frame
+	var all_done := true
+	for r in race.racers:
+		if not race.finished(r):
+			all_done = false
+	_check(finished or all_done, "los bots completan la vuelta del archipiélago")
+	_check(island_crashes[0] <= 1, "casi sin chocar islas (%d)" % island_crashes[0])
+	m.queue_free()
+	await process_frame
+	GameSettings.track_layout = GameSettings.TrackLayout.CLASSIC
 
 
 func _finish() -> void:

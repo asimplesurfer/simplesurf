@@ -1,13 +1,13 @@
 extends RiderState
-## Caído de la tabla. Hay que spamear A para recuperarse, en dos etapas:
-##   1. En el agua  -> se sube a la tabla y queda acostado (puede remar un poco).
-##   2. Acostado    -> se para sobre la tabla y vuelve a `riding`.
-## Cada pulsación llena una barra que se vacía sola: solo avanza quien
-## pulsa más rápido que una velocidad mínima.
+## Caído de la tabla. Hay que spamear A para recuperarse: una sola barra que
+## se llena con una cantidad fija de pulsaciones y nunca baja.
+##   - A la mitad se sube a la tabla y queda acostado (puede remar un poco).
+##   - Llena, se para sobre la tabla y vuelve a `riding`.
+## Las pulsaciones cuentan siempre (también mientras se sube a la tabla).
 
-## Barra de spam de la etapa actual (0..1).
+## Progreso total de la barra (0..1).
 var meter: float = 0.0
-## Tiempo que falta de la animación de subirse; mientras tanto no cuenta el spam.
+## Tiempo que falta de la animación de subirse a la tabla.
 var _climb_timer: float = 0.0
 
 
@@ -33,31 +33,23 @@ func update(delta: float, input: RiderInput) -> void:
 	else:
 		rider.reset_steer()
 
-	if _climb_timer > 0.0:
-		_climb_timer -= delta
-	elif input.mash_presses > 0:
-		meter += stats.mash_fill_per_press * input.mash_presses
+	_climb_timer = maxf(_climb_timer - delta, 0.0)
+	if input.mash_presses > 0:
+		meter = minf(meter + stats.mash_fill_per_press * input.mash_presses, 1.0)
 		rider.mash_pressed.emit()
 		if prone:
 			rider.speed = minf(
 				rider.speed + stats.paddle_impulse * input.mash_presses, stats.paddle_max_speed
 			)
 
-	meter = maxf(0.0, meter - stats.mash_decay_per_second * delta)
 	rider.move_forward(delta)
 	rider.stick_to_water(delta, false)
 
-	if meter >= 1.0:
-		_advance_stage()
-	else:
-		rider.mash_progress_changed.emit(meter, rider.recovery_stage)
-
-
-func _advance_stage() -> void:
-	meter = 0.0
-	if rider.recovery_stage == Rider.RecoveryStage.IN_WATER:
+	if not prone and meter >= 0.5:
 		rider.set_recovery_stage(Rider.RecoveryStage.PRONE)
-		_climb_timer = rider.stats.climb_time
-		rider.mash_progress_changed.emit(meter, rider.recovery_stage)
-	else:
+		_climb_timer = stats.climb_time
+	# Llena: se para (apenas termina de subirse, si todavía estaba en eso).
+	if meter >= 1.0 and _climb_timer <= 0.0:
 		state_machine.transition_to(&"riding")
+		return
+	rider.mash_progress_changed.emit(meter, rider.recovery_stage)

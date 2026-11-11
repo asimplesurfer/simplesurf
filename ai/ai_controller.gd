@@ -136,8 +136,8 @@ func _drive(delta: float, input: RiderInput) -> void:
 			_jump_started = true
 		_jump_hold -= delta
 	elif GameSettings.jump_style == GameSettings.JumpStyle.WAVES:
-		# Modo olas: no salta en las rectas; hace el pop al subir una ola.
-		if rider.vertical_speed > rider.stats.pop_min_climb + 1.0 and not _pop_tried:
+		# Modo olas: no salta en las rectas; hace el pop justo antes de la cresta.
+		if rider.pop_ready() and not _pop_tried:
 			_pop_tried = true
 			if _rng.randf() < difficulty.pop_skill:
 				input.jump_pressed = true

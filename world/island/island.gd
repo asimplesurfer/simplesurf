@@ -1,9 +1,12 @@
 class_name Island
 extends Node3D
-## Isla en el medio del circuito: playa, una loma verde, palmeras y un faro.
+## Isla: playa, una loma verde, palmeras y (si es grande) un faro.
 ## Solo es visual; el choque con la orilla lo maneja Course.
 
 @export var radius: float = 45.0
+## Semilla para que cada isla tenga sus palmeras en otro lugar.
+@export var island_seed: int = 11
+@export var lighthouse: bool = true
 
 const SAND := Color(0.98, 0.86, 0.6)
 const GRASS := Color(0.45, 0.78, 0.35)
@@ -33,13 +36,18 @@ func _ready() -> void:
 	_add_mesh(hill_mesh, Vector3(0.0, 0.5, 0.0))
 
 	var rng := RandomNumberGenerator.new()
-	rng.seed = 11
-	for i in 9:
-		var angle := TAU * i / 9.0 + rng.randf_range(-0.2, 0.2)
-		var r := radius * rng.randf_range(0.45, 0.72)
+	rng.seed = island_seed
+	# Más palmeras en las islas más grandes.
+	var palms := clampi(int(radius / 5.0), 3, 9)
+	var offset := rng.randf_range(0.0, TAU)
+	for i in palms:
+		var angle := offset + TAU * i / float(palms) + rng.randf_range(-0.2, 0.2)
+		var r := radius * rng.randf_range(0.3 if lighthouse else 0.0, 0.72)
 		var pos := Vector3(cos(angle) * r, _ground_height(r), sin(angle) * r)
 		_add_palm(pos, rng)
-	_add_lighthouse(Vector3(0.0, _ground_height(0.0) - 0.5, 0.0))
+	_build_palms()
+	if lighthouse:
+		_add_lighthouse(Vector3(0.0, _ground_height(0.0) - 0.5, 0.0))
 
 
 ## Altura del suelo de la loma a una distancia del centro.
@@ -59,26 +67,55 @@ func _add_mesh(mesh: Mesh, pos: Vector3) -> MeshInstance3D:
 	return mi
 
 
+## Palmeras: se juntan todos los troncos y todas las hojas de la isla en dos
+## MultiMesh (muchas menos llamadas de dibujo que una malla por pieza).
+var _trunks: Array[Transform3D] = []
+var _leaves: Array[Transform3D] = []
+
+
 func _add_palm(pos: Vector3, rng: RandomNumberGenerator) -> void:
 	var height := rng.randf_range(6.0, 9.0)
-	var trunk := CylinderMesh.new()
-	trunk.top_radius = 0.25
-	trunk.bottom_radius = 0.45
-	trunk.height = height
-	trunk.material = ToonMaterial.make(TRUNK, 0.05)
-	var t := _add_mesh(trunk, pos + Vector3(0.0, height * 0.5, 0.0))
-	t.rotation = Vector3(rng.randf_range(-0.12, 0.12), 0.0, rng.randf_range(-0.12, 0.12))
-
-	var leaf := SphereMesh.new()
-	leaf.radius = 1.0
-	leaf.height = 2.0
-	leaf.material = ToonMaterial.make(LEAVES, 0.05)
+	var tilt := Basis.from_euler(Vector3(rng.randf_range(-0.12, 0.12), 0.0, rng.randf_range(-0.12, 0.12)))
+	# La malla del tronco mide 7.5 m: se escala poco (escalar mucho arruina la luz).
+	var stretch := height / 7.5
+	_trunks.append(Transform3D(tilt * Basis.from_scale(Vector3(1.0, stretch, 1.0)), pos + Vector3(0.0, height * 0.5, 0.0)))
 	var top := pos + Vector3(0.0, height, 0.0)
 	for k in 6:
 		var a := TAU * k / 6.0
-		var l := _add_mesh(leaf, top + Vector3(cos(a), -0.3, sin(a)) * 1.6)
-		l.scale = Vector3(2.0, 0.25, 0.7)
-		l.rotation = Vector3(0.0, -a, -0.35)
+		var basis := Basis.from_euler(Vector3(0.0, -a, -0.35)).scaled(Vector3(2.0, 0.25, 0.7))
+		_leaves.append(Transform3D(basis, top + Vector3(cos(a), -0.3, sin(a)) * 1.6))
+
+
+func _build_palms() -> void:
+	if _trunks.is_empty():
+		return
+	var trunk := CylinderMesh.new()
+	trunk.top_radius = 0.25
+	trunk.bottom_radius = 0.45
+	trunk.height = 7.5
+	trunk.radial_segments = 8
+	trunk.material = ToonMaterial.make(TRUNK, 0.05)
+	_add_multimesh(trunk, _trunks, "Trunks")
+	var leaf := SphereMesh.new()
+	leaf.radius = 1.0
+	leaf.height = 2.0
+	leaf.radial_segments = 10
+	leaf.rings = 5
+	leaf.material = ToonMaterial.make(LEAVES, 0.05)
+	_add_multimesh(leaf, _leaves, "Leaves")
+
+
+func _add_multimesh(mesh: Mesh, transforms: Array[Transform3D], node_name: String) -> void:
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = mesh
+	mm.instance_count = transforms.size()
+	for i in transforms.size():
+		mm.set_instance_transform(i, transforms[i])
+	var mmi := MultiMeshInstance3D.new()
+	mmi.name = node_name
+	mmi.multimesh = mm
+	add_child(mmi)
 
 
 func _add_lighthouse(base: Vector3) -> void:

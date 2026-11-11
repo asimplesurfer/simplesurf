@@ -93,6 +93,11 @@ Si el teclado no responde, haz clic dentro del juego.
   pista, sumando vueltas: con una vuelta de atraso, el handicap es el máximo). La barra muestra "NITRO ×1.8" cuando hay ayuda.
 - **Motivación:** mini sprint automático al pasar por un círculo o tirar a alguien.
 - **Rocas:** chocarlas tira de la tabla (saltando se esquivan). Chocar la isla también.
+- **Mapa** (fila **Mapa** en el menú):
+  - **Archipiélago** (por defecto): un recorrido con curvas a izquierda y derecha entre
+    muchas islas (siempre ves islas alrededor). 3 vueltas.
+  - **Isla (anillo)**: el circuito de siempre alrededor de una isla. 5 vueltas.
+  - La ola constante a la izquierda por ahora solo existe en el mapa Isla.
 - **Modo de olas** (fila **Olas** en el menú, con flechas o el mando):
   - **Grandes que aparecen** (por defecto): ver abajo.
   - **Constante a la izquierda:** una ola que da toda la vuelta por el lado de afuera de la
