@@ -687,13 +687,10 @@ func _test_music() -> void:
 		await _mash_until_standing(8.0, 4.0)
 	await _wait(1.0)
 	_check(not audio.epic, "en el agua, volumen normal")
-	# Salto cargado al máximo: mucho tiempo en el aire.
-	GameSettings.jump_mode = GameSettings.JumpMode.CHARGE
-	_set_action(&"p1_a", true)
-	await _wait(1.05)
-	_set_action(&"p1_a", false)
-	GameSettings.jump_mode = GameSettings.JumpMode.TAP
-	await _wait(0.6)
+	# Un salto largo (más de 1 s en el aire): la música se pone épica.
+	await _press(&"p1_a")
+	_rider.vertical_speed = 12.0
+	await _wait(0.8)
 	_check(not _rider.grounded and audio.epic, "mucho tiempo en el aire: música épica")
 	await _wait_until_state(&"riding", 2.0)
 	await _wait(0.1)
