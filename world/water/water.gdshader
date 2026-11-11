@@ -96,7 +96,7 @@ void add_swell(vec4 a, vec4 b, vec2 p, inout float h, inout vec2 g, inout vec2 d
 	float dn_du = (-2.0 * u / (width * width)) * gauss * e;
 	h += amp * n;
 	// Corrimiento de la cresta hacia adelante (más fuerte cuando rompe).
-	float lean = (0.45 + 1.35 * breaking) * amp;
+	float lean = (0.35 + 0.95 * breaking) * amp;
 	float n2 = n * n;
 	disp += dir * (lean * n2 * n);
 	float stretch = max(1.0 + lean * 3.0 * n2 * dn_du, 0.12);
@@ -108,9 +108,9 @@ void add_swell(vec4 a, vec4 b, vec2 p, inout float h, inout vec2 g, inout vec2 d
 	// Cuerpo turquesa: aparece a medida que la ola gana altura.
 	body = max(body, n * strength * (0.4 + 0.6 * breaking));
 	// Espuma: arriba del labio y cayendo por la cara de adelante.
-	float crest_foam = smoothstep(0.62, 0.92, n);
-	float face_foam = smoothstep(0.25, 0.7, n) * smoothstep(0.0, width * 0.5, u);
-	lip = max(lip, breaking * strength * max(crest_foam, face_foam * 0.8));
+	float crest_foam = smoothstep(0.8, 0.97, n);
+	float face_foam = smoothstep(0.5, 0.8, n) * smoothstep(0.0, width * 0.35, u);
+	lip = max(lip, breaking * strength * max(crest_foam, face_foam * 0.6));
 }
 
 void add_ring(vec2 p, inout float h, inout vec2 g, inout float body, inout float lip) {
