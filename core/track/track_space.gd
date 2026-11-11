@@ -28,6 +28,11 @@ func lateral_of(p: Vector3) -> float:
 	return Vector2(p.x, p.z).distance_to(center) - radius
 
 
+## Ángulo y lateral juntos: Vector2(ángulo, lateral).
+func locate(p: Vector3) -> Vector2:
+	return Vector2(angle_of(p), lateral_of(p))
+
+
 func position_at(angle: float, lateral: float = 0.0) -> Vector3:
 	var r := radius + lateral
 	return Vector3(center.x + cos(angle) * r, 0.0, center.y + sin(angle) * r)

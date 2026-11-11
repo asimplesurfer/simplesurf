@@ -1,9 +1,12 @@
 class_name Island
 extends Node3D
-## Isla en el medio del circuito: playa, una loma verde, palmeras y un faro.
+## Isla: playa, una loma verde, palmeras y (si es grande) un faro.
 ## Solo es visual; el choque con la orilla lo maneja Course.
 
 @export var radius: float = 45.0
+## Semilla para que cada isla tenga sus palmeras en otro lugar.
+@export var island_seed: int = 11
+@export var lighthouse: bool = true
 
 const SAND := Color(0.98, 0.86, 0.6)
 const GRASS := Color(0.45, 0.78, 0.35)
@@ -33,13 +36,17 @@ func _ready() -> void:
 	_add_mesh(hill_mesh, Vector3(0.0, 0.5, 0.0))
 
 	var rng := RandomNumberGenerator.new()
-	rng.seed = 11
-	for i in 9:
-		var angle := TAU * i / 9.0 + rng.randf_range(-0.2, 0.2)
-		var r := radius * rng.randf_range(0.45, 0.72)
+	rng.seed = island_seed
+	# Más palmeras en las islas más grandes.
+	var palms := clampi(int(radius / 5.0), 3, 9)
+	var offset := rng.randf_range(0.0, TAU)
+	for i in palms:
+		var angle := offset + TAU * i / float(palms) + rng.randf_range(-0.2, 0.2)
+		var r := radius * rng.randf_range(0.3 if lighthouse else 0.0, 0.72)
 		var pos := Vector3(cos(angle) * r, _ground_height(r), sin(angle) * r)
 		_add_palm(pos, rng)
-	_add_lighthouse(Vector3(0.0, _ground_height(0.0) - 0.5, 0.0))
+	if lighthouse:
+		_add_lighthouse(Vector3(0.0, _ground_height(0.0) - 0.5, 0.0))
 
 
 ## Altura del suelo de la loma a una distancia del centro.

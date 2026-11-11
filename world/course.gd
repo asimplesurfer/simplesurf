@@ -1,8 +1,32 @@
 class_name Course
 extends Node3D
-## El circuito: una isla circular en el medio y un anillo de agua alrededor.
-## Arma la isla, las boyas que marcan el borde, la meta, los círculos de
+## El circuito. Dos mapas (GameSettings.TrackLayout):
+## - Isla: un anillo de agua alrededor de una isla circular.
+## - Archipiélago: un recorrido con curvas a izquierda y derecha entre varias
+##   islas (siempre se ven islas alrededor).
+## Arma las islas, las corcheras que marcan el borde, la meta, los círculos de
 ## velocidad y las rocas, y cada frame aplica los choques y los límites.
+
+## Archipiélago: puntos de control del recorrido (x, z), en el sentido de la carrera.
+const ARCHIPELAGO_PATH := [
+	Vector2(0, -110), Vector2(70, -105), Vector2(115, -60), Vector2(100, 0),
+	Vector2(130, 55), Vector2(105, 110), Vector2(45, 115), Vector2(10, 75),
+	Vector2(-45, 100), Vector2(-105, 95), Vector2(-125, 35), Vector2(-80, -5),
+	Vector2(-115, -60), Vector2(-70, -105),
+]
+## Archipiélago: islas (x, z, radio). Las primeras están pegadas al recorrido
+## (adentro del lazo y en las curvas); las últimas, más lejos, de paisaje.
+const ARCHIPELAGO_ISLANDS := [
+	Vector3(-20, -35, 26), Vector3(45, 40, 22), Vector3(-55, 45, 14), Vector3(65, -30, 12),
+	Vector3(175, 0, 30), Vector3(60, 175, 26), Vector3(-25, 140, 14), Vector3(-170, 110, 24),
+	Vector3(-190, -20, 28), Vector3(-60, -60, 10), Vector3(-170, -120, 22), Vector3(40, -175, 30),
+	Vector3(155, -130, 18), Vector3(160, 140, 16),
+	Vector3(-120, 190, 34), Vector3(240, 80, 40), Vector3(250, -90, 30), Vector3(-90, -220, 38),
+	Vector3(120, -240, 28), Vector3(-260, 60, 40), Vector3(20, 250, 36),
+]
+
+## -1: el mapa elegido en el menú (GameSettings.track_layout).
+@export var layout: int = -1
 
 @export var island_radius: float = 45.0
 @export var track_radius: float = 82.0
@@ -23,7 +47,9 @@ var hazards_enabled: bool = true
 var bounds_enabled: bool = true
 
 var track: TrackSpace
+## La isla principal (en el mapa Isla, la del medio).
 var island: Island
+var islands: Array[Island] = []
 var rings: Array[NitroRing] = []
 var rocks: Array[Rock] = []
 
@@ -36,23 +62,54 @@ var _time: float = 0.0
 
 func _ready() -> void:
 	add_to_group("course")
-	track = TrackSpace.new(track_radius, half_width)
+	GameSettings.load_settings()
+	if layout < 0:
+		layout = GameSettings.track_layout
 	_water = get_tree().get_first_node_in_group("water") as Water
 
-	island = Island.new()
-	island.name = "Island"
-	island.radius = island_radius
-	add_child(island)
+	if is_archipelago():
+		track = PathTrack.new(PackedVector2Array(ARCHIPELAGO_PATH), half_width)
+		ring_count = 14
+		rock_count = 16
+		for i in ARCHIPELAGO_ISLANDS.size():
+			var d: Vector3 = ARCHIPELAGO_ISLANDS[i]
+			_add_island(Vector2(d.x, d.y), d.z, i)
+	else:
+		track = TrackSpace.new(track_radius, half_width)
+		_add_island(track.center, island_radius, 0)
+	island = islands[0]
 
 	if _water:
-		_water.set_island(track.center, island_radius + 2.0)
-		_water.set_track(track.center, inner_limit(), outer_limit())
+		var fade: Array[Vector3] = []
+		for isl in islands:
+			fade.append(Vector3(isl.position.x, isl.position.z, isl.radius + 2.0))
+		_water.set_islands(fade)
+		if is_archipelago():
+			_water.set_track(Vector2.ZERO, 0.0, 0.0)
+		else:
+			_water.set_track(track.center, inner_limit(), outer_limit())
 	_build_buoys()
 	_build_finish_line()
 	_place_rings_and_rocks()
 
 
-## Distancia a la que la orilla tira al jugador.
+func is_archipelago() -> bool:
+	return layout == GameSettings.TrackLayout.ARCHIPELAGO
+
+
+func _add_island(center: Vector2, radius: float, index: int) -> void:
+	var isl := Island.new()
+	isl.name = "Island%d" % index
+	isl.radius = radius
+	isl.island_seed = 11 + index * 7
+	# Faro solo en las islas grandes (y en la del medio del mapa Isla).
+	isl.lighthouse = radius >= 26.0 or not is_archipelago()
+	isl.position = Vector3(center.x, 0.0, center.y)
+	add_child(isl)
+	islands.append(isl)
+
+
+## Distancia a la que la orilla de la isla principal tira al jugador.
 func island_crash_radius() -> float:
 	return island_radius + 2.0
 
@@ -87,21 +144,28 @@ func _process(delta: float) -> void:
 
 
 func _apply_to_rider(rider: Rider) -> void:
-	var flat := Vector2(rider.position.x, rider.position.z) - track.center
-	var r := flat.length()
+	var flat := Vector2(rider.position.x, rider.position.z)
 
-	if hazards_enabled and r < island_crash_radius() and not rider.is_fallen():
-		var safe := track.center + flat.normalized() * (island_crash_radius() + 2.0)
-		_crash(rider, Vector3(safe.x, rider.position.y, safe.y))
-		return
+	# Islas: la orilla tira de la tabla.
+	if hazards_enabled and not rider.is_fallen():
+		for isl in islands:
+			var c := Vector2(isl.position.x, isl.position.z)
+			var crash_r := isl.radius + 2.0
+			var d := flat.distance_to(c)
+			if d < crash_r:
+				var dir := (flat - c) / d if d > 0.01 else Vector2.RIGHT
+				var safe := c + dir * (crash_r + 2.0)
+				_crash(rider, Vector3(safe.x, rider.position.y, safe.y))
+				return
 
-	# Las corcheras no dejan salir de la pista (ni hacia afuera ni hacia la isla).
+	# Las corcheras no dejan salir de la pista (por ningún lado).
 	if bounds_enabled:
-		var limit := clampf(r, inner_limit() + 0.6, outer_limit() - 0.6)
-		if limit != r and r > island_crash_radius():
-			var p := track.center + flat.normalized() * limit
+		var loc := track.locate(rider.position)
+		var limit := half_width - 0.6
+		if absf(loc.y) > limit:
+			var p := track.position_at(loc.x, clampf(loc.y, -limit, limit))
 			rider.position.x = p.x
-			rider.position.z = p.y
+			rider.position.z = p.z
 			rider.speed *= 0.97
 
 	if not hazards_enabled:
@@ -127,7 +191,10 @@ func _crash(rider: Rider, safe_position: Vector3) -> void:
 ## Al lado de la roca, hacia adentro o afuera de la pista (del lado donde estaba
 ## el Rider). Así, al seguir en el sentido de la carrera, se aleja de la roca.
 func _safe_position_beside(rock: Rock, rider: Rider) -> Vector3:
-	var radial := (Vector2(rock.position.x, rock.position.z) - track.center).normalized()
+	# Dirección "de costado" de la pista donde está la roca.
+	var a := track.angle_of(rock.position)
+	var side_dir := track.position_at(a, 1.0) - track.position_at(a, 0.0)
+	var radial := Vector2(side_dir.x, side_dir.z).normalized()
 	var rel := Vector2(rider.position.x - rock.position.x, rider.position.z - rock.position.z)
 	var side := 1.0 if rel.dot(radial) >= 0.0 else -1.0
 	var p := Vector2(rock.position.x, rock.position.z) + radial * side * (rock.radius + 2.0)
@@ -147,15 +214,21 @@ func _in_start_zone(angle: float) -> bool:
 func _build_buoys() -> void:
 	var yellow := Color(1.0, 0.82, 0.2)
 	var red := Color(0.95, 0.28, 0.25)
-	_add_rope(inner_limit(), yellow)
-	_add_rope(outer_limit(), red)
-	_add_buoy_circle(inner_limit(), yellow, 24.0)
-	_add_buoy_circle(outer_limit(), red, 24.0)
+	# Adentro (derecha del que corre) amarilla; afuera (izquierda) roja.
+	_add_rope(-half_width, yellow)
+	_add_rope(half_width, red)
+	_add_buoy_circle(-half_width, yellow, 24.0)
+	_add_buoy_circle(half_width, red, 24.0)
+
+
+## Largo del borde a esa distancia de la línea central.
+func _edge_length(lateral: float) -> float:
+	return track.length() * maxf(1.0 + lateral / track.radius, 0.2)
 
 
 ## Corchera: muchos flotadores chicos alternando color y blanco.
-func _add_rope(r: float, color: Color) -> void:
-	var count := int(TAU * r / float_spacing)
+func _add_rope(lateral: float, color: Color) -> void:
+	var count := int(_edge_length(lateral) / float_spacing)
 	var mesh := SphereMesh.new()
 	mesh.radius = 0.3
 	mesh.height = 0.45
@@ -173,7 +246,7 @@ func _add_rope(r: float, color: Color) -> void:
 	mm.instance_count = count
 	for i in count:
 		var a := TAU * i / count
-		var p := track.position_at(a, r - track_radius)
+		var p := track.position_at(a, lateral)
 		mm.set_instance_transform(i, Transform3D(Basis.IDENTITY, p))
 		mm.set_instance_color(i, color if (i / 2) % 2 == 0 else Color(0.97, 0.97, 0.97))
 	var mmi := MultiMeshInstance3D.new()
@@ -185,8 +258,8 @@ func _add_rope(r: float, color: Color) -> void:
 	_ropes.append(mmi)
 
 
-func _add_buoy_circle(r: float, color: Color, spacing: float) -> void:
-	var count := int(TAU * r / spacing)
+func _add_buoy_circle(lateral: float, color: Color, spacing: float) -> void:
+	var count := int(_edge_length(lateral) / spacing)
 	var base_mesh := CylinderMesh.new()
 	base_mesh.top_radius = 0.35
 	base_mesh.bottom_radius = 0.6
@@ -199,7 +272,7 @@ func _add_buoy_circle(r: float, color: Color, spacing: float) -> void:
 	for i in count:
 		var a := TAU * i / count
 		var buoy := Node3D.new()
-		var p := track.position_at(a, r - track_radius)
+		var p := track.position_at(a, lateral)
 		buoy.position = p
 		var base := MeshInstance3D.new()
 		base.mesh = base_mesh
@@ -239,7 +312,8 @@ func _build_finish_line() -> void:
 	# Sin sombra: si no, deja una franja oscura enorme justo en la largada.
 	banner.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	banner.position = (inner + outer) * 0.5 + Vector3(0.0, 9.0, 0.0)
-	# El banner va a lo ancho del circuito (dirección radial en ángulo 0 = eje X).
+	# El banner va a lo ancho del circuito: mirando en el sentido de la carrera.
+	banner.rotation.y = track.heading_at(0.0)
 	add_child(banner)
 
 	# Boyas a cuadros sobre el agua marcando la línea.

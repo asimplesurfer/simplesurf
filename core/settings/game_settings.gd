@@ -10,6 +10,10 @@ enum JumpStyle { WAVES, FREE }
 ## CONSTANT_LEFT: una ola constante a la izquierda (lado de afuera de la pista).
 enum WaveMode { SURGES, CONSTANT_LEFT }
 const WAVE_MODE_NAMES := ["grandes que aparecen", "constante a la izquierda"]
+## CLASSIC: un anillo alrededor de una isla. ARCHIPELAGO: un recorrido con
+## curvas entre varias islas.
+enum TrackLayout { CLASSIC, ARCHIPELAGO }
+const TRACK_LAYOUT_NAMES := ["isla (anillo)", "archipiélago"]
 
 const PATH := "user://settings.cfg"
 const JUMP_MODE_NAMES := ["mantener para cargar", "tocar para saltar"]
@@ -21,6 +25,7 @@ const JUMP_MODE_NAMES := ["mantener para cargar", "tocar para saltar"]
 static var jump_mode: JumpMode = JumpMode.TAP
 static var jump_style: JumpStyle = JumpStyle.WAVES
 static var wave_mode: WaveMode = WaveMode.SURGES
+static var track_layout: TrackLayout = TrackLayout.ARCHIPELAGO
 ## Cuántas personas juegan (pantalla dividida). Se cambia con las teclas 1 / 2.
 static var player_count: int = 1
 ## Avance: true = avanza solo (stick atrás frena); false = stick adelante para avanzar.
@@ -47,6 +52,9 @@ static func load_settings() -> void:
 		split_vertical = bool(cfg.get_value("gameplay", "split_vertical", true))
 		auto_forward = bool(cfg.get_value("gameplay", "auto_forward", true))
 		jump_style = int(cfg.get_value("gameplay", "jump_style", JumpStyle.WAVES)) as JumpStyle
+		track_layout = clampi(
+			int(cfg.get_value("gameplay", "track_layout", TrackLayout.ARCHIPELAGO)), 0, 1
+		) as TrackLayout
 		wave_mode = clampi(int(cfg.get_value("gameplay", "wave_mode", WaveMode.SURGES)), 0, 1) as WaveMode
 		bot_count = clampi(int(cfg.get_value("gameplay", "bot_count", 1)), 0, 3)
 		bot_level = clampi(int(cfg.get_value("gameplay", "bot_level", 1)), 0, 2)
@@ -68,6 +76,7 @@ static func save_settings() -> void:
 	cfg.set_value("gameplay", "auto_forward", auto_forward)
 	cfg.set_value("gameplay", "jump_style", jump_style)
 	cfg.set_value("gameplay", "wave_mode", wave_mode)
+	cfg.set_value("gameplay", "track_layout", track_layout)
 	cfg.set_value("gameplay", "bot_count", bot_count)
 	cfg.set_value("gameplay", "bot_level", bot_level)
 	for i in characters:
@@ -116,3 +125,19 @@ static func toggle_wave_mode() -> void:
 
 static func wave_mode_name() -> String:
 	return WAVE_MODE_NAMES[wave_mode]
+
+
+static func toggle_track_layout() -> void:
+	track_layout = (
+		TrackLayout.CLASSIC if track_layout == TrackLayout.ARCHIPELAGO else TrackLayout.ARCHIPELAGO
+	)
+	save_settings()
+
+
+static func track_layout_name() -> String:
+	return TRACK_LAYOUT_NAMES[track_layout]
+
+
+## Vueltas de la carrera según el mapa (el archipiélago es mucho más largo).
+static func laps_for_layout() -> int:
+	return 3 if track_layout == TrackLayout.ARCHIPELAGO else 5

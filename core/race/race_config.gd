@@ -10,6 +10,7 @@ extends Resource
 ## `player_count` humanos (con sus personajes guardados) y `bot_count` bots.
 static func create(player_count: int, bot_count: int, bot_level: int) -> RaceConfig:
 	var config := RaceConfig.new()
+	config.laps = GameSettings.laps_for_layout()
 	for i in player_count:
 		var slot := RacerSlot.new()
 		slot.kind = RacerSlot.Kind.HUMAN

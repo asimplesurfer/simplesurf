@@ -46,6 +46,12 @@ func _run() -> void:
 		GameSettings.wave_mode == GameSettings.WaveMode.SURGES,
 		"por defecto las olas son grandes que aparecen solas"
 	)
+	_check(
+		GameSettings.track_layout == GameSettings.TrackLayout.ARCHIPELAGO,
+		"por defecto el mapa es el archipiélago"
+	)
+	# Las mecánicas se prueban en el mapa Isla (anillo); el archipiélago, aparte.
+	GameSettings.track_layout = GameSettings.TrackLayout.CLASSIC
 	# Los tests de salto libre van primero; el modo olas se prueba aparte.
 	GameSettings.jump_style = GameSettings.JumpStyle.FREE
 	_test_avatar()
@@ -120,6 +126,7 @@ func _run() -> void:
 	await _test_bot_race()
 	await _test_demo()
 	await _test_memory()
+	await _test_archipelago()
 	_finish()
 
 
@@ -1313,6 +1320,109 @@ func _test_memory() -> void:
 	_check(last.orphans <= first.orphans, "no quedan nodos sueltos (%d -> %d)" % [first.orphans, last.orphans])
 	_check(in_race_growth <= 200, "durante la carrera no crece la memoria (+%d objetos en 10 s)" % in_race_growth)
 	_check(menu_nodes <= 3 and after_menu <= last.nodes + 2, "el menú no se acumula al rearmarse (%d hijos)" % menu_nodes)
+
+
+func _test_archipelago() -> void:
+	print("Mapa archipiélago:")
+	GameSettings.track_layout = GameSettings.TrackLayout.ARCHIPELAGO
+	GameSettings.jump_style = GameSettings.JumpStyle.WAVES
+	var config := RaceConfig.new()
+	config.laps = 1
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 3
+	for level in [2, 2, 1]:
+		var slot := RacerSlot.new()
+		slot.kind = RacerSlot.Kind.BOT
+		slot.display_name = "Bot %d" % level
+		slot.character = CharacterData.random(rng)
+		slot.difficulty = AIDifficulty.preset(level)
+		config.slots.append(slot)
+	var m: Node = load("res://main.tscn").instantiate()
+	var race := m.get_node("RaceManager") as RaceManager
+	race.config = config
+	race.catchup_enabled = false
+	root.add_child(m)
+	await process_frame
+	await process_frame
+	var course := m.get_node("Course") as Course
+	var track := course.track
+	_check(track is PathTrack, "el recorrido no es un círculo")
+	_check(course.islands.size() >= 12, "hay muchas islas (%d)" % course.islands.size())
+	_check(
+		track.length() > 700.0 and track.length() < 1000.0,
+		"una vuelta mide %.0f m" % track.length()
+	)
+	_check(config.laps == 1 and GameSettings.laps_for_layout() == 3, "en el archipiélago se corren 3 vueltas")
+
+	# Ida y vuelta: posición <-> (ángulo, lateral).
+	var roundtrip := true
+	for i in 40:
+		var a := -PI + TAU * i / 40.0
+		var lat := -15.0 + 30.0 * (i % 7) / 6.0
+		var p := track.position_at(a, lat)
+		var back := track.locate(p)
+		if absf(wrapf(back.x - a, -PI, PI)) > 0.02 or absf(back.y - lat) > 0.6:
+			roundtrip = false
+			print("    ida y vuelta: %.2f, %.1f -> %.2f, %.1f" % [a, lat, back.x, back.y])
+	_check(roundtrip, "posiciones y coordenadas de pista coinciden")
+
+	# Curvas a la izquierda y a la derecha.
+	var lefts := 0
+	var rights := 0
+	for i in 200:
+		var a := -PI + TAU * i / 200.0
+		var t0 := track.tangent_at(a)
+		var t1 := track.tangent_at(a + 0.05)
+		var turn := t0.x * t1.z - t0.z * t1.x
+		if turn > 0.01:
+			lefts += 1
+		elif turn < -0.01:
+			rights += 1
+	_check(lefts > 10 and rights > 10, "hay curvas a los dos lados (%d / %d)" % [lefts, rights])
+
+	# Ninguna isla pisa la pista.
+	var clear := true
+	for isl in course.islands:
+		var lat := absf(track.lateral_of(isl.position))
+		if lat < track.half_width + isl.radius + 4.0:
+			clear = false
+			print("    isla en %s muy cerca (%.1f m)" % [isl.position, lat])
+	_check(clear, "las islas no pisan la pista")
+	# Desde cualquier lugar de la pista se ven islas cerca.
+	var always_islands := true
+	for i in 30:
+		var p := track.position_at(-PI + TAU * i / 30.0)
+		var near := 0
+		for isl in course.islands:
+			if Vector2(p.x - isl.position.x, p.z - isl.position.z).length() < 130.0:
+				near += 1
+		if near < 2:
+			always_islands = false
+	_check(always_islands, "siempre hay islas a la vista")
+
+	# Los bots dan la vuelta sin chocar islas.
+	var island_crashes := [0]
+	for r in race.racers:
+		r.crashed.connect(func() -> void:
+			for isl in course.islands:
+				if Vector2(r.position.x - isl.position.x, r.position.z - isl.position.z).length() < isl.radius + 8.0:
+					island_crashes[0] += 1
+		)
+	var finished := false
+	for i in int(150.0 * FPS):
+		if race.state == RaceManager.State.FINISHED:
+			finished = true
+			break
+		await process_frame
+	var all_done := true
+	for r in race.racers:
+		if not race.finished(r):
+			all_done = false
+	_check(finished or all_done, "los bots completan la vuelta del archipiélago")
+	_check(island_crashes[0] <= 1, "casi sin chocar islas (%d)" % island_crashes[0])
+	m.queue_free()
+	await process_frame
+	GameSettings.track_layout = GameSettings.TrackLayout.CLASSIC
 
 
 func _finish() -> void:

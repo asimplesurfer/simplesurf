@@ -22,8 +22,9 @@ uniform vec4 swell_a7; uniform vec4 swell_b7;
 // Ola constante (ver ring_wave.gd). a = (centro.x, centro.z, radio, ancho); b = (amplitud, base, lóbulos, fase)
 uniform vec4 ring_a = vec4(0.0, 0.0, 1.0, 1.0);
 uniform vec4 ring_b = vec4(0.0);
-// Isla (x, z, radio): las olas grandes se apagan cerca de la orilla. Radio 0 = sin isla.
-uniform vec3 island = vec3(0.0);
+// Islas (x, z, radio): las olas grandes se apagan cerca de cada orilla.
+uniform vec3 islands[16];
+uniform int island_count = 0;
 // Pista (centro x, centro z, radio de adentro, radio de afuera). 0 = sin pista.
 uniform vec4 track_band = vec4(0.0);
 uniform vec3 outside_color : source_color = vec3(0.02, 0.17, 0.34);
@@ -108,11 +109,15 @@ void add_ring(vec2 p, inout float h, inout vec2 g, inout float crest) {
 }
 
 float island_fade(vec2 p) {
-	if (island.z <= 0.0) {
-		return 1.0;
+	float fade = 1.0;
+	for (int i = 0; i < 16; i++) {
+		if (i >= island_count) {
+			break;
+		}
+		float d = distance(p, islands[i].xy);
+		fade *= smoothstep(islands[i].z + 4.0, islands[i].z + 28.0, d);
 	}
-	float d = distance(p, island.xy);
-	return smoothstep(island.z + 4.0, island.z + 28.0, d);
+	return fade;
 }
 
 void vertex() {

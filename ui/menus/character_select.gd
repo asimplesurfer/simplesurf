@@ -11,7 +11,7 @@ signal start_requested
 
 const RACE_SCENE := "res://main.tscn"
 const ROWS_PLAYER := ["Peso", "Piel", "Short", "Tabla"]
-const ROWS_GLOBAL := ["Bots", "Dificultad", "Olas"]
+const ROWS_GLOBAL := ["Bots", "Dificultad", "Olas", "Mapa"]
 const WEIGHT_STEP := 0.05
 const REPEAT_DELAY := 0.35
 const REPEAT_RATE := 0.1
@@ -248,6 +248,8 @@ func _change(p: Dictionary, row: String, step: int) -> void:
 			GameSettings.bot_level = clampi(GameSettings.bot_level + step, 0, 2)
 		"Olas":
 			GameSettings.toggle_wave_mode()
+		"Mapa":
+			GameSettings.toggle_track_layout()
 	var avatar: Avatar = p.avatar
 	avatar.rebuild()
 
@@ -338,6 +340,8 @@ func _refresh(p: Dictionary) -> void:
 				value = AIDifficulty.NAMES[GameSettings.bot_level]
 			"Olas":
 				value = GameSettings.wave_mode_name()
+			"Mapa":
+				value = GameSettings.track_layout_name()
 		var selected: bool = i == p.row and not p.ready
 		labels[i].text = ("> " if selected else "   ") + "%s:  < %s >" % [row, value]
 		labels[i].add_theme_color_override("font_color", YELLOW if selected else Color.WHITE)
