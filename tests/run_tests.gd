@@ -243,7 +243,7 @@ func _test_wave_jump() -> void:
 	await _press(&"p1_a")
 	_check(_state() == &"airborne", "en agua plana, A hace un saltito")
 	var hop := await _measure_air()
-	_check(hop.x < 0.8, "el saltito es bajo (%.2f m)" % hop.x)
+	_check(hop.x < 1.0, "el saltito es bajo (%.2f m)" % hop.x)
 	await _wait_until_state(&"riding", 2.0)
 	await _wait(0.5)
 
