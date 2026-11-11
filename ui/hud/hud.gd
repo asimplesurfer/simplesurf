@@ -242,6 +242,7 @@ func _update_help() -> void:
 		+ "Salto: %s (O cambia)   ·   Pantalla dividida: V\n" % GameSettings.jump_style_name()
 		+ "Truco: en el aire, mantener ESPACIO / botón de abajo\n"
 		+ "Derrapar: SHIFT o botón izquierdo / RB   ·   Turbo: E o botón derecho\n"
+		+ "Mirar atrás: Q o gatillo izquierdo\n"
 		+ "Levantarse: spamear ESPACIO o botón de abajo   ·   Caerse (prueba): F\n"
 		+ "J2: flechas, ENTER salta, . derrapa, - turbo   ·   Esc: menú\n"
 		+ "Olas: %s (se cambia en el menú)\n" % GameSettings.wave_mode_name()

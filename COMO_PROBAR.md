@@ -42,6 +42,7 @@ Ojo: ese zip no funciona con doble clic en `index.html`, necesita un servidor we
 | Turbo (gasta nitro) | E | - | Botón derecho (B / ○) |
 | Levantarse (spamear) | Espacio | Enter | Botón de abajo |
 | Caerse (para probar) | F | Retroceso | Botón de arriba (Y / △) |
+| Mirar atrás (mantener) | Q | , | Gatillo izquierdo (LT / L2) |
 
 Con 1 jugador, J1 también puede usar las flechas.
 

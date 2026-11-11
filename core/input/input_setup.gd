@@ -27,6 +27,8 @@ const PAD_BUTTONS := {
 		"left": JOY_BUTTON_X,
 		"top": JOY_BUTTON_Y,
 		"rb": JOY_BUTTON_RIGHT_SHOULDER,
+		# El gatillo izquierdo en los mandos estándar es un eje (se agrega aparte).
+		"lt": -1,
 		"start": JOY_BUTTON_START,
 		"select": JOY_BUTTON_BACK,
 	},
@@ -36,6 +38,7 @@ const PAD_BUTTONS := {
 		"left": 3,
 		"top": 0,
 		"rb": 5,
+		"lt": 6,
 		"start": 9,
 		"select": 8,
 	},
@@ -47,6 +50,7 @@ const BUTTON_ROLES := {
 	"b": ["right"],
 	"drift": ["left", "rb"],
 	"debug_fall": ["top"],
+	"look_back": ["lt"],
 	"start": ["start"],
 	"select": ["select"],
 }
@@ -62,6 +66,7 @@ const KEYBOARD_1P := {
 		"drift": [KEY_SHIFT, KEY_L],
 		"b": [KEY_E, KEY_K],
 		"debug_fall": [KEY_F],
+		"look_back": [KEY_Q],
 	},
 }
 const KEYBOARD_2P := {
@@ -74,6 +79,7 @@ const KEYBOARD_2P := {
 		"drift": [KEY_SHIFT],
 		"b": [KEY_E],
 		"debug_fall": [KEY_F],
+		"look_back": [KEY_Q],
 	},
 	1: {
 		"left": [KEY_LEFT],
@@ -84,6 +90,7 @@ const KEYBOARD_2P := {
 		"drift": [KEY_PERIOD, KEY_KP_1],
 		"b": [KEY_SLASH, KEY_KP_2],
 		"debug_fall": [KEY_BACKSPACE],
+		"look_back": [KEY_COMMA],
 	},
 }
 
@@ -115,6 +122,8 @@ static func ensure_player_actions(player_index: int) -> void:
 	_joy_button(p + "right", device, JOY_BUTTON_DPAD_RIGHT)
 	_joy_button(p + "up", device, JOY_BUTTON_DPAD_UP)
 	_joy_button(p + "down", device, JOY_BUTTON_DPAD_DOWN)
+	# Mirar atrás: gatillo izquierdo (eje en los mandos estándar).
+	_joy_axis(p + "look_back", device, JOY_AXIS_TRIGGER_LEFT, 1.0)
 	set_pad_layout(player_index, PadLayout.STANDARD)
 
 	if player_index == 0:
@@ -156,7 +165,9 @@ static func set_pad_layout(player_index: int, layout: PadLayout) -> void:
 			if ev is InputEventJoypadButton:
 				InputMap.action_erase_event(action_name, ev)
 		for role in BUTTON_ROLES[action]:
-			_joy_button(action_name, device, PAD_BUTTONS[layout][role])
+			var button: int = PAD_BUTTONS[layout][role]
+			if button >= 0:
+				_joy_button(action_name, device, button)
 
 
 ## Adivina la distribución del mando. En el navegador, los mandos que no se

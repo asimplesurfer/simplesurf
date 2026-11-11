@@ -100,6 +100,7 @@ func get_input(_delta: float) -> RiderInput:
 	input.trick = Input.is_action_pressed(_prefix + "a")
 	input.drift = Input.is_action_pressed(_prefix + "drift")
 	input.turbo = Input.is_action_pressed(_prefix + "b")
+	input.look_back = Input.is_action_pressed(_prefix + "look_back")
 	input.jump_pressed = _pending_mash > 0
 	input.mash_presses = _pending_mash
 	input.debug_fall = _pending_debug_fall
