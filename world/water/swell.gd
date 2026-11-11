@@ -23,6 +23,10 @@ var fade_time: float = 2.5
 
 var age: float = 0.0
 var amplitude: float = 0.0
+## 0 mientras crece; sube a 1 apenas llega a su máximo (rompe: labio y espuma).
+var breaking: float = 0.0
+## Tiempo que tarda en romper del todo después de llegar al máximo (s).
+const BREAK_TIME := 1.2
 
 
 func update(delta: float) -> void:
@@ -30,6 +34,12 @@ func update(delta: float) -> void:
 	center += direction * speed * delta
 	var k := minf(age / grow_time, 1.0) * clampf((lifetime - age) / fade_time, 0.0, 1.0)
 	amplitude = max_amplitude * smoothstep(0.0, 1.0, k)
+	breaking = clampf((age - grow_time) / BREAK_TIME, 0.0, 1.0)
+
+
+## Que se termine pronto (ya pasó y no le sirve a nadie): se desvanece.
+func retire() -> void:
+	lifetime = minf(lifetime, age + fade_time)
 
 
 func is_dead() -> bool:
@@ -83,4 +93,5 @@ func shader_a() -> Vector4:
 
 
 func shader_b() -> Vector4:
-	return Vector4(amplitude, width, half_length, edge)
+	# El borde (edge) es fijo en el shader (8 m); el último valor es lo que rompió.
+	return Vector4(amplitude, width, half_length, breaking)

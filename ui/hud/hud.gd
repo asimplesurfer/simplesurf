@@ -42,6 +42,8 @@ var _nitro_bar: ProgressBar
 var _message: Label
 var _speed_lines: ColorRect
 var _pop_label: Label
+## Aviso de ola grande que viene de frente.
+var _wave_label: Label
 var _nitro_label: Label
 var _speed_lines_material: ShaderMaterial
 var _message_time: float = 0.0
@@ -172,6 +174,8 @@ func _process(delta: float) -> void:
 		_pop_label.pivot_offset = _pop_label.size * 0.5
 		_pop_label.scale = Vector2.ONE * (1.0 + 0.12 * sin(Time.get_ticks_msec() * 0.025))
 
+	_update_wave_warning(pop)
+
 	_speed_label.text = "%d km/h" % roundi(rider.speed * 3.6)
 	# Handicap: muestra cuánto más rápido carga el nitro.
 	var mult := rider.nitro_gain_mult()
@@ -222,6 +226,45 @@ func _update_mash(delta: float) -> void:
 	_flash = move_toward(_flash, 0.0, delta * 6.0)
 	_mash_title.pivot_offset = _mash_title.size * 0.5
 	_mash_title.scale = Vector2.ONE * (1.0 + 0.15 * _flash)
+
+
+## Ola grande adelante que viene hacia el jugador: "se viene" mientras crece y
+## "rompiendo" cuando ya llegó a su máximo.
+func _update_wave_warning(pop_showing: bool) -> void:
+	var swell := incoming_wave()
+	_wave_label.visible = swell != null and not pop_showing and rider.grounded
+	if not _wave_label.visible:
+		return
+	if swell.breaking > 0.3:
+		_wave_label.text = "¡ESTÁ ROMPIENDO!"
+		_wave_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))
+	else:
+		_wave_label.text = "¡SE VIENE UNA OLA!"
+		_wave_label.add_theme_color_override("font_color", Color(0.45, 0.95, 1.0))
+	_wave_label.pivot_offset = _wave_label.size * 0.5
+	_wave_label.scale = Vector2.ONE * (1.0 + 0.06 * sin(Time.get_ticks_msec() * 0.012))
+
+
+## La ola grande más cercana que viene de frente, adelante (o null).
+func incoming_wave() -> Swell:
+	if rider == null or rider.water == null or not rider.is_human:
+		return null
+	var pos := Vector2(rider.global_position.x, rider.global_position.z)
+	var f := rider.forward()
+	var fwd := Vector2(f.x, f.z).normalized()
+	var best: Swell = null
+	var best_d := INF
+	for s in rider.water.swells:
+		if s.amplitude < 1.2:
+			continue
+		var rel := s.center - pos
+		var ahead := rel.dot(fwd)
+		var side := absf(rel.dot(Vector2(-fwd.y, fwd.x)))
+		if ahead > 8.0 and ahead < 75.0 and side < s.half_length and s.direction.dot(-fwd) > 0.3:
+			if ahead < best_d:
+				best_d = ahead
+				best = s
+	return best
 
 
 func _button_name() -> String:
@@ -348,6 +391,15 @@ func _build() -> void:
 	root.add_child(_message)
 
 	# Botón del pop (en la cresta de la ola), un poco abajo del centro.
+	_wave_label = _make_label(30, Color(0.45, 0.95, 1.0))
+	_wave_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_wave_label.offset_left = -300.0
+	_wave_label.offset_right = 300.0
+	_wave_label.offset_top = 70.0
+	_wave_label.offset_bottom = 110.0
+	_wave_label.visible = false
+	root.add_child(_wave_label)
+
 	_pop_label = _make_label(64, PROMPT_COLOR)
 	_pop_label.set_anchors_preset(Control.PRESET_CENTER)
 	_pop_label.offset_left = -250.0

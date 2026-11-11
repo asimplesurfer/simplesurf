@@ -1188,6 +1188,42 @@ func _test_swells() -> void:
 			break
 		await process_frame
 	_check(launched, "subir una ola grande con velocidad lo lanza al aire")
+	_set_action(&"p1_up", false)
+	await _wait_until_state(&"riding", 3.0)
+	await _wait(0.5)
+
+	# Ciclo de la ola: crece ("se viene"), llega al máximo y rompe.
+	_water.clear_swells()
+	var w := Swell.new()
+	var fw := _rider.forward()
+	var spot := _rider.global_position + fw * 45.0
+	w.center = Vector2(spot.x, spot.z)
+	w.direction = -Vector2(fw.x, fw.z).normalized()
+	w.speed = 0.0
+	w.max_amplitude = 3.0
+	w.width = 5.5
+	w.half_length = 20.0
+	w.lifetime = 100.0
+	w.grow_time = 2.0
+	_water.add_swell(w)
+	_rider.speed = 0.0
+	await _wait(1.0)
+	var hud := (_main.get_node("Views") as SplitScreen).huds[0]
+	_check(w.breaking == 0.0 and w.amplitude < w.max_amplitude, "mientras crece todavía no rompe")
+	_check(
+		hud._wave_label.visible and hud._wave_label.text.contains("SE VIENE"),
+		"en pantalla: se viene una ola (%s)" % hud._wave_label.text
+	)
+	await _wait(2.5)
+	_check(w.breaking > 0.9, "al llegar a su máximo rompe (%.2f)" % w.breaking)
+	_check(
+		hud._wave_label.visible and hud._wave_label.text.contains("ROMPIENDO"),
+		"en pantalla: está rompiendo (%s)" % hud._wave_label.text
+	)
+	_check(is_equal_approx(w.shader_b().w, w.breaking), "el shader recibe cuánto rompió la ola")
+	w.retire()
+	await _wait(w.fade_time + 0.2)
+	_check(_water.swells.is_empty(), "una ola retirada se desvanece y desaparece")
 
 
 ## Mantiene A `seconds` en el agua y suelta (salto cargado).
@@ -1409,11 +1445,27 @@ func _test_archipelago() -> void:
 					island_crashes[0] += 1
 		)
 	var finished := false
+	var waves := m.get_node("WaveManager") as WaveManager
+	var lead: Rider = race.racers[0]
+	var gap := 0.0
+	var longest_gap := 0.0
+	var racing_time := 0.0
 	for i in int(150.0 * FPS):
 		if race.state == RaceManager.State.FINISHED:
 			finished = true
 			break
+		if race.state == RaceManager.State.RACING and not race.finished(lead):
+			racing_time += 1.0 / FPS
+			if waves.has_wave_ahead(lead):
+				gap = 0.0
+			else:
+				gap += 1.0 / FPS
+				longest_gap = maxf(longest_gap, gap)
 		await process_frame
+	_check(
+		racing_time > 10.0 and longest_gap < 3.0,
+		"siempre hay una ola grande viniendo (el rato más largo sin ola: %.1f s)" % longest_gap
+	)
 	var all_done := true
 	for r in race.racers:
 		if not race.finished(r):
