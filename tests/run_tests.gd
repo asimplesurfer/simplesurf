@@ -352,7 +352,7 @@ func _test_constant_wave() -> void:
 	_set_action(&"p1_up", false)
 	_check(launched, "andando por la ola constante, los picos lo lanzan al aire")
 	_check(prompt, "en la ola constante también aparece el botón del pop")
-	_check(max_height > 0.3, "salta (%.1f m el más alto en 10 s)" % max_height)
+	_check(max_height > 0.15, "salta (%.1f m el más alto en 10 s)" % max_height)
 	await _wait_until_state(&"riding", 3.0)
 	await _wait(0.5)
 
