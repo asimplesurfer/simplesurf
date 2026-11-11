@@ -145,8 +145,6 @@ func _unhandled_input(event: InputEvent) -> void:
 	var key := event as InputEventKey
 	if key and key.pressed and not key.echo and key.physical_keycode == KEY_H:
 		_help.visible = not _help.visible
-	if key and key.pressed and not key.echo and key.physical_keycode == KEY_P:
-		show_fps = not show_fps
 
 
 func _process(delta: float) -> void:
