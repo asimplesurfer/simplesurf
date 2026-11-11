@@ -76,7 +76,9 @@ var _leaves: Array[Transform3D] = []
 func _add_palm(pos: Vector3, rng: RandomNumberGenerator) -> void:
 	var height := rng.randf_range(6.0, 9.0)
 	var tilt := Basis.from_euler(Vector3(rng.randf_range(-0.12, 0.12), 0.0, rng.randf_range(-0.12, 0.12)))
-	_trunks.append(Transform3D(tilt.scaled(Vector3(1.0, height, 1.0)), pos + Vector3(0.0, height * 0.5, 0.0)))
+	# La malla del tronco mide 7.5 m: se escala poco (escalar mucho arruina la luz).
+	var stretch := height / 7.5
+	_trunks.append(Transform3D(tilt * Basis.from_scale(Vector3(1.0, stretch, 1.0)), pos + Vector3(0.0, height * 0.5, 0.0)))
 	var top := pos + Vector3(0.0, height, 0.0)
 	for k in 6:
 		var a := TAU * k / 6.0
@@ -90,7 +92,7 @@ func _build_palms() -> void:
 	var trunk := CylinderMesh.new()
 	trunk.top_radius = 0.25
 	trunk.bottom_radius = 0.45
-	trunk.height = 1.0
+	trunk.height = 7.5
 	trunk.radial_segments = 8
 	trunk.material = ToonMaterial.make(TRUNK, 0.05)
 	_add_multimesh(trunk, _trunks, "Trunks")
