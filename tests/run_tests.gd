@@ -637,6 +637,18 @@ func _test_turbo_and_wrong_way() -> void:
 	_check(_rider.nitro == 0.0, "el turbo se acaba con el nitro")
 	_check(not _rider.turbo_active, "sin nitro no hay turbo")
 	_set_action(&"p1_b", false)
+	await process_frame
+	# Con gotitas de nitro (como las del handicap) no se puede sostener el turbo:
+	# hace falta un mínimo para arrancarlo.
+	_rider.reset_nitro()
+	_rider.add_nitro(0.05)
+	_check(not _rider.turbo_request(true), "con gotitas de nitro el turbo no arranca")
+	_rider.turbo_request(false)
+	_rider.reset_nitro()
+	_rider.add_nitro(0.2)
+	_check(_rider.turbo_request(true), "soltando y con nitro suficiente, el turbo vuelve")
+	_rider.turbo_request(false)
+	_rider.reset_nitro()
 
 	print("Al revés:")
 	_course.bounds_enabled = true
@@ -810,33 +822,42 @@ func _test_get_up() -> void:
 	await _wait(1.0)
 	_check(_rider.is_fallen(), "sin pulsar nada sigue caído")
 
-	await _mash(2.0, 3.0)
-	_check(
-		_rider.recovery_stage == Rider.RecoveryStage.IN_WATER,
-		"spamear lento (2 por segundo) no alcanza para subirse"
-	)
-
-	await _mash(8.0, 1.0)
-	_check(
-		_rider.recovery_stage == Rider.RecoveryStage.PRONE,
-		"spamear rápido lo sube acostado a la tabla en ~1 s"
-	)
-	_check(_rider.is_fallen(), "acostado todavía no está parado")
+	# Una sola barra que se llena con una cantidad fija de pulsaciones y no baja.
 	var hud := (_main.get_node("Views") as SplitScreen).huds[0]
+	await _press(&"p1_a")
+	await _press(&"p1_a")
 	await process_frame
+	var after_two: float = hud._mash_bar.value
+	await _wait(2.0)
+	_check(
+		after_two > 0.25 and is_equal_approx(hud._mash_bar.value, after_two),
+		"la barra no baja si dejás de spamear (%.2f -> %.2f)" % [after_two, hud._mash_bar.value]
+	)
+	_check(_rider.recovery_stage == Rider.RecoveryStage.IN_WATER, "con 2 pulsaciones sigue en el agua")
+
+	await _press(&"p1_a")
+	await process_frame
+	_check(_rider.recovery_stage == Rider.RecoveryStage.PRONE, "con 3 pulsaciones se sube a la tabla")
+	_check(_rider.is_fallen(), "acostado todavía no está parado")
 	_check(
 		hud._mash_bar.value >= 0.5 and hud._mash_bar.value < 1.0,
 		"una sola barra: acostado ya está por la mitad (%.2f)" % hud._mash_bar.value
 	)
+	# Sin pausa: se puede seguir spameando enseguida, mientras se sube.
+	await _press(&"p1_a")
+	await process_frame
+	_check(hud._mash_bar.value > 0.6, "sigue sumando mientras se sube, sin pausa (%.2f)" % hud._mash_bar.value)
 
 	await _wait(3.0)
 	_check(_rider.is_fallen(), "si deja de spamear se queda acostado")
 
 	var frames_before := Engine.get_process_frames()
-	await _mash_until_standing(8.0, 4.0)
+	await _press(&"p1_a")
+	await _press(&"p1_a")
+	await _wait(0.6)
 	var seconds := float(Engine.get_process_frames() - frames_before) / FPS
-	_check(not _rider.is_fallen(), "seguir spameando lo pone de pie")
-	_check(seconds < 1.3, "pararse desde acostado tarda poco (%.2f s)" % seconds)
+	_check(not _rider.is_fallen(), "6 pulsaciones en total: de pie")
+	_check(seconds < 1.0, "pararse tarda poco (%.2f s)" % seconds)
 	_check(_rider.recovery_stage == Rider.RecoveryStage.STANDING, "etapa = parado")
 
 

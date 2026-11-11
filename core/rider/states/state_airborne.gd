@@ -45,13 +45,19 @@ func update(delta: float, input: RiderInput) -> void:
 	rider.apply_steer(input.steer, delta, stats.air_turn_factor)
 	rider.move_forward(delta)
 
-	# En el saltito no se puede hacer truco (no daría el tiempo).
-	if input.trick and rider.can_trick:
+	# El truco solo arranca si da el tiempo de completar una vuelta antes de
+	# tocar el agua (si no, ni empieza: así no te caés por algo imposible).
+	# En el saltito tampoco se puede.
+	if rider.trick_angle <= 0.0 and rider.time_to_land() < TAU / stats.trick_spin_speed + 0.08:
+		_hold_time = 0.0
+	elif input.trick and rider.can_trick:
 		_hold_time += delta
 	else:
 		_hold_time = 0.0
 
-	if input.trick and rider.can_trick and _hold_time >= stats.trick_hold_delay:
+	if input.trick and rider.can_trick and _hold_time >= stats.trick_hold_delay and (
+		rider.trick_angle > 0.0 or rider.time_to_land() >= TAU / stats.trick_spin_speed + 0.08
+	):
 		# Girando: la tabla rota y se carga nitro.
 		rider.trick_angle += stats.trick_spin_speed * delta
 		_pending_nitro += stats.trick_nitro_rate * delta
@@ -67,9 +73,12 @@ func update(delta: float, input: RiderInput) -> void:
 	if thin > 0.0:
 		_reached_thin_air = true
 
-	if input.turbo and rider.nitro > 0.0:
+	if rider.turbo_request(input.turbo):
 		_air_turbo_time += delta
 		var lift := stats.air_turbo_lift * exp(stats.air_turbo_growth * _air_turbo_time)
+		# En el saltito el turbo no levanta (las olitas no sirven de impulso).
+		if not rider.can_trick:
+			lift = 0.0
 		# En el aire fino el turbo no le gana a la gravedad: sigue subiendo
 		# un poco por inercia, hace la curva y después planea al bajar.
 		if _reached_thin_air:

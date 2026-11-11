@@ -76,6 +76,7 @@ var can_trick: bool = true
 var catchup: float = 0.0
 var water: Water
 
+var _turbo_on: bool = false
 var _steer_smoothed: float = 0.0
 
 @onready var controller: BaseController = $Controller
@@ -103,7 +104,9 @@ func _process(delta: float) -> void:
 		input = RiderInput.new()
 	motivation_timer = maxf(0.0, motivation_timer - delta)
 	pop_buffer = maxf(0.0, pop_buffer - delta)
-	if catchup > 0.0 and not controls_locked:
+	# Handicap: nitro de a poco (no mientras se aprieta el turbo, así no se
+	# puede usar el turbo sin fin).
+	if catchup > 0.0 and not controls_locked and not input.turbo:
 		add_nitro(stats.catchup_nitro_trickle * catchup * delta)
 	if wave_air_time >= 0.0:
 		wave_air_time += delta
@@ -153,7 +156,7 @@ func apply_throttle(throttle: float, delta: float, turbo: bool = false) -> void:
 	if motivation_timer > 0.0:
 		target = maxf(target, top * stats.motivation_speed_mult)
 		rate *= 2.0
-	if turbo and nitro > 0.0:
+	if turbo_request(turbo):
 		turbo_active = true
 		target = maxf(target, top * stats.turbo_speed_mult)
 		rate = stats.acceleration * stats.turbo_accel_mult
@@ -161,6 +164,18 @@ func apply_throttle(throttle: float, delta: float, turbo: bool = false) -> void:
 	if speed > target:
 		rate = stats.brake_decel if throttle < -0.1 else stats.coast_decel
 	speed = move_toward(speed, target, rate * delta)
+
+
+## Turbo: devuelve true si puede usarse este frame. Hace falta un mínimo de
+## nitro para arrancarlo; si se vacía, se corta hasta soltar el botón y volver
+## a tener ese mínimo (no se puede sostener con gotitas de nitro).
+func turbo_request(pressed: bool) -> bool:
+	if not pressed or nitro <= 0.0:
+		_turbo_on = false
+		return false
+	if not _turbo_on and nitro >= stats.turbo_min_nitro:
+		_turbo_on = true
+	return _turbo_on
 
 
 ## Mini sprint automático tras pasar por un círculo o tirar a alguien.
@@ -192,7 +207,13 @@ func water_height() -> float:
 func stick_to_water(delta: float, allow_launch: bool = true) -> bool:
 	var h := water_height()
 	var ballistic_y := position.y + vertical_speed * delta - 0.5 * stats.gravity * delta * delta
-	if allow_launch and vertical_speed > stats.min_launch_speed and ballistic_y > h:
+	# Solo las olas grandes lanzan; las olitas de fondo son decorado.
+	if (
+		allow_launch
+		and vertical_speed > stats.min_launch_speed
+		and ballistic_y > h
+		and on_big_wave(0.3)
+	):
 		position.y = ballistic_y
 		var boost := stats.wave_launch_boost * jump_mult()
 		if turbo_active:
@@ -233,9 +254,34 @@ func pop_ready() -> bool:
 	if GameSettings.jump_style != GameSettings.JumpStyle.WAVES or did_pop or is_fallen():
 		return false
 	if grounded:
-		var on_swell := water != null and water.swell_height_at(position.x, position.z) > 0.8
-		return on_swell and vertical_speed > stats.pop_min_climb + 1.0 and pop_buffer <= 0.0
+		return (
+			on_big_wave(0.8)
+			and vertical_speed > stats.pop_min_climb + 1.0
+			and pop_buffer <= 0.0
+			and crest_soon()
+		)
 	return wave_air_time >= 0.0 and wave_air_time < stats.pop_window
+
+
+## true si está sobre una ola grande (o la ola constante) de al menos esa altura.
+func on_big_wave(min_height: float) -> bool:
+	return water != null and water.swell_height_at(position.x, position.z) > min_height
+
+
+## true si la cresta llega dentro de la ventana del pop: un poco más adelante
+## la ola ya casi no sube (o baja).
+func crest_soon() -> bool:
+	if water == null:
+		return false
+	var ahead := position + forward() * speed * stats.pop_window
+	var rise := water.height_at(ahead.x, ahead.z) - water_height()
+	return rise < vertical_speed * stats.pop_window * 0.5
+
+
+## Segundos hasta tocar el agua si sigue cayendo así (estimado, agua quieta).
+func time_to_land() -> float:
+	var above := maxf(position.y - water_height(), 0.0)
+	return (vertical_speed + sqrt(vertical_speed * vertical_speed + 2.0 * stats.gravity * above)) / stats.gravity
 
 
 ## Modo olas: saltito en agua plana (no alcanza para un truco).
@@ -264,7 +310,8 @@ func update_air(delta: float) -> bool:
 	vertical_speed -= stats.gravity * delta
 	position.y += vertical_speed * delta
 	var h := water_height()
-	if position.y <= h and vertical_speed <= 0.0:
+	# Toca el agua al bajar, o si una ola lo alcanza desde abajo.
+	if position.y <= h:
 		position.y = h
 		grounded = true
 		wave_air_time = -1.0
