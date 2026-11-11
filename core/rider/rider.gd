@@ -81,6 +81,8 @@ var water: Water
 var _turbo_on: bool = false
 ## Para no repetir el "atravesar la ola" seguido.
 var _punch_cooldown: float = 0.0
+## Apretó A fuera de tiempo en esta ola: ya no hay pop hasta la próxima.
+var pop_locked: bool = false
 var _prev_vertical_speed: float = 0.0
 var _steer_smoothed: float = 0.0
 
@@ -108,7 +110,14 @@ func _process(delta: float) -> void:
 	if controls_locked:
 		input = RiderInput.new()
 	motivation_timer = maxf(0.0, motivation_timer - delta)
-	pop_buffer = maxf(0.0, pop_buffer - delta)
+	if pop_buffer > 0.0:
+		pop_buffer = maxf(0.0, pop_buffer - delta)
+		# Apretó y la ola no lo lanzó a tiempo: se le pasó el momento.
+		if pop_buffer <= 0.0 and grounded:
+			pop_locked = true
+	# Fuera de las olas grandes se vuelve a poder (para la próxima ola).
+	if grounded and pop_locked and not on_big_wave(0.1):
+		pop_locked = false
 	_punch_cooldown = maxf(0.0, _punch_cooldown - delta)
 	# Handicap: nitro de a poco (no mientras se aprieta el turbo, así no se
 	# puede usar el turbo sin fin).
@@ -271,7 +280,7 @@ func _check_wave_punch() -> void:
 ## Modo olas: true en el momento justo para el pop (subiendo una ola grande o
 ## apenas la ola lo lanzó). El HUD muestra el botón.
 func pop_ready() -> bool:
-	if GameSettings.jump_style != GameSettings.JumpStyle.WAVES or did_pop or is_fallen():
+	if GameSettings.jump_style != GameSettings.JumpStyle.WAVES or did_pop or is_fallen() or pop_locked:
 		return false
 	if grounded:
 		return (
@@ -315,9 +324,25 @@ func hop() -> void:
 	jumped.emit()
 
 
+## Modo olas: A apretado en una ola grande. Cuenta solo si la cresta está por
+## llegar (o recién lo lanzó); si es antes de tiempo, se pierde el pop de esta ola.
+func try_pop_press() -> void:
+	if pop_locked or did_pop:
+		return
+	if grounded:
+		if crest_soon() and vertical_speed > stats.pop_min_climb:
+			pop_buffer = stats.pop_window
+		else:
+			pop_locked = true
+	elif wave_air_time >= 0.0 and wave_air_time < stats.pop_window:
+		do_pop()
+	else:
+		pop_locked = true
+
+
 ## Modo olas: apretar A en la ola hace salir mucho más alto.
 func do_pop() -> void:
-	if did_pop:
+	if did_pop or pop_locked:
 		return
 	did_pop = true
 	pop_buffer = 0.0
@@ -336,6 +361,7 @@ func update_air(delta: float) -> bool:
 		position.y = h
 		grounded = true
 		wave_air_time = -1.0
+		pop_locked = false
 		landed.emit()
 		return true
 	return false

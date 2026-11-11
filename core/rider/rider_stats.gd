@@ -34,7 +34,7 @@ extends Resource
 @export var pop_extra: float = 1.0
 ## Modo olas: segundos que se recuerda el A apretado subiendo la ola (y
 ## después del lanzamiento en los que todavía vale el pop).
-@export var pop_window: float = 0.15
+@export var pop_window: float = 0.12
 ## Velocidad hacia arriba subiendo una ola para que A cuente como pop (m/s).
 @export var pop_min_climb: float = 1.5
 ## Velocidad vertical mínima para que una ola te lance al aire (m/s).

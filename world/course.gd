@@ -181,7 +181,7 @@ func _apply_to_rider(rider: Rider) -> void:
 			var p := track.position_at(loc.x, clampf(loc.y, -limit, limit))
 			rider.position.x = p.x
 			rider.position.z = p.z
-			rider.speed *= 0.97
+			_slide_along_edge(rider, loc, signf(loc.y))
 
 	if not hazards_enabled:
 		return
@@ -194,6 +194,29 @@ func _apply_to_rider(rider: Rider) -> void:
 	if not rider.is_fallen():
 		for ring in rings:
 			ring.try_collect(rider, _time)
+
+
+## Contra la corchera: se desliza a lo largo de ella. Se le saca solo la parte
+## del rumbo que va hacia afuera (sigue avanzando) y pierde un poco de velocidad
+## una sola vez al tocarla, no en cada frame.
+func _slide_along_edge(rider: Rider, loc: Vector2, side: float) -> void:
+	var edge := track.position_at(loc.x, side * half_width)
+	var center := track.position_at(loc.x, 0.0)
+	var out := Vector2(edge.x - center.x, edge.z - center.z).normalized()
+	var f := rider.forward()
+	var fwd := Vector2(f.x, f.z)
+	var into := fwd.dot(out)
+	if into <= 0.0:
+		return
+	var slide := fwd - out * into
+	if slide.length() < 0.05:
+		# De frente contra la corchera: seguir en el sentido de la carrera.
+		var t := track.tangent_at(loc.x)
+		slide = Vector2(t.x, t.z)
+	slide = slide.normalized()
+	rider.heading = atan2(-slide.x, -slide.y)
+	# Pierde velocidad según qué tan de frente pegó (de refilón casi nada).
+	rider.speed *= 1.0 - 0.35 * into
 
 
 ## Choque: se cae, queda fuera del obstáculo y mirando en el sentido de la

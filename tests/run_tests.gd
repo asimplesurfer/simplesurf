@@ -16,6 +16,8 @@ var _waves: WaveManager
 var _takeoff_y: float = 0.0
 ## Veces que atravesó una ola que rompía, y si se vieron sus efectos.
 var _punches: int = 0
+## Si el último salto de ola fue con pop.
+var _last_did_pop: bool = false
 var _splash_seen: bool = false
 var _duck_seen: bool = false
 var _race: RaceManager
@@ -286,6 +288,11 @@ func _test_wave_jump() -> void:
 		popped > plain * 1.3,
 		"A al subir la ola (pop) lanza mucho más alto (%.1f m contra %.1f m)" % [popped, plain]
 	)
+	_check(_last_did_pop, "apretar justo al salir de la ola hace el pop")
+	# Apretar antes de tiempo (lejos de la cresta) pierde el pop de esa ola,
+	# aunque después se vuelva a apretar justo.
+	await _ride_into_swell(true, Vector3(1600.0, 0.0, 900.0), true)
+	_check(not _last_did_pop, "apretar antes de tiempo pierde el pop de esa ola")
 	# Las olas de prueba ya rompieron (espuma): al cruzarlas, se "atraviesan".
 	_check(_punches > 0, "atravesar una ola que rompe se detecta (%d veces)" % _punches)
 	_check(_duck_seen, "al atravesarla el personaje se agacha y se cubre")
@@ -389,7 +396,7 @@ func _test_constant_wave() -> void:
 
 ## Anda hacia una ola grande y devuelve la altura máxima del salto.
 ## Con press = true, aprieta A apenas la ola lo lanza (pop tardío).
-func _ride_into_swell(press: bool, at: Vector3) -> float:
+func _ride_into_swell(press: bool, at: Vector3, early: bool = false) -> float:
 	_water.clear_swells()
 	_teleport(at)
 	_rider.heading = 0.0
@@ -408,6 +415,8 @@ func _ride_into_swell(press: bool, at: Vector3) -> float:
 	s.grow_time = 0.01
 	_water.add_swell(s)
 	var pressed := false
+	var early_done := false
+	_last_did_pop = false
 	var release_next := false
 	var max_height := 0.0
 	var was_airborne := false
@@ -426,10 +435,17 @@ func _ride_into_swell(press: bool, at: Vector3) -> float:
 		if release_next:
 			_set_action(&"p1_a", false)
 			release_next = false
-		if press and not pressed and _state() == &"airborne":
+		# Antes de tiempo: apenas empieza a subir la ola, lejos de la cresta.
+		if early and not early_done and _rider.grounded and _rider.on_big_wave(0.3) and not _rider.crest_soon():
+			_set_action(&"p1_a", true)
+			early_done = true
+			release_next = true
+		elif press and not pressed and _state() == &"airborne" and not release_next:
 			_set_action(&"p1_a", true)
 			pressed = true
 			release_next = true
+		if _state() == &"airborne":
+			_last_did_pop = _last_did_pop or _rider.did_pop
 		if _state() == &"airborne":
 			was_airborne = true
 			max_height = maxf(max_height, _rider.global_position.y - _water_height_here())
@@ -645,6 +661,30 @@ func _test_course() -> void:
 	_check(r_center <= _course.outer_limit() + 0.5, "no se puede salir del circuito por afuera")
 	await _mash_until_standing(8.0, 4.0)
 	_course.hazards_enabled = false
+
+	# Contra la corchera (también en el aire): se desliza a lo largo de ella,
+	# sin frenarse de golpe ni ser empujado hacia atrás.
+	var a0 := 2.0
+	_teleport(_course.track.position_at(a0, _course.half_width - 3.0))
+	_rider.heading = _course.track.heading_at(a0) + 0.7
+	_rider.speed = 13.0
+	_set_action(&"p1_up", true)
+	var min_speed := 99.0
+	for i in int(1.5 * FPS):
+		# A mitad de camino salta (el bug pasaba sobre todo en el aire).
+		if i == 20:
+			_set_action(&"p1_a", true)
+		elif i == 23:
+			_set_action(&"p1_a", false)
+		min_speed = minf(min_speed, _rider.speed)
+		await process_frame
+	_set_action(&"p1_up", false)
+	var moved := wrapf(_course.track.angle_of(_rider.position) - a0, -PI, PI)
+	var lat := absf(_course.track.lateral_of(_rider.position))
+	_check(min_speed > 8.0, "contra la corchera no pierde casi velocidad (mín %.1f m/s)" % min_speed)
+	_check(moved > 0.1, "y sigue avanzando a lo largo de ella (%.2f rad)" % moved)
+	_check(lat <= _course.half_width, "sin salirse de la pista (%.1f m)" % lat)
+	await _wait_until_state(&"riding", 3.0)
 
 
 func _test_turbo_and_wrong_way() -> void:

@@ -36,7 +36,7 @@ func update(delta: float, input: RiderInput) -> void:
 		# (hay que apretar justo antes de la cresta); nunca hace el saltito ahí.
 		# En el resto (agua plana u olitas de fondo), un saltito.
 		if rider.on_big_wave(0.1):
-			rider.pop_buffer = rider.stats.pop_window
+			rider.try_pop_press()
 		else:
 			rider.hop()
 			state_machine.transition_to(&"airborne")
