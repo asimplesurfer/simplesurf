@@ -58,6 +58,11 @@ var _wake: CPUParticles3D
 ## Tiempo desde el último cambio de etapa (caída, subida, parada).
 var _stage_time: float = 0.0
 var _spray: DriftSpray
+## Chapuzón al atravesar una ola que rompe.
+var _splash: CPUParticles3D
+## Tiempo que queda de la animación de atravesar la ola (agachado, brazos sobre la cabeza).
+var duck_time: float = 0.0
+const DUCK_DURATION := 0.45
 
 
 func _ready() -> void:
@@ -70,6 +75,7 @@ func setup(p_rider: Rider) -> void:
 	rider = p_rider
 	rider.recovery_stage_changed.connect(_on_recovery_stage_changed)
 	rider.mash_pressed.connect(_on_mash_pressed)
+	rider.wave_punched.connect(_on_wave_punched)
 	_trail.setup(rider)
 	_snap_to(rider.recovery_stage)
 
@@ -135,6 +141,26 @@ func _build() -> void:
 	_spray = DriftSpray.new()
 	_spray.name = "Spray"
 	add_child(_spray)
+
+	# Gotas que salen al atravesar la ola: hacia arriba y para los costados.
+	_splash = WaterFx.soft_particles(70, 0.9, 0.35)
+	_splash.name = "Splash"
+	_splash.one_shot = true
+	_splash.explosiveness = 0.9
+	_splash.emission_sphere_radius = 0.8
+	_splash.direction = Vector3(0.0, 1.0, 0.3)
+	_splash.spread = 70.0
+	_splash.initial_velocity_min = 3.0
+	_splash.initial_velocity_max = 8.0
+	_splash.position = Vector3(0.0, 1.0, 0.0)
+	add_child(_splash)
+
+
+## Atravesó una ola que rompía: chapuzón y animación.
+func _on_wave_punched() -> void:
+	duck_time = DUCK_DURATION
+	_splash.restart()
+	_splash.emitting = true
 
 
 ## Pose del personaje (transform del BodyPivot) para cada etapa.
@@ -249,6 +275,7 @@ func _process(delta: float) -> void:
 ## Elige la animación del personaje según lo que está haciendo el Rider.
 func _update_avatar_anim(delta: float) -> void:
 	_stage_time += delta
+	duck_time = maxf(duck_time - delta, 0.0)
 	var stage := rider.recovery_stage
 	var a: StringName = &"ride"
 	_body.effort = clampf(_punch * 1.5, 0.0, 1.0)
@@ -263,6 +290,8 @@ func _update_avatar_anim(delta: float) -> void:
 		_:
 			if _stage_time < 0.3 and _pose_t < 1.0:
 				a = &"pop_up"
+			elif duck_time > 0.0:
+				a = &"duck"
 			elif not rider.grounded:
 				a = &"trick" if rider.trick_angle > 0.0 else &"air"
 			elif rider.drift_side != 0:

@@ -10,6 +10,9 @@ const PROMPT_COLOR := Color(1.0, 0.86, 0.2)
 const NITRO_COLOR := Color(0.25, 0.85, 1.0)
 const BAD_COLOR := Color(1.0, 0.4, 0.35)
 const SPEED_LINES_SHADER := preload("res://ui/shaders/speed_lines.gdshader")
+const SPLASH_SHADER := preload("res://ui/shaders/wave_splash.gdshader")
+## Duración del efecto de salir de atravesar una ola (s).
+const SPLASH_TIME := 0.6
 
 ## Se pueden asignar antes de agregar el HUD al árbol (lo hace SplitScreen).
 var rider: Rider
@@ -40,6 +43,10 @@ static var show_fps: bool = false
 var _fps_label: Label
 var _nitro_bar: ProgressBar
 var _message: Label
+## Efecto de cámara al atravesar una ola (borroso, gotas, tono de agua).
+var splash_overlay: ColorRect
+var _splash_material: ShaderMaterial
+var _splash_t: float = 0.0
 var _speed_lines: ColorRect
 var _pop_label: Label
 var _nitro_label: Label
@@ -83,6 +90,7 @@ func _connect_rider() -> void:
 	rider.ring_collected.connect(func() -> void: show_message("+ NITRO", NITRO_COLOR))
 	rider.crashed.connect(func() -> void: show_message("¡Pum!", BAD_COLOR))
 	rider.popped.connect(func() -> void: show_message("¡POP!", PROMPT_COLOR))
+	rider.wave_punched.connect(_on_wave_punched)
 	var pc := rider.controller as PlayerController
 	if pc:
 		pc.pad_layout_changed.connect(func(layout_name: String) -> void:
@@ -162,6 +170,7 @@ func _process(delta: float) -> void:
 		]
 	if rider == null:
 		return
+	_update_splash(delta)
 	_update_mash(delta)
 
 	# Momento justo para el pop: el botón aparece en grande y late.
@@ -224,6 +233,23 @@ func _update_mash(delta: float) -> void:
 	_mash_title.scale = Vector2.ONE * (1.0 + 0.15 * _flash)
 
 
+## Atravesó una ola que rompía: medio segundo de imagen mojada que se aclara.
+func _on_wave_punched() -> void:
+	if not rider.is_human:
+		return
+	_splash_t = SPLASH_TIME
+	_splash_material.set_shader_parameter("seed", randf() * 100.0)
+
+
+func _update_splash(delta: float) -> void:
+	_splash_t = maxf(_splash_t - delta, 0.0)
+	splash_overlay.visible = _splash_t > 0.0
+	if splash_overlay.visible:
+		# Arranca de golpe y se aclara suave.
+		var k := _splash_t / SPLASH_TIME
+		_splash_material.set_shader_parameter("amount", k * k * (3.0 - 2.0 * k))
+
+
 func _button_name() -> String:
 	var pc := rider.controller as PlayerController
 	if pc and pc.using_joypad:
@@ -259,6 +285,16 @@ func _build() -> void:
 	add_child(root)
 
 	# Rayas de velocidad (detrás de todo lo demás).
+	# Primero (debajo de los textos): el efecto de salir de la ola.
+	splash_overlay = ColorRect.new()
+	splash_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	splash_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_splash_material = ShaderMaterial.new()
+	_splash_material.shader = SPLASH_SHADER
+	splash_overlay.material = _splash_material
+	splash_overlay.visible = false
+	root.add_child(splash_overlay)
+
 	_speed_lines = ColorRect.new()
 	_speed_lines.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_speed_lines.mouse_filter = Control.MOUSE_FILTER_IGNORE
