@@ -310,8 +310,9 @@ func update_air(delta: float) -> bool:
 	vertical_speed -= stats.gravity * delta
 	position.y += vertical_speed * delta
 	var h := water_height()
-	# Toca el agua al bajar, o si una ola lo alcanza desde abajo.
-	if position.y <= h:
+	# Toca el agua al bajar. En el saltito, también si una ola lo alcanza
+	# desde abajo (así entra a la ola normal, sin trucos raros).
+	if position.y <= h and (vertical_speed <= 0.0 or not can_trick):
 		position.y = h
 		grounded = true
 		wave_air_time = -1.0

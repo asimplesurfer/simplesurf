@@ -65,8 +65,9 @@ func _run() -> void:
 		_finish()
 		return
 	_rider = _race.racers[0]
-	# Sin olas grandes al azar durante los tests de movimiento.
+	# Sin olas grandes al azar ni handicap durante los tests de movimiento.
 	_waves.enabled = false
+	_race.catchup_enabled = false
 	_water.clear_swells()
 	_rider.trick_landed.connect(func(_spins: int) -> void: _tricks_landed += 1)
 
