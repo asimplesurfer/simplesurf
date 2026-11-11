@@ -63,8 +63,8 @@ for (let race = 1; race <= 3; race++) {
   report(`carrera ${race} (al empezar)`, await fps(6000));
   if (race === 1) {
     // Una carrera más larga: ¿se va poniendo lenta con el tiempo?
-    await sleep(40000);
-    report(`carrera ${race} (50 s después)`, await fps(6000));
+    await sleep(20000);
+    report(`carrera ${race} (30 s después)`, await fps(6000));
   }
   await tap('Escape');
   await sleep(2500);

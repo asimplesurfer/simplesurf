@@ -79,6 +79,20 @@ func _run() -> void:
 	)
 	_check(env.fog_sky_affect == 0.0, "la niebla no tapa el cielo")
 
+	# P muestra el contador de FPS.
+	var hud0 := (_main.get_node("Views") as SplitScreen).huds[0]
+	var pkey := InputEventKey.new()
+	pkey.physical_keycode = KEY_P
+	pkey.pressed = true
+	Input.parse_input_event(pkey)
+	await process_frame
+	await process_frame
+	_check(Hud.show_fps and hud0._fps_label.visible, "P muestra el contador de FPS")
+	Input.parse_input_event(pkey)
+	await process_frame
+	await process_frame
+	_check(not Hud.show_fps, "P lo vuelve a ocultar")
+
 	_test_pad_layouts()
 	await _test_race_start()
 
