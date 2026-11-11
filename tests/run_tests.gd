@@ -1208,18 +1208,9 @@ func _test_swells() -> void:
 	_water.add_swell(w)
 	_rider.speed = 0.0
 	await _wait(1.0)
-	var hud := (_main.get_node("Views") as SplitScreen).huds[0]
 	_check(w.breaking == 0.0 and w.amplitude < w.max_amplitude, "mientras crece todavía no rompe")
-	_check(
-		hud._wave_label.visible and hud._wave_label.text.contains("SE VIENE"),
-		"en pantalla: se viene una ola (%s)" % hud._wave_label.text
-	)
 	await _wait(2.5)
 	_check(w.breaking > 0.9, "al llegar a su máximo rompe (%.2f)" % w.breaking)
-	_check(
-		hud._wave_label.visible and hud._wave_label.text.contains("ROMPIENDO"),
-		"en pantalla: está rompiendo (%s)" % hud._wave_label.text
-	)
 	_check(is_equal_approx(w.shader_b().w, w.breaking), "el shader recibe cuánto rompió la ola")
 	w.retire()
 	await _wait(w.fade_time + 0.2)

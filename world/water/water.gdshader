@@ -35,13 +35,16 @@ uniform vec3 shallow_color : source_color = vec3(0.08, 0.48, 0.7);
 uniform vec3 foam_color : source_color = vec3(0.93, 0.98, 1.0);
 uniform float foam_height = 0.42;
 uniform vec3 wave_color : source_color = vec3(0.1, 0.68, 0.72);
+// Agua donde se está por levantar una ola (más oscura, como una sombra).
+uniform vec3 rising_color : source_color = vec3(0.01, 0.16, 0.36);
 
 varying float v_height;
 // 0..1: cuerpo de una ola grande (para el color turquesa de la ola).
 varying float v_body;
 // 0..1: espuma de la ola que rompe (labio y cara).
 varying float v_lip;
-// 0..1: ola que todavía está creciendo ("se viene").
+// 0..1: ola que todavía está creciendo ("se viene"): el agua se oscurece donde
+// se va a levantar, aunque todavía no tenga altura.
 varying float v_grow;
 varying vec3 v_world;
 
@@ -64,7 +67,8 @@ void add_wave(vec4 w, vec2 p, inout float h, inout vec2 g) {
 void add_swell(vec4 a, vec4 b, vec2 p, inout float h, inout vec2 g, inout vec2 disp,
 		inout float body, inout float lip, inout float grow) {
 	float amp = b.x;
-	if (amp <= 0.0) {
+	float width = b.y;
+	if (width <= 0.0) {
 		return;
 	}
 	vec2 dir = a.zw;
@@ -73,15 +77,19 @@ void add_swell(vec4 a, vec4 b, vec2 p, inout float h, inout vec2 g, inout vec2 d
 	float u = dot(rel, dir);
 	float w = dot(rel, perp);
 	float aw = abs(w);
-	float width = b.y;
 	float half_len = b.z;
 	float breaking = b.w;
 	float edge = 8.0;
 	if (aw >= half_len || abs(u) > width * 4.0) {
 		return;
 	}
-	float gauss = exp(-(u * u) / (width * width));
 	float t = clamp((aw - (half_len - edge)) / edge, 0.0, 1.0);
+	float e0 = 1.0 - t * t * (3.0 - 2.0 * t);
+	// "Se viene": franja oscura donde va a subir la ola, desde que nace (sin
+	// altura todavía) hasta que llega a su máximo.
+	float band = exp(-(u * u) / (width * width * 2.2)) * e0;
+	grow = max(grow, band * (1.0 - breaking));
+	float gauss = exp(-(u * u) / (width * width));
 	float e = 1.0 - t * t * (3.0 - 2.0 * t);
 	float de = -6.0 * t * (1.0 - t) / edge;
 	float n = gauss * e;
@@ -97,8 +105,8 @@ void add_swell(vec4 a, vec4 b, vec2 p, inout float h, inout vec2 g, inout vec2 d
 	float dh_dw = amp * gauss * de * sign(w);
 	g += dir * dh_du + perp * dh_dw;
 	float strength = smoothstep(0.3, 1.2, amp);
-	body = max(body, n * strength);
-	grow = max(grow, n * strength * (1.0 - breaking));
+	// Cuerpo turquesa: aparece a medida que la ola gana altura.
+	body = max(body, n * strength * (0.4 + 0.6 * breaking));
 	// Espuma: arriba del labio y cayendo por la cara de adelante.
 	float crest_foam = smoothstep(0.62, 0.92, n);
 	float face_foam = smoothstep(0.25, 0.7, n) * smoothstep(0.0, width * 0.5, u);
@@ -193,8 +201,8 @@ void fragment() {
 	// Olas grandes: cuerpo turquesa (se ve la ola de lejos). Mientras crece
 	// ("se viene") es más oscura y sin espuma; al llegar al máximo rompe y se
 	// llena de espuma arriba y en la cara.
+	col = mix(col, rising_color, v_grow * 0.55);
 	col = mix(col, wave_color, v_body * 0.75);
-	col = mix(col, wave_color * 0.7, v_grow * 0.35);
 	foam = max(foam, v_lip);
 	col = mix(col, foam_color, clamp(foam, 0.0, 1.0) * 0.85);
 
