@@ -424,6 +424,7 @@ func _ride_into_swell(press: bool, at: Vector3, early: bool = false, turbo: bool
 	var pressed := false
 	var early_done := false
 	var turbo_done := false
+	var early_frame := -1
 	_last_did_pop = false
 	var release_next := false
 	var max_height := 0.0
@@ -453,6 +454,11 @@ func _ride_into_swell(press: bool, at: Vector3, early: bool = false, turbo: bool
 			_set_action(&"p1_a", true)
 			early_done = true
 			release_next = true
+			early_frame = i
+		if early and early_frame >= 0 and i == early_frame + 3:
+			print("    pop antes de tiempo: bloqueado=%s, buffer=%.2f, en el aire=%s, estado=%s, ola=%.2f" % [
+				_rider.pop_locked, _rider.pop_buffer, not _rider.grounded, _state(),
+				_water.swell_height_at(_rider.position.x, _rider.position.z)])
 		elif press and not pressed and _state() == &"airborne" and not release_next:
 			_set_action(&"p1_a", true)
 			pressed = true
