@@ -289,6 +289,13 @@ func _test_wave_jump() -> void:
 		"A al subir la ola (pop) lanza mucho más alto (%.1f m contra %.1f m)" % [popped, plain]
 	)
 	_check(_last_did_pop, "apretar justo al salir de la ola hace el pop")
+	# Turbo al subir la ola: sale mucho más alto que sin turbo.
+	var with_turbo := await _ride_into_swell(false, Vector3(2000.0, 0.0, 900.0), false, true)
+	_check(
+		with_turbo > plain * 1.3,
+		"con turbo la ola lanza mucho más alto (%.1f m contra %.1f m)" % [with_turbo, plain]
+	)
+	_rider.reset_nitro()
 	# Apretar antes de tiempo (lejos de la cresta) pierde el pop de esa ola,
 	# aunque después se vuelva a apretar justo.
 	await _ride_into_swell(true, Vector3(1600.0, 0.0, 900.0), true)
@@ -396,7 +403,7 @@ func _test_constant_wave() -> void:
 
 ## Anda hacia una ola grande y devuelve la altura máxima del salto.
 ## Con press = true, aprieta A apenas la ola lo lanza (pop tardío).
-func _ride_into_swell(press: bool, at: Vector3, early: bool = false) -> float:
+func _ride_into_swell(press: bool, at: Vector3, early: bool = false, turbo: bool = false) -> float:
 	_water.clear_swells()
 	_teleport(at)
 	_rider.heading = 0.0
@@ -416,6 +423,7 @@ func _ride_into_swell(press: bool, at: Vector3, early: bool = false) -> float:
 	_water.add_swell(s)
 	var pressed := false
 	var early_done := false
+	var turbo_done := false
 	_last_did_pop = false
 	var release_next := false
 	var max_height := 0.0
@@ -435,6 +443,11 @@ func _ride_into_swell(press: bool, at: Vector3, early: bool = false) -> float:
 		if release_next:
 			_set_action(&"p1_a", false)
 			release_next = false
+		# Turbo justo antes de que la ola lo lance.
+		if turbo and not turbo_done and _rider.grounded and _rider.on_big_wave(0.5):
+			_rider.add_nitro(Rider.TURBO_CHARGE)
+			_rider.fire_turbo()
+			turbo_done = true
 		# Antes de tiempo: apenas empieza a subir la ola, lejos de la cresta.
 		if early and not early_done and _rider.grounded and _rider.on_big_wave(0.3) and not _rider.crest_soon():
 			_set_action(&"p1_a", true)
@@ -695,28 +708,37 @@ func _test_turbo_and_wrong_way() -> void:
 	await _wait(2.5)
 	_rider.reset_nitro()
 	_rider.add_nitro(1.0)
-	_set_action(&"p1_b", true)
-	await _wait(0.8)
+	_check(_rider.turbo_charges() == 3, "la barra llena son 3 cargas de turbo")
+	# Un toque: una ráfaga que gasta una carga.
+	await _press(&"p1_b")
+	await _wait(0.6)
+	_check(_rider.turbo_active, "un toque de turbo dispara una ráfaga")
 	_check(
-		_rider.speed > _rider.stats.max_speed * 1.3,
-		"el turbo acelera mucho (%.1f m/s)" % _rider.speed
+		_rider.speed > _rider.stats.max_speed * 1.15,
+		"el turbo acelera (%.1f m/s)" % _rider.speed
 	)
-	_check(_rider.nitro < 0.8, "el turbo gasta nitro (%.2f)" % _rider.nitro)
-	await _wait(3.0)
-	_check(_rider.nitro == 0.0, "el turbo se acaba con el nitro")
-	_check(not _rider.turbo_active, "sin nitro no hay turbo")
+	_check(_rider.turbo_charges() == 2, "y gasta una carga (quedan %d)" % _rider.turbo_charges())
+	await _wait(1.2)
+	_check(not _rider.turbo_active, "la ráfaga dura un rato y se termina")
+	# Mantener apretado no hace nada extra: solo cuenta el toque.
+	_set_action(&"p1_b", true)
+	await _wait(2.5)
+	_check(_rider.turbo_charges() == 1, "mantener apretado gasta una sola carga")
+	_check(not _rider.turbo_active, "mantener no sostiene el turbo")
 	_set_action(&"p1_b", false)
-	await process_frame
-	# Con gotitas de nitro (como las del handicap) no se puede sostener el turbo:
-	# hace falta un mínimo para arrancarlo.
+	await _wait(0.1)
+	# Dos toques seguidos: se encadenan.
 	_rider.reset_nitro()
-	_rider.add_nitro(0.05)
-	_check(not _rider.turbo_request(true), "con gotitas de nitro el turbo no arranca")
-	_rider.turbo_request(false)
+	_rider.add_nitro(1.0)
+	await _press(&"p1_b")
+	await _press(&"p1_b")
+	_check(_rider.turbo_time > _rider.stats.turbo_burst_time * 1.5, "dos toques encadenan dos ráfagas")
+	await _wait(3.5)
+	# Sin una carga completa no sale.
 	_rider.reset_nitro()
 	_rider.add_nitro(0.2)
-	_check(_rider.turbo_request(true), "soltando y con nitro suficiente, el turbo vuelve")
-	_rider.turbo_request(false)
+	await _press(&"p1_b")
+	_check(not _rider.turbo_active, "sin una carga completa el turbo no sale")
 	_rider.reset_nitro()
 
 	print("Al revés:")

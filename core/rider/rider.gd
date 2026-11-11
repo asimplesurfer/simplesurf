@@ -23,6 +23,7 @@ signal drift_hit(victim: Rider)
 signal motivation_started
 ## Atravesó una ola que estaba rompiendo (para la animación, el chapuzón y la cámara).
 signal wave_punched
+signal turbo_fired
 signal popped
 signal ring_collected
 signal crashed
@@ -31,6 +32,9 @@ signal crashed
 enum RecoveryStage { IN_WATER, PRONE, STANDING }
 
 const NITRO_MAX := 1.0
+## La barra de nitro tiene 3 cargas: cada toque de turbo gasta una.
+const TURBO_CHARGES := 3
+const TURBO_CHARGE := NITRO_MAX / TURBO_CHARGES
 
 @export var player_index: int = 0
 @export var stats: RiderStats
@@ -78,7 +82,8 @@ var can_trick: bool = true
 var catchup: float = 0.0
 var water: Water
 
-var _turbo_on: bool = false
+## Tiempo que le queda a la ráfaga de turbo en curso (s).
+var turbo_time: float = 0.0
 ## Para no repetir el "atravesar la ola" seguido.
 var _punch_cooldown: float = 0.0
 ## Apretó A fuera de tiempo en esta ola: ya no hay pop hasta la próxima.
@@ -119,10 +124,13 @@ func _process(delta: float) -> void:
 	if grounded and pop_locked and not on_big_wave(0.1):
 		pop_locked = false
 	_punch_cooldown = maxf(0.0, _punch_cooldown - delta)
-	# Handicap: nitro de a poco (no mientras se aprieta el turbo, así no se
-	# puede usar el turbo sin fin).
-	if catchup > 0.0 and not controls_locked and not input.turbo:
+	# Handicap: nitro de a poco.
+	if catchup > 0.0 and not controls_locked:
 		add_nitro(stats.catchup_nitro_trickle * catchup * delta)
+	# Turbo en ráfagas: cada toque dispara una (mantener no hace nada).
+	turbo_time = maxf(0.0, turbo_time - delta)
+	if input.turbo_pressed and not is_fallen():
+		fire_turbo()
 	if wave_air_time >= 0.0:
 		wave_air_time += delta
 	turbo_active = false
@@ -175,22 +183,30 @@ func apply_throttle(throttle: float, delta: float, turbo: bool = false) -> void:
 		turbo_active = true
 		target = maxf(target, top * stats.turbo_speed_mult)
 		rate = stats.acceleration * stats.turbo_accel_mult
-		add_nitro(-stats.turbo_drain * delta)
 	if speed > target:
 		rate = stats.brake_decel if throttle < -0.1 else stats.coast_decel
 	speed = move_toward(speed, target, rate * delta)
 
 
-## Turbo: devuelve true si puede usarse este frame. Hace falta un mínimo de
-## nitro para arrancarlo; si se vacía, se corta hasta soltar el botón y volver
-## a tener ese mínimo (no se puede sostener con gotitas de nitro).
-func turbo_request(pressed: bool) -> bool:
-	if not pressed or nitro <= 0.0:
-		_turbo_on = false
+## true mientras hay una ráfaga de turbo en curso.
+func turbo_request(_pressed: bool = false) -> bool:
+	return turbo_time > 0.0
+
+
+## Cargas de turbo completas que tiene (0..3).
+func turbo_charges() -> int:
+	return int(floor((nitro + 0.0001) / TURBO_CHARGE))
+
+
+## Dispara una ráfaga de turbo si tiene una carga. Si ya hay una en curso, la
+## alarga (se pueden encadenar). Devuelve true si salió.
+func fire_turbo() -> bool:
+	if turbo_charges() < 1:
 		return false
-	if not _turbo_on and nitro >= stats.turbo_min_nitro:
-		_turbo_on = true
-	return _turbo_on
+	add_nitro(-TURBO_CHARGE)
+	turbo_time = minf(turbo_time + stats.turbo_burst_time, stats.turbo_burst_time * 2.0)
+	turbo_fired.emit()
+	return true
 
 
 ## Mini sprint automático tras pasar por un círculo o tirar a alguien.

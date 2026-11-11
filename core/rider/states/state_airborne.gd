@@ -92,7 +92,6 @@ func update(delta: float, input: RiderInput) -> void:
 			stats.max_speed * stats.turbo_speed_mult,
 			stats.acceleration * stats.turbo_accel_mult * delta
 		)
-		rider.add_nitro(-stats.air_turbo_drain * delta)
 		rider.turbo_active = true
 	else:
 		_air_turbo_time = 0.0
