@@ -157,6 +157,13 @@ func _build() -> void:
 
 
 ## Atravesó una ola que rompía: chapuzón y animación.
+## Dónde está la cara del personaje (para saber si atravesó una ola).
+func face_position() -> Vector3:
+	if _body:
+		return _body.face_position()
+	return global_position + Vector3.UP * BODY_HEIGHT * 0.9
+
+
 func _on_wave_punched() -> void:
 	duck_time = DUCK_DURATION
 	_splash.restart()

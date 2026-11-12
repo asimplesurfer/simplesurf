@@ -156,6 +156,31 @@ func breaking_at(x: float, z: float) -> float:
 	return best
 
 
+## true si el punto (la cara de alguien) quedó adentro del agua de una ola
+## grande tal como se ve en pantalla, incluido el labio que se curva al romper.
+func face_in_wave(q: Vector3) -> bool:
+	var p := Vector2(q.x, q.z)
+	var fade := _island_fade(p)
+	if fade <= 0.0:
+		return false
+	var ambient := waves.height_at(q.x, q.z, time)
+	if ring_wave:
+		var rh := ring_wave.height_at(p) * fade
+		if rh > Swell.MIN_FACE_DEPTH and q.y < ambient + rh:
+			return true
+	for s in swells:
+		# El resto de las olas grandes suma su altura en ese punto.
+		var others := 0.0
+		for o in swells:
+			if o != s:
+				others += o.height_at(p)
+		if ring_wave:
+			others += ring_wave.height_at(p)
+		if s.face_inside(q, ambient + others * fade, fade):
+			return true
+	return false
+
+
 func normal_at(x: float, z: float) -> Vector3:
 	var g := waves.gradient_at(x, z, time)
 	var p := Vector2(x, z)

@@ -330,6 +330,7 @@ func _test_wave_jump() -> void:
 	_check(_early_pressed and not _last_did_pop, "apretar antes de tiempo pierde el pop de esa ola")
 	# Las olas de prueba ya rompieron (espuma): al cruzarlas, se "atraviesan".
 	_check(_punches > 0, "atravesar una ola que rompe se detecta (%d veces)" % _punches)
+	_check_face_geometry()
 	_check(_duck_seen, "al atravesarla el personaje se agacha y se cubre")
 	_check(_splash_seen, "y la cámara queda mojada medio segundo")
 	await _wait(1.0)
@@ -431,6 +432,30 @@ func _test_constant_wave() -> void:
 
 ## Anda hacia una ola grande y devuelve la altura máxima del salto.
 ## Con press = true, aprieta A apenas la ola lo lanza (pop tardío).
+## El chapuzón cuenta solo si la cara queda adentro del agua tal como se ve.
+func _check_face_geometry() -> void:
+	var s := Swell.new()
+	s.center = Vector2.ZERO
+	s.direction = Vector2.RIGHT
+	s.max_amplitude = 3.0
+	s.amplitude = 3.0
+	s.width = 5.5
+	s.half_length = 20.0
+	s.breaking = 1.0
+	var lean := (0.35 + 0.95) * 3.0
+	# El labio está corrido hacia adelante: arriba de la cresta física no hay
+	# agua, pero adelante, a la altura del labio, sí.
+	_check(not s.face_inside(Vector3(0.0, 3.3, 0.0), 0.0), "cara arriba de la cresta: no atraviesa")
+	_check(s.face_inside(Vector3(lean * 0.9, 2.6, 0.0), 0.0), "cara metida en el labio: atraviesa")
+	_check(s.face_inside(Vector3(-2.0, 1.0, 0.0), 0.0), "cara adentro del cuerpo de la ola: atraviesa")
+	# Pies o tabla en el agua pero la cara afuera: no cuenta.
+	var x := -4.0
+	var surface := 3.0 * exp(-(x * x) / (5.5 * 5.5))
+	_check(not s.face_inside(Vector3(x, surface + 0.9, 0.0), 0.0), "cara afuera aunque los pies toquen: no atraviesa")
+	_check(not s.face_inside(Vector3(30.0, -0.1, 0.0), 0.0), "debajo del mar sin ola: no cuenta")
+	_check(not s.face_inside(Vector3(0.0, 1.0, 25.0), 0.0), "fuera del largo de la ola: no cuenta")
+
+
 func _ride_into_swell(press: bool, at: Vector3, early: bool = false, turbo: bool = false) -> float:
 	_water.clear_swells()
 	_teleport(at)

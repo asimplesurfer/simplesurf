@@ -88,7 +88,8 @@ var turbo_time: float = 0.0
 var _punch_cooldown: float = 0.0
 ## Apretó A fuera de tiempo en esta ola: ya no hay pop hasta la próxima.
 var pop_locked: bool = false
-var _prev_vertical_speed: float = 0.0
+## La cara estaba adentro de una ola el frame anterior.
+var _face_in_wave: bool = false
 var _steer_smoothed: float = 0.0
 
 @onready var controller: BaseController = $Controller
@@ -142,6 +143,7 @@ func _process(delta: float) -> void:
 		fall()
 	state_machine.update(delta, input)
 	rotation.y = heading
+	_check_wave_punch()
 
 
 func forward() -> Vector3:
@@ -259,15 +261,10 @@ func stick_to_water(delta: float, allow_launch: bool = true) -> bool:
 		wave_air_time = 0.0
 		did_pop = false
 		can_trick = true
-		_check_wave_punch()
 		if pop_buffer > 0.0:
 			do_pop()
 		return true
 	vertical_speed = clampf((h - position.y) / delta, -30.0, 30.0)
-	# Pasó la cresta de una ola sin despegar (iba subiendo y ahora baja).
-	if _prev_vertical_speed > 1.5 and vertical_speed <= 0.0:
-		_check_wave_punch()
-	_prev_vertical_speed = vertical_speed
 	position.y = h
 	grounded = true
 	if water:
@@ -288,13 +285,16 @@ func jump() -> void:
 	jumped.emit()
 
 
-## Si la ola que está cruzando rompe, "la atraviesa" (animación y chapuzón).
+## "Atraviesa la ola" (animación y chapuzón) solo cuando la cara del modelo
+## entra al agua de una ola grande tal como se ve (no los pies ni el cuerpo).
 func _check_wave_punch() -> void:
-	if _punch_cooldown > 0.0 or water == null:
+	if water == null or visual == null:
 		return
-	if water.breaking_at(position.x, position.z) > 0.4:
+	var inside := water.face_in_wave(visual.face_position())
+	if inside and not _face_in_wave and _punch_cooldown <= 0.0:
 		_punch_cooldown = 1.2
 		wave_punched.emit()
+	_face_in_wave = inside
 
 
 ## Modo olas: true en el momento justo para el pop (subiendo una ola grande o
