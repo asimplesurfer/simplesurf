@@ -18,6 +18,7 @@ var _takeoff_y: float = 0.0
 var _punches: int = 0
 ## Si el último salto de ola fue con pop.
 var _last_did_pop: bool = false
+var _early_pressed: bool = false
 var _splash_seen: bool = false
 var _duck_seen: bool = false
 var _race: RaceManager
@@ -299,7 +300,7 @@ func _test_wave_jump() -> void:
 	# Apretar antes de tiempo (lejos de la cresta) pierde el pop de esa ola,
 	# aunque después se vuelva a apretar justo.
 	await _ride_into_swell(true, Vector3(1600.0, 0.0, 900.0), true)
-	_check(not _last_did_pop, "apretar antes de tiempo pierde el pop de esa ola")
+	_check(_early_pressed and not _last_did_pop, "apretar antes de tiempo pierde el pop de esa ola")
 	# Las olas de prueba ya rompieron (espuma): al cruzarlas, se "atraviesan".
 	_check(_punches > 0, "atravesar una ola que rompe se detecta (%d veces)" % _punches)
 	_check(_duck_seen, "al atravesarla el personaje se agacha y se cubre")
@@ -425,6 +426,7 @@ func _ride_into_swell(press: bool, at: Vector3, early: bool = false, turbo: bool
 	var early_done := false
 	var turbo_done := false
 	var early_frame := -1
+	_early_pressed = false
 	_last_did_pop = false
 	var release_next := false
 	var max_height := 0.0
@@ -450,11 +452,16 @@ func _ride_into_swell(press: bool, at: Vector3, early: bool = false, turbo: bool
 			_rider.fire_turbo()
 			turbo_done = true
 		# Antes de tiempo: apenas empieza a subir la ola, lejos de la cresta.
-		if early and not early_done and _rider.grounded and _rider.on_big_wave(0.3) and not _rider.crest_soon():
+		var low_on_wave := (
+			_rider.on_big_wave(0.3)
+			and _water.swell_height_at(_rider.position.x, _rider.position.z) < 1.2
+		)
+		if early and not early_done and _rider.grounded and low_on_wave:
 			_set_action(&"p1_a", true)
 			early_done = true
 			release_next = true
 			early_frame = i
+			_early_pressed = true
 		if early and early_frame >= 0 and i == early_frame + 3:
 			print("    pop antes de tiempo: bloqueado=%s, buffer=%.2f, en el aire=%s, estado=%s, ola=%.2f" % [
 				_rider.pop_locked, _rider.pop_buffer, not _rider.grounded, _state(),
