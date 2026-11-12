@@ -182,7 +182,8 @@ func _process(delta: float) -> void:
 	_update_mash(delta)
 
 	# Momento justo para el pop: el botón aparece en grande y late.
-	var pop := rider.is_human and rider.pop_ready()
+	# Cada vista muestra lo suyo: también las de los bots en la demo.
+	var pop := rider.pop_ready()
 	_pop_box.visible = pop
 	if pop:
 		var pad := _using_pad()
@@ -221,7 +222,7 @@ func _process(delta: float) -> void:
 
 
 func _update_mash(delta: float) -> void:
-	var fallen := rider.is_fallen() and not rider.controls_locked and rider.is_human
+	var fallen := rider.is_fallen() and not rider.controls_locked
 	_mash_box.visible = fallen
 	if not fallen:
 		return
@@ -265,7 +266,8 @@ func _update_splash(delta: float) -> void:
 
 func _using_pad() -> bool:
 	var pc := rider.controller as PlayerController
-	return pc != null and pc.using_joypad
+	# Los bots (demo) muestran los íconos de mando.
+	return pc == null or pc.using_joypad
 
 
 ## Tecla del botón principal (A) para quien juega con teclado.
