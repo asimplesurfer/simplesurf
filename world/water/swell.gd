@@ -27,6 +27,10 @@ var amplitude: float = 0.0
 var breaking: float = 0.0
 ## Tiempo que tarda en romper del todo después de llegar al máximo (s).
 const BREAK_TIME := 1.2
+## Puntos del perfil para saber si la cara quedó adentro de la ola.
+const FACE_SAMPLES := 64
+## Altura mínima de la ola sobre el mar en ese punto para que cuente (m).
+const MIN_FACE_DEPTH := 0.25
 
 
 func update(delta: float) -> void:
@@ -85,6 +89,41 @@ func _edge(aw: float) -> float:
 func _edge_derivative(aw: float) -> float:
 	var t := clampf((aw - (half_length - edge)) / edge, 0.0, 1.0)
 	return -6.0 * t * (1.0 - t) / edge
+
+
+## true si el punto q (la cara del personaje) está adentro del agua de esta ola
+## tal como se ve: con el labio corrido hacia adelante igual que en
+## water.gdshader. base_y = altura del agua sin esta ola; fade = island_fade.
+## Tira un rayo hacia arriba desde q y cuenta cuántas veces cruza el perfil de
+## la ola (impar = adentro; debajo del labio pero en el aire da par).
+func face_inside(q: Vector3, base_y: float, fade: float = 1.0) -> bool:
+	if amplitude <= 0.0 or fade <= 0.0:
+		return false
+	var uw := local_coords(Vector2(q.x, q.z))
+	var aw := absf(uw.y)
+	if aw >= half_length:
+		return false
+	var e := _edge(aw)
+	var amp := amplitude * fade
+	var lean := (0.35 + 0.95 * breaking) * amplitude * fade
+	var span := width * 4.0
+	if uw.x < -span or uw.x > span + lean:
+		return false
+	var crossings := 0
+	var top := -INF
+	var prev := Vector2.ZERO
+	for i in FACE_SAMPLES + 1:
+		var u := lerpf(-span, span, float(i) / FACE_SAMPLES)
+		var n := exp(-(u * u) / (width * width)) * e
+		var cur := Vector2(u + lean * n * n * n, base_y + amp * n)
+		if i > 0 and (prev.x - uw.x) * (cur.x - uw.x) <= 0.0 and prev.x != cur.x:
+			var y := lerpf(prev.y, cur.y, (uw.x - prev.x) / (cur.x - prev.x))
+			if y > q.y:
+				crossings += 1
+				top = maxf(top, y)
+		prev = cur
+	# Tiene que ser agua de la ola, no el nivel del mar de siempre.
+	return crossings % 2 == 1 and top - base_y > MIN_FACE_DEPTH
 
 
 ## Parámetros empaquetados para el shader.

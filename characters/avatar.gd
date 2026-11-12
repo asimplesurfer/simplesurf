@@ -137,6 +137,16 @@ func _place_eyes() -> void:
 		_eyes[i].position = head.position + Vector3(side * r.x * 0.36, r.y * 0.15, r.z * 0.9)
 
 
+## Punto de la cara en el mundo (entre los ojos, sobre el frente de la cabeza).
+func face_position() -> Vector3:
+	if _eyes.size() == 2 and _eyes[0].is_inside_tree():
+		return (_eyes[0].global_position + _eyes[1].global_position) * 0.5
+	var head: MeshInstance3D = _pieces.get("head")
+	if head and head.is_inside_tree():
+		return head.global_position
+	return global_position
+
+
 func _process(delta: float) -> void:
 	_time += delta
 	if anim != _last_anim:
