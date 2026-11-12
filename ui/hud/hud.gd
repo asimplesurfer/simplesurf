@@ -11,8 +11,10 @@ const NITRO_COLOR := Color(0.25, 0.85, 1.0)
 const BAD_COLOR := Color(1.0, 0.4, 0.35)
 const SPEED_LINES_SHADER := preload("res://ui/shaders/speed_lines.gdshader")
 const SPLASH_SHADER := preload("res://ui/shaders/wave_splash.gdshader")
-## Duración del efecto de salir de atravesar una ola (s).
-const SPLASH_TIME := 0.6
+## Duración del efecto de atravesar una ola (s): golpe de agua y gotas que chorrean.
+const SPLASH_TIME := 1.2
+## Duración del golpe (cortina de espuma) al principio (s).
+const SPLASH_WASH := 0.22
 
 ## Se pueden asignar antes de agregar el HUD al árbol (lo hace SplitScreen).
 var rider: Rider
@@ -153,6 +155,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	var key := event as InputEventKey
 	if key and key.pressed and not key.echo and key.physical_keycode == KEY_H:
 		_help.visible = not _help.visible
+	# Tecla oculta para probar el efecto de atravesar una ola.
+	if key and key.pressed and not key.echo and key.physical_keycode == KEY_F8 and rider:
+		_on_wave_punched()
+		var cam := get_viewport().get_camera_3d() as ChaseCamera
+		if cam:
+			cam.shake(0.6)
 
 
 func _process(delta: float) -> void:
@@ -245,9 +253,14 @@ func _update_splash(delta: float) -> void:
 	_splash_t = maxf(_splash_t - delta, 0.0)
 	splash_overlay.visible = _splash_t > 0.0
 	if splash_overlay.visible:
-		# Arranca de golpe y se aclara suave.
-		var k := _splash_t / SPLASH_TIME
-		_splash_material.set_shader_parameter("amount", k * k * (3.0 - 2.0 * k))
+		var elapsed := SPLASH_TIME - _splash_t
+		# El golpe: entra de una y se va rápido.
+		var wash := 1.0 - smoothstep(0.0, SPLASH_WASH, elapsed - 0.04)
+		# Las gotas: quedan y se van de a poco.
+		var drops := 1.0 - smoothstep(SPLASH_TIME * 0.45, SPLASH_TIME, elapsed)
+		_splash_material.set_shader_parameter("wash", wash)
+		_splash_material.set_shader_parameter("drops", drops)
+		_splash_material.set_shader_parameter("elapsed", elapsed)
 
 
 func _button_name() -> String:
