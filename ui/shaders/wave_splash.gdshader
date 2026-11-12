@@ -45,14 +45,15 @@ vec3 drip_layer(vec2 uv, float aspect, float cols, float layer) {
 	vec2 p = vec2(uv.x * cols * aspect, uv.y);
 	float col = floor(p.x);
 	float h = hash(vec2(col, layer));
-	if (h < 0.35) {
+	// Pocas gotas (no una por columna).
+	if (h < 0.55 + layer * 0.08) {
 		return vec3(0.0);
 	}
 	float x = fract(p.x) - 0.5 - (hash(vec2(col, layer + 3.0)) - 0.5) * 0.5;
 	float speed = mix(0.15, 0.55, hash(vec2(col, layer + 7.0)));
 	float start = hash(vec2(col, layer + 11.0)) * 0.7;
 	float y_drop = start + speed * elapsed * elapsed * 1.6 + 0.05 * elapsed;
-	float size = mix(0.06, 0.12, hash(vec2(col, layer + 13.0)));
+	float size = mix(0.035, 0.11, pow(hash(vec2(col, layer + 13.0)), 1.5));
 	// La gota: elipse (un poco más alta que ancha). x está en ancho de columna:
 	// una columna mide 1/cols de la altura de la pantalla.
 	vec2 d = vec2((x / cols) / (size * 0.75), (uv.y - y_drop) / size);
@@ -62,8 +63,12 @@ vec3 drip_layer(vec2 uv, float aspect, float cols, float layer) {
 	float trail_y = clamp((y_drop - uv.y) / 0.35, 0.0, 1.0);
 	float trail = (1.0 - smoothstep(0.03, 0.08, abs(x / cols) / size)) * step(0.0, y_drop - uv.y) * (1.0 - trail_y)
 		* step(0.45, noise(vec2(col * 3.0, uv.y * 40.0)));
-	vec2 offset = -d * drop * 0.035 + vec2(x * trail * 0.02, 0.0);
-	float shine = drop * smoothstep(0.35, 0.9, r) + trail * 0.3;
+	// Adentro de la gota la imagen se ve aumentada y dada vuelta (como el agua).
+	vec2 offset = d * drop * size * 0.9 + vec2(x * trail * 0.01, 0.0);
+	// Brillo: un puntito arriba a la izquierda y el borde un poco más oscuro.
+	float spot = drop * (1.0 - smoothstep(0.0, 0.3, length(d - vec2(-0.35, -0.4))));
+	float rim = drop * smoothstep(0.6, 0.95, r);
+	float shine = spot * 0.9 - rim * 0.25 + trail * 0.12;
 	return vec3(offset, shine);
 }
 
