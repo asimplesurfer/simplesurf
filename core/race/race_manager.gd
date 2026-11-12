@@ -65,6 +65,7 @@ func _ready() -> void:
 	var audio := get_node_or_null("/root/AudioManager")
 	if audio:
 		audio.race_started()
+		audio.connect_race(self)
 	for r in racers:
 		r.controls_locked = true
 

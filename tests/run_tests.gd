@@ -823,6 +823,19 @@ func _test_music() -> void:
 	var player: AudioStreamPlayer = audio.player
 	_check(player.stream != null and player.playing, "suena la música durante la carrera")
 	_check((player.stream as AudioStreamOggVorbis).loop, "la música está en bucle")
+	# Efectos de sonido.
+	_check(audio._sfx.size() == 16, "están todos los efectos de sonido (%d)" % audio._sfx.size())
+	_check(audio.ocean.stream != null and audio.ocean.playing, "suena el mar de fondo")
+	_check((audio.ocean.stream as AudioStreamWAV).loop_mode == AudioStreamWAV.LOOP_FORWARD, "el mar está en bucle")
+	audio.last_sfx = ""
+	await _press(&"p1_debug_fall")
+	_check(audio.last_sfx == "splash", "caer al agua suena (%s)" % audio.last_sfx)
+	await _mash_until_standing(8.0, 4.0)
+	_check(audio.last_sfx == "mash", "spamear para subirse suena")
+	_rider.add_nitro(1.0)
+	await _press(&"p1_b")
+	_check(audio.last_sfx == "turbo", "el turbo suena")
+	await _wait(2.0)
 	_course.hazards_enabled = false
 	_course.bounds_enabled = false
 	_teleport(Vector3(0.0, 0.0, 900.0))
