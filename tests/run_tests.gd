@@ -16,6 +16,7 @@ var _waves: WaveManager
 var _takeoff_y: float = 0.0
 ## Veces que atravesó una ola que rompía, y si se vieron sus efectos.
 var _punches: int = 0
+var _punch_without_face: bool = false
 ## Si el último salto de ola fue con pop.
 var _last_did_pop: bool = false
 var _early_pressed: bool = false
@@ -86,7 +87,12 @@ func _run() -> void:
 	_water.clear_swells()
 	_rider.trick_landed.connect(func(_spins: int) -> void: _tricks_landed += 1)
 	_rider.jumped.connect(func() -> void: _takeoff_y = _rider.global_position.y)
-	_rider.wave_punched.connect(func() -> void: _punches += 1)
+	_rider.wave_punched.connect(func() -> void:
+		_punches += 1
+		var v := _rider.get_node("Visual") as RiderVisual
+		if not _water.face_in_wave(v.face_position()):
+			_punch_without_face = true
+	)
 
 	var world_env := _main.get_node("WorldEnvironment") as WorldEnvironment
 	var env := world_env.environment
@@ -328,7 +334,9 @@ func _test_wave_jump() -> void:
 	# aunque después se vuelva a apretar justo.
 	await _ride_into_swell(true, Vector3(1600.0, 0.0, 900.0), true)
 	_check(_early_pressed and not _last_did_pop, "apretar antes de tiempo pierde el pop de esa ola")
-	# Las olas de prueba ya rompieron (espuma): al cruzarlas, se "atraviesan".
+	# Una ola grande (4 m) rompiendo sí: el labio cae sobre la cara.
+	await _ride_into_swell(false, Vector3(2400.0, 0.0, 900.0), false, false, 4.0, 6.4)
+	_check(not _punch_without_face, "el chapuzón solo salta con la cara adentro del agua")
 	_check(_punches > 0, "atravesar una ola que rompe se detecta (%d veces)" % _punches)
 	_check_face_geometry()
 	_check(_duck_seen, "al atravesarla el personaje se agacha y se cubre")
@@ -456,7 +464,10 @@ func _check_face_geometry() -> void:
 	_check(not s.face_inside(Vector3(0.0, 1.0, 25.0), 0.0), "fuera del largo de la ola: no cuenta")
 
 
-func _ride_into_swell(press: bool, at: Vector3, early: bool = false, turbo: bool = false) -> float:
+func _ride_into_swell(
+	press: bool, at: Vector3, early: bool = false, turbo: bool = false,
+	amp: float = 3.0, width: float = 5.5
+) -> float:
 	_water.clear_swells()
 	_teleport(at)
 	_rider.heading = 0.0
@@ -468,8 +479,8 @@ func _ride_into_swell(press: bool, at: Vector3, early: bool = false, turbo: bool
 	s.direction = -Vector2(f.x, f.z)
 	# Viene de frente, como las olas del juego (quieta queda justo en el límite).
 	s.speed = 4.0
-	s.max_amplitude = 3.0
-	s.width = 5.5
+	s.max_amplitude = amp
+	s.width = width
 	s.half_length = 20.0
 	s.lifetime = 100.0
 	s.grow_time = 0.01
