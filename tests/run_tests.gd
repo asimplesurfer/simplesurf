@@ -523,7 +523,7 @@ func _ride_into_swell(
 	for i in int(5.0 * FPS):
 		if _rider.grounded:
 			max_climb = maxf(max_climb, _rider.vertical_speed)
-		if hud._pop_label.visible:
+		if hud._pop_box.visible:
 			_pop_prompt_seen = true
 		if hud.splash_overlay.visible:
 			_splash_seen = true
