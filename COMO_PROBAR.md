@@ -114,6 +114,10 @@ Si el teclado no responde, haz clic dentro del juego.
 - **Música** de fondo (`assets/audio/simple_surf.ogg`, convertida del WAV original que
   está en `assets/audio/source/`). Sube de volumen cuando alguien pasa mucho tiempo en el
   aire. En el navegador empieza a sonar después de tocar una tecla o la pantalla.
+- **Sonido:** efectos para caer al agua, chocar, saltar, el pop, aterrizar, trucos (logrados
+  y fallidos), turbo, círculos, tirar a alguien con el derrape, atravesar una ola, spamear,
+  cuenta regresiva, vuelta y llegada; siseo mientras derrapás y el mar de fondo. Los de los
+  bots suenan más bajo y solo si están cerca. Se generan con `tools/make_sfx.py`.
 - **Demo:** si nadie toca el menú por 10 s, arranca una carrera solo de bots con lo que
   esté armado en el menú: un bot por cada jugador y bot elegidos (mínimo 2, máximo 4), en
   la dificultad, el mapa y el modo de olas elegidos. Por ejemplo, 1 jugador + 1 bot = un

@@ -105,6 +105,10 @@ func _ready() -> void:
 	position.y = water_height()
 	visual.setup(self)
 	state_machine.setup(self)
+	var sounds := RiderAudio.new()
+	sounds.name = "Audio"
+	add_child(sounds)
+	sounds.setup(self)
 
 
 func _process(delta: float) -> void:
