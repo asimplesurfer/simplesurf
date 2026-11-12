@@ -19,19 +19,19 @@ extends Resource
 @export_group("Salto y olas")
 @export var gravity: float = 20.0
 ## Velocidad hacia arriba de un salto sin cargar (toque rápido) (m/s).
-@export var jump_speed_min: float = 4.2
+@export var jump_speed_min: float = 4.7
 ## Velocidad hacia arriba con el salto cargado al máximo (m/s).
-@export var jump_speed_max: float = 7.0
+@export var jump_speed_max: float = 7.83
 ## Tiempo manteniendo ESPACIO para cargar el salto al máximo (s). Al llegar, salta solo.
 @export var jump_charge_time: float = 1.0
 ## Velocidad hacia arriba en el modo "tocar para saltar" (m/s).
-@export var jump_speed_tap: float = 6.5
+@export var jump_speed_tap: float = 7.27
 ## Modo olas: velocidad del saltito en agua plana (m/s); ~40 cm de alto.
-@export var hop_speed: float = 4.0
+@export var hop_speed: float = 4.47
 ## Modo olas: el "pop" multiplica el impulso con el que te lanza la ola.
 @export var pop_mult: float = 1.35
 ## Modo olas: velocidad hacia arriba que suma el pop además del multiplicador (m/s).
-@export var pop_extra: float = 1.0
+@export var pop_extra: float = 1.12
 ## Modo olas: segundos que se recuerda el A apretado subiendo la ola (y
 ## después del lanzamiento en los que todavía vale el pop).
 @export var pop_window: float = 0.12
@@ -40,7 +40,7 @@ extends Resource
 ## Velocidad vertical mínima para que una ola te lance al aire (m/s).
 @export var min_launch_speed: float = 4.5
 ## Multiplica la velocidad hacia arriba al salir despedido de una ola.
-@export var wave_launch_boost: float = 1.0
+@export var wave_launch_boost: float = 1.12
 ## Multiplicador de giro en el aire.
 @export var air_turn_factor: float = 0.5
 
@@ -68,17 +68,17 @@ extends Resource
 ## Si una ola te lanza mientras usás el turbo, el impulso hacia arriba se multiplica.
 @export var turbo_launch_mult: float = 2.2
 ## Turbo en el aire: empuje hacia arriba al empezar (m/s²); crece exponencialmente.
-@export var air_turbo_lift: float = 8.0
+@export var air_turbo_lift: float = 8.94
 ## Qué tan rápido crece el empuje en el aire (por segundo, exponencial).
 @export var air_turbo_growth: float = 1.6
 ## Velocidad máxima hacia arriba con el turbo en el aire (m/s).
-@export var air_turbo_max_up: float = 5.0
+@export var air_turbo_max_up: float = 5.59
 ## "Aire fino": desde esta altura sobre el agua (m) el impulso hacia arriba
 ## se va perdiendo de a poco y el turbo empuja cada vez menos.
-@export var air_soft_height: float = 3.5
+@export var air_soft_height: float = 4.38
 ## Altura (m) a la que el turbo ya no empuja nada y el frenado es pleno.
 ## No es un techo duro: la subida se va frenando y el salto hace la curva.
-@export var air_max_height: float = 6.0
+@export var air_max_height: float = 7.5
 ## Frenado extra de la subida en el aire fino (veces la gravedad, al máximo).
 @export var air_thin_gravity: float = 1.5
 ## Frenado extra proporcional a la velocidad de subida (por segundo, al máximo).
