@@ -95,7 +95,7 @@ await mash(12, 100);
 await sleep(600);
 await shot('3_parado');
 
-await page.keyboard.down('KeyW');
+// Avanza solo (ya no hace falta W).
 await sleep(3000);
 await shot('4_andando');
 await page.keyboard.down('KeyE');
@@ -138,7 +138,7 @@ await shot('8f_gotas');
 await sleep(5000);
 await shot('8g_gotas_tarde');
 await tap('F7');
-await page.keyboard.up('KeyW');
+
 
 // Volver al menú y no tocar nada: arranca la demo de bots con pantalla dividida.
 await tap('Escape');

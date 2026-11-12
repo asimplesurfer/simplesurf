@@ -103,10 +103,6 @@ func _connect_rider() -> void:
 			show_message("Salto: " + style_name, Color.WHITE)
 			_update_help()
 		)
-		pc.forward_mode_changed.connect(func(mode_name: String) -> void:
-			show_message("Avance: " + mode_name, Color.WHITE)
-			_update_help()
-		)
 		pc.jump_mode_changed.connect(func(mode_name: String) -> void:
 			show_message("Salto: " + mode_name, Color.WHITE)
 			_update_help()
@@ -276,7 +272,8 @@ func _update_help() -> void:
 	if rider and rider.controller is PlayerController:
 		layout = (rider.controller as PlayerController).layout_name()
 	_help.text = (
-		"Avance: %s (G cambia)   ·   Girar: A / D o stick\n" % GameSettings.forward_mode_name()
+		"Avanza solo (atrás frena)   ·   Girar: A / D o stick\n"
+		+ "Pop: ESPACIO / botón de abajo o golpe de palanca (W) hacia arriba\n"
 		+ "Salto: %s (O cambia)   ·   Pantalla dividida: V\n" % GameSettings.jump_style_name()
 		+ "Truco: en el aire, mantener ESPACIO / botón de abajo\n"
 		+ "Derrapar: SHIFT o botón izquierdo / RB   ·   Turbo (tocar, gasta 1 carga): E o botón derecho\n"
