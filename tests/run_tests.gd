@@ -42,10 +42,9 @@ func _run() -> void:
 	GameSettings.load_settings()
 	GameSettings.player_count = 1
 	GameSettings.bot_count = 0
-	_check(GameSettings.auto_forward, "por defecto el avance es automático")
-	# Los tests de movimiento usan el modo manual (W acelera); el automático
-	# se prueba aparte.
-	GameSettings.auto_forward = false
+	# Avanza solo siempre. Para que los tests empiecen quietos, se mantiene
+	# "atrás" (frenar) y se suelta cuando hay que avanzar.
+	_set_action(&"p1_down", true)
 	_check(
 		GameSettings.jump_style == GameSettings.JumpStyle.WAVES,
 		"por defecto el salto es de olas (saltito + pop)"
@@ -64,6 +63,7 @@ func _run() -> void:
 	GameSettings.jump_style = GameSettings.JumpStyle.FREE
 	_test_avatar()
 	await _test_menu()
+	_set_action(&"p1_down", true)
 	_main = load("res://main.tscn").instantiate()
 	root.add_child(_main)
 	await process_frame
@@ -140,6 +140,7 @@ func _run() -> void:
 	_test_bot_paths()
 	await _test_bot_race()
 	await _test_demo()
+	_set_action(&"p1_down", true)
 	await _test_memory()
 	await _test_archipelago()
 	_finish()
@@ -154,6 +155,8 @@ func _test_demo() -> void:
 	root.add_child(menu)
 	await _wait(9.0)
 	_check(not started[0], "a los 9 s sin tocar nada todavía no arranca")
+	_set_action(&"p1_down", false)
+	await process_frame
 	await _press(&"p1_down")
 	await _wait(9.0)
 	_check(not started[0], "tocar algo reinicia la espera")
@@ -254,6 +257,7 @@ func _test_menu() -> void:
 	menu.auto_start = false
 	var started := [false]
 	menu.start_requested.connect(func() -> void: started[0] = true)
+	_set_action(&"p1_down", false)
 	root.add_child(menu)
 	await process_frame
 	await process_frame
@@ -291,7 +295,7 @@ func _test_wave_jump() -> void:
 	_teleport(Vector3(400.0, 0.0, 900.0))
 	if _rider.is_fallen():
 		await _mash_until_standing(8.0, 4.0)
-	_set_action(&"p1_up", true)
+	_set_action(&"p1_down", false)
 	await _wait(2.0)
 	await _press(&"p1_a")
 	_check(_state() == &"airborne", "en agua plana, A hace un saltito")
@@ -299,6 +303,25 @@ func _test_wave_jump() -> void:
 	_check(hop.x < 1.0, "el saltito es bajo (%.2f m)" % hop.x)
 	await _wait_until_state(&"riding", 2.0)
 	await _wait(0.5)
+	# Golpe de palanca hacia arriba (o W) = lo mismo que A.
+	await _press(&"p1_up")
+	_check(_state() == &"airborne", "golpe de palanca arriba hace el saltito igual que A")
+	await _wait_until_state(&"riding", 2.0)
+	await _wait(0.5)
+	# Inclinarla de a poco no cuenta.
+	var slow_flick := false
+	for i in 20:
+		var ev := InputEventAction.new()
+		ev.action = &"p1_up"
+		ev.pressed = true
+		ev.strength = float(i + 1) / 20.0
+		Input.parse_input_event(ev)
+		await process_frame
+		if _state() == &"airborne":
+			slow_flick = true
+	_set_action(&"p1_up", false)
+	_check(not slow_flick, "subir la palanca despacio no salta")
+	await _wait(0.3)
 
 	# Mantener A en el saltito no hace truco (así nadie se cae por no llegar).
 	_set_action(&"p1_a", true)
@@ -398,7 +421,7 @@ func _test_constant_wave() -> void:
 	_teleport(track.position_at(start_angle, lat - 0.5))
 	if _rider.is_fallen():
 		await _mash_until_standing(8.0, 4.0)
-	_set_action(&"p1_up", true)
+	_set_action(&"p1_down", false)
 	var launched := false
 	var prompt := false
 	var max_height := 0.0
@@ -412,7 +435,7 @@ func _test_constant_wave() -> void:
 			launched = true
 			max_height = maxf(max_height, _rider.global_position.y - _water_height_here())
 		await process_frame
-	_set_action(&"p1_up", false)
+	_set_action(&"p1_down", true)
 	_check(launched, "andando por la ola constante, los picos lo lanzan al aire")
 	_check(prompt, "en la ola constante también aparece el botón del pop")
 	_check(max_height > 0.15, "salta (%.1f m el más alto en 10 s)" % max_height)
@@ -676,9 +699,9 @@ func _test_race_start() -> void:
 	_check(split != null and split.views.size() == 1, "1 jugador: una sola pantalla")
 	var start_angle := _course.track.angle_of(_rider.global_position)
 	_check(absf(start_angle) < 0.1, "larga en la meta (ángulo %.2f)" % start_angle)
-	_set_action(&"p1_up", true)
+	_set_action(&"p1_down", false)
 	await _mash(8.0, 1.0)
-	_set_action(&"p1_up", false)
+	_set_action(&"p1_down", true)
 	_check(
 		_state() == &"riding" and _rider.speed < 0.5,
 		"durante la cuenta no se mueve ni salta"
@@ -695,7 +718,7 @@ func _test_course() -> void:
 	_check(_course.rocks.size() > 5, "hay rocas (%d)" % _course.rocks.size())
 	_course.hazards_enabled = true
 	_course.bounds_enabled = true
-	_set_action(&"p1_up", true)
+	_set_action(&"p1_down", false)
 	if _rider.is_fallen():
 		await _mash_until_standing(8.0, 4.0)
 
@@ -757,7 +780,7 @@ func _test_course() -> void:
 	_teleport(_course.track.position_at(a0, _course.half_width - 3.0))
 	_rider.heading = _course.track.heading_at(a0) + 0.7
 	_rider.speed = 13.0
-	_set_action(&"p1_up", true)
+	_set_action(&"p1_down", false)
 	var min_speed := 99.0
 	for i in int(1.5 * FPS):
 		# A mitad de camino salta (el bug pasaba sobre todo en el aire).
@@ -767,7 +790,7 @@ func _test_course() -> void:
 			_set_action(&"p1_a", false)
 		min_speed = minf(min_speed, _rider.speed)
 		await process_frame
-	_set_action(&"p1_up", false)
+	_set_action(&"p1_down", true)
 	var moved := wrapf(_course.track.angle_of(_rider.position) - a0, -PI, PI)
 	var lat := absf(_course.track.lateral_of(_rider.position))
 	_check(min_speed > 8.0, "contra la corchera no pierde casi velocidad (mín %.1f m/s)" % min_speed)
@@ -780,7 +803,7 @@ func _test_turbo_and_wrong_way() -> void:
 	print("Turbo:")
 	_course.bounds_enabled = false
 	_teleport(Vector3(0.0, 0.0, 900.0))
-	_set_action(&"p1_up", true)
+	_set_action(&"p1_down", false)
 	await _wait(2.5)
 	_rider.reset_nitro()
 	_rider.add_nitro(1.0)
@@ -1044,11 +1067,11 @@ func _test_get_up() -> void:
 func _test_throttle_and_steer() -> void:
 	print("Acelerar y girar:")
 	await _wait(2.5)
-	_check(_rider.speed < 1.0, "parado sin acelerar no avanza solo (velocidad %.1f)" % _rider.speed)
+	_check(_rider.speed < 1.0, "frenando no avanza (velocidad %.1f)" % _rider.speed)
 
-	_set_action(&"p1_up", true)
+	_set_action(&"p1_down", false)
 	await _wait(3.0)
-	_check(_rider.speed > 10.0, "W acelera (velocidad %.1f)" % _rider.speed)
+	_check(_rider.speed > 10.0, "sin tocar nada avanza solo (velocidad %.1f)" % _rider.speed)
 
 	var start_heading := _rider.heading
 	var start_pos := _rider.global_position
@@ -1064,23 +1087,12 @@ func _test_throttle_and_steer() -> void:
 	var expected_y := _water.height_at(_rider.global_position.x, _rider.global_position.z)
 	_check(absf(_rider.global_position.y - expected_y) < 0.001, "flota a la altura de la ola")
 
-	_set_action(&"p1_up", false)
-	await _wait(1.0)
-	_check(_rider.speed < 11.5, "al soltar W frena de a poco (velocidad %.1f)" % _rider.speed)
-
-	# Modo automático: avanza solo y atrás frena.
-	GameSettings.auto_forward = true
-	await _wait(2.5)
-	_check(_rider.speed > 12.0, "automático: avanza solo sin tocar nada (%.1f)" % _rider.speed)
 	_set_action(&"p1_down", true)
 	await _wait(1.5)
-	_check(_rider.speed < 3.0, "automático: atrás frena (%.1f)" % _rider.speed)
+	_check(_rider.speed < 3.0, "atrás frena (%.1f)" % _rider.speed)
 	_set_action(&"p1_down", false)
 	await _wait(2.5)
-	_check(_rider.speed > 10.0, "automático: al soltar vuelve a avanzar (%.1f)" % _rider.speed)
-	GameSettings.auto_forward = false
-	_set_action(&"p1_up", true)
-	await _wait(1.5)
+	_check(_rider.speed > 10.0, "al soltar vuelve a avanzar (%.1f)" % _rider.speed)
 
 	var launched := false
 	for i in int(8.0 * FPS):
@@ -1113,9 +1125,11 @@ func _test_jump_and_tricks() -> void:
 	# Soltar enseguida: si se sigue manteniendo en el aire, empieza un truco.
 	_set_action(&"p1_a", false)
 	var charged_height := await _measure_jump_height()
+	# Contra la altura teórica del toque (la medida depende de las olitas).
+	var tap_theory := pow(_rider.stats.jump_speed_min, 2.0) / (2.0 * _rider.stats.gravity)
 	_check(
-		charged_height > tap_height * 2.0,
-		"el salto cargado sube mucho más (%.2f m contra %.2f m)" % [charged_height, tap_height]
+		charged_height > tap_theory * 2.0,
+		"el salto cargado sube mucho más (%.2f m contra %.2f m de un toque)" % [charged_height, tap_theory]
 	)
 	await _wait_until_state(&"riding", 2.0)
 	await _wait(0.3)
@@ -1376,7 +1390,7 @@ func _test_swells() -> void:
 	s.lifetime = 100.0
 	s.grow_time = 0.01
 	_water.add_swell(s)
-	_set_action(&"p1_up", true)
+	_set_action(&"p1_down", false)
 	var launched := false
 	for i in int(4.0 * FPS):
 		if _state() == &"airborne":
@@ -1384,7 +1398,7 @@ func _test_swells() -> void:
 			break
 		await process_frame
 	_check(launched, "subir una ola grande con velocidad lo lanza al aire")
-	_set_action(&"p1_up", false)
+	_set_action(&"p1_down", true)
 	await _wait_until_state(&"riding", 3.0)
 	await _wait(0.5)
 
