@@ -119,13 +119,16 @@ func _drive(delta: float, input: RiderInput) -> void:
 		_drift_timer -= delta
 		input.drift = true
 
-	# Turbo en línea recta cuando junta suficiente nitro.
-	if difficulty.uses_turbo:
-		if rider.nitro >= difficulty.turbo_threshold and absf(input.steer) < difficulty.turbo_steer_limit:
-			_turbo_on = true
-		if rider.nitro <= 0.0 or absf(input.steer) > 0.8:
-			_turbo_on = false
-		input.turbo = _turbo_on
+	# Turbo en ráfagas: lo mejor es justo antes de que una ola lo lance; si no,
+	# en una recta cuando junta suficiente nitro.
+	if difficulty.uses_turbo and rider.turbo_time <= 0.0 and rider.turbo_charges() >= 1:
+		var before_wave := rider.pop_ready() and _rng.randf() < difficulty.pop_skill
+		var straight := (
+			rider.nitro >= maxf(difficulty.turbo_threshold, Rider.TURBO_CHARGE)
+			and absf(input.steer) < difficulty.turbo_steer_limit
+		)
+		if before_wave or straight:
+			input.turbo_pressed = true
 
 	# Salto para hacer un truco.
 	if _jump_hold > 0.0:
@@ -365,9 +368,11 @@ func _air(_delta: float, input: RiderInput) -> void:
 	var full_turn := TAU / spin
 	var t_land := _time_to_land()
 	# Turbo en el aire para subir más y tener tiempo para más vueltas.
-	if difficulty.uses_turbo and rider.nitro > difficulty.turbo_threshold and rider.vertical_speed > -2.0:
-		input.turbo = true
-		t_land += 0.5
+	if difficulty.uses_turbo and rider.vertical_speed > -2.0:
+		if rider.turbo_time <= 0.0 and rider.nitro > maxf(difficulty.turbo_threshold, Rider.TURBO_CHARGE):
+			input.turbo_pressed = true
+		if rider.turbo_time > 0.0:
+			t_land += 0.5
 	if _trick_will_fail:
 		input.trick = true
 		return

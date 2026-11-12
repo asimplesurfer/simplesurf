@@ -22,3 +22,6 @@ var debug_fall: bool = false
 
 ## Mirar hacia atrás (gatillo izquierdo / Q): solo cambia la cámara.
 var look_back: bool = false
+
+## Tocó el turbo este frame (cada toque dispara una ráfaga).
+var turbo_pressed: bool = false

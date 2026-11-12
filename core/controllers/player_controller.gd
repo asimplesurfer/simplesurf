@@ -19,6 +19,7 @@ var using_joypad: bool = false
 var _prefix: String = ""
 var _pending_mash: int = 0
 var _pending_debug_fall: bool = false
+var _pending_turbo: bool = false
 ## Distribución elegida a mano (-1 = automática).
 var _manual_layout: int = -1
 
@@ -70,6 +71,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_pending_mash += 1
 	if event.is_action_pressed(_prefix + "debug_fall"):
 		_pending_debug_fall = true
+	if event.is_action_pressed(_prefix + "b"):
+		_pending_turbo = true
 
 	if event is InputEventKey:
 		using_joypad = false
@@ -104,6 +107,8 @@ func get_input(_delta: float) -> RiderInput:
 	input.jump_pressed = _pending_mash > 0
 	input.mash_presses = _pending_mash
 	input.debug_fall = _pending_debug_fall
+	input.turbo_pressed = _pending_turbo
+	_pending_turbo = false
 	_pending_mash = 0
 	_pending_debug_fall = false
 	return input

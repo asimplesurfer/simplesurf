@@ -267,7 +267,7 @@ func _update_help() -> void:
 		"Avance: %s (G cambia)   ·   Girar: A / D o stick\n" % GameSettings.forward_mode_name()
 		+ "Salto: %s (O cambia)   ·   Pantalla dividida: V\n" % GameSettings.jump_style_name()
 		+ "Truco: en el aire, mantener ESPACIO / botón de abajo\n"
-		+ "Derrapar: SHIFT o botón izquierdo / RB   ·   Turbo: E o botón derecho\n"
+		+ "Derrapar: SHIFT o botón izquierdo / RB   ·   Turbo (tocar, gasta 1 carga): E o botón derecho\n"
 		+ "Mirar atrás: Q o gatillo izquierdo\n"
 		+ "Levantarse: spamear ESPACIO o botón de abajo   ·   Caerse (prueba): F\n"
 		+ "J2: flechas, ENTER salta, . derrapa, - turbo   ·   Esc: menú\n"
@@ -341,6 +341,18 @@ func _build() -> void:
 	nitro_box.add_child(nitro_label)
 	_nitro_bar = _make_bar(NITRO_COLOR, 18.0)
 	nitro_box.add_child(_nitro_bar)
+	# La barra tiene 3 cargas de turbo (cada toque gasta una): marcas divisorias.
+	for k in range(1, Rider.TURBO_CHARGES):
+		var mark := ColorRect.new()
+		mark.color = Color(0.0, 0.0, 0.0, 0.85)
+		mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		mark.anchor_left = float(k) / Rider.TURBO_CHARGES
+		mark.anchor_right = mark.anchor_left
+		mark.anchor_top = 0.0
+		mark.anchor_bottom = 1.0
+		mark.offset_left = -1.5
+		mark.offset_right = 1.5
+		_nitro_bar.add_child(mark)
 
 	# Posición, vuelta y velocidad, arriba a la derecha.
 	var right_box := VBoxContainer.new()

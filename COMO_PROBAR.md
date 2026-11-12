@@ -39,7 +39,7 @@ Ojo: ese zip no funciona con doble clic en `index.html`, necesita un servidor we
 | Girar | A / D | ← / → | Stick o cruceta |
 | Saltar · truco (en el aire, mantener) | Espacio | Enter | Botón de abajo (A / ✕) |
 | Derrapar (mantener) | Shift | . | Botón izquierdo (X / □) o RB |
-| Turbo (gasta nitro) | E | - | Botón derecho (B / ○) |
+| Turbo (tocar: una ráfaga) | E | - | Botón derecho (B / ○) |
 | Levantarse (spamear) | Espacio | Enter | Botón de abajo |
 | Caerse (para probar) | F | Retroceso | Botón de arriba (Y / △) |
 | Mirar atrás (mantener) | Q | , | Gatillo izquierdo (LT / L2) |
@@ -87,7 +87,11 @@ Si el teclado no responde, haz clic dentro del juego.
   más alto. Con O se cambia al salto libre (A salta alto en cualquier lado).
 - **Truco:** en el aire, mantener gira la tabla y carga nitro. Si toca el agua girando: se cae y pierde el nitro.
 - **Derrape:** tabla de costado, frena y tira una cortina de agua hacia atrás que hace caer a quien esté detrás.
-- **Nitro y turbo:** los círculos de velocidad y los trucos cargan nitro; el turbo lo gasta. Si una ola te lanza con el turbo puesto, salís mucho más alto, y en el aire el turbo te sigue subiendo (cada vez más fuerte) para tener más tiempo de trucos.
+- **Nitro y turbo:** los círculos de velocidad y los trucos cargan nitro. La barra tiene
+  **3 cargas**: cada toque de turbo dispara una ráfaga de 1,5 s y gasta una (mantener apretado
+  no hace nada; dos toques seguidos encadenan dos ráfagas). En las rectas el turbo acelera
+  poco; donde vale es **justo antes de que una ola te lance**: salís mucho más alto, y en el
+  aire la ráfaga te sigue subiendo un poco más.
 - **Handicap:** cuanto más lejos del primero, el nitro se carga más rápido (hasta ×2,5,
   y muy atrás también se carga solo) los saltos son más altos (hasta +35%), va hasta un 20% más rápido y
   hay tolerancia al caer de un truco. El tope es a 120 m del primero (medido por la

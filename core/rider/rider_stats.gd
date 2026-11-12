@@ -34,7 +34,7 @@ extends Resource
 @export var pop_extra: float = 1.0
 ## Modo olas: segundos que se recuerda el A apretado subiendo la ola (y
 ## después del lanzamiento en los que todavía vale el pop).
-@export var pop_window: float = 0.15
+@export var pop_window: float = 0.12
 ## Velocidad hacia arriba subiendo una ola para que A cuente como pop (m/s).
 @export var pop_min_climb: float = 1.5
 ## Velocidad vertical mínima para que una ola te lance al aire (m/s).
@@ -54,13 +54,11 @@ extends Resource
 
 @export_group("Turbo y motivación")
 ## Multiplica la velocidad máxima con el turbo.
-@export var turbo_speed_mult: float = 1.55
+@export var turbo_speed_mult: float = 1.3
 ## Multiplica la aceleración con el turbo.
 @export var turbo_accel_mult: float = 2.5
-## Nitro que gasta el turbo por segundo (1.0 = barra llena).
-@export var turbo_drain: float = 0.35
-## Nitro mínimo para arrancar el turbo (si se vacía, hay que soltar y juntar esto).
-@export var turbo_min_nitro: float = 0.15
+## Duración de cada ráfaga de turbo (s). Cada toque gasta una carga (1/3 de la barra).
+@export var turbo_burst_time: float = 1.5
 ## Duración del mini sprint automático (motivación) (s).
 @export var motivation_time: float = 1.3
 ## Multiplica la velocidad máxima durante la motivación.
@@ -68,15 +66,13 @@ extends Resource
 ## Nitro que da pasar por un círculo de velocidad.
 @export var ring_nitro: float = 0.25
 ## Si una ola te lanza mientras usás el turbo, el impulso hacia arriba se multiplica.
-@export var turbo_launch_mult: float = 1.6
+@export var turbo_launch_mult: float = 2.2
 ## Turbo en el aire: empuje hacia arriba al empezar (m/s²); crece exponencialmente.
 @export var air_turbo_lift: float = 8.0
 ## Qué tan rápido crece el empuje en el aire (por segundo, exponencial).
 @export var air_turbo_growth: float = 1.6
 ## Velocidad máxima hacia arriba con el turbo en el aire (m/s).
 @export var air_turbo_max_up: float = 5.0
-## Nitro que gasta el turbo por segundo en el aire.
-@export var air_turbo_drain: float = 0.6
 ## "Aire fino": desde esta altura sobre el agua (m) el impulso hacia arriba
 ## se va perdiendo de a poco y el turbo empuja cada vez menos.
 @export var air_soft_height: float = 3.5
