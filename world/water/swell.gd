@@ -28,7 +28,8 @@ var breaking: float = 0.0
 ## Tiempo que tarda en romper del todo después de llegar al máximo (s).
 const BREAK_TIME := 1.2
 ## Puntos del perfil para saber si la cara quedó adentro de la ola.
-const FACE_SAMPLES := 64
+## (Solo sobre el tramo que puede tapar la cara: ~25 cm entre puntos.)
+const FACE_SAMPLES := 16
 ## Altura mínima de la ola sobre el mar en ese punto para que cuente (m).
 const MIN_FACE_DEPTH := 0.25
 
@@ -109,12 +110,22 @@ func face_inside(q: Vector3, base_y: float, fade: float = 1.0) -> bool:
 	var span := width * 4.0
 	if uw.x < -span or uw.x > span + lean:
 		return false
+	# Más alto que la cresta en esa franja: imposible que esté adentro.
+	if q.y >= base_y + amp * e:
+		return false
+	# El labio corre cada punto entre 0 y `lean` hacia adelante: solo los puntos
+	# con u en [uq - lean, uq] pueden quedar arriba o abajo de la cara.
+	var u0 := maxf(uw.x - lean, -span)
+	var u1 := minf(uw.x, span)
+	if u1 <= u0:
+		return false
 	var crossings := 0
 	var top := -INF
 	var prev := Vector2.ZERO
+	var inv_w2 := 1.0 / (width * width)
 	for i in FACE_SAMPLES + 1:
-		var u := lerpf(-span, span, float(i) / FACE_SAMPLES)
-		var n := exp(-(u * u) / (width * width)) * e
+		var u := lerpf(u0, u1, float(i) / FACE_SAMPLES)
+		var n := exp(-(u * u) * inv_w2) * e
 		var cur := Vector2(u + lean * n * n * n, base_y + amp * n)
 		if i > 0 and (prev.x - uw.x) * (cur.x - uw.x) <= 0.0 and prev.x != cur.x:
 			var y := lerpf(prev.y, cur.y, (uw.x - prev.x) / (cur.x - prev.x))
