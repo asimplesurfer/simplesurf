@@ -125,6 +125,16 @@ await sleep(1500);
 await shot('8b_olas');
 await sleep(1500);
 await shot('8c_olas');
+
+// Efecto de atravesar una ola (F8 lo dispara para probar).
+await page.keyboard.down('F8');
+await sleep(40);
+await page.keyboard.up('F8');
+await shot('8d_golpe_ola');
+await sleep(500);
+await shot('8e_gotas');
+await sleep(700);
+await shot('8f_gotas_tarde');
 await page.keyboard.up('KeyW');
 
 // Volver al menú y no tocar nada: arranca la demo de bots con pantalla dividida.

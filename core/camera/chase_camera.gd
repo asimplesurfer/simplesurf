@@ -21,6 +21,9 @@ var _water: Water
 ## cada ola) y todo en el aire (para no perderlo cuando sube mucho).
 var _follow_y: float = 0.6
 
+## Sacudón (al atravesar una ola): se va apagando solo.
+var _shake: float = 0.0
+
 ## Mirando hacia atrás (gatillo izquierdo): la cámara pasa adelante del Rider.
 var looking_back: bool = false
 
@@ -33,6 +36,8 @@ func _ready() -> void:
 	process_priority = 10
 	if target == null:
 		target = get_node_or_null(target_path) as Rider
+	if target and target.is_human:
+		target.wave_punched.connect(func() -> void: shake(0.6))
 	_water = get_tree().get_first_node_in_group("water") as Water
 	if target:
 		global_position = _desired_position()
@@ -63,9 +68,20 @@ func _process(delta: float) -> void:
 		if global_position.y < h:
 			global_position.y = h
 	look_at(_look_point(), Vector3.UP)
+	if _shake > 0.0:
+		_shake = maxf(_shake - delta * 2.5, 0.0)
+		var s := _shake * _shake
+		rotate_object_local(Vector3.RIGHT, randf_range(-1.0, 1.0) * 0.05 * s)
+		rotate_object_local(Vector3.UP, randf_range(-1.0, 1.0) * 0.05 * s)
+		global_position += Vector3(randf_range(-1, 1), randf_range(-1, 1), 0.0) * 0.25 * s
 	# Más ángulo de visión con turbo / motivación: sensación de velocidad.
 	var boosting := target.turbo_active or target.motivation_timer > 0.0
 	fov = lerpf(fov, BOOST_FOV if boosting else BASE_FOV, 1.0 - exp(-4.0 * delta))
+
+
+## Sacude la cámara (0..1).
+func shake(amount: float) -> void:
+	_shake = maxf(_shake, amount)
 
 
 func _desired_position() -> Vector3:

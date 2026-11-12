@@ -20,7 +20,7 @@ on:
         default: false
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -131,6 +131,15 @@ jobs:
           python3 -m http.server 8001 --directory build/web > /dev/null 2>&1 &
           sleep 1
           node tests/web_perf.mjs http://localhost:8001/index.html
+
+      - name: TEMP subir capturas a rama
+        if: always()
+        run: |
+          cd screens
+          git init -q -b ci-screens
+          git add .
+          git -c user.name=ci -c user.email=ci@example.invalid commit -qm capturas
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-screens
 
       - name: Guardar capturas del navegador
         if: always()
