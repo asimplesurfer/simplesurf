@@ -243,8 +243,7 @@ func _update_mash(delta: float) -> void:
 
 ## Atravesó una ola que rompía: medio segundo de imagen mojada que se aclara.
 func _on_wave_punched() -> void:
-	if not rider.is_human:
-		return
+	# Cada vista tiene su HUD: también las de los bots en la demo.
 	_splash_t = SPLASH_TIME
 	_splash_material.set_shader_parameter("seed", randf() * 100.0)
 
