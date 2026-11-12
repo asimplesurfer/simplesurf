@@ -1,13 +1,17 @@
 # Compila el juego para la web con Godot (sin tener Godot instalado) y lo publica
 # en GitHub Pages.
-# - En las ramas de trabajo: tests + build + prueba en navegador.
-# - En main (después de mergear un PR ya probado): solo build y publicación,
-#   para que publicar tarde un par de minutos.
-# - La medición de rendimiento se corre a mano (Actions > Run workflow > perf).
+#
+# Al mergear en main corren dos trabajos a la vez:
+# - publish: chequea que todos los scripts compilen (si no, NO publica y queda la
+#   versión anterior), arma el juego y lo publica. Tarda un par de minutos.
+# - tests: tests del juego + prueba en navegador. No frenan la publicación: si
+#   fallan, se corrige con un cambio aparte.
+# La medición de rendimiento se corre a mano (Actions > Run workflow > perf).
 name: Web build
 
 on:
   push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       perf:
@@ -28,44 +32,59 @@ env:
   GODOT_VERSION: "4.5.1"
 
 jobs:
-  build:
+  publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-godot
 
-      - name: Cache de Godot
-        id: cache-godot
-        uses: actions/cache@v4
+      - name: Chequeo de compilación
+        run: |
+          godot --headless --path . --script res://tests/compile_check.gd 2>&1 | tee compile.log
+          if grep -E "SCRIPT ERROR|Parse Error|Failed to load script|Compile Error" compile.log import.log; then
+            echo "::error::Hay scripts que no compilan: no se publica"
+            exit 1
+          fi
+          grep -q "COMPILA OK" compile.log
+
+      - name: Exportar para web
+        run: |
+          mkdir -p build/web
+          godot --headless --path . --export-release "Web" build/web/index.html 2>&1 | tee export.log
+          test -f build/web/index.html
+          test -f build/web/index.pck
+
+      - name: Guardar el build (descargable desde la pestaña Actions)
+        uses: actions/upload-artifact@v4
         with:
-          path: ~/godot
-          key: godot-${{ env.GODOT_VERSION }}-web
+          name: simplesurf-web
+          path: build/web
 
-      - name: Descargar Godot y plantillas de exportación
-        if: steps.cache-godot.outputs.cache-hit != 'true'
-        run: |
-          base="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
-          mkdir -p ~/godot && cd ~/godot
-          curl -fsSL -o godot.zip "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
-          unzip -q godot.zip
-          mv "Godot_v${GODOT_VERSION}-stable_linux.x86_64" godot
-          chmod +x godot
-          curl -fsSL -o templates.tpz "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
-          # Solo hacen falta las plantillas web.
-          unzip -q templates.tpz 'templates/web_*' 'templates/version.txt'
-          rm godot.zip templates.tpz
+      - name: Preparar para GitHub Pages
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
 
-      - name: Instalar plantillas
-        run: |
-          dest="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
-          mkdir -p "$dest"
-          cp ~/godot/templates/* "$dest/"
-          echo "$HOME/godot" >> "$GITHUB_PATH"
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: publish
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publicar en GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
 
-      - name: Importar el proyecto
-        run: godot --headless --path . --import 2>&1 | tee import.log || true
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-godot
 
       - name: Tests
-        if: github.ref != 'refs/heads/main'
         run: |
           timeout 900 godot --headless --path . --fixed-fps 60 --script res://tests/run_tests.gd 2>&1 | tee tests.log
           if grep -E "SCRIPT ERROR|Parse Error|Failed to load script|Compile Error" tests.log import.log; then
@@ -74,16 +93,14 @@ jobs:
           fi
           grep -q "TESTS OK" tests.log
 
-      - name: Exportar para web
+      - name: Exportar para web (para la prueba en navegador)
+        if: always()
         run: |
           mkdir -p build/web
-          godot --headless --path . --export-release "Web" build/web/index.html 2>&1 | tee export.log
-          test -f build/web/index.html
-          test -f build/web/index.pck
-          ls -la build/web
+          godot --headless --path . --export-release "Web" build/web/index.html > export.log 2>&1
 
       - name: Cache de Chromium
-        if: github.ref != 'refs/heads/main'
+        if: always()
         id: cache-chromium
         uses: actions/cache@v4
         with:
@@ -91,7 +108,7 @@ jobs:
           key: playwright-1.49.1-chromium
 
       - name: Probar en navegador (Chromium)
-        if: github.ref != 'refs/heads/main'
+        if: always()
         run: |
           npm install --no-save --silent playwright@1.49.1
           if [ "${{ steps.cache-chromium.outputs.cache-hit }}" != "true" ]; then
@@ -111,33 +128,9 @@ jobs:
           node tests/web_perf.mjs http://localhost:8001/index.html
 
       - name: Guardar capturas del navegador
-        if: always() && github.ref != 'refs/heads/main'
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: capturas
           path: screens
           if-no-files-found: ignore
-
-      - name: Guardar el build (descargable desde la pestaña Actions)
-        uses: actions/upload-artifact@v4
-        with:
-          name: simplesurf-web
-          path: build/web
-
-      - name: Preparar para GitHub Pages
-        if: github.ref == 'refs/heads/main'
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: build/web
-
-  deploy:
-    if: github.ref == 'refs/heads/main'
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Publicar en GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4

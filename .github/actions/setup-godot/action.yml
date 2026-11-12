@@ -1,0 +1,39 @@
+# Instala Godot y las plantillas web (con caché) e importa el proyecto.
+name: Preparar Godot
+description: Descarga Godot (o lo toma de la caché), instala las plantillas web e importa el proyecto.
+runs:
+  using: composite
+  steps:
+    - name: Cache de Godot
+      id: cache-godot
+      uses: actions/cache@v4
+      with:
+        path: ~/godot
+        key: godot-${{ env.GODOT_VERSION }}-web
+
+    - name: Descargar Godot y plantillas de exportación
+      if: steps.cache-godot.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        base="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+        mkdir -p ~/godot && cd ~/godot
+        curl -fsSL -o godot.zip "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+        unzip -q godot.zip
+        mv "Godot_v${GODOT_VERSION}-stable_linux.x86_64" godot
+        chmod +x godot
+        curl -fsSL -o templates.tpz "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+        # Solo hacen falta las plantillas web.
+        unzip -q templates.tpz 'templates/web_*' 'templates/version.txt'
+        rm godot.zip templates.tpz
+
+    - name: Instalar plantillas
+      shell: bash
+      run: |
+        dest="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+        mkdir -p "$dest"
+        cp ~/godot/templates/* "$dest/"
+        echo "$HOME/godot" >> "$GITHUB_PATH"
+
+    - name: Importar el proyecto
+      shell: bash
+      run: ~/godot/godot --headless --path . --import 2>&1 | tee import.log || true
