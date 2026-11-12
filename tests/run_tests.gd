@@ -156,20 +156,44 @@ func _test_demo() -> void:
 	menu.queue_free()
 	await process_frame
 
+	# La demo usa lo armado en el menú: 1 jugador + 1 bot en Fácil -> 1 vs 1 de bots.
+	var saved := [GameSettings.player_count, GameSettings.bot_count, GameSettings.bot_level]
+	GameSettings.player_count = 1
+	GameSettings.bot_count = 1
+	GameSettings.bot_level = 0
+	var duel: Node = load("res://main.tscn").instantiate()
+	root.add_child(duel)
+	await process_frame
+	await process_frame
+	var duel_race := duel.get_node("RaceManager") as RaceManager
+	var duel_split := duel.get_node("Views") as SplitScreen
+	_check(
+		duel_race.racers.size() == 2 and duel_race.humans().is_empty(),
+		"con 1 jugador + 1 bot en el menú, la demo es un 1 vs 1 de bots"
+	)
+	var easy := (duel_race.racers[0].controller as AIController).difficulty.display_name == "Fácil"
+	_check(easy, "en la dificultad elegida en el menú")
+	_check(duel_split.views.size() == 2, "con la pantalla en 2")
+	duel.queue_free()
+	await process_frame
+
+	# 1 jugador + 3 bots en Difícil -> 4 bots.
+	GameSettings.bot_count = 3
+	GameSettings.bot_level = 2
 	var demo: Node = load("res://main.tscn").instantiate()
 	root.add_child(demo)
 	await process_frame
 	await process_frame
 	var race := demo.get_node("RaceManager") as RaceManager
 	var split := demo.get_node("Views") as SplitScreen
-	_check(race.racers.size() == 4, "la demo tiene 4 corredores")
+	_check(race.racers.size() == 4, "con 1 jugador + 3 bots, la demo tiene 4 corredores")
 	_check(race.humans().is_empty(), "son bots")
 	var hard := true
 	for r in race.racers:
 		var ai := r.controller as AIController
 		if ai == null or ai.difficulty.display_name != "Difícil":
 			hard = false
-	_check(hard, "en la dificultad máxima")
+	_check(hard, "en la dificultad elegida (Difícil)")
 	_check(split.views.size() == 4, "con la pantalla en 4 (una vista por bot)")
 	_check(split.get_child(0) is GridContainer, "en grilla de 2x2")
 	var weights: Array[float] = []
@@ -188,6 +212,9 @@ func _test_demo() -> void:
 		if race.progress_of(r) < 0.3:
 			moving = false
 	_check(moving, "los bots arrancan solos")
+	GameSettings.player_count = saved[0]
+	GameSettings.bot_count = saved[1]
+	GameSettings.bot_level = saved[2]
 	GameSettings.demo_mode = false
 	demo.queue_free()
 	await process_frame

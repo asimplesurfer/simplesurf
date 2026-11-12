@@ -114,6 +114,9 @@ Si el teclado no responde, haz clic dentro del juego.
 - **Música** de fondo (`assets/audio/simple_surf.ogg`, convertida del WAV original que
   está en `assets/audio/source/`). Sube de volumen cuando alguien pasa mucho tiempo en el
   aire. En el navegador empieza a sonar después de tocar una tecla o la pantalla.
-- **Demo:** si nadie toca el menú por 10 s, arranca una carrera de 4 bots en Difícil
-  con la pantalla en 4 (una vista por bot) (sirve para mirarlo en una tablet). Cualquier toque vuelve al menú.
+- **Demo:** si nadie toca el menú por 10 s, arranca una carrera solo de bots con lo que
+  esté armado en el menú: un bot por cada jugador y bot elegidos (mínimo 2, máximo 4), en
+  la dificultad, el mapa y el modo de olas elegidos. Por ejemplo, 1 jugador + 1 bot = un
+  1 vs 1 de bots; 1 jugador + 3 bots = 4 bots. Pantalla dividida, una vista por bot (sirve
+  para mirarlo en una tablet). Cualquier toque vuelve al menú.
 - Los valores de balance están en `core/rider/rider_stats.tres`.
