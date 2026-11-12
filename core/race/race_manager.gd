@@ -296,6 +296,9 @@ func _unhandled_input(event: InputEvent) -> void:
 					restart()
 			KEY_C, KEY_ESCAPE:
 				back_to_menu()
+			KEY_F7:
+				# Cámara lenta (para mirar animaciones y efectos).
+				Engine.time_scale = 1.0 if Engine.time_scale < 1.0 else 0.08
 			KEY_P:
 				# Contador de FPS en el HUD (para ver si anda lento).
 				Hud.show_fps = not Hud.show_fps

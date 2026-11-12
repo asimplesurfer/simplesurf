@@ -53,13 +53,14 @@ vec3 drip_layer(vec2 uv, float aspect, float cols, float layer) {
 	float start = hash(vec2(col, layer + 11.0)) * 0.7;
 	float y_drop = start + speed * elapsed * elapsed * 1.6 + 0.05 * elapsed;
 	float size = mix(0.06, 0.12, hash(vec2(col, layer + 13.0)));
-	// La gota: elipse (un poco más alta que ancha).
-	vec2 d = vec2(x / (size * cols * aspect * 1.4), (uv.y - y_drop) / size);
+	// La gota: elipse (un poco más alta que ancha). x está en ancho de columna:
+	// una columna mide 1/cols de la altura de la pantalla.
+	vec2 d = vec2((x / cols) / (size * 0.75), (uv.y - y_drop) / size);
 	float r = length(d);
 	float drop = 1.0 - smoothstep(0.7, 1.0, r);
 	// El rastro, arriba de la gota: fino y cortado.
 	float trail_y = clamp((y_drop - uv.y) / 0.35, 0.0, 1.0);
-	float trail = (1.0 - smoothstep(0.08, 0.2, abs(x))) * step(0.0, y_drop - uv.y) * (1.0 - trail_y)
+	float trail = (1.0 - smoothstep(0.03, 0.08, abs(x / cols) / size)) * step(0.0, y_drop - uv.y) * (1.0 - trail_y)
 		* step(0.45, noise(vec2(col * 3.0, uv.y * 40.0)));
 	vec2 offset = -d * drop * 0.035 + vec2(x * trail * 0.02, 0.0);
 	float shine = drop * smoothstep(0.35, 0.9, r) + trail * 0.3;
