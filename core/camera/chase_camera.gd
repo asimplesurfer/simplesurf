@@ -36,7 +36,7 @@ func _ready() -> void:
 	process_priority = 10
 	if target == null:
 		target = get_node_or_null(target_path) as Rider
-	if target and target.is_human:
+	if target:
 		target.wave_punched.connect(func() -> void: shake(0.6))
 	_water = get_tree().get_first_node_in_group("water") as Water
 	if target:
