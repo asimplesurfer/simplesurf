@@ -31,7 +31,7 @@ const COMPACT_SCALE := 0.6
 var _root: Control
 
 var _mash_box: VBoxContainer
-var _mash_title: Label
+var _mash_prompt: ButtonPrompt
 var _mash_hint: Label
 var _mash_bar: ProgressBar
 var _speed_label: Label
@@ -50,7 +50,11 @@ var splash_overlay: ColorRect
 var _splash_material: ShaderMaterial
 var _splash_t: float = 0.0
 var _speed_lines: ColorRect
-var _pop_label: Label
+## Pop en la cresta: íconos (palanca arriba y botón de abajo, o la tecla).
+var _pop_box: HBoxContainer
+var _pop_stick: ButtonPrompt
+var _pop_face: ButtonPrompt
+var _pop_key: ButtonPrompt
 var _nitro_label: Label
 var _speed_lines_material: ShaderMaterial
 var _message_time: float = 0.0
@@ -179,11 +183,13 @@ func _process(delta: float) -> void:
 
 	# Momento justo para el pop: el botón aparece en grande y late.
 	var pop := rider.is_human and rider.pop_ready()
-	_pop_label.visible = pop
+	_pop_box.visible = pop
 	if pop:
-		_pop_label.text = _button_name()
-		_pop_label.pivot_offset = _pop_label.size * 0.5
-		_pop_label.scale = Vector2.ONE * (1.0 + 0.12 * sin(Time.get_ticks_msec() * 0.025))
+		var pad := _using_pad()
+		_pop_stick.visible = pad
+		_pop_face.visible = pad
+		_pop_key.visible = not pad
+		_pop_key.key_text = _key_name()
 
 	_speed_label.text = "%d km/h" % roundi(rider.speed * 3.6)
 	# Handicap: muestra cuánto más rápido carga el nitro.
@@ -226,15 +232,14 @@ func _update_mash(delta: float) -> void:
 		meter = state.meter
 	_mash_bar.value = meter
 
-	_mash_title.text = "¡Spamea %s!" % _button_name()
+	_set_prompt(_mash_prompt)
 	if rider.recovery_stage == Rider.RecoveryStage.IN_WATER:
 		_mash_hint.text = "Súbete a la tabla"
 	else:
 		_mash_hint.text = "¡Ahora párate!"
 
 	_flash = move_toward(_flash, 0.0, delta * 6.0)
-	_mash_title.pivot_offset = _mash_title.size * 0.5
-	_mash_title.scale = Vector2.ONE * (1.0 + 0.15 * _flash)
+	_mash_prompt.pulse = _flash
 
 
 ## Atravesó una ola que rompía: medio segundo de imagen mojada que se aclara.
@@ -258,13 +263,25 @@ func _update_splash(delta: float) -> void:
 		_splash_material.set_shader_parameter("elapsed", elapsed)
 
 
-func _button_name() -> String:
+func _using_pad() -> bool:
 	var pc := rider.controller as PlayerController
-	if pc and pc.using_joypad:
-		return "(X)" if pc.is_generic_pad() else "(A)"
+	return pc != null and pc.using_joypad
+
+
+## Tecla del botón principal (A) para quien juega con teclado.
+func _key_name() -> String:
 	if rider.player_index == 1 and GameSettings.player_count >= 2:
 		return "ENTER"
 	return "ESPACIO"
+
+
+## Botón de abajo si juega con mando; la tecla si juega con teclado.
+func _set_prompt(prompt: ButtonPrompt) -> void:
+	if _using_pad():
+		prompt.kind = ButtonPrompt.Kind.FACE_BOTTOM
+	else:
+		prompt.kind = ButtonPrompt.Kind.KEY
+		prompt.key_text = _key_name()
 
 
 func _update_help() -> void:
@@ -328,8 +345,10 @@ func _build() -> void:
 	root.add_child(_mash_box)
 	_mash_hint = _make_label(24, Color.WHITE)
 	_mash_box.add_child(_mash_hint)
-	_mash_title = _make_label(44, PROMPT_COLOR)
-	_mash_box.add_child(_mash_title)
+	_mash_prompt = ButtonPrompt.new()
+	_mash_prompt.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_mash_prompt.custom_minimum_size = Vector2(200.0, 100.0)
+	_mash_box.add_child(_mash_prompt)
 	_mash_bar = _make_bar(PROMPT_COLOR, 24.0)
 	_mash_box.add_child(_mash_bar)
 
@@ -406,14 +425,26 @@ func _build() -> void:
 	root.add_child(_message)
 
 	# Botón del pop (en la cresta de la ola), un poco abajo del centro.
-	_pop_label = _make_label(64, PROMPT_COLOR)
-	_pop_label.set_anchors_preset(Control.PRESET_CENTER)
-	_pop_label.offset_left = -250.0
-	_pop_label.offset_right = 250.0
-	_pop_label.offset_top = 40.0
-	_pop_label.offset_bottom = 130.0
-	_pop_label.visible = false
-	root.add_child(_pop_label)
+	_pop_box = HBoxContainer.new()
+	_pop_box.set_anchors_preset(Control.PRESET_CENTER)
+	_pop_box.offset_left = -250.0
+	_pop_box.offset_right = 250.0
+	_pop_box.offset_top = 30.0
+	_pop_box.offset_bottom = 150.0
+	_pop_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	_pop_box.add_theme_constant_override("separation", 18)
+	_pop_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_pop_box.visible = false
+	root.add_child(_pop_box)
+	_pop_stick = ButtonPrompt.new()
+	_pop_stick.kind = ButtonPrompt.Kind.STICK_UP
+	_pop_box.add_child(_pop_stick)
+	_pop_face = ButtonPrompt.new()
+	_pop_box.add_child(_pop_face)
+	_pop_key = ButtonPrompt.new()
+	_pop_key.kind = ButtonPrompt.Kind.KEY
+	_pop_key.custom_minimum_size = Vector2(200.0, 110.0)
+	_pop_box.add_child(_pop_key)
 
 	# Cartel grande al centro (cuenta regresiva, vuelta, llegada, al revés).
 	_center_label = _make_label(84, Color.WHITE)
