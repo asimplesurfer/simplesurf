@@ -221,6 +221,18 @@ func _test_demo() -> void:
 		if race.progress_of(r) < 0.3:
 			moving = false
 	_check(moving, "los bots arrancan solos")
+	# Su vista muestra lo mismo que la de un jugador: al caerse, el cartel de
+	# levantarse con el ícono del botón.
+	var bot0 := race.racers[0]
+	var hud0 := split.huds[0]
+	_check(hud0.rider == bot0, "la primera vista sigue al primer bot")
+	bot0.fall()
+	await _wait(0.3)
+	_check(hud0._mash_box.visible, "en la demo, la vista del bot muestra el cartel de levantarse")
+	_check(
+		hud0._mash_prompt.kind == ButtonPrompt.Kind.FACE_BOTTOM,
+		"con el ícono de los botones del mando"
+	)
 	GameSettings.player_count = saved[0]
 	GameSettings.bot_count = saved[1]
 	GameSettings.bot_level = saved[2]
