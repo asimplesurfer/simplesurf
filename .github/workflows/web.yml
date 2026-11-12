@@ -24,9 +24,8 @@ permissions:
   pages: write
   id-token: write
 
-concurrency:
-  group: web-${{ github.ref }}
-  cancel-in-progress: true
+# La concurrencia va por trabajo (no por workflow): así los tests lentos de un
+# cambio anterior nunca frenan la publicación del siguiente.
 
 env:
   GODOT_VERSION: "4.5.1"
@@ -34,6 +33,9 @@ env:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    concurrency:
+      group: publish-${{ github.ref }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-godot
@@ -80,6 +82,9 @@ jobs:
 
   tests:
     runs-on: ubuntu-latest
+    concurrency:
+      group: tests-${{ github.ref }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-godot
