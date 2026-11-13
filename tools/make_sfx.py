@@ -171,6 +171,20 @@ def main():
     o = lowpass(noise(length), 500)
     swell = 0.55 + 0.45 * np.sin(2 * np.pi * t(length) / (length / 2)) ** 2
     save("ocean_loop", seamless(o * swell, 0.4), 0.5)
+    # Trueno a lo lejos: chasquido apagado y retumbe grave que va y viene.
+    length = 3.5
+    crack = lowpass(noise(0.4), 1800) * env(int(SR * 0.4), 0.003, 0.4, 4.0)
+    r = lowpass(noise(length), 140 + 260 * np.exp(-1.5 * t(length)))
+    roll = 0.6 + 0.4 * np.sin(2 * np.pi * t(length) * 1.7) ** 2
+    rumble = r * roll * env(len(r), 0.06, length, 2.5)
+    save("thunder", mix(0.35 * crack, rumble), 0.9)
+    # Lluvia fuerte con ráfagas de viento (loop).
+    length = 6.0
+    hiss = bandpass(noise(length), 3200, q=0.7)
+    patter = lowpass(noise(length), 900) * 0.5
+    gust = 0.6 + 0.4 * np.sin(2 * np.pi * t(length) / (length / 2)) ** 2
+    wind = bandpass(noise(length), 350 + 250 * gust, q=1.5) * gust
+    save("rain_loop", seamless(hiss + patter + 0.8 * wind, 0.4), 0.6)
 
 
 if __name__ == "__main__":

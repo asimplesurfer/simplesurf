@@ -18,6 +18,11 @@ uniform vec3 island_far_color : source_color = vec3(0.38, 0.62, 0.70);
 uniform vec3 ocean_color : source_color = vec3(0.06, 0.38, 0.62);
 uniform float cloud_coverage : hint_range(0.0, 1.0) = 0.48;
 uniform float cloud_speed = 0.008;
+// Rayo a lo lejos (tormenta): azimut, semilla del zigzag y brillo (0 = no hay).
+uniform float bolt_az = 0.0;
+uniform float bolt_seed = 0.0;
+uniform float bolt_strength = 0.0;
+uniform vec3 bolt_color : source_color = vec3(0.92, 0.95, 1.0);
 
 float hash(vec2 p) {
 	p = fract(p * vec2(123.34, 456.21));
@@ -45,6 +50,20 @@ float fbm(vec2 p) {
 		a *= 0.5;
 	}
 	return v;
+}
+
+// Corrimiento (en azimut) del zigzag del rayo a la altura y.
+float bolt_jag(float y, float seed) {
+	float k = y * 16.0;
+	float i = floor(k);
+	float a = hash(vec2(i, seed)) - 0.5;
+	float b = hash(vec2(i + 1.0, seed)) - 0.5;
+	return mix(a, b, fract(k)) * 0.06;
+}
+
+// Distancia angular entre dos azimuts.
+float az_dist(float a, float b) {
+	return abs(mod(a - b + 3.14159265, 6.28318531) - 3.14159265);
 }
 
 // Un volcán: cono redondeado centrado en el azimut c, de ancho w y alto h.
@@ -97,8 +116,29 @@ void sky() {
 	// Disco del sol (encima de las nubes, como en un dibujo).
 	col = mix(col, sun_color * 1.25, smoothstep(0.9991, 0.9995, sdot));
 
-	// Islas volcánicas en el horizonte: unas cerca y oscuras, otras lejos y con bruma.
 	float az = atan(d.x, d.z);
+
+	// Rayo: zigzag del horizonte hasta las nubes, con una rama, y resplandor.
+	if (bolt_strength > 0.0 && y > -0.02) {
+		float top = 0.42 + hash(vec2(bolt_seed, 3.0)) * 0.15;
+		float off = bolt_jag(y, bolt_seed);
+		float core = 0.0;
+		if (y < top) {
+			core = 1.0 - smoothstep(0.0035, 0.0065, az_dist(az, bolt_az + off));
+			// Rama: sale a media altura y se abre hacia un costado.
+			float y0 = top * (0.45 + 0.25 * hash(vec2(bolt_seed, 7.0)));
+			float side = hash(vec2(bolt_seed, 9.0)) > 0.5 ? 1.0 : -1.0;
+			if (y < y0 && y > y0 - 0.13) {
+				float boff = off + (y0 - y) * 0.35 * side + bolt_jag(y * 2.2, bolt_seed + 5.0) * 0.7;
+				core = max(core, 0.8 * (1.0 - smoothstep(0.002, 0.0042, az_dist(az, bolt_az + boff))));
+			}
+		}
+		float halo = exp(-pow(az_dist(az, bolt_az) / 0.22, 2.0)) * smoothstep(0.75, 0.0, y);
+		col += bolt_color * halo * 0.35 * bolt_strength;
+		col = mix(col, bolt_color, core * bolt_strength);
+	}
+
+	// Islas volcánicas en el horizonte: unas cerca y oscuras, otras lejos y con bruma.
 	float ripple = (noise(vec2(az * 22.0, 0.0)) - 0.5) * 0.004;
 	float near_v = max(max(
 		volcano(az, 0.9, 0.42, 0.075),

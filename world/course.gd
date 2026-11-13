@@ -1,9 +1,10 @@
 class_name Course
 extends Node3D
-## El circuito. Dos mapas (GameSettings.TrackLayout):
+## El circuito. Tres mapas (GameSettings.TrackLayout):
 ## - Isla: un anillo de agua alrededor de una isla circular.
 ## - Archipiélago: un recorrido con curvas a izquierda y derecha entre varias
 ##   islas (siempre se ven islas alrededor).
+## - El Atolón: afuera y adentro de un anillo de islas, con un volcán al medio.
 ## Arma las islas, las corcheras que marcan el borde, la meta, los círculos de
 ## velocidad y las rocas, y cada frame aplica los choques y los límites.
 
@@ -23,6 +24,26 @@ const ARCHIPELAGO_ISLANDS := [
 	Vector3(155, -130, 18), Vector3(160, 140, 16),
 	Vector3(-120, 190, 34), Vector3(240, 80, 40), Vector3(250, -90, 30), Vector3(-90, -220, 38),
 	Vector3(120, -240, 28), Vector3(-260, 60, 40), Vector3(20, 250, 36),
+]
+
+## El Atolón: un anillo de islas de arrecife con una laguna y un volcán en el
+## medio. La pista da media vuelta por afuera (mar abierto, olas grandes),
+## entra a la laguna por un paso entre islas, rodea el volcán por adentro
+## (agua más calma, curvas cerradas) y sale por el otro paso.
+const ATOLL_PATH := [
+	Vector2(215, 0), Vector2(200, -85), Vector2(150, -160), Vector2(80, -205), Vector2(30, -200), Vector2(5, -158), Vector2(-6, -112), Vector2(-46, -86), Vector2(-76, -55), Vector2(-87, -10), Vector2(-82, 34), Vector2(-57, 74), Vector2(-20, 102), Vector2(-2, 140), Vector2(4, 182), Vector2(40, 207), Vector2(105, 212), Vector2(170, 168), Vector2(208, 88),
+]
+## Islas del atolón (x, z, radio): la primera es el volcán; después el anillo
+## de arrecife (con dos pasos, al norte y al sur), dos islotes en la laguna y
+## las islas lejanas del paisaje.
+const ATOLL_ISLANDS := [
+	Vector3(0, 0, 40), Vector3(43.9, -143.4, 16), Vector3(98.4, -113.2, 21), Vector3(137, -61, 24),
+	Vector3(150, 0, 20), Vector3(137, 61, 23), Vector3(98.4, 113.2, 19), Vector3(43.9, 143.4, 16),
+	Vector3(-43.9, 143.4, 16), Vector3(-98.4, 113.2, 22), Vector3(-135.9, 63.4, 19), Vector3(-150, 0, 24),
+	Vector3(-137, -61, 20), Vector3(-98.4, -113.2, 22), Vector3(-43.9, -143.4, 16), Vector3(58, -38, 9),
+	Vector3(66, 40, 8), Vector3(330, 0, 40), Vector3(250, -245, 35), Vector3(-55, -335, 38),
+	Vector3(-300, -170, 40), Vector3(-320, 120, 36), Vector3(-110, 325, 35), Vector3(225, 265, 38),
+	Vector3(-245, -30, 24),
 ]
 
 ## -1: el mapa elegido en el menú (GameSettings.track_layout).
@@ -52,6 +73,12 @@ var island: Island
 var islands: Array[Island] = []
 var rings: Array[NitroRing] = []
 var rocks: Array[Rock] = []
+## Géiseres de la laguna (Atolón).
+var geysers: Array[Geyser] = []
+## -1: el clima elegido en el menú (GameSettings.weather).
+@export var weather: int = -1
+## La tormenta, si hay.
+var storm: Storm = null
 
 var _buoys: Array[Node3D] = []
 ## Corcheras: flotadores (MultiMesh) que marcan los bordes de la pista.
@@ -78,6 +105,13 @@ func _ready() -> void:
 		for i in ARCHIPELAGO_ISLANDS.size():
 			var d: Vector3 = ARCHIPELAGO_ISLANDS[i]
 			_add_island(Vector2(d.x, d.y), d.z, i)
+	elif is_atoll():
+		track = PathTrack.new(PackedVector2Array(ATOLL_PATH), half_width)
+		ring_count = 14
+		rock_count = 12
+		for i in ATOLL_ISLANDS.size():
+			var d: Vector3 = ATOLL_ISLANDS[i]
+			_add_island(Vector2(d.x, d.y), d.z, i, i == 0)
 	else:
 		track = TrackSpace.new(track_radius, half_width)
 		_add_island(track.center, island_radius, 0)
@@ -88,29 +122,148 @@ func _ready() -> void:
 		for isl in islands:
 			fade.append(Vector3(isl.position.x, isl.position.z, isl.radius + 2.0))
 		_water.set_islands(fade)
-		if is_archipelago():
+		if uses_path():
 			_water.set_track(Vector2.ZERO, 0.0, 0.0)
 		else:
 			_water.set_track(track.center, inner_limit(), outer_limit())
 	_build_buoys()
 	_build_finish_line()
 	_place_rings_and_rocks()
+	if is_atoll():
+		_build_atoll_extras()
+	if weather < 0:
+		weather = GameSettings.weather
+	if weather == GameSettings.Weather.STORM:
+		storm = Storm.new()
+		storm.name = "Storm"
+		add_child(storm)
 
 
 func is_archipelago() -> bool:
 	return layout == GameSettings.TrackLayout.ARCHIPELAGO
 
 
-func _add_island(center: Vector2, radius: float, index: int) -> void:
+func is_atoll() -> bool:
+	return layout == GameSettings.TrackLayout.ATOLL
+
+
+## Mapas con recorrido libre (no el anillo alrededor de la isla).
+func uses_path() -> bool:
+	return is_archipelago() or is_atoll()
+
+
+func _add_island(center: Vector2, radius: float, index: int, volcano: bool = false) -> void:
 	var isl := Island.new()
 	isl.name = "Island%d" % index
 	isl.radius = radius
 	isl.island_seed = 11 + index * 7
+	isl.volcano = volcano
 	# Faro solo en las islas grandes (y en la del medio del mapa Isla).
-	isl.lighthouse = radius >= 26.0 or not is_archipelago()
+	isl.lighthouse = not volcano and (radius >= 26.0 or not uses_path())
 	isl.position = Vector3(center.x, 0.0, center.y)
 	add_child(isl)
 	islands.append(isl)
+
+
+## Atolón: géiseres en la laguna, un arco de roca sobre el paso norte y un
+## barco pirata hundido.
+func _build_atoll_extras() -> void:
+	# Géiseres sobre la pista de la laguna (desfasados entre sí).
+	var spots := [[Vector2(-78, -42), -5.0], [Vector2(-88, 12), 6.0], [Vector2(-62, 66), -4.0], [Vector2(-30, -98), 4.0]]
+	for i in spots.size():
+		var loc := track.locate(Vector3(spots[i][0].x, 0.0, spots[i][0].y))
+		var pos := track.position_at(loc.x, spots[i][1])
+		var g := Geyser.new()
+		g.name = "Geyser%d" % i
+		g.phase = i * 1.7
+		g.position = Vector3(pos.x, 0.0, pos.z)
+		add_child(g)
+		geysers.append(g)
+	# Arco de roca natural sobre el paso norte (se pasa por debajo): piedras
+	# facetadas apiladas en semicírculo, cada vez más finas arriba.
+	var arch := Node3D.new()
+	arch.name = "RockArch"
+	arch.position = Vector3(0.0, 0.0, -143.4)
+	add_child(arch)
+	var stone := ToonMaterial.make(Color(0.5, 0.42, 0.36), 0.12)
+	var moss := ToonMaterial.make(Color(0.36, 0.55, 0.3), 0.12)
+	var arng := RandomNumberGenerator.new()
+	arng.seed = 77
+	var steps := 15
+	for k in steps + 1:
+		var t := float(k) / steps
+		var ang := PI * t
+		var thick := lerpf(9.0, 5.0, sin(ang))
+		var boulder := MeshInstance3D.new()
+		var sm := SphereMesh.new()
+		sm.radius = thick
+		sm.height = thick * 2.0
+		sm.radial_segments = 7
+		sm.rings = 4
+		sm.material = moss if sin(ang) > 0.93 else stone
+		boulder.mesh = sm
+		boulder.position = Vector3(cos(ang) * 40.0, sin(ang) * 26.0 - 2.0, arng.randf_range(-1.0, 1.0))
+		boulder.rotation = Vector3(arng.randf() * TAU, arng.randf() * TAU, arng.randf() * TAU)
+		boulder.scale = Vector3(arng.randf_range(1.0, 1.4), arng.randf_range(0.8, 1.1), arng.randf_range(0.9, 1.2))
+		arch.add_child(boulder)
+	# Una cascadita de lianas colgando del arco.
+	for k in 5:
+		var vine := MeshInstance3D.new()
+		var vm := CylinderMesh.new()
+		vm.top_radius = 0.18
+		vm.bottom_radius = 0.1
+		vm.height = arng.randf_range(4.0, 8.0)
+		vm.material = moss
+		vine.mesh = vm
+		vine.position = Vector3(-10.0 + k * 5.0 + arng.randf_range(-1.5, 1.5), 22.0 - vm.height * 0.5, arng.randf_range(-2.0, 2.0))
+		arch.add_child(vine)
+	# Barco pirata hundido en la laguna (de paisaje).
+	add_child(_shipwreck(Vector3(96.0, 0.0, 4.0)))
+
+
+## Un barco viejo medio hundido y ladeado, con el mástil roto y la vela rota.
+func _shipwreck(at: Vector3) -> Node3D:
+	var ship := Node3D.new()
+	ship.name = "Shipwreck"
+	ship.position = at
+	ship.rotation = Vector3(0.18, 0.7, 0.35)
+	ship.scale = Vector3.ONE * 1.5
+	var wood := ToonMaterial.make(Color(0.42, 0.27, 0.15), 0.12)
+	var hull := MeshInstance3D.new()
+	var cap := CapsuleMesh.new()
+	cap.radius = 3.0
+	cap.height = 16.0
+	cap.material = wood
+	hull.mesh = cap
+	hull.basis = Basis(Vector3.RIGHT, PI / 2.0) * Basis.from_scale(Vector3(1.0, 1.0, 0.75))
+	hull.position.y = -0.8
+	ship.add_child(hull)
+	var mast := MeshInstance3D.new()
+	var cyl := CylinderMesh.new()
+	cyl.top_radius = 0.25
+	cyl.bottom_radius = 0.35
+	cyl.height = 11.0
+	cyl.material = wood
+	mast.mesh = cyl
+	mast.position = Vector3(0.0, 5.0, -1.5)
+	mast.rotation.z = 0.25
+	ship.add_child(mast)
+	var sail := MeshInstance3D.new()
+	var quad := BoxMesh.new()
+	quad.size = Vector3(5.0, 4.0, 0.1)
+	quad.material = ToonMaterial.make(Color(0.92, 0.88, 0.78), 0.08)
+	sail.mesh = quad
+	sail.position = Vector3(0.6, 7.0, -1.5)
+	sail.rotation = Vector3(0.0, 0.3, 0.3)
+	ship.add_child(sail)
+	var flag := MeshInstance3D.new()
+	var fq := BoxMesh.new()
+	fq.size = Vector3(1.6, 1.0, 0.05)
+	fq.material = ToonMaterial.make(Color(0.08, 0.08, 0.1), 0.0)
+	flag.mesh = fq
+	flag.position = Vector3(1.9, 10.4, -1.5)
+	ship.add_child(flag)
+	return ship
 
 
 ## Distancia a la que la orilla de la isla principal tira al jugador.
@@ -172,6 +325,13 @@ func _apply_to_rider(rider: Rider) -> void:
 				var safe := c + dir * (crash_r + 2.0)
 				_crash(rider, Vector3(safe.x, rider.position.y, safe.y))
 				return
+
+	# Géiser explotando abajo: sale volando.
+	if hazards_enabled and rider.grounded and not rider.is_fallen():
+		for g in geysers:
+			if g.erupting() and g.covers(rider.position.x, rider.position.z):
+				rider.geyser_launch(Geyser.LAUNCH_SPEED)
+				break
 
 	# Las corcheras no dejan salir de la pista (por ningún lado).
 	if bounds_enabled:

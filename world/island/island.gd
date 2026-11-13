@@ -7,6 +7,8 @@ extends Node3D
 ## Semilla para que cada isla tenga sus palmeras en otro lugar.
 @export var island_seed: int = 11
 @export var lighthouse: bool = true
+## Volcán: un cono de roca con lava en el cráter y humo (en vez de la loma).
+@export var volcano: bool = false
 
 const SAND := Color(0.98, 0.86, 0.6)
 const GRASS := Color(0.45, 0.78, 0.35)
@@ -25,6 +27,10 @@ func _ready() -> void:
 	beach_mesh.radial_segments = 48
 	beach_mesh.material = ToonMaterial.make(SAND, 0.0)
 	_add_mesh(beach_mesh, Vector3(0.0, -1.4, 0.0))
+
+	if volcano:
+		_build_volcano()
+		return
 
 	# Loma verde.
 	var hill_mesh := SphereMesh.new()
@@ -48,6 +54,93 @@ func _ready() -> void:
 	_build_palms()
 	if lighthouse:
 		_add_lighthouse(Vector3(0.0, _ground_height(0.0) - 0.5, 0.0))
+
+
+## Volcán: falda verde con palmeras, cono de roca, lava en el cráter y una
+## columna de humo que sube despacio.
+func _build_volcano() -> void:
+	var skirt := SphereMesh.new()
+	skirt.radius = radius * 0.95
+	skirt.height = radius * 0.95 * 0.32
+	skirt.radial_segments = 40
+	skirt.rings = 10
+	skirt.material = ToonMaterial.make(GRASS, 0.0)
+	_add_mesh(skirt, Vector3(0.0, 0.4, 0.0))
+	var cone := CylinderMesh.new()
+	cone.top_radius = radius * 0.2
+	cone.bottom_radius = radius * 0.78
+	cone.height = radius * 0.95
+	cone.radial_segments = 32
+	cone.material = ToonMaterial.make(Color(0.42, 0.34, 0.3), 0.0)
+	var top_y := 0.6 + cone.height
+	_add_mesh(cone, Vector3(0.0, 0.6 + cone.height * 0.5, 0.0))
+	# Lava en el cráter (brilla aunque sea de noche).
+	var lava := CylinderMesh.new()
+	lava.top_radius = radius * 0.16
+	lava.bottom_radius = radius * 0.16
+	lava.height = 0.6
+	var lava_mat := StandardMaterial3D.new()
+	lava_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	lava_mat.albedo_color = Color(1.0, 0.45, 0.1)
+	lava.material = lava_mat
+	_add_mesh(lava, Vector3(0.0, top_y - 0.1, 0.0))
+	# Chorros de lava bajando por la ladera.
+	for i in 3:
+		var a := TAU * i / 3.0 + 0.4
+		var flow := BoxMesh.new()
+		flow.size = Vector3(radius * 0.05, radius * 0.6, 0.4)
+		flow.material = lava_mat
+		var mi := _add_mesh(flow, Vector3.ZERO)
+		var out := Vector3(cos(a), 0.0, sin(a))
+		var slope := atan2(radius * 0.58, cone.height)
+		mi.basis = Basis(Vector3.UP, -a + PI * 0.5) * Basis(Vector3.RIGHT, -slope)
+		mi.position = out * radius * 0.42 + Vector3(0.0, 0.6 + cone.height * 0.55, 0.0)
+	_add_smoke(Vector3(0.0, top_y + 1.0, 0.0))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = island_seed
+	for i in 9:
+		var ang := TAU * i / 9.0 + rng.randf_range(-0.2, 0.2)
+		var r := radius * rng.randf_range(0.82, 0.95)
+		_add_palm(Vector3(cos(ang) * r, 0.6, sin(ang) * r), rng)
+	_build_palms()
+
+
+func _add_smoke(at: Vector3) -> void:
+	var smoke := CPUParticles3D.new()
+	smoke.name = "Smoke"
+	var puff := SphereMesh.new()
+	puff.radius = 2.5
+	puff.height = 5.0
+	puff.radial_segments = 10
+	puff.rings = 5
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.vertex_color_use_as_albedo = true
+	puff.material = mat
+	smoke.mesh = puff
+	smoke.amount = 26
+	smoke.lifetime = 9.0
+	smoke.preprocess = 9.0
+	smoke.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	smoke.emission_sphere_radius = radius * 0.12
+	smoke.direction = Vector3(0.15, 1.0, 0.0)
+	smoke.spread = 12.0
+	smoke.gravity = Vector3(0.6, 0.4, 0.0)
+	smoke.initial_velocity_min = 2.5
+	smoke.initial_velocity_max = 4.0
+	smoke.scale_amount_min = 1.0
+	smoke.scale_amount_max = 1.6
+	var grow := Curve.new()
+	grow.add_point(Vector2(0.0, 0.6))
+	grow.add_point(Vector2(1.0, 3.2))
+	smoke.scale_amount_curve = grow
+	var fade := Gradient.new()
+	fade.set_color(0, Color(0.55, 0.52, 0.5, 0.85))
+	fade.set_color(1, Color(0.85, 0.85, 0.85, 0.0))
+	smoke.color_ramp = fade
+	smoke.position = at
+	add_child(smoke)
 
 
 ## Altura del suelo de la loma a una distancia del centro.

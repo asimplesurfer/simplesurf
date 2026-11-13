@@ -27,6 +27,8 @@ signal turbo_fired
 signal popped
 signal ring_collected
 signal crashed
+## Un géiser lo lanzó al aire.
+signal geyser_launched
 
 ## En qué punto de la recuperación está: en el agua, acostado sobre la tabla o parado.
 enum RecoveryStage { IN_WATER, PRONE, STANDING }
@@ -229,6 +231,20 @@ func trigger_motivation() -> void:
 	if motivation_timer <= 0.0:
 		motivation_started.emit()
 	motivation_timer = stats.motivation_time
+
+
+## Un géiser explota abajo: sale volando hacia arriba (puede hacer trucos).
+func geyser_launch(speed: float) -> void:
+	if is_fallen() or not grounded:
+		return
+	position.y += 0.2
+	vertical_speed = maxf(vertical_speed, speed)
+	grounded = false
+	can_trick = true
+	did_pop = false
+	wave_air_time = 0.0
+	state_machine.transition_to(&"airborne")
+	geyser_launched.emit()
 
 
 ## Choque (roca, isla): se cae y queda en `safe_position`, fuera del obstáculo.

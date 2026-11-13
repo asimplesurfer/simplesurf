@@ -476,6 +476,8 @@ func _build_setup() -> void:
 	_setup_row(box, "Olas", _capitalized(GameSettings.WAVE_MODE_NAMES), GameSettings.wave_mode, set_wave_mode)
 	_setup_row(box, "Mapa", _capitalized(GameSettings.TRACK_LAYOUT_NAMES), GameSettings.track_layout,
 		set_track_layout)
+	_setup_row(box, "Clima", _capitalized(GameSettings.WEATHER_NAMES), GameSettings.weather,
+		func(i: int) -> void: GameSettings.weather = i as GameSettings.Weather)
 	if GameSettings.player_count == 2:
 		_setup_row(box, "Pantalla", ["Lado a lado", "Arriba y abajo"], 0 if GameSettings.split_vertical else 1,
 			func(i: int) -> void: GameSettings.split_vertical = i == 0)
