@@ -42,8 +42,7 @@ static func create(player_count: int, bot_count: int, bot_level: int) -> RaceCon
 ## un bot por cada jugador y bot elegidos (mínimo 2), en la dificultad elegida.
 ## Ej.: 1 jugador + 1 bot -> 1 vs 1 de bots; 1 jugador + 3 bots -> 4 bots.
 static func demo() -> RaceConfig:
-	var bots := clampi(GameSettings.player_count + GameSettings.bot_count, 2, 4)
-	return create(0, bots, GameSettings.bot_level)
+	return create(0, GameSettings.DEMO_BOTS, GameSettings.DEMO_LEVEL)
 
 
 ## Configuración según lo elegido en el menú (GameSettings).
