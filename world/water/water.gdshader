@@ -55,15 +55,31 @@ varying float v_lip;
 varying float v_grow;
 varying vec3 v_world;
 
-void add_wave(vec4 w, vec2 p, inout float h, inout vec2 g) {
+// Para que el oleaje no forme un enrejado que se repite, cada onda se tuerce
+// (sus crestas se curvan) y crece y baja por zonas (series de olas), cada una
+// distinto. Mismos números que wave_definition.gd.
+const vec2 WARP_A[4] = vec2[](vec2(0.023, 0.031), vec2(-0.033, 0.017), vec2(0.027, -0.026), vec2(-0.019, -0.035));
+const vec2 WARP_B[4] = vec2[](vec2(-0.029, 0.021), vec2(0.018, 0.034), vec2(-0.031, -0.022), vec2(0.036, -0.012));
+const vec2 GROUP[4] = vec2[](vec2(0.011, 0.014), vec2(-0.016, 0.008), vec2(0.009, -0.015), vec2(-0.013, -0.012));
+const float SEED[4] = float[](0.0, 2.1, 4.3, 1.2);
+
+void add_wave(vec4 w, int i, vec2 p, inout float h, inout vec2 g) {
 	if (w.w <= 0.0) {
 		return;
 	}
 	float k = 6.28318530718 / w.w;
 	float omega = sqrt(9.8 * k) * speed_scale;
-	float phase = k * dot(w.xy, p) - omega * wave_time;
-	h += w.z * sin(phase);
-	g += w.xy * (w.z * k * cos(phase));
+	float wa = 0.22 * w.w;
+	float s1 = dot(p, WARP_A[i]) + SEED[i];
+	float s2 = dot(p, WARP_B[i]) + SEED[i] * 1.37;
+	vec2 q = p + wa * vec2(sin(s1), sin(s2));
+	float phase = k * dot(w.xy, q) - omega * wave_time;
+	vec2 dphase = k * (w.xy + w.x * wa * cos(s1) * WARP_A[i] + w.y * wa * cos(s2) * WARP_B[i]);
+	float sg = dot(p, GROUP[i]) + SEED[i] * 1.7;
+	float m = 0.65 + 0.35 * sin(sg);
+	vec2 dm = 0.35 * cos(sg) * GROUP[i];
+	h += w.z * m * sin(phase);
+	g += w.z * (dm * sin(phase) + m * cos(phase) * dphase);
 }
 
 // Ola grande: una loma que avanza en `dir`. La parte de arriba se corre hacia
@@ -169,10 +185,10 @@ void vertex() {
 	vec3 world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	float h = 0.0;
 	vec2 g = vec2(0.0);
-	add_wave(wave_0, world.xz, h, g);
-	add_wave(wave_1, world.xz, h, g);
-	add_wave(wave_2, world.xz, h, g);
-	add_wave(wave_3, world.xz, h, g);
+	add_wave(wave_0, 0, world.xz, h, g);
+	add_wave(wave_1, 1, world.xz, h, g);
+	add_wave(wave_2, 2, world.xz, h, g);
+	add_wave(wave_3, 3, world.xz, h, g);
 	float ambient_h = h;
 	float sh = 0.0;
 	vec2 sg = vec2(0.0);
@@ -229,6 +245,8 @@ void fragment() {
 	float n2 = fx_noise(wp * 2.3 - vec2(t * 0.25, t * 0.4));
 	float grain = n1 * 0.65 + n2 * 0.35;
 	float crest = smoothstep(foam_height - 0.05, foam_height + 0.2, v_height);
+	// Solo en algunas zonas (que se mueven despacio), así no se ve un patrón.
+	crest *= smoothstep(0.22, 0.6, fx_noise(wp * 0.025 + vec2(t * 0.03, -t * 0.02)));
 	float foam = crest * smoothstep(0.62, 0.8, grain + crest * 0.25);
 	float lip = clamp(v_lip, 0.0, 1.0);
 	foam = max(foam, lip * smoothstep(0.15, 0.45, grain + lip * 0.5));
