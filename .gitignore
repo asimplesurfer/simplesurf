@@ -6,3 +6,6 @@ build/
 # Pruebas en navegador
 node_modules/
 screens/
+# Scripts temporales de medición
+tests/_*_tmp.gd
+tests/_*_tmp.gd.uid
