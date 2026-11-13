@@ -80,9 +80,6 @@ var did_pop: bool = false
 var can_trick: bool = true
 ## Handicap (0..1): cuánto ayuda el juego por ir atrás. Lo calcula RaceManager.
 var catchup: float = 0.0
-## Ventaja de los bots de los niveles más altos (1 = ninguna).
-var skill_speed_mult: float = 1.0
-var skill_nitro_mult: float = 1.0
 var water: Water
 
 ## Tiempo que le queda a la ráfaga de turbo en curso (s).
@@ -414,12 +411,12 @@ func update_air(delta: float) -> bool:
 
 ## Multiplicador del nitro que se gana por el handicap.
 func nitro_gain_mult() -> float:
-	return (1.0 + catchup * (stats.catchup_nitro_mult - 1.0)) * skill_nitro_mult
+	return 1.0 + catchup * (stats.catchup_nitro_mult - 1.0)
 
 
 ## Multiplicador de la velocidad máxima por el handicap.
 func speed_mult() -> float:
-	return (1.0 + catchup * stats.catchup_speed_bonus) * skill_speed_mult
+	return 1.0 + catchup * stats.catchup_speed_bonus
 
 
 ## Radianes que le pueden faltar a un truco al caer para que igual cuente (handicap).

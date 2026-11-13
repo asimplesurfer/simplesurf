@@ -34,9 +34,24 @@ extends Resource
 ## el más rápido (Difícil) es el 75 % de lo que spameaban antes todos (10/s).
 ## Cada caída sale entre MASH_SPREAD y 100 % de esto, así no se paran todos igual.
 @export var mash_rate: float = 6.0
-## Ventaja física (solo en los niveles más altos): velocidad máxima y nitro que gana.
-@export var speed_bonus: float = 1.0
-@export var nitro_bonus: float = 1.0
+## Línea de carrera: 0 = sigue su camino; 1 = corta siempre por adentro de las
+## curvas (el camino más corto), como un experto.
+@export_range(0.0, 1.0) var line_skill: float = 0.0
+## Margen (s) que deja antes de tocar el agua para terminar una vuelta de truco.
+## Menos margen = más vueltas (y más nitro), con más riesgo.
+@export var trick_margin: float = 0.12
+## Cuánto acelera mientras esquiva una roca de cerca (1 = no afloja).
+@export_range(0.0, 1.0) var rock_throttle: float = 0.6
+## Guarda el turbo para usarlo justo antes de que la ola lo lance (sale más alto).
+@export var saves_turbo_for_waves: bool = false
+## Probabilidad de salirse del cono del derrape del rival de adelante (para que
+## no lo tire).
+@export_range(0.0, 1.0) var evade_skill: float = 0.0
+## Espacio extra (m) que deja al esquivar rocas.
+@export var rock_margin: float = 0.0
+## Calcula el aterrizaje con el agua de adelante (no la de abajo): no lo
+## agarra una ola a mitad de una vuelta de truco.
+@export var reads_landing: bool = false
 
 const MASH_SPREAD := 0.8
 
@@ -80,8 +95,9 @@ static func preset(level: int) -> AIDifficulty:
 			d.wave_seek = 0.9
 			d.mash_rate = 7.5
 		3:
-			# Juega perfecto: sin errores, siempre al mejor camino, turbo con cada
-			# carga en recta, todos los pops y todas las olas.
+			# Juega casi perfecto: sin errores de manejo, va a los aros y a las
+			# olas, todos los pops, turbo con cada carga en recta, y ya corta
+			# bastante por adentro de las curvas.
 			d.display_name = "Profesional"
 			d.max_throttle = 1.0
 			d.think_interval = 0.05
@@ -96,9 +112,16 @@ static func preset(level: int) -> AIDifficulty:
 			d.pop_skill = 0.97
 			d.wave_seek = 0.97
 			d.mash_rate = 8.5
+			d.line_skill = 0.55
+			d.trick_margin = 0.1
+			d.rock_throttle = 0.75
+			d.evade_skill = 0.6
+			d.rock_margin = 0.8
+			d.reads_landing = true
 		4:
-			# Como Profesional pero sin un solo error, y con ventaja física:
-			# un poco más rápido y carga más nitro. Para ganarle hay que jugar perfecto.
+			# Lo mejor que se puede jugar, sin ninguna ventaja: la línea más corta
+			# siempre, trucos al límite, turbo guardado para salir volando de
+			# las olas, ni un error y se para lo más rápido posible.
 			d.display_name = "Imposible"
 			d.max_throttle = 1.0
 			d.think_interval = 0.03
@@ -106,13 +129,18 @@ static func preset(level: int) -> AIDifficulty:
 			d.ring_seek = 1.0
 			d.trick_fail_chance = 0.0
 			d.trick_jump_rate = 0.45
-			d.aggression = 1.0
+			d.aggression = 0.55
 			d.turbo_threshold = 0.34
 			d.turbo_steer_limit = 0.25
 			d.look_ahead = 45.0
 			d.pop_skill = 1.0
 			d.wave_seek = 1.0
 			d.mash_rate = 10.0
-			d.speed_bonus = 1.12
-			d.nitro_bonus = 1.7
+			d.line_skill = 0.8
+			d.trick_margin = 0.1
+			d.rock_throttle = 0.9
+			d.saves_turbo_for_waves = true
+			d.evade_skill = 1.0
+			d.rock_margin = 1.5
+			d.reads_landing = true
 	return d
