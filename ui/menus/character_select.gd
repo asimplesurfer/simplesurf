@@ -1,51 +1,101 @@
 class_name CharacterSelect
 extends Control
-## Menú de personaje: cada jugador arma su surfista (estilos armados, cuerpo,
-## piel, cara, pelo, accesorios, short y tabla, o uno al azar) y marca "listo". J1 además elige cuántos bots y su dificultad.
-## Cuando todos están listos, empieza la carrera.
+## Menú del juego, en dos pantallas:
+## 1. "Creá tu surfista": categorías a la izquierda, el personaje en grande en
+##    el medio y, a la derecha, cuadrados con la foto de cada opción (o el
+##    color). Las barras (panza, músculos, cabeza) se mueven con ← →.
+## 2. "Armá la partida": jugadores, bots, dificultad, olas y mapa, también en
+##    cuadrados. De ahí arranca la carrera.
 ##
-## Controles por jugador: ↑↓ elegir fila · ←→ cambiar · A / ESPACIO listo ·
-## B / E volver. Teclas 1 / 2 (o Select): cantidad de jugadores.
+## Se maneja con el mouse, con el mando o con el teclado: flechas / stick para
+## moverse, ESPACIO / A para elegir, ENTER / Start para seguir, ESC / B para
+## volver. Sin tocar nada 10 s arranca la demo (carrera de bots).
 
 signal start_requested
 
 const RACE_SCENE := "res://main.tscn"
-const ROWS_PLAYER := [
-	"Estilo", "Sorpresa", "Panza", "Músculos", "Piel", "Tamaño de cabeza", "Cabeza", "Pelo", "Color de pelo", "Ojos", "Anteojos",
-	"Nariz", "Boca", "Cara", "Orejas", "Collar", "Short", "Estampado", "Tabla", "Diseño de tabla",
-]
-## Fila del menú -> campo de CharacterData.
-const ROW_FIELDS := {
-	"Piel": "skin", "Cabeza": "head", "Pelo": "hair", "Color de pelo": "hair_color", "Ojos": "eyes",
-	"Anteojos": "glasses", "Nariz": "nose", "Boca": "mouth", "Cara": "extra", "Orejas": "ears",
-	"Collar": "neck", "Short": "shorts", "Estampado": "shorts_pattern", "Tabla": "board",
-	"Diseño de tabla": "board_design",
-}
-## Con estas filas la cámara se acerca a la cara.
-## Barras del menú -> propiedad de CharacterData.
-const ROW_SLIDERS := {"Panza": "weight", "Músculos": "muscle", "Tamaño de cabeza": "head_size"}
-const FACE_ROWS := [
-	"Tamaño de cabeza", "Cabeza", "Pelo", "Color de pelo", "Ojos", "Anteojos", "Nariz", "Boca", "Cara", "Orejas",
-]
-## Filas visibles a la vez (el resto se ve al bajar).
-const VISIBLE_ROWS := 11
-const ROWS_GLOBAL := ["Bots", "Dificultad", "Olas", "Mapa"]
-const WEIGHT_STEP := 0.05
-const REPEAT_DELAY := 0.35
-const REPEAT_RATE := 0.1
 const YELLOW := Color(1.0, 0.86, 0.2)
-
+const PANEL_BG := Color(0.05, 0.15, 0.3, 0.82)
+const TILE := Vector2(104.0, 122.0)
 ## Segundos sin tocar nada para que arranque la demo (carrera de bots).
 const IDLE_DEMO_TIME := 10.0
+
+## Categorías del creador: nombre -> secciones. Cada sección es
+## [título, tipo, campo, encuadre de la foto]. Tipos: "preset", "option",
+## "color", "slider".
+const CATEGORIES := {
+	"Estilos": [["Estilos armados", "preset", "", ThumbRenderer.Frame.BODY]],
+	"Cuerpo": [
+		["Panza", "slider", "weight", 0],
+		["Músculos", "slider", "muscle", 0],
+		["Tamaño de cabeza", "slider", "head_size", 0],
+		["Forma de cabeza", "option", "head", ThumbRenderer.Frame.HEAD],
+	],
+	"Piel": [["Color de piel", "color", "skin", 0]],
+	"Pelo": [
+		["Peinado", "option", "hair", ThumbRenderer.Frame.HEAD],
+		["Color de pelo", "color", "hair_color", 0],
+	],
+	"Cara": [
+		["Ojos", "option", "eyes", ThumbRenderer.Frame.HEAD],
+		["Nariz", "option", "nose", ThumbRenderer.Frame.HEAD],
+		["Boca", "option", "mouth", ThumbRenderer.Frame.HEAD],
+		["Bigote y cejas", "option", "extra", ThumbRenderer.Frame.HEAD],
+		["Orejas", "option", "ears", ThumbRenderer.Frame.HEAD],
+	],
+	"Accesorios": [
+		["Anteojos", "option", "glasses", ThumbRenderer.Frame.HEAD],
+		["Collar", "option", "neck", ThumbRenderer.Frame.CHEST],
+	],
+	"Short": [
+		["Color del short", "color", "shorts", 0],
+		["Estampado", "option", "shorts_pattern", ThumbRenderer.Frame.HIPS],
+	],
+	"Tabla": [
+		["Color de la tabla", "color", "board", 0],
+		["Diseño", "option", "board_design", ThumbRenderer.Frame.BOARD],
+	],
+}
+## Con estas categorías la cámara se acerca a la cara.
+const FACE_CATEGORIES := ["Pelo", "Cara", "Accesorios"]
+## Colores de cada lista (para los cuadrados de color).
+const COLOR_LISTS := {
+	"skin": CharacterData.SKIN_COLORS,
+	"hair_color": CharacterData.HAIR_COLORS,
+	"shorts": CharacterData.SHORTS_COLORS,
+	"board": CharacterData.BOARD_COLORS,
+}
+const SLIDER_ENDS := {
+	"weight": ["Musculoso", "Panzón"],
+	"muscle": ["Flaquito", "Musculoso"],
+	"head_size": ["Cabecita", "Cabezón"],
+}
 
 ## Si es false, no cambia de escena al empezar (para tests); solo emite la señal.
 var auto_start: bool = true
 
+## "creator" o "setup".
+var screen: String = "creator"
+## Jugador que se está armando.
+var player: int = 0
+var category: String = "Estilos"
+## Último estilo armado elegido (-1 = a tu gusto).
+var preset: int = -1
+
 var _idle_time: float = 0.0
 var _demo_label: Label
-
-var _panels: Array[Dictionary] = []
-var _footer: Label
+var _thumbs: ThumbRenderer
+var _avatar: Avatar
+var _pivot: Node3D
+var _board: Node3D
+var _cam: Camera3D
+var _zoom: float = 0.0
+var _options_box: VBoxContainer
+var _category_buttons: Dictionary = {}
+## Cuadrados de la categoría actual: campo (o "preset") -> Array de botones.
+var _tiles: Dictionary = {}
+var _sliders: Dictionary = {}
+var _rng := RandomNumberGenerator.new()
 
 
 func _ready() -> void:
@@ -54,301 +104,479 @@ func _ready() -> void:
 	for i in 2:
 		InputSetup.ensure_player_actions(i)
 	InputSetup.apply_keyboard_layout(GameSettings.player_count)
+	_rng.randomize()
 	_build()
 	var audio := get_node_or_null("/root/AudioManager")
 	if audio:
 		audio.menu_opened()
 
 
+func data() -> CharacterData:
+	return GameSettings.character_for(player)
+
+
+## Arma la pantalla actual desde cero.
 func _build() -> void:
 	for child in get_children():
+		remove_child(child)
 		child.queue_free()
-	_panels.clear()
+	_tiles.clear()
+	_sliders.clear()
+	_category_buttons.clear()
+	_options_box = null
+	_cam = null
 	set_anchors_preset(Control.PRESET_FULL_RECT)
-
 	var bg := ColorRect.new()
 	bg.color = Color(0.36, 0.7, 0.9)
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
-
-	var root := VBoxContainer.new()
-	root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	root.offset_left = 24.0
-	root.offset_right = -24.0
-	root.offset_top = 12.0
-	root.offset_bottom = -12.0
-	root.add_theme_constant_override("separation", 8)
-	add_child(root)
-
-	var title := _label("SIMPLE SURF", 52, YELLOW)
-	root.add_child(title)
-
-	var columns := HBoxContainer.new()
-	columns.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	columns.add_theme_constant_override("separation", 24)
-	root.add_child(columns)
-	for i in GameSettings.player_count:
-		columns.add_child(_build_panel(i))
-
-	_demo_label = _label("", 16, Color(0.85, 0.95, 1.0))
-	root.add_child(_demo_label)
-	_footer = _label("", 18, Color.WHITE)
-	root.add_child(_footer)
-	_footer.text = (
-		"Arriba / abajo: elegir  ·  Izquierda / derecha: cambiar  ·  ESPACIO / A: ¡listo!  ·  E / B: volver\n"
-		+ "Jugadores: teclas 1 / 2 o Select  ·  J2 usa flechas y ENTER  ·  "
-		+ "Pantalla dividida (V): %s\n" % ("lado a lado" if GameSettings.split_vertical else "arriba y abajo")
-		+ "Salto (O): %s" % GameSettings.jump_style_name()
-	)
-	_refresh_all()
+	_thumbs = ThumbRenderer.new()
+	add_child(_thumbs)
+	if screen == "creator":
+		_build_creator()
+	else:
+		_build_setup()
+	_demo_label = _label("", 16, Color(0.9, 0.97, 1.0))
+	_demo_label.position = Vector2(20.0, 4.0)
+	add_child(_demo_label)
 
 
-func _build_panel(player: int) -> Control:
-	var data := GameSettings.character_for(player)
-	var panel := PanelContainer.new()
-	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.05, 0.15, 0.3, 0.75)
-	style.set_corner_radius_all(18)
-	style.set_border_width_all(4)
-	style.border_color = Color.BLACK
-	style.set_content_margin_all(14)
-	panel.add_theme_stylebox_override("panel", style)
+# ---------------------------------------------------------------- creador
 
-	var box := HBoxContainer.new()
-	box.add_theme_constant_override("separation", 16)
-	panel.add_child(box)
+func _build_creator() -> void:
+	var root := _root_box()
+	var title := "Creá tu surfista"
+	if GameSettings.player_count > 1:
+		title = "Jugador %d · creá tu surfista" % (player + 1)
+	root.add_child(_label(title, 40, YELLOW))
 
-	# Vista 3D del personaje girando (mundo propio).
+	var body := HBoxContainer.new()
+	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body.add_theme_constant_override("separation", 14)
+	root.add_child(body)
+
+	# Categorías.
+	var cats := VBoxContainer.new()
+	cats.add_theme_constant_override("separation", 6)
+	cats.custom_minimum_size.x = 160.0
+	body.add_child(_panel(cats))
+	for cat_name in CATEGORIES:
+		var b := _button(cat_name, 22)
+		b.custom_minimum_size = Vector2(150.0, 46.0)
+		b.pressed.connect(func() -> void: _select_category(cat_name))
+		b.focus_entered.connect(func() -> void: _select_category(cat_name))
+		cats.add_child(b)
+		_category_buttons[cat_name] = b
+
+	# Vista previa grande.
 	var view := SubViewportContainer.new()
 	view.stretch = true
-	view.custom_minimum_size = Vector2(240.0, 300.0)
 	view.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	box.add_child(view)
+	view.custom_minimum_size = Vector2(300.0, 300.0)
+	body.add_child(_panel(view))
 	var vp := SubViewport.new()
 	vp.own_world_3d = true
 	vp.transparent_bg = true
 	view.add_child(vp)
-	var pivot := Node3D.new()
-	vp.add_child(pivot)
-	var avatar := Avatar.new()
-	avatar.data = data
-	pivot.add_child(avatar)
-	var board := Node3D.new()
-	board.name = "Board"
-	pivot.add_child(board)
-	var cam := Camera3D.new()
-	cam.transform = Transform3D(Basis.IDENTITY, Vector3(0.0, 1.5, 6.2)).looking_at(
-		Vector3(0.0, 1.3, 0.0), Vector3.UP
-	)
-	cam.fov = 38.0
-	cam.set_meta("zoom", 0.0)
-	vp.add_child(cam)
-	var sun := DirectionalLight3D.new()
-	sun.rotation = Vector3(-0.8, 0.5, 0.0)
-	vp.add_child(sun)
+	_pivot = Node3D.new()
+	vp.add_child(_pivot)
+	_avatar = Avatar.new()
+	_avatar.data = data()
+	_pivot.add_child(_avatar)
+	_board = Node3D.new()
+	_pivot.add_child(_board)
+	_cam = Camera3D.new()
+	_cam.fov = 34.0
+	vp.add_child(_cam)
+	_cam.current = true
 	var env := WorldEnvironment.new()
 	env.environment = Environment.new()
 	env.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.environment.ambient_light_color = Color(0.8, 0.9, 1.0)
-	env.environment.ambient_light_energy = 0.6
 	vp.add_child(env)
+	var sun := DirectionalLight3D.new()
+	sun.rotation = Vector3(-0.8, 0.5, 0.0)
+	vp.add_child(sun)
+	_rebuild_board()
 
-	var right := VBoxContainer.new()
-	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	right.alignment = BoxContainer.ALIGNMENT_CENTER
-	right.add_theme_constant_override("separation", 10)
-	box.add_child(right)
-	right.add_child(_label("Jugador %d" % (player + 1), 34, Color.WHITE))
+	# Opciones de la categoría (con desplazamiento).
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.custom_minimum_size.x = 470.0
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.follow_focus = true
+	body.add_child(_panel(scroll))
+	_options_box = VBoxContainer.new()
+	_options_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_options_box.add_theme_constant_override("separation", 8)
+	scroll.add_child(_options_box)
 
-	var rows: Array = ROWS_PLAYER.duplicate()
-	if player == 0:
-		rows.append_array(ROWS_GLOBAL)
-	var row_labels: Array[Label] = []
-	# Indicadores de que hay más filas arriba / abajo.
-	var up_label := _label("", 16, Color(0.8, 0.9, 1.0))
-	up_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	right.add_child(up_label)
-	for r in mini(rows.size(), VISIBLE_ROWS):
-		var l := _label("", 21, Color.WHITE)
+	# Abajo: al azar, ayuda y seguir.
+	var bar := HBoxContainer.new()
+	bar.add_theme_constant_override("separation", 16)
+	root.add_child(bar)
+	var random := _button("Al azar", 22)
+	random.custom_minimum_size = Vector2(140.0, 48.0)
+	random.pressed.connect(randomize_character)
+	bar.add_child(random)
+	var hint := _label("Flechas / stick: moverse · ESPACIO / A: elegir · ENTER / Start: seguir", 16, Color.WHITE)
+	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar.add_child(hint)
+	var next := _button("Listo  →", 26)
+	next.custom_minimum_size = Vector2(170.0, 48.0)
+	next.pressed.connect(go_setup)
+	bar.add_child(next)
+	_show_category(category)
+	(_category_buttons[category] as Button).grab_focus.call_deferred()
+
+
+func _select_category(cat_name: String) -> void:
+	if cat_name != category:
+		_show_category(cat_name)
+
+
+func _show_category(cat_name: String) -> void:
+	category = cat_name
+	for c in _category_buttons:
+		_style_tile(_category_buttons[c], c == cat_name)
+	_fill_options()
+
+
+func _fill_options() -> void:
+	if _options_box == null:
+		return
+	for c in _options_box.get_children():
+		_options_box.remove_child(c)
+		c.queue_free()
+	_tiles.clear()
+	_sliders.clear()
+	_thumbs.clear()
+	for section in CATEGORIES[category]:
+		var title: String = section[0]
+		var kind: String = section[1]
+		var field: String = section[2]
+		var l := _label(title, 20, YELLOW)
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-		right.add_child(l)
-		row_labels.append(l)
-	var down_label := _label("", 16, Color(0.8, 0.9, 1.0))
-	down_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	right.add_child(down_label)
-	var ready_label := _label("", 30, YELLOW)
-	right.add_child(ready_label)
-
-	_panels.append({
-		"player": player,
-		"data": data,
-		"avatar": avatar,
-		"pivot": pivot,
-		"board": board,
-		"rows": rows,
-		"row_labels": row_labels,
-		"up_label": up_label,
-		"down_label": down_label,
-		"cam": cam,
-		"preset": -1,
-		"rng": RandomNumberGenerator.new(),
-		"ready_label": ready_label,
-		"row": 0,
-		"ready": false,
-		"repeat": 0.0,
-		"last_dir": Vector2i.ZERO,
-	})
-	return panel
+		_options_box.add_child(l)
+		match kind:
+			"slider":
+				_add_slider(field)
+			"preset":
+				_add_grid("preset", CharacterData.PRESET_NAMES, kind, section[3])
+			_:
+				_add_grid(field, (CharacterData.FIELDS[field][1] as Array), kind, section[3])
+	_refresh_selection()
 
 
-func _input(event: InputEvent) -> void:
-	# Cualquier cosa que toque el jugador reinicia la espera de la demo.
-	var moved := event is InputEventJoypadMotion and absf(event.axis_value) > 0.5
-	if RaceManager.is_any_press(event) or moved:
-		_idle_time = 0.0
+func _add_slider(prop: String) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	row.add_child(_label(SLIDER_ENDS[prop][0], 16, Color.WHITE))
+	var slider := HSlider.new()
+	slider.min_value = 0.0
+	slider.max_value = 1.0
+	slider.step = 0.05
+	slider.focus_mode = Control.FOCUS_ALL
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slider.custom_minimum_size = Vector2(200.0, 40.0)
+	slider.value = float(data().get(prop))
+	slider.value_changed.connect(func(v: float) -> void: set_slider(prop, v))
+	row.add_child(slider)
+	row.add_child(_label(SLIDER_ENDS[prop][1], 16, Color.WHITE))
+	_options_box.add_child(row)
+	_sliders[prop] = slider
 
 
-func _process(delta: float) -> void:
-	_idle_time += delta
-	var left := IDLE_DEMO_TIME - _idle_time
-	if _demo_label:
-		_demo_label.text = "Demo en %d s" % ceili(left) if left < 6.0 else ""
-	if left <= 0.0:
-		_start_demo()
+func set_slider(prop: String, value: float) -> void:
+	data().set(prop, clampf(value, 0.0, 1.0))
+	preset = -1
+	if _sliders.has(prop):
+		(_sliders[prop] as HSlider).set_value_no_signal(value)
+	_changed()
+
+
+func _add_grid(field: String, names: Array, kind: String, frame: int) -> void:
+	var grid := GridContainer.new()
+	grid.columns = 4
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 8)
+	_options_box.add_child(grid)
+	var buttons: Array[Button] = []
+	for i in names.size():
+		var b := Button.new()
+		b.custom_minimum_size = TILE
+		b.focus_mode = Control.FOCUS_ALL
+		b.tooltip_text = names[i]
+		_style_tile(b, false)
+		var box := VBoxContainer.new()
+		box.set_anchors_preset(Control.PRESET_FULL_RECT)
+		box.offset_left = 6.0
+		box.offset_right = -6.0
+		box.offset_top = 6.0
+		box.offset_bottom = -4.0
+		box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		box.add_theme_constant_override("separation", 2)
+		b.add_child(box)
+		if kind == "color":
+			var swatch := Panel.new()
+			var sb := StyleBoxFlat.new()
+			sb.bg_color = (COLOR_LISTS[field] as Array)[i]
+			sb.set_corner_radius_all(40)
+			sb.set_border_width_all(3)
+			sb.border_color = Color.BLACK
+			swatch.add_theme_stylebox_override("panel", sb)
+			swatch.custom_minimum_size = Vector2(70.0, 70.0)
+			swatch.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+			swatch.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			box.add_child(swatch)
+		else:
+			var pic := TextureRect.new()
+			pic.custom_minimum_size = Vector2(80.0, 80.0)
+			pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			pic.size_flags_vertical = Control.SIZE_EXPAND_FILL
+			pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			box.add_child(pic)
+			_thumbs.request(_variant(field, i), frame, pic)
+		var name_label := _label(names[i], 12, Color.WHITE)
+		name_label.clip_text = true
+		name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		box.add_child(name_label)
+		var index := i
+		b.pressed.connect(func() -> void: choose(field, index))
+		grid.add_child(b)
+		buttons.append(b)
+	_tiles[field] = buttons
+
+
+## El personaje actual con esa opción cambiada (para la foto del cuadrado).
+func _variant(field: String, index: int) -> CharacterData:
+	var d := CharacterData.from_dict(data().to_dict())
+	if field == "preset":
+		d.apply_preset(index)
+	else:
+		d.set(CharacterData.FIELDS[field][0], index)
+		# Para ver los ojos y las cejas, la foto va sin anteojos.
+		if field in ["eyes", "extra"]:
+			d.glasses_index = 0
+	return d
+
+
+## Elige la opción `index` del campo (o un estilo armado con field = "preset").
+func choose(field: String, index: int) -> void:
+	if field == "preset":
+		preset = index
+		data().apply_preset(index)
+		for prop in _sliders:
+			(_sliders[prop] as HSlider).set_value_no_signal(float(data().get(prop)))
+	else:
+		data().set(CharacterData.FIELDS[field][0], index)
+		preset = -1
+	_changed()
+	_refresh_selection()
+	# Un color cambia las fotos de esa categoría: se rehacen.
+	if field in COLOR_LISTS:
+		_refresh_thumbs()
+
+
+func randomize_character() -> void:
+	var r := CharacterData.random(_rng)
+	for prop in CharacterData.SLIDERS.values():
+		data().set(prop, r.get(prop))
+	for f in CharacterData.FIELDS:
+		data().set(CharacterData.FIELDS[f][0], r.get_option(f))
+	preset = -1
+	_changed()
+	_fill_options()
+
+
+## Vuelve a pedir las fotos de los cuadrados de la categoría.
+func _refresh_thumbs() -> void:
+	_thumbs.clear()
+	for section in CATEGORIES[category]:
+		var kind: String = section[1]
+		if kind != "option" and kind != "preset":
+			continue
+		var field: String = "preset" if kind == "preset" else section[2]
+		var buttons: Array = _tiles.get(field, [])
+		for i in buttons.size():
+			var pic := (buttons[i] as Button).find_children("*", "TextureRect", true, false)
+			if not pic.is_empty():
+				_thumbs.request(_variant(field, i), section[3], pic[0])
+
+
+func _changed() -> void:
+	_avatar.rebuild()
+	_rebuild_board()
+
+
+func _refresh_selection() -> void:
+	for field in _tiles:
+		var selected := preset if field == "preset" else data().get_option(field)
+		var buttons: Array = _tiles[field]
+		for i in buttons.size():
+			_style_tile(buttons[i], i == selected)
+
+
+func _rebuild_board() -> void:
+	for c in _board.get_children():
+		c.free()
+	var mesh := CapsuleMesh.new()
+	mesh.radius = 0.5
+	mesh.height = 3.6
+	mesh.material = ToonMaterial.make(data().board_color(), 0.04)
+	var body := MeshInstance3D.new()
+	body.mesh = mesh
+	body.basis = Basis(Vector3.RIGHT, PI / 2.0) * Basis.from_scale(Vector3(1.0, 1.0, 0.18))
+	body.position.y = -0.06
+	_board.add_child(body)
+	BoardDesign.add_to(_board, data(), 3.6, 1.0, 0.03)
+
+
+## Gira el personaje; en las categorías de la cara, la cámara se acerca y él
+## mira al frente.
+func _animate_preview(delta: float) -> void:
+	if _cam == null or not is_instance_valid(_cam):
 		return
-	for p in _panels:
-		_animate_preview(p, delta)
-		_handle_stick(p, delta)
-
-
-## Gira el personaje; con una fila de la cara, la cámara se acerca y él mira
-## al frente (moviéndose un poco), para ver bien lo que se elige.
-func _animate_preview(p: Dictionary, delta: float) -> void:
-	var pivot: Node3D = p.pivot
-	var cam: Camera3D = p.cam
-	var face: bool = not p.ready and p.rows[p.row] in FACE_ROWS
-	var zoom: float = move_toward(cam.get_meta("zoom"), 1.0 if face else 0.0, delta * 3.0)
-	cam.set_meta("zoom", zoom)
-	var z := smoothstep(0.0, 1.0, zoom)
-	var avatar: Avatar = p.avatar
-	# Encuadre de la cara según el tamaño real de la cabeza.
-	var head_y := avatar.head_center().y
-	var head_r := avatar.head_radius()
-	var eye := Vector3(0.0, 1.5, 6.2).lerp(Vector3(0.0, head_y - 0.05, 1.7 + head_r * 4.5), z)
-	var look := Vector3(0.0, 1.3, 0.0).lerp(Vector3(0.0, head_y - 0.25, 0.0), z)
-	cam.transform = Transform3D(Basis.IDENTITY, eye).looking_at(look, Vector3.UP)
+	var face := category in FACE_CATEGORIES
+	_zoom = move_toward(_zoom, 1.0 if face else 0.0, delta * 3.0)
+	var z := smoothstep(0.0, 1.0, _zoom)
+	var head_y := _avatar.head_center().y
+	var head_r := _avatar.head_radius()
+	var eye := Vector3(0.0, 1.7, 7.4).lerp(Vector3(0.0, head_y + 0.05, 1.6 + head_r * 4.6), z)
+	var look := Vector3(0.0, 1.35, 0.0).lerp(Vector3(0.0, head_y - 0.1, 0.0), z)
+	_cam.transform = Transform3D(Basis.IDENTITY, eye).looking_at(look, Vector3.UP)
 	if face:
-		var target := sin(Time.get_ticks_msec() * 0.0012) * 0.55
-		pivot.rotation.y = lerp_angle(pivot.rotation.y, target, 1.0 - exp(-5.0 * delta))
+		var target := -0.35 + sin(Time.get_ticks_msec() * 0.001) * 0.35
+		_pivot.rotation.y = lerp_angle(_pivot.rotation.y, target, 1.0 - exp(-4.0 * delta))
 	else:
-		pivot.rotation.y += delta * 0.8
+		_pivot.rotation.y += delta * 0.6
 
 
-## Stick / flechas mantenidos: repite el movimiento.
-func _handle_stick(p: Dictionary, delta: float) -> void:
-	var prefix := InputSetup.prefix(p.player)
-	var x := Input.get_axis(prefix + "left", prefix + "right")
-	var y := Input.get_axis(prefix + "up", prefix + "down")
-	var dir := Vector2i.ZERO
-	if absf(x) > 0.5:
-		dir.x = int(signf(x))
-	elif absf(y) > 0.5:
-		dir.y = int(signf(y))
-	if dir == Vector2i.ZERO:
-		p.last_dir = dir
-		return
-	if dir != p.last_dir:
-		p.last_dir = dir
-		p.repeat = REPEAT_DELAY
-		_move(p, dir)
-		return
-	p.repeat -= delta
-	if p.repeat <= 0.0:
-		p.repeat = REPEAT_RATE
-		_move(p, dir)
+## 0 = lejos ... 1 = encima de la cara (para tests).
+func zoom() -> float:
+	return _zoom
 
 
-func _move(p: Dictionary, dir: Vector2i) -> void:
-	if p.ready:
-		return
-	if dir.y != 0:
-		p.row = posmod(p.row + dir.y, p.rows.size())
-	else:
-		_change(p, p.rows[p.row], dir.x)
-	_refresh(p)
+# ---------------------------------------------------------------- partida
+
+func _build_setup() -> void:
+	var root := _root_box()
+	root.add_child(_label("Armá la partida", 40, YELLOW))
+	var box := VBoxContainer.new()
+	box.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	box.add_theme_constant_override("separation", 10)
+	root.add_child(_panel(box))
+	var first := _setup_row(box, "Jugadores", ["1 jugador", "2 jugadores"], GameSettings.player_count - 1,
+		func(i: int) -> void: set_player_count(i + 1))
+	_setup_row(box, "Bots", ["Sin bots", "1 bot", "2 bots", "3 bots"], GameSettings.bot_count,
+		func(i: int) -> void: GameSettings.bot_count = i)
+	_setup_row(box, "Dificultad", AIDifficulty.NAMES, GameSettings.bot_level,
+		func(i: int) -> void: GameSettings.bot_level = i)
+	_setup_row(box, "Olas", _capitalized(GameSettings.WAVE_MODE_NAMES), GameSettings.wave_mode, set_wave_mode)
+	_setup_row(box, "Mapa", _capitalized(GameSettings.TRACK_LAYOUT_NAMES), GameSettings.track_layout,
+		set_track_layout)
+	if GameSettings.player_count == 2:
+		_setup_row(box, "Pantalla", ["Lado a lado", "Arriba y abajo"], 0 if GameSettings.split_vertical else 1,
+			func(i: int) -> void: GameSettings.split_vertical = i == 0)
+		var edit := HBoxContainer.new()
+		edit.add_theme_constant_override("separation", 10)
+		box.add_child(edit)
+		for p in 2:
+			var b := _button("Editar surfista J%d" % (p + 1), 20)
+			b.custom_minimum_size = Vector2(240.0, 50.0)
+			b.pressed.connect(func() -> void: go_creator(p))
+			edit.add_child(b)
+	var bar := HBoxContainer.new()
+	bar.add_theme_constant_override("separation", 16)
+	root.add_child(bar)
+	var back := _button("←  Personaje", 22)
+	back.custom_minimum_size = Vector2(170.0, 48.0)
+	back.pressed.connect(func() -> void: go_creator(0))
+	bar.add_child(back)
+	var hint := _label("ESPACIO / A: elegir · ENTER / Start: ¡a surfear! · ESC: volver", 16, Color.WHITE)
+	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar.add_child(hint)
+	var go := _button("¡A surfear!  →", 28)
+	go.custom_minimum_size = Vector2(220.0, 52.0)
+	go.pressed.connect(start_race)
+	bar.add_child(go)
+	first.grab_focus.call_deferred()
 
 
-func _change(p: Dictionary, row: String, step: int) -> void:
-	var data: CharacterData = p.data
-	if ROW_FIELDS.has(row):
-		data.step_option(ROW_FIELDS[row], step)
-		p.preset = -1
-	match row:
-		"Estilo":
-			p.preset = posmod(int(p.preset) + step, CharacterData.PRESETS.size())
-			data.apply_preset(p.preset)
-		"Sorpresa":
-			var rng: RandomNumberGenerator = p.rng
-			rng.randomize()
-			var r := CharacterData.random(rng)
-			for slider in CharacterData.SLIDERS:
-				data.set(CharacterData.SLIDERS[slider], r.get(CharacterData.SLIDERS[slider]))
-			for field in CharacterData.FIELDS:
-				data.set(CharacterData.FIELDS[field][0], r.get_option(field))
-			p.preset = -1
-		"Panza", "Músculos", "Tamaño de cabeza":
-			var prop: String = ROW_SLIDERS[row]
-			data.set(prop, clampf(snappedf(float(data.get(prop)) + step * WEIGHT_STEP, WEIGHT_STEP), 0.0, 1.0))
-			p.preset = -1
-		"Bots":
-			GameSettings.bot_count = clampi(GameSettings.bot_count + step, 0, 3)
-		"Dificultad":
-			GameSettings.bot_level = clampi(GameSettings.bot_level + step, 0, 2)
-		"Olas":
-			GameSettings.toggle_wave_mode()
-		"Mapa":
-			GameSettings.toggle_track_layout()
-	var avatar: Avatar = p.avatar
-	avatar.rebuild()
+func _capitalized(names: Array) -> Array:
+	var out := []
+	for n in names:
+		var t := String(n)
+		out.append(t.substr(0, 1).to_upper() + t.substr(1))
+	return out
 
 
-func _unhandled_input(event: InputEvent) -> void:
-	var key := event as InputEventKey
-	if key and key.pressed and not key.echo:
-		if key.physical_keycode == KEY_1:
-			_set_player_count(1)
-			return
-		if key.physical_keycode == KEY_2:
-			_set_player_count(2)
-			return
-		if key.physical_keycode == KEY_V:
-			GameSettings.split_vertical = not GameSettings.split_vertical
-			_build()
-			return
-		if key.physical_keycode == KEY_O:
-			GameSettings.toggle_jump_style()
-			_build()
-			return
-	for p in _panels:
-		var prefix := InputSetup.prefix(p.player)
-		if event.is_action_pressed(prefix + "a"):
-			p.ready = true
-			_refresh(p)
-			_check_start()
-		elif event.is_action_pressed(prefix + "b"):
-			p.ready = false
-			_refresh(p)
-		elif event.is_action_pressed(prefix + "select"):
-			_set_player_count(2 if GameSettings.player_count == 1 else 1)
+## Una fila de opciones en cuadrados; devuelve el primer botón.
+func _setup_row(parent: Control, title: String, names: Array, selected: int, on_pick: Callable) -> Button:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	parent.add_child(row)
+	var l := _label(title, 22, YELLOW)
+	l.custom_minimum_size.x = 150.0
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	row.add_child(l)
+	var buttons: Array[Button] = []
+	for i in names.size():
+		var b := _button(names[i], 18)
+		b.custom_minimum_size = Vector2(150.0, 54.0)
+		_style_tile(b, i == selected)
+		var index := i
+		b.pressed.connect(func() -> void:
+			on_pick.call(index)
+			for k in buttons.size():
+				if is_instance_valid(buttons[k]):
+					_style_tile(buttons[k], k == index)
+			GameSettings.save_settings()
+		)
+		row.add_child(b)
+		buttons.append(b)
+	return buttons[0]
 
 
-func _set_player_count(count: int) -> void:
+func set_player_count(count: int) -> void:
 	if count == GameSettings.player_count:
 		return
 	GameSettings.player_count = count
 	InputSetup.apply_keyboard_layout(count)
 	_build()
+
+
+func set_wave_mode(mode: int) -> void:
+	if GameSettings.wave_mode != mode:
+		GameSettings.toggle_wave_mode()
+
+
+func set_track_layout(layout: int) -> void:
+	if GameSettings.track_layout != layout:
+		GameSettings.toggle_track_layout()
+
+
+# ---------------------------------------------------------------- flujo
+
+func go_setup() -> void:
+	GameSettings.save_settings()
+	screen = "setup"
+	_build()
+
+
+func go_creator(p: int) -> void:
+	player = p
+	screen = "creator"
+	preset = -1
+	_build()
+
+
+func start_race() -> void:
+	GameSettings.save_settings()
+	start_requested.emit()
+	if auto_start:
+		get_tree().change_scene_to_file(RACE_SCENE)
 
 
 func _start_demo() -> void:
@@ -359,82 +587,106 @@ func _start_demo() -> void:
 		get_tree().change_scene_to_file(RACE_SCENE)
 
 
-func _check_start() -> void:
-	for p in _panels:
-		if not p.ready:
-			return
-	GameSettings.save_settings()
-	start_requested.emit()
-	if auto_start:
-		get_tree().change_scene_to_file(RACE_SCENE)
+func _input(event: InputEvent) -> void:
+	# Cualquier cosa que toque el jugador reinicia la espera de la demo.
+	var moved := event is InputEventJoypadMotion and absf(event.axis_value) > 0.5
+	if RaceManager.is_any_press(event) or moved or event is InputEventMouseButton:
+		_idle_time = 0.0
+	# ENTER / Start: seguir (antes que los botones, que usan ENTER para elegir).
+	var key := event as InputEventKey
+	var forward := key != null and key.pressed and not key.echo and key.physical_keycode in [KEY_ENTER, KEY_KP_ENTER]
+	for p in 2:
+		var prefix := InputSetup.prefix(p)
+		if InputMap.has_action(prefix + "start") and event.is_action_pressed(prefix + "start"):
+			forward = true
+	if forward:
+		get_viewport().set_input_as_handled()
+		if screen == "creator":
+			go_setup()
+		else:
+			start_race()
 
 
-func _refresh_all() -> void:
-	for p in _panels:
-		_refresh(p)
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel") and screen == "setup":
+		get_viewport().set_input_as_handled()
+		go_creator(0)
 
 
-func _refresh(p: Dictionary) -> void:
-	var data: CharacterData = p.data
-	var labels: Array[Label] = p.row_labels
-	var rows: Array = p.rows
-	# Ventana de filas visibles alrededor de la elegida.
-	var first := clampi(int(p.row) - VISIBLE_ROWS / 2, 0, maxi(rows.size() - VISIBLE_ROWS, 0))
-	for k in labels.size():
-		var i := first + k
-		var row: String = rows[i]
-		var value := ""
-		if ROW_FIELDS.has(row):
-			value = data.option_name(ROW_FIELDS[row])
-		match row:
-			"Estilo":
-				value = CharacterData.PRESET_NAMES[p.preset] if p.preset >= 0 else "a tu gusto"
-			"Sorpresa":
-				value = "uno al azar"
-			"Panza":
-				value = "%s  %s" % [_bar(data.weight), "Musculoso" if data.weight < 0.15 else AvatarCore.stage_name(data.weight)]
-			"Músculos":
-				value = _bar(data.muscle)
-			"Tamaño de cabeza":
-				value = _bar(data.head_size)
-			"Bots":
-				value = str(GameSettings.bot_count)
-			"Dificultad":
-				value = AIDifficulty.NAMES[GameSettings.bot_level]
-			"Olas":
-				value = GameSettings.wave_mode_name()
-			"Mapa":
-				value = GameSettings.track_layout_name()
-		var selected: bool = i == p.row and not p.ready
-		labels[k].text = ("> " if selected else "   ") + "%s:  < %s >" % [row, value]
-		labels[k].add_theme_color_override("font_color", YELLOW if selected else Color.WHITE)
-	(p.up_label as Label).text = "      ▲ más" if first > 0 else ""
-	(p.down_label as Label).text = "      ▼ más" if first + labels.size() < rows.size() else ""
-	var ready_label: Label = p.ready_label
-	ready_label.text = "¡LISTO!" if p.ready else "Apretá ESPACIO / A"
-	_rebuild_board(p.board, data)
+func _process(delta: float) -> void:
+	_idle_time += delta
+	var left := IDLE_DEMO_TIME - _idle_time
+	if _demo_label:
+		_demo_label.text = "Demo en %d s" % ceili(left) if left < 6.0 else ""
+	if left <= 0.0:
+		_start_demo()
+		return
+	if screen == "creator":
+		_animate_preview(delta)
 
 
-## Tabla del menú: la misma forma que en la carrera (más grande) con su diseño.
-func _rebuild_board(board: Node3D, data: CharacterData) -> void:
-	for c in board.get_children():
-		c.queue_free()
-	var mesh := CapsuleMesh.new()
-	mesh.radius = 0.5
-	mesh.height = 3.6
-	mesh.material = ToonMaterial.make(data.board_color(), 0.05)
-	var body := MeshInstance3D.new()
-	body.mesh = mesh
-	body.basis = Basis(Vector3.RIGHT, PI / 2.0) * Basis.from_scale(Vector3(1.0, 1.0, 0.18))
-	body.position.y = -0.06
-	board.add_child(body)
-	BoardDesign.add_to(board, data, 3.6, 1.0, 0.03)
+# ---------------------------------------------------------------- piezas de UI
+
+func _root_box() -> VBoxContainer:
+	var root := VBoxContainer.new()
+	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.offset_left = 20.0
+	root.offset_right = -20.0
+	root.offset_top = 10.0
+	root.offset_bottom = -12.0
+	root.add_theme_constant_override("separation", 10)
+	add_child(root)
+	return root
 
 
-func _bar(t: float) -> String:
-	var n := 10
-	var filled := roundi(t * n)
-	return "[" + "|".repeat(filled) + ".".repeat(n - filled) + "]"
+func _panel(content: Control) -> PanelContainer:
+	var panel := PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = PANEL_BG
+	style.set_corner_radius_all(16)
+	style.set_border_width_all(3)
+	style.border_color = Color.BLACK
+	style.set_content_margin_all(10)
+	panel.add_theme_stylebox_override("panel", style)
+	panel.size_flags_horizontal = content.size_flags_horizontal
+	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	panel.add_child(content)
+	return panel
+
+
+func _button(text: String, font_size: int) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.focus_mode = Control.FOCUS_ALL
+	b.add_theme_font_size_override("font_size", font_size)
+	_style_tile(b, false)
+	return b
+
+
+## Estilo de un cuadrado: elegido = borde amarillo grueso; con el foco (mando
+## o teclado encima) = borde blanco.
+func _style_tile(b: Button, selected: bool) -> void:
+	b.set_meta("selected", selected)
+	for state in ["normal", "hover", "pressed", "focus"]:
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.1, 0.25, 0.45) if state != "hover" else Color(0.16, 0.34, 0.58)
+		if selected or state == "pressed":
+			sb.bg_color = Color(0.2, 0.42, 0.7)
+		sb.set_corner_radius_all(12)
+		sb.set_border_width_all(5 if selected else 2)
+		sb.border_color = YELLOW if selected else Color(0.02, 0.05, 0.1)
+		if state == "focus":
+			sb.bg_color = Color(0, 0, 0, 0)
+			sb.set_border_width_all(4)
+			sb.border_color = Color.WHITE
+			sb.expand_margin_left = 3.0
+			sb.expand_margin_right = 3.0
+			sb.expand_margin_top = 3.0
+			sb.expand_margin_bottom = 3.0
+		b.add_theme_stylebox_override(state, sb)
+	b.add_theme_color_override("font_color", Color.WHITE)
+	b.add_theme_color_override("font_focus_color", Color.WHITE)
+	b.add_theme_color_override("font_hover_color", Color.WHITE)
 
 
 func _label(text: String, font_size: int, color: Color) -> Label:
@@ -444,5 +696,5 @@ func _label(text: String, font_size: int, color: Color) -> Label:
 	l.add_theme_font_size_override("font_size", font_size)
 	l.add_theme_color_override("font_color", color)
 	l.add_theme_color_override("font_outline_color", Color.BLACK)
-	l.add_theme_constant_override("outline_size", maxi(6, font_size / 5))
+	l.add_theme_constant_override("outline_size", maxi(4, font_size / 5))
 	return l

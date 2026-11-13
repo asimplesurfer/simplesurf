@@ -301,56 +301,78 @@ func _test_menu() -> void:
 	await process_frame
 	await process_frame
 	var data := GameSettings.character_for(0)
-	var panel: Dictionary = menu._panels[0]
-	var w := data.weight
-	await _menu_go(panel, "Panza")
-	await _press(&"p1_right")
-	if is_equal_approx(data.weight, w):
-		await _press(&"p1_left")
-		await _press(&"p1_left")
-	_check(not is_equal_approx(data.weight, w), "la barra Panza cambia el peso (%.2f -> %.2f)" % [w, data.weight])
-	var skin := data.skin_index
-	await _menu_go(panel, "Piel")
-	await _press(&"p1_right")
-	_check(data.skin_index != skin, "la fila Piel cambia la piel")
-	var avatar := panel.avatar as Avatar
-	_check(_kit_color(avatar, "skin") == data.skin_color(), "el personaje del menú muestra la piel elegida")
-	# Estilo armado: el surfista rubio (melena, anteojos de sol, collar, flores).
-	await _menu_go(panel, "Estilo")
-	while panel.preset != 0:
-		await _press(&"p1_right")
-	_check(data.get_option("hair") == 2 and data.get_option("glasses") == 1, "estilo Surfista rubio: melena y anteojos de sol")
+	_check(menu.screen == "creator", "arranca en la pantalla de crear el surfista")
+	_check(menu._category_buttons.size() == 8, "con 8 categorías")
+	var presets: Array = menu._tiles.get("preset", [])
+	_check(presets.size() == 6, "Estilos: un cuadrado por estilo armado (%d)" % presets.size())
+	# Elegir un cuadrado con el teclado (foco + ESPACIO).
+	(presets[1] as Button).grab_focus()
 	await process_frame
-	# Es el modelo original: melena, anteojos de sol, sonrisa, perlas y flores.
-	var kit_head := avatar.find_child("Head", true, false) as Node3D
+	await _press(&"ui_accept")
+	_check(menu.preset == 1 and data.weight > 0.8, "ESPACIO sobre un cuadrado lo elige (Abuelo playero)")
+	_check((presets[1] as Button).get_meta("selected"), "el cuadrado elegido queda marcado")
+	# El surfista original: melena, anteojos, sonrisa, perlas y flores del modelo.
+	menu.choose("preset", 0)
+	var avatar := menu._avatar
+	_check(data.get_option("hair") == 2 and data.get_option("glasses") == 1, "estilo Surfista rubio: melena y anteojos de sol")
 	_check(_kit_has(avatar, "hair") and _kit_has(avatar, "lens"), "el surfista rubio usa la melena y los anteojos del modelo")
 	_check(_kit_has(avatar, "pearl") and _kit_has(avatar, "flower"), "con el collar de perlas y las flores del short")
+	var kit_head := avatar.find_child("Head", true, false) as Node3D
 	_check(kit_head.get_child_count() <= 3, "cada parte se dibuja junta (pocas mallas)")
-	# Con una fila de la cara, la cámara se acerca.
-	await _menu_go(panel, "Ojos")
+	# Colores en cuadrados: piel.
+	menu._show_category("Piel")
+	_check((menu._tiles.get("skin", []) as Array).size() == CharacterData.SKIN_COLORS.size(), "Piel: un cuadrado por color")
+	menu.choose("skin", 7)
+	_check(data.skin_index == 7 and _kit_color(avatar, "skin") == data.skin_color(), "elegir un color de piel cambia el personaje")
+	# Barras.
+	menu._show_category("Cuerpo")
+	_check(menu._sliders.size() == 3, "Cuerpo: barras de panza, músculos y cabeza")
+	menu.set_slider("weight", 1.0)
+	_check(is_equal_approx(data.weight, 1.0) and menu.preset == -1, "la barra de panza cambia el cuerpo (queda a tu gusto)")
+	# Cara: la cámara se acerca.
+	menu._show_category("Cara")
 	await _wait(0.6)
-	_check((panel.cam as Camera3D).get_meta("zoom") > 0.9, "en las filas de la cara, la cámara se acerca")
+	_check(menu.zoom() > 0.9, "en la cara, la cámara se acerca")
 	var eyes := data.get_option("eyes")
-	await _press(&"p1_right")
-	_check(data.get_option("eyes") != eyes and panel.preset == -1, "cambiar los ojos deja el estilo a tu gusto")
-	# Sorpresa: uno al azar.
-	await _menu_go(panel, "Sorpresa")
-	var before := data.to_dict()
-	await _press(&"p1_right")
-	_check(data.to_dict() != before, "Sorpresa arma uno al azar")
+	menu.choose("eyes", (eyes + 1) % CharacterData.EYES.size())
+	_check(data.get_option("eyes") != eyes, "elegir ojos cambia los ojos")
+	menu._show_category("Short")
 	await _wait(0.6)
-	_check((panel.cam as Camera3D).get_meta("zoom") < 0.1, "fuera de la cara, la cámara se aleja")
-	# Fila "Olas" (de las de J1): cambia el modo de olas.
-	await _menu_go(panel, "Olas")
+	_check(menu.zoom() < 0.1, "fuera de la cara, la cámara se aleja")
+	var before := data.to_dict()
+	menu.randomize_character()
+	_check(data.to_dict() != before, "Al azar arma uno nuevo")
+	menu.choose("preset", 0)
+	# ENTER: a la pantalla de la partida.
+	await _key(KEY_ENTER)
+	_check(menu.screen == "setup", "ENTER pasa a armar la partida")
 	var mode_before := GameSettings.wave_mode
-	await _press(&"p1_right")
-	_check(GameSettings.wave_mode != mode_before, "en el menú, la fila Olas cambia el modo de olas")
-	await _press(&"p1_right")
-	_check(GameSettings.wave_mode == mode_before, "y vuelve al anterior")
+	menu.set_wave_mode(1 - mode_before)
+	_check(GameSettings.wave_mode != mode_before, "en la partida se elige el modo de olas")
+	menu.set_wave_mode(mode_before)
+	_check(GameSettings.wave_mode == mode_before, "y se vuelve al anterior")
+	await _press(&"ui_cancel")
+	_check(menu.screen == "creator", "ESC vuelve al personaje")
+	await _key(KEY_ENTER)
 	_check(not started[0], "todavía no empieza")
-	await _press(&"p1_a")
-	_check(started[0], "ESPACIO / A: listo y empieza la carrera")
+	await _key(KEY_ENTER)
+	_check(started[0], "ENTER en la partida: ¡a surfear!")
 	menu.queue_free()
+	await process_frame
+
+
+## Toca una tecla (por código físico).
+func _key(code: Key) -> void:
+	var ev := InputEventKey.new()
+	ev.physical_keycode = code
+	ev.keycode = code
+	ev.pressed = true
+	Input.parse_input_event(ev)
+	await process_frame
+	await process_frame
+	var up := ev.duplicate() as InputEventKey
+	up.pressed = false
+	Input.parse_input_event(up)
 	await process_frame
 
 
@@ -1693,7 +1715,7 @@ func _test_memory() -> void:
 	)
 	_check(last.orphans <= first.orphans, "no quedan nodos sueltos (%d -> %d)" % [first.orphans, last.orphans])
 	_check(in_race_growth <= 200, "durante la carrera no crece la memoria (+%d objetos en 10 s)" % in_race_growth)
-	_check(menu_nodes <= 3 and after_menu <= last.nodes + 2, "el menú no se acumula al rearmarse (%d hijos)" % menu_nodes)
+	_check(menu_nodes <= 4 and after_menu <= last.nodes + 2, "el menú no se acumula al rearmarse (%d hijos)" % menu_nodes)
 
 
 func _test_archipelago() -> void:
@@ -1860,13 +1882,6 @@ func _kit_color(avatar: Avatar, mat_name: String) -> Color:
 
 func _kit_has(avatar: Avatar, mat_name: String) -> bool:
 	return _kit_color(avatar, mat_name) != Color.BLACK
-
-
-## En el menú de personaje, baja / sube hasta la fila con ese nombre.
-func _menu_go(panel: Dictionary, row_name: String) -> void:
-	var target: int = (panel.rows as Array).find(row_name)
-	while panel.row != target:
-		await _press(&"p1_down" if panel.row < target else &"p1_up")
 
 
 func _press(action: StringName) -> void:
