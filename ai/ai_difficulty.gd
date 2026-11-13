@@ -95,29 +95,29 @@ static func preset(level: int) -> AIDifficulty:
 			d.wave_seek = 0.9
 			d.mash_rate = 7.5
 		3:
-			# Juega casi perfecto: sin errores de manejo, va a los aros y a las
-			# olas, todos los pops, turbo con cada carga en recta, y ya corta
-			# bastante por adentro de las curvas.
+			# Muy bueno, pero no perfecto: casi no se equivoca, va a los aros y a
+			# casi todas las olas, y a veces corta por adentro o esquiva el
+			# derrape del de adelante. Calcula el aterrizaje con el agua de abajo
+			# (alguna ola lo agarra a mitad de un truco).
 			d.display_name = "Profesional"
 			d.max_throttle = 1.0
-			d.think_interval = 0.05
-			d.steer_noise = 0.02
-			d.ring_seek = 1.0
-			d.trick_fail_chance = 0.02
-			d.trick_jump_rate = 0.35
-			d.aggression = 0.95
+			d.think_interval = 0.06
+			d.steer_noise = 0.03
+			d.ring_seek = 0.92
+			d.trick_fail_chance = 0.03
+			d.trick_jump_rate = 0.3
+			d.aggression = 0.9
 			d.turbo_threshold = 0.34
-			d.turbo_steer_limit = 0.25
-			d.look_ahead = 38.0
-			d.pop_skill = 0.97
-			d.wave_seek = 0.97
+			d.turbo_steer_limit = 0.3
+			d.look_ahead = 36.0
+			d.pop_skill = 0.93
+			d.wave_seek = 0.9
 			d.mash_rate = 8.5
-			d.line_skill = 0.55
-			d.trick_margin = 0.1
-			d.rock_throttle = 0.75
-			d.evade_skill = 0.6
-			d.rock_margin = 0.8
-			d.reads_landing = true
+			d.line_skill = 0.3
+			d.trick_margin = 0.11
+			d.rock_throttle = 0.7
+			d.evade_skill = 0.35
+			d.rock_margin = 0.6
 		4:
 			# Lo mejor que se puede jugar, sin ninguna ventaja: la línea más corta
 			# siempre, trucos al límite, turbo guardado para salir volando de
