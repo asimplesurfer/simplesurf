@@ -69,9 +69,6 @@ func _ready() -> void:
 	rider = get_parent() as Rider
 	if difficulty == null:
 		difficulty = AIDifficulty.preset(1)
-	if rider:
-		rider.skill_speed_mult = difficulty.speed_bonus
-		rider.skill_nitro_mult = difficulty.nitro_bonus
 	_rng.randomize()
 	_pick_path()
 	course = get_tree().get_first_node_in_group("course") as Course
@@ -123,7 +120,7 @@ func _drive(delta: float, input: RiderInput) -> void:
 		_think(angle, lateral)
 
 	input.steer = _steer_towards(angle, lateral, _target_lateral)
-	input.throttle = difficulty.max_throttle * (0.6 if _brake else 1.0)
+	input.throttle = difficulty.max_throttle * (difficulty.rock_throttle if _brake else 1.0)
 
 	# Derrape (para tirar al de atrás).
 	if _drift_timer > 0.0:
@@ -138,6 +135,9 @@ func _drive(delta: float, input: RiderInput) -> void:
 			rider.nitro >= maxf(difficulty.turbo_threshold, Rider.TURBO_CHARGE)
 			and absf(input.steer) < difficulty.turbo_steer_limit
 		)
+		# Los mejores guardan una carga para la próxima ola (salir volando).
+		if difficulty.saves_turbo_for_waves and _next_swell(angle, lateral) != null:
+			straight = straight and rider.turbo_charges() >= 2
 		if before_wave or straight:
 			input.turbo_pressed = true
 
@@ -201,6 +201,9 @@ func _think(angle: float, lateral: float) -> void:
 			_last_lap = lap
 
 	var target := path_lateral(angle, lane) + _noise
+	# Línea de carrera: los expertos cortan por adentro de la curva que viene.
+	if difficulty.line_skill > 0.0:
+		target = lerpf(target, _inside_line(angle, lane), difficulty.line_skill)
 
 	# Círculo de velocidad próximo.
 	var ring := _next_ring(angle)
@@ -232,11 +235,18 @@ func _think(angle: float, lateral: float) -> void:
 			continue
 		var ahead := _arc_ahead(angle, track.angle_of(other.position), lateral)
 		var dlat := track.lateral_of(other.position) - lateral
-		if ahead > 0.0 and ahead < 10.0 and absf(dlat) < 2.5:
+		# Los buenos se salen del todo del cono que barre el derrape del de
+		# adelante (se abre con la distancia), así no los pueden tirar.
+		var cone := 0.8 + maxf(ahead, 0.0) * tan(deg_to_rad(rider.stats.drift_cone_half_angle)) + 1.2
+		if ahead > 0.0 and ahead < rider.stats.drift_range + 4.0 and absf(dlat) < cone and _rng.randf() < difficulty.evade_skill:
+			var away := -1.0 if dlat > 0.0 else 1.0
+			target = track.lateral_of(other.position) + away * (cone + 0.6)
+		elif ahead > 0.0 and ahead < 10.0 and absf(dlat) < 2.5:
 			target = lateral + (4.0 if dlat <= 0.0 else -4.0)
 		elif ahead < 0.0 and ahead > -6.0 and absf(dlat) < 2.5:
 			if rider.speed > rider.stats.drift_min_speed + 1.0 and _rng.randf() < difficulty.aggression:
 				_drift_timer = 0.6
+
 
 	# Rocas: la más cercana que quede en el camino (entre donde está y adonde
 	# va) se esquiva por el lado elegido, y se mantiene ese lado hasta pasarla.
@@ -252,7 +262,7 @@ func _think(angle: float, lateral: float) -> void:
 		if ahead <= 0.0 or ahead > difficulty.look_ahead:
 			continue
 		var rock_lat := track.lateral_of(rock.position)
-		var clearance := rock.radius + 2.6
+		var clearance := rock.radius + 2.6 + difficulty.rock_margin
 		var lo := minf(lateral, target) - clearance
 		var hi := maxf(lateral, target) + clearance
 		var in_path := rock_lat > lo and rock_lat < hi
@@ -262,7 +272,7 @@ func _think(angle: float, lateral: float) -> void:
 	if nearest:
 		var id := nearest.get_instance_id()
 		var rock_lat := track.lateral_of(nearest.position)
-		var clearance := nearest.radius + 3.0
+		var clearance := nearest.radius + 3.0 + difficulty.rock_margin
 		if not _rock_side.has(id):
 			var left := rock_lat - clearance
 			var right := rock_lat + clearance
@@ -279,6 +289,29 @@ func _think(angle: float, lateral: float) -> void:
 			_brake = true
 
 	_target_lateral = clampf(target, -lane, lane)
+
+
+## Desvío lateral que va por adentro de la curva que viene (0 si es recta):
+## compara el largo de ir por un borde o por el otro en los próximos metros.
+func _inside_line(angle: float, lane: float) -> float:
+	var track := course.track
+	var step := 18.0 / maxf(track.radius, 10.0)
+	var left := 0.0
+	var right := 0.0
+	var prev_l := track.position_at(angle, lane)
+	var prev_r := track.position_at(angle, -lane)
+	for i in range(1, 4):
+		var a := angle + step * i
+		var l := track.position_at(a, lane)
+		var r := track.position_at(a, -lane)
+		left += prev_l.distance_to(l)
+		right += prev_r.distance_to(r)
+		prev_l = l
+		prev_r = r
+	var bend := (right - left) / maxf(right + left, 0.01)
+	# Cuánto se nota la curva (0 = recta, 1 = curva cerrada).
+	var amount := clampf(absf(bend) * 12.0, 0.0, 1.0)
+	return signf(bend) * lane * 0.85 * amount
 
 
 ## Metros por delante (siguiendo la pista) de un punto en otro ángulo. Negativo = detrás.
@@ -390,17 +423,29 @@ func _air(_delta: float, input: RiderInput) -> void:
 	var a := rider.trick_angle
 	if a <= 0.0:
 		# ¿Le da el tiempo para empezar y completar una vuelta?
-		input.trick = t_land > stats.trick_hold_delay + full_turn + 0.12
+		input.trick = t_land > stats.trick_hold_delay + full_turn + difficulty.trick_margin
 	else:
 		var remaining := (ceilf(a / TAU - 0.001) * TAU - a) / spin
 		# Seguir si alcanza para terminar esta vuelta y hacer otra completa.
-		input.trick = t_land > remaining + full_turn + 0.1
+		input.trick = t_land > remaining + full_turn + difficulty.trick_margin * 0.85
 
 
-## Estimación del tiempo hasta tocar el agua (tiro vertical).
+## Estimación del tiempo hasta tocar el agua (tiro vertical). Los buenos
+## miran el agua donde van a caer (una ola que se levanta adelante los
+## alcanza antes).
 func _time_to_land() -> float:
 	var g := rider.stats.gravity
 	var vy := rider.vertical_speed
-	var h := rider.position.y - rider.water_height()
+	var water_y := rider.water_height()
+	var t := _fall_time(vy, rider.position.y - water_y, g)
+	if difficulty.reads_landing and _water:
+		for i in 2:
+			var land := rider.position + rider.forward() * rider.speed * t
+			var ahead_y := _water.height_at(land.x, land.z)
+			t = minf(t, _fall_time(vy, rider.position.y - maxf(water_y, ahead_y), g))
+	return t
+
+
+func _fall_time(vy: float, h: float, g: float) -> float:
 	var disc := vy * vy + 2.0 * g * maxf(h, 0.0)
 	return (vy + sqrt(disc)) / g

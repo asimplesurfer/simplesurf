@@ -184,7 +184,8 @@ func _update_catchup() -> void:
 		if not finished(r):
 			leader = maxf(leader, progress_of(r))
 	for r in racers:
-		if finished(r) or leader <= -1e8 or not catchup_enabled:
+		# Solo las personas reciben handicap: los bots corren a su nivel real.
+		if finished(r) or leader <= -1e8 or not catchup_enabled or not r.is_human:
 			r.catchup = 0.0
 			continue
 		var gap_m := (leader - progress_of(r)) * course.track.radius
