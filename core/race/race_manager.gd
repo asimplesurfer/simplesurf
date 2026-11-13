@@ -105,6 +105,11 @@ func _spawn_racers() -> void:
 		_wrong_way_time[rider] = 0.0
 
 
+## true en el modo libre (sin carrera: sin vueltas, posiciones ni llegada).
+func free_ride() -> bool:
+	return false
+
+
 func humans() -> Array[Rider]:
 	var result: Array[Rider] = []
 	for r in racers:
@@ -255,6 +260,7 @@ func restart() -> void:
 
 func back_to_menu() -> void:
 	GameSettings.demo_mode = false
+	GameSettings.sandbox_mode = false
 	get_tree().change_scene_to_file("res://ui/menus/character_select.tscn")
 
 

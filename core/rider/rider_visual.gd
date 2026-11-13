@@ -61,6 +61,10 @@ var _trail: BoardTrail
 var _wake: CPUParticles3D
 ## Tiempo desde el último cambio de etapa (caída, subida, parada).
 var _stage_time: float = 0.0
+## Etapa anterior y si se está trepando a la tabla desde el agua (en el modo
+## libre también se acuesta desde parado, y ahí no se trepa).
+var _last_stage: Rider.RecoveryStage = Rider.RecoveryStage.STANDING
+var _climbing: bool = false
 var _spray: DriftSpray
 ## Chapuzón al atravesar una ola que rompe.
 var _splash: CPUParticles3D
@@ -84,6 +88,7 @@ func setup(p_rider: Rider) -> void:
 	rider.trick_landed.connect(func(_spins: int) -> void: _body.cheer())
 	rider.drift_hit.connect(func(_victim: Rider) -> void: _body.cheer())
 	_trail.setup(rider)
+	_last_stage = rider.recovery_stage
 	_snap_to(rider.recovery_stage)
 
 
@@ -215,6 +220,9 @@ func _snap_to(stage: Rider.RecoveryStage) -> void:
 
 
 func _on_recovery_stage_changed(stage: Rider.RecoveryStage) -> void:
+	var from_water := _last_stage == Rider.RecoveryStage.IN_WATER
+	_last_stage = stage
+	_climbing = stage == Rider.RecoveryStage.PRONE and from_water
 	if not _initialized:
 		_snap_to(stage)
 		return
@@ -228,9 +236,13 @@ func _on_recovery_stage_changed(stage: Rider.RecoveryStage) -> void:
 		Rider.RecoveryStage.IN_WATER:  # Sale volando de la tabla con un revolcón.
 			_pose_duration = TUMBLE_TIME
 			_pose_arc = 1.1
-		Rider.RecoveryStage.PRONE:  # Se trepa a la tabla.
-			_pose_duration = rider.stats.climb_time
-			_pose_arc = 0.55
+		Rider.RecoveryStage.PRONE:
+			if _climbing:  # Se trepa a la tabla.
+				_pose_duration = rider.stats.climb_time
+				_pose_arc = 0.55
+			else:  # Modo libre: frena y se acuesta a remar.
+				_pose_duration = 0.4
+				_pose_arc = 0.2
 		_:  # Se para de un salto.
 			_pose_duration = 0.3
 			_pose_arc = 0.35
@@ -329,7 +341,7 @@ func _update_avatar_anim(delta: float) -> void:
 		Rider.RecoveryStage.IN_WATER:
 			a = &"flail" if _stage_time < 1.4 or _punch > 0.3 else &"tread"
 		Rider.RecoveryStage.PRONE:
-			a = &"climb" if _stage_time < rider.stats.climb_time else &"paddle"
+			a = &"climb" if _climbing and _stage_time < rider.stats.climb_time else &"paddle"
 			_body.effort = maxf(_body.effort, clampf(rider.speed / 3.0, 0.0, 1.0))
 		_:
 			if _stage_time < 0.3 and _pose_t < 1.0:

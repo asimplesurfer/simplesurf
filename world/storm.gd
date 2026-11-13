@@ -54,12 +54,26 @@ var strikes: int = 0
 ## Dónde cayó el último rayo.
 var last_strike: Vector3 = Vector3.ZERO
 
+# Lo que había antes de la tormenta (para dejar todo igual con stop()).
+var _world_env: WorldEnvironment
+var _orig_env: Environment
+var _orig_sun_energy: float = 0.0
+var _orig_sun_color: Color = Color.WHITE
+var _water: Water
+var _orig_waves: WaveDefinition
+var _orig_params: Dictionary = {}
+var _wave_manager: WaveManager
+var _orig_amp: Vector2 = Vector2.ZERO
+var _stopped: bool = false
+
 
 func _ready() -> void:
 	_rng.randomize()
 	var main := get_parent().get_parent()
 	var world_env := main.get_node_or_null("WorldEnvironment") as WorldEnvironment
 	if world_env and world_env.environment:
+		_world_env = world_env
+		_orig_env = world_env.environment
 		_env = world_env.environment.duplicate() as Environment
 		_env.ambient_light_color = Color(0.62, 0.66, 0.74)
 		_env.ambient_light_energy = 0.5
@@ -75,6 +89,8 @@ func _ready() -> void:
 		_base_fog = _env.fog_light_color
 	_sun = main.get_node_or_null("Sun") as DirectionalLight3D
 	if _sun:
+		_orig_sun_energy = _sun.light_energy
+		_orig_sun_color = _sun.light_color
 		_sun.light_energy = 0.45
 		_sun.light_color = Color(0.72, 0.78, 0.9)
 		_base_sun = _sun.light_energy
@@ -83,6 +99,8 @@ func _ready() -> void:
 		_roughen(water)
 	var waves := main.get_node_or_null("WaveManager") as WaveManager
 	if waves:
+		_wave_manager = waves
+		_orig_amp = Vector2(waves.amplitude_min, waves.amplitude_max)
 		waves.amplitude_min *= 1.25
 		waves.amplitude_max *= 1.35
 	# Lluvia y viento (las vistas se arman después que la pista).
@@ -98,6 +116,8 @@ func _ready() -> void:
 
 
 func _add_rain(main: Node) -> void:
+	if _stopped:
+		return
 	_split = main.get_node_or_null("Views") as SplitScreen
 	_drop_mat = StandardMaterial3D.new()
 	_drop_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -134,8 +154,6 @@ func _ensure_rain() -> void:
 			r.material = _rain_mat
 			r.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			r.set_anchors_preset(Control.PRESET_FULL_RECT)
-			r.size = Vector2(vp.size)
-			vp.size_changed.connect(func() -> void: r.size = Vector2(vp.size))
 			vp.add_child(r)
 			veils.append(r)
 	for i in range(rain.size() - 1, -1, -1):
@@ -218,6 +236,8 @@ func _paint_sky() -> void:
 
 
 func _roughen(water: Water) -> void:
+	_water = water
+	_orig_waves = water.waves
 	var w := water.waves.duplicate() as WaveDefinition
 	var list: Array[Vector4] = []
 	for v in w.waves:
@@ -227,16 +247,56 @@ func _roughen(water: Water) -> void:
 	water.waves = w
 	var mat := water.shader_material()
 	w.apply_to(mat)
-	mat.set_shader_parameter("deep_color", Color(0.05, 0.15, 0.23))
-	mat.set_shader_parameter("shallow_color", Color(0.11, 0.29, 0.37))
-	mat.set_shader_parameter("wave_color", Color(0.15, 0.4, 0.44))
-	mat.set_shader_parameter("outside_color", Color(0.04, 0.1, 0.16))
-	mat.set_shader_parameter("rising_color", Color(0.03, 0.1, 0.17))
-	mat.set_shader_parameter("sky_tint", Color(0.5, 0.55, 0.62))
-	mat.set_shader_parameter("glow_strength", 0.15)
-	mat.set_shader_parameter("sky_reflect", 0.6)
+	_set_water(mat, "deep_color", Color(0.05, 0.15, 0.23))
+	_set_water(mat, "shallow_color", Color(0.11, 0.29, 0.37))
+	_set_water(mat, "wave_color", Color(0.15, 0.4, 0.44))
+	_set_water(mat, "outside_color", Color(0.04, 0.1, 0.16))
+	_set_water(mat, "rising_color", Color(0.03, 0.1, 0.17))
+	_set_water(mat, "sky_tint", Color(0.5, 0.55, 0.62))
+	_set_water(mat, "glow_strength", 0.15)
+	_set_water(mat, "sky_reflect", 0.6)
 	# Espuma solo en las crestas más altas (si no, el mar picado se llena de manchas).
-	mat.set_shader_parameter("foam_height", 0.42 * CHOP_SCALE * 0.5)
+	_set_water(mat, "foam_height", 0.42 * CHOP_SCALE * 0.5)
+
+
+## Cambia un parámetro del agua, recordando el que tenía (para stop()).
+func _set_water(mat: ShaderMaterial, param: String, value: Variant) -> void:
+	if not _orig_params.has(param):
+		_orig_params[param] = mat.get_shader_parameter(param)
+	mat.set_shader_parameter(param, value)
+
+
+## Se va la tormenta: deja el cielo, la luz, el agua y las olas como estaban y
+## saca la lluvia de todas las vistas. Después se puede liberar el nodo.
+func stop() -> void:
+	if _stopped:
+		return
+	_stopped = true
+	set_process(false)
+	if is_instance_valid(_world_env) and _orig_env:
+		_world_env.environment = _orig_env
+	if is_instance_valid(_sun):
+		_sun.light_energy = _orig_sun_energy
+		_sun.light_color = _orig_sun_color
+	if is_instance_valid(_water) and _orig_waves:
+		_water.waves = _orig_waves
+		var mat := _water.shader_material()
+		_orig_waves.apply_to(mat)
+		for param in _orig_params:
+			mat.set_shader_parameter(param, _orig_params[param])
+	if is_instance_valid(_wave_manager):
+		_wave_manager.amplitude_min = _orig_amp.x
+		_wave_manager.amplitude_max = _orig_amp.y
+	for r in rain:
+		if is_instance_valid(r):
+			r.queue_free()
+	for v in veils:
+		if is_instance_valid(v):
+			v.queue_free()
+	rain.clear()
+	veils.clear()
+	if _rain_sound:
+		_rain_sound.stop()
 
 
 func _process(delta: float) -> void:

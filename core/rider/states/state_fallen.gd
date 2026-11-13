@@ -48,6 +48,10 @@ func update(delta: float, input: RiderInput) -> void:
 	if not prone and meter >= 0.5:
 		rider.set_recovery_stage(Rider.RecoveryStage.PRONE)
 		_climb_timer = stats.climb_time
+	# Modo libre: ya arriba de la tabla, se pone a remar (no hace falta pararse).
+	if rider.free_ride and prone and _climb_timer <= 0.0:
+		state_machine.transition_to(&"paddling")
+		return
 	# Llena: se para (apenas termina de subirse, si todavía estaba en eso).
 	if meter >= 1.0 and _climb_timer <= 0.0:
 		state_machine.transition_to(&"riding")

@@ -72,6 +72,7 @@ func _ready() -> void:
 		hud.show_help = humans.size() == 1 and not spectating
 		hud.demo = spectating
 		hud.compact = humans.size() >= 3
+		hud.free_ride = race_manager.free_ride()
 		vp.add_child(hud)
 		huds.append(hud)
 

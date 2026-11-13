@@ -29,6 +29,8 @@ signal ring_collected
 signal crashed
 ## Un géiser lo lanzó al aire.
 signal geyser_launched
+## Cambió la cantidad de vueltas del truco en curso (en el aire).
+signal live_spins_changed(spins: int)
 
 ## En qué punto de la recuperación está: en el agua, acostado sobre la tabla o parado.
 enum RecoveryStage { IN_WATER, PRONE, STANDING }
@@ -83,6 +85,14 @@ var can_trick: bool = true
 ## Handicap (0..1): cuánto ayuda el juego por ir atrás. Lo calcula RaceManager.
 var catchup: float = 0.0
 var water: Water
+## Modo libre: sin aceleración automática; quieto o lento, rema acostado.
+var free_ride: bool = false
+## Vueltas del truco en curso (para el contador del HUD); 0 si no está girando.
+var live_spins: int = 0:
+	set(value):
+		if value != live_spins:
+			live_spins = value
+			live_spins_changed.emit(value)
 
 ## Tiempo que le queda a la ráfaga de turbo en curso (s).
 var turbo_time: float = 0.0
@@ -115,6 +125,11 @@ func _ready() -> void:
 	water = get_tree().get_first_node_in_group("water") as Water
 	heading = rotation.y
 	position.y = water_height()
+	# Remar acostado (modo libre).
+	var paddling := RiderState.new()
+	paddling.set_script(preload("res://core/rider/states/state_paddling.gd"))
+	paddling.name = "Paddling"
+	state_machine.add_child(paddling)
 	visual.setup(self)
 	state_machine.setup(self)
 	var sounds := RiderAudio.new()

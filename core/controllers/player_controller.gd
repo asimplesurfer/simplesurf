@@ -102,11 +102,18 @@ func get_input(delta: float) -> RiderInput:
 	# Avanza solo; tirar el stick claramente hacia atrás frena (un poco de
 	# diagonal al girar no frena).
 	input.throttle = -1.0 if Input.get_action_strength(_prefix + "down") > 0.5 else 1.0
+	var rider := get_parent() as Rider
+	var free := rider != null and rider.free_ride
+	if free:
+		# Modo libre: avanza solo si empuja el stick (o W), y tanto como lo empuje.
+		if input.throttle > 0.0:
+			input.throttle = Input.get_action_strength(_prefix + "up")
 	# Golpe de palanca hacia arriba = lo mismo que apretar A (pop / saltito).
-	if _update_flick(delta, input.steer):
+	# (En el modo libre no: ahí la palanca adelante es para avanzar.)
+	if _update_flick(delta, input.steer) and not free:
 		_pending_mash += 1
 	input.trick = Input.is_action_pressed(_prefix + "a")
-	input.drift = Input.is_action_pressed(_prefix + "drift")
+	input.drift = Input.is_action_pressed(_prefix + "drift") and not free
 	input.turbo = Input.is_action_pressed(_prefix + "b")
 	input.look_back = Input.is_action_pressed(_prefix + "look_back")
 	input.jump_pressed = _pending_mash > 0

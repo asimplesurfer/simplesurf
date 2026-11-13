@@ -1,0 +1,66 @@
+[gd_scene load_steps=13 format=3]
+
+[ext_resource type="Script" path="res://world/water/water.gd" id="1_water"]
+[ext_resource type="Script" path="res://world/sandbox_world.gd" id="2_course"]
+[ext_resource type="Script" path="res://world/wave_manager.gd" id="3_waves"]
+[ext_resource type="Script" path="res://core/race/sandbox.gd" id="4_race"]
+[ext_resource type="Script" path="res://ui/split_screen/split_screen.gd" id="5_split"]
+[ext_resource type="Shader" path="res://world/sky/tropical_sky.gdshader" id="7_sky"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_sky"]
+shader = ExtResource("7_sky")
+
+[sub_resource type="Sky" id="Sky_tropical"]
+sky_material = SubResource("ShaderMaterial_sky")
+radiance_size = 0
+
+[sub_resource type="Environment" id="Environment_sea"]
+background_mode = 2
+sky = SubResource("Sky_tropical")
+ambient_light_source = 2
+ambient_light_color = Color(0.75, 0.88, 1, 1)
+ambient_light_energy = 0.45
+reflected_light_source = 1
+fog_enabled = true
+fog_light_color = Color(0.7, 0.9, 0.98, 1)
+fog_sky_affect = 0.0
+fog_density = 0.0045
+
+[node name="Sandbox" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_sea")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+rotation = Vector3(-0.96, 0.61, 0)
+light_energy = 1.1
+shadow_enabled = true
+directional_shadow_max_distance = 50.0
+
+[node name="Water" type="Node3D" parent="." groups=["water"]]
+script = ExtResource("1_water")
+
+[node name="World" type="Node3D" parent="."]
+script = ExtResource("2_course")
+
+[node name="WaveManager" type="Node" parent="."]
+script = ExtResource("3_waves")
+
+[node name="Riders" type="Node3D" parent="."]
+
+[node name="RaceManager" type="Node" parent="."]
+script = ExtResource("4_race")
+course_path = NodePath("../World")
+riders_path = NodePath("../Riders")
+
+[node name="Views" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("5_split")
+race_manager_path = NodePath("../RaceManager")
+water_path = NodePath("../Water")

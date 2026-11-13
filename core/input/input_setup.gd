@@ -27,6 +27,7 @@ const PAD_BUTTONS := {
 		"left": JOY_BUTTON_X,
 		"top": JOY_BUTTON_Y,
 		"rb": JOY_BUTTON_RIGHT_SHOULDER,
+		"lb": JOY_BUTTON_LEFT_SHOULDER,
 		# El gatillo izquierdo en los mandos estándar es un eje (se agrega aparte).
 		"lt": -1,
 		"start": JOY_BUTTON_START,
@@ -38,6 +39,7 @@ const PAD_BUTTONS := {
 		"left": 3,
 		"top": 0,
 		"rb": 5,
+		"lb": 4,
 		"lt": 6,
 		"start": 9,
 		"select": 8,
@@ -53,6 +55,10 @@ const BUTTON_ROLES := {
 	"look_back": ["lt"],
 	"start": ["start"],
 	"select": ["select"],
+	# Modo libre: subir / bajar las olas y prender / apagar la tormenta.
+	"waves_up": ["rb"],
+	"waves_down": ["lb"],
+	"storm": ["select"],
 }
 
 ## Teclado según cuántos juegan. Con 1 jugador, J1 usa todo; con 2, se reparte.
@@ -67,6 +73,9 @@ const KEYBOARD_1P := {
 		"b": [KEY_E, KEY_K],
 		"debug_fall": [KEY_F],
 		"look_back": [KEY_Q],
+		"waves_up": [KEY_X],
+		"waves_down": [KEY_Z],
+		"storm": [KEY_T],
 	},
 }
 const KEYBOARD_2P := {
@@ -80,6 +89,9 @@ const KEYBOARD_2P := {
 		"b": [KEY_E],
 		"debug_fall": [KEY_F],
 		"look_back": [KEY_Q],
+		"waves_up": [KEY_X],
+		"waves_down": [KEY_Z],
+		"storm": [KEY_T],
 	},
 	1: {
 		"left": [KEY_LEFT],

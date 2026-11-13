@@ -21,8 +21,15 @@ func enter(previous: StringName) -> void:
 		rider.stood_up.emit()
 
 
+## Modo libre: por debajo de esta velocidad se acuesta a remar.
+const SIT_SPEED := 1.6
+
+
 func update(delta: float, input: RiderInput) -> void:
 	_jump_lock = maxf(0.0, _jump_lock - delta)
+	if rider.free_ride and rider.grounded and rider.speed < SIT_SPEED and not _charging:
+		state_machine.transition_to(&"paddling")
+		return
 	if _charging:
 		if input.trick:
 			rider.jump_charge = minf(1.0, rider.jump_charge + delta / rider.stats.jump_charge_time)

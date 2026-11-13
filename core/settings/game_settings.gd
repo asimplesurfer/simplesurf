@@ -39,6 +39,12 @@ static var bot_count: int = 1
 static var bot_level: int = 1
 ## Modo demo: carrera de bots que arranca sola si nadie toca el menú (no se guarda).
 static var demo_mode: bool = false
+## Modo libre (mar abierto, sin carrera). No se guarda.
+static var sandbox_mode: bool = false
+## Modo libre: nivel de las olas (0 = sin olas grandes .. SANDBOX_WAVE_LEVELS =
+## como en una carrera). Se recuerda mientras el juego está abierto.
+const SANDBOX_WAVE_LEVELS := 5
+static var sandbox_wave_level: int = 3
 ## La demo siempre es igual: dos bots en Imposible, en El Atolón con tormenta.
 const DEMO_LAYOUT := TrackLayout.ATOLL
 const DEMO_WEATHER := Weather.STORM
