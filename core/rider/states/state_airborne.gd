@@ -4,15 +4,17 @@ extends RiderState
 ## se cobra al aterrizar bien (así no alimenta el turbo en el mismo salto).
 ## Al soltar, la tabla termina el giro hasta quedar mirando al frente.
 ## Si toca el agua sin haber terminado el giro: truco fallido, nitro a 0 y al agua.
-## El turbo sigue funcionando en el aire: empuja hacia arriba (cada vez más
-## fuerte mientras se mantiene) y da más tiempo para trucos, gastando nitro.
-## Muy arriba el aire es "fino": la subida se va frenando de a poco y el turbo
-## empuja cada vez menos, así el salto hace una curva natural en vez de chocar
-## con un techo. Después de llegar ahí, el turbo solo frena la caída (planea).
+## El turbo en el aire acelera hacia adelante y, la primera ráfaga de cada salto,
+## da un solo empujón hacia arriba. La gravedad nunca cambia: el salto siempre
+## es una parábola (nada de flotar). Muy arriba el aire es "fino": la subida se
+## va frenando de a poco, así el salto hace una curva en vez de chocar con un techo.
 
 var _hold_time: float = 0.0
 var _spins: int = 0
-var _air_turbo_time: float = 0.0
+## Ya usó el empujón hacia arriba del turbo en este salto.
+var _kick_used: bool = false
+## Ráfaga de turbo en curso (para notar cuándo empieza una nueva).
+var _prev_turbo_time: float = 0.0
 ## Nitro ganado con trucos en este salto; se suma al aterrizar bien.
 var _pending_nitro: float = 0.0
 ## Ya llegó al aire fino en este salto.
@@ -22,7 +24,8 @@ var _reached_thin_air: bool = false
 func enter(_previous: StringName) -> void:
 	_hold_time = 0.0
 	_spins = 0
-	_air_turbo_time = 0.0
+	_kick_used = false
+	_prev_turbo_time = rider.turbo_time
 	_pending_nitro = 0.0
 	_reached_thin_air = false
 	rider.trick_angle = 0.0
@@ -73,28 +76,19 @@ func update(delta: float, input: RiderInput) -> void:
 		_reached_thin_air = true
 
 	if rider.turbo_request(input.turbo):
-		_air_turbo_time += delta
-		var lift := stats.air_turbo_lift * exp(stats.air_turbo_growth * _air_turbo_time)
-		# En el saltito el turbo no levanta (las olitas no sirven de impulso).
-		if not rider.can_trick:
-			lift = 0.0
-		# En el aire fino el turbo no le gana a la gravedad: sigue subiendo
-		# un poco por inercia, hace la curva y después planea al bajar.
-		if _reached_thin_air:
-			lift = minf(lift, stats.gravity * maxf(1.0 - thin, 0.0))
-		# (Si ya sube más rápido que el máximo del turbo, no lo frena.)
-		rider.vertical_speed = minf(
-			rider.vertical_speed + lift * delta,
-			maxf(stats.air_turbo_max_up, rider.vertical_speed)
-		)
+		# Empujón único, en el momento en que sale la ráfaga (no en el saltito
+		# ni ya en el aire fino). Después, gravedad normal.
+		var new_burst := rider.turbo_time > _prev_turbo_time + 0.0001
+		if new_burst and not _kick_used and rider.can_trick and not _reached_thin_air:
+			_kick_used = true
+			rider.vertical_speed = maxf(rider.vertical_speed, 0.0) + stats.air_turbo_kick
 		rider.speed = move_toward(
 			rider.speed,
 			stats.max_speed * stats.turbo_speed_mult,
 			stats.acceleration * stats.turbo_accel_mult * delta
 		)
 		rider.turbo_active = true
-	else:
-		_air_turbo_time = 0.0
+	_prev_turbo_time = rider.turbo_time
 
 	# Aire fino: la subida pierde impulso de a poco (la caída es normal).
 	if thin > 0.0 and rider.vertical_speed > 0.0:

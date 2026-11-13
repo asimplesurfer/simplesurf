@@ -67,12 +67,9 @@ extends Resource
 @export var ring_nitro: float = 0.25
 ## Si una ola te lanza mientras usás el turbo, el impulso hacia arriba se multiplica.
 @export var turbo_launch_mult: float = 2.2
-## Turbo en el aire: empuje hacia arriba al empezar (m/s²); crece exponencialmente.
-@export var air_turbo_lift: float = 8.94
-## Qué tan rápido crece el empuje en el aire (por segundo, exponencial).
-@export var air_turbo_growth: float = 1.6
-## Velocidad máxima hacia arriba con el turbo en el aire (m/s).
-@export var air_turbo_max_up: float = 5.59
+## Turbo en el aire: empujón hacia arriba, una sola vez por salto (m/s).
+## Después la gravedad es la normal (no flota).
+@export var air_turbo_kick: float = 5.5
 ## "Aire fino": desde esta altura sobre el agua (m) el impulso hacia arriba
 ## se va perdiendo de a poco y el turbo empuja cada vez menos.
 @export var air_soft_height: float = 4.38
