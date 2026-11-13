@@ -4,6 +4,8 @@ shader_type spatial;
 // cull_disabled: la cresta que se curva puede quedar "dada vuelta".
 render_mode specular_schlick_ggx, cull_disabled;
 
+#include "res://effects/shaders/noise.gdshaderinc"
+
 uniform vec4 wave_0; // xy = dirección, z = amplitud, w = longitud de onda
 uniform vec4 wave_1;
 uniform vec4 wave_2;
@@ -37,6 +39,11 @@ uniform float foam_height = 0.42;
 uniform vec3 wave_color : source_color = vec3(0.1, 0.68, 0.72);
 // Agua donde se está por levantar una ola (más oscura, como una sombra).
 uniform vec3 rising_color : source_color = vec3(0.01, 0.16, 0.36);
+// Luz que atraviesa la parte fina de la ola (cerca de la cresta).
+uniform vec3 glow_color : source_color = vec3(0.25, 0.95, 0.8);
+uniform float glow_strength = 0.35;
+// Color del cielo que se refleja en ángulos rasantes.
+uniform vec3 sky_tint : source_color = vec3(0.72, 0.92, 1.0);
 
 varying float v_height;
 // 0..1: cuerpo de una ola grande (para el color turquesa de la ola).
@@ -197,15 +204,43 @@ void vertex() {
 }
 
 void fragment() {
+	float t = wave_time;
+	vec2 wp = v_world.xz;
+	// Color base: valles profundos, crestas claras.
 	vec3 col = mix(deep_color, shallow_color, smoothstep(-0.5, 0.5, v_height));
-	float foam = smoothstep(foam_height, foam_height + 0.1, v_height);
+	// Manchas suaves de color (el mar no es de un solo tono).
+	float patches = fx_noise(wp * 0.035 + vec2(t * 0.01, 0.0));
+	col = mix(col, col * vec3(0.85, 1.05, 1.08), patches * 0.5);
 	// Olas grandes: cuerpo turquesa (se ve la ola de lejos). Mientras crece
 	// ("se viene") es más oscura y sin espuma; al llegar al máximo rompe y se
 	// llena de espuma arriba y en la cara.
 	col = mix(col, rising_color, v_grow * 0.55);
 	col = mix(col, wave_color, v_body * 0.75);
-	foam = max(foam, v_lip);
-	col = mix(col, foam_color, clamp(foam, 0.0, 1.0) * 0.85);
+	// Luz que atraviesa la parte fina de la ola, cerca de la cresta.
+	col += glow_color * v_body * v_body * glow_strength;
+
+	// Reflejo del cielo en ángulos rasantes (fresnel): el mar de lejos brilla.
+	float facing = clamp(dot(NORMAL, VIEW), 0.0, 1.0);
+	float fresnel = pow(1.0 - facing, 4.0);
+	col = mix(col, sky_tint, fresnel * 0.6);
+
+	// Espuma con textura: se deshace en bordes irregulares y se mueve.
+	float n1 = fx_noise(wp * 0.9 + vec2(t * 0.35, t * 0.2));
+	float n2 = fx_noise(wp * 2.3 - vec2(t * 0.25, t * 0.4));
+	float grain = n1 * 0.65 + n2 * 0.35;
+	float crest = smoothstep(foam_height - 0.05, foam_height + 0.2, v_height);
+	float foam = crest * smoothstep(0.62, 0.8, grain + crest * 0.25);
+	float lip = clamp(v_lip, 0.0, 1.0);
+	foam = max(foam, lip * smoothstep(0.15, 0.45, grain + lip * 0.5));
+	// Vetas finas de espuma que flotan en el agua (marcan el movimiento).
+	float streak = smoothstep(0.78, 0.82, fx_noise(wp * vec2(0.18, 0.6) + vec2(t * 0.05, 0.0)));
+	foam = max(foam, streak * 0.35 * (1.0 - v_body));
+	col = mix(col, foam_color, clamp(foam, 0.0, 1.0) * 0.9);
+
+	// Destellos del sol: puntitos que titilan.
+	float sparkle = step(0.95, fx_noise(wp * 3.5 + vec2(t * 0.9, -t * 0.7)))
+		* step(0.7, fx_noise(wp * 1.3 - t * 0.5));
+	sparkle *= (1.0 - clamp(foam, 0.0, 1.0)) * (0.3 + fresnel * 1.5);
 
 	// Fuera de la pista, el agua más oscura (con un borde suave).
 	if (track_band.w > 0.0) {
@@ -217,6 +252,7 @@ void fragment() {
 	}
 
 	ALBEDO = col;
-	ROUGHNESS = 0.55;
-	SPECULAR = 0.2;
+	EMISSION = vec3(sparkle * 0.7);
+	ROUGHNESS = mix(0.26, 0.7, clamp(foam, 0.0, 1.0));
+	SPECULAR = 0.38;
 }
