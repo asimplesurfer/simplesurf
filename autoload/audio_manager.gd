@@ -40,6 +40,8 @@ var _next_voice: int = 0
 var ocean: AudioStreamPlayer
 ## Último efecto que sonó (para los tests).
 var last_sfx: String = ""
+## Últimos efectos que sonaron (para los tests).
+var recent_sfx: Array[String] = []
 
 
 func _ready() -> void:
@@ -81,6 +83,9 @@ func play(sfx_name: String, volume_db: float = 0.0, pitch: float = 1.0) -> bool:
 	v.pitch_scale = pitch
 	v.play()
 	last_sfx = sfx_name
+	recent_sfx.append(sfx_name)
+	if recent_sfx.size() > 32:
+		recent_sfx.pop_front()
 	return true
 
 

@@ -1020,8 +1020,10 @@ func _test_music() -> void:
 	audio.last_sfx = ""
 	await _press(&"p1_debug_fall")
 	_check(audio.last_sfx == "splash", "caer al agua suena (%s)" % audio.last_sfx)
+	audio.recent_sfx.clear()
 	await _mash_until_standing(8.0, 4.0)
-	_check(audio.last_sfx == "mash", "spamear para subirse suena")
+	# (Puede sonar otra cosa después, como el chapuzón si la cara toca el agua.)
+	_check("mash" in audio.recent_sfx, "spamear para subirse suena")
 	_rider.add_nitro(1.0)
 	await _press(&"p1_b")
 	_check(audio.last_sfx == "turbo", "el turbo suena")
