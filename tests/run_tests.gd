@@ -478,26 +478,63 @@ func _test_constant_wave() -> void:
 ## Con press = true, aprieta A apenas la ola lo lanza (pop tardío).
 ## El chapuzón cuenta solo si la cara queda adentro del agua tal como se ve.
 func _check_face_geometry() -> void:
+	_water.clear_swells()
+	var o := Vector2(5000.0, 5000.0)
 	var s := Swell.new()
-	s.center = Vector2.ZERO
+	s.center = o
 	s.direction = Vector2.RIGHT
 	s.max_amplitude = 3.0
 	s.amplitude = 3.0
 	s.width = 5.5
 	s.half_length = 20.0
 	s.breaking = 1.0
-	var lean := (0.35 + 0.95) * 3.0
-	# El labio está corrido hacia adelante: arriba de la cresta física no hay
-	# agua, pero adelante, a la altura del labio, sí.
-	_check(not s.face_inside(Vector3(0.0, 3.3, 0.0), 0.0), "cara arriba de la cresta: no atraviesa")
-	_check(s.face_inside(Vector3(lean * 0.9, 2.6, 0.0), 0.0), "cara metida en el labio: atraviesa")
-	_check(s.face_inside(Vector3(-2.0, 1.0, 0.0), 0.0), "cara adentro del cuerpo de la ola: atraviesa")
-	# Pies o tabla en el agua pero la cara afuera: no cuenta.
-	var x := -4.0
-	var surface := 3.0 * exp(-(x * x) / (5.5 * 5.5))
-	_check(not s.face_inside(Vector3(x, surface + 0.9, 0.0), 0.0), "cara afuera aunque los pies toquen: no atraviesa")
-	_check(not s.face_inside(Vector3(30.0, -0.1, 0.0), 0.0), "debajo del mar sin ola: no cuenta")
-	_check(not s.face_inside(Vector3(0.0, 1.0, 25.0), 0.0), "fuera del largo de la ola: no cuenta")
+	s.lifetime = 1000.0
+	_water.add_swell(s)
+	var amb := _water.waves.max_height()
+	var at := func(u: float, y: float, w: float = 0.0) -> Vector3:
+		return Vector3(o.x + u, y, o.y + w)
+	# Arriba de la cresta física no hay agua: el labio está corrido adelante.
+	_check(_water.drawn_depth(at.call(0.0, 3.0 + amb + 0.3)) == 0.0, "cara arriba de la cresta: no atraviesa")
+	_check(_water.drawn_depth(at.call(s.lean() * 0.9, 2.2)) > 0.0, "cara metida en el labio: atraviesa")
+	_check(_water.drawn_depth(at.call(-2.0, 1.0)) > 0.0, "cara adentro del cuerpo de la ola: atraviesa")
+	# De costado: la ola lo tapa igual (no importa hacia dónde mire).
+	_check(_water.drawn_depth(at.call(-2.0, 1.0, 12.0)) > 0.0, "de costado, tapado por la ola: atraviesa")
+	# Pies en el agua pero la cara afuera: no cuenta.
+	var surface := _water.drawn_vertex(Vector2(o.x - 5.0, o.y)).y
+	_check(_water.drawn_depth(at.call(-5.0, surface + 1.0)) == 0.0, "cara afuera aunque los pies toquen: no atraviesa")
+	# Cualquier agua cuenta, también el mar sin ola.
+	_check(_water.drawn_depth(at.call(40.0, -amb - 0.5)) > 0.0, "cara debajo del mar: cuenta")
+	_check(_water.drawn_depth(at.call(0.0, amb + 0.3, 25.0)) == 0.0, "fuera del largo de la ola y arriba del mar: no cuenta")
+	# Debe coincidir con la malla completa (sin atajos) en muchos puntos.
+	var mismatches := 0
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	for i in 300:
+		var q: Vector3 = at.call(rng.randf_range(-14.0, 14.0), rng.randf_range(-0.5, 3.5), rng.randf_range(-24.0, 24.0))
+		if (_water.drawn_depth(q) > 0.0) != (_full_mesh_depth(q) > 0.0):
+			mismatches += 1
+	_check(mismatches == 0, "el chequeo rápido coincide con la malla completa (%d diferencias en 300)" % mismatches)
+	_water.clear_swells()
+
+
+## Profundidad bajo la malla del agua revisando TODOS los triángulos cercanos
+## (lento, solo para comparar con Water.drawn_depth).
+func _full_mesh_depth(q: Vector3) -> float:
+	var step := _water.size / float(_water.subdivisions + 1)
+	var above: Array[float] = []
+	var p := Vector2(q.x, q.z)
+	for j in range(floori((q.z - 9.0) / step), ceili((q.z + 9.0) / step) + 1):
+		for i in range(floori((q.x - 9.0) / step), ceili((q.x + 9.0) / step) + 1):
+			var a := _water.drawn_vertex(Vector2((i - 0.5) * step, (j - 0.5) * step))
+			var b := _water.drawn_vertex(Vector2((i + 0.5) * step, (j - 0.5) * step))
+			var c := _water.drawn_vertex(Vector2((i - 0.5) * step, (j + 0.5) * step))
+			var e := _water.drawn_vertex(Vector2((i + 0.5) * step, (j + 0.5) * step))
+			for y in [Water._tri_height(p, a, b, c), Water._tri_height(p, b, e, c)]:
+				if not is_nan(y) and y > q.y:
+					above.append(y)
+	if above.size() % 2 == 0:
+		return 0.0
+	return above.min() - q.y
 
 
 func _ride_into_swell(
