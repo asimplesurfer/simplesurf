@@ -42,6 +42,7 @@ func _ready() -> void:
 	box.set_anchors_preset(Control.PRESET_FULL_RECT)
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(box)
+	_tune_shadows(humans.size())
 	for i in humans.size():
 		var rider := humans[i]
 		var container := SubViewportContainer.new()
@@ -74,5 +75,21 @@ func _ready() -> void:
 		vp.add_child(hud)
 		huds.append(hud)
 
+		rider.has_view = true
 		if water:
 			water.add_follower(rider, i)
+
+
+## Sombras del sol: cada vista vuelve a dibujar la escena para cada "corte" de
+## sombra. Con 1-2 vistas, 2 cortes; con 3-4, uno solo y más corto (se nota poco
+## en pantallas chicas y ahorra mucho).
+func _tune_shadows(view_count: int) -> void:
+	var sun := get_parent().get_node_or_null("Sun") as DirectionalLight3D
+	if sun == null:
+		return
+	if view_count >= 3:
+		sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
+		sun.directional_shadow_max_distance = 30.0
+	else:
+		sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+		sun.directional_shadow_max_distance = 50.0
