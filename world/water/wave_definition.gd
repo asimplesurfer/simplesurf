@@ -33,6 +33,14 @@ func height_at(x: float, z: float, t: float) -> float:
 
 
 ## Derivadas de la altura: (dh/dx, dh/dz).
+## Lo más alto que pueden llegar las olitas de fondo (suma de amplitudes).
+func max_height() -> float:
+	var total := 0.0
+	for w in waves:
+		total += absf(w.z)
+	return total
+
+
 func gradient_at(x: float, z: float, t: float) -> Vector2:
 	var g := Vector2.ZERO
 	for i in mini(waves.size(), MAX_WAVES):

@@ -28,11 +28,17 @@ var ring_wave: RingWave = null
 var islands: Array[Vector3] = []
 ## Islas que entiende el shader (islands[0..15]).
 const MAX_ISLANDS := 16
+## Solo para diagnóstico: revisar sin atajos.
+static var debug_exact: bool = false
+## Cuánto tiene que quedar la cara debajo del agua dibujada para que cuente (m).
+const FACE_MIN_DEPTH := 0.02
 
 var _plane: PlaneMesh
 var _material: ShaderMaterial
 ## Cada uno: {node: Node3D, mesh: MeshInstance3D}
 var _followers: Array[Dictionary] = []
+## Mientras drawn_depth revisa una zona lejos de las islas (ahorra cuentas).
+var _far_from_islands: bool = false
 
 
 func _ready() -> void:
@@ -156,33 +162,171 @@ func breaking_at(x: float, z: float) -> float:
 	return best
 
 
-## true si el punto (la cara de alguien) quedó adentro del agua de una ola
-## grande tal como se ve en pantalla, incluido el labio que se curva al romper.
+## true si el punto (la cara de alguien) está debajo del agua TAL COMO SE DIBUJA.
 func face_in_wave(q: Vector3) -> bool:
-	if swells.is_empty() and ring_wave == null:
-		return false
-	var p := Vector2(q.x, q.z)
-	var fade := _island_fade(p)
-	if fade <= 0.0:
-		return false
-	var ambient := waves.height_at(q.x, q.z, time)
-	var ring_h := ring_wave.height_at(p) if ring_wave else 0.0
-	if ring_h * fade > Swell.MIN_FACE_DEPTH and q.y < ambient + ring_h * fade:
-		return true
-	# Altura de todas las olas grandes en ese punto (una pasada); a cada una se
-	# le resta la propia para tener el "mar" sobre el que se apoya.
-	var heights: Array[float] = []
-	var total := 0.0
+	return drawn_depth(q) > FACE_MIN_DEPTH
+
+
+## Vértice de la malla del agua en el punto de grilla p, movido igual que en
+## water.gdshader (altura de todas las olas y corrimiento del labio).
+func drawn_vertex(p: Vector2) -> Vector3:
+	var h := waves.height_at(p.x, p.y, time)
+	var sh := 0.0
+	var disp := Vector2.ZERO
 	for s in swells:
-		var sh := s.height_at(p)
-		heights.append(sh)
-		total += sh
-	total += ring_h
-	for i in swells.size():
-		var s := swells[i]
-		if s.face_inside(q, ambient + (total - heights[i]) * fade, fade):
-			return true
-	return false
+		if s.amplitude <= 0.0:
+			continue
+		var uw := s.local_coords(p)
+		var aw := absf(uw.y)
+		if aw >= s.half_length or absf(uw.x) > s.width * 4.0:
+			continue
+		var n := exp(-(uw.x * uw.x) / (s.width * s.width)) * s._edge(aw)
+		sh += s.amplitude * n
+		disp += s.direction * (s.lean() * n * n * n)
+	if ring_wave:
+		sh += ring_wave.height_at(p)
+	if sh == 0.0 and disp == Vector2.ZERO:
+		return Vector3(p.x, h, p.y)
+	var fade := 1.0 if _far_from_islands else _island_fade(p)
+	disp *= fade
+	return Vector3(p.x + disp.x, h + sh * fade, p.y + disp.y)
+
+
+## Cuánto está q debajo del agua tal como se dibuja (0 si está afuera).
+## Usa la misma malla que se ve: vértices cada `step` metros (en la misma
+## grilla del mundo para todas las cámaras), corridos por el labio de la ola,
+## y los triángulos como los arma PlaneMesh. Cuenta las capas de agua que hay
+## arriba del punto (impar = adentro; debajo del rulo pero en el aire da par).
+func drawn_depth(q: Vector3) -> float:
+	var step := size / float(subdivisions + 1)
+	var p := Vector2(q.x, q.z)
+	# Olas que pueden correr vértices hasta acá.
+	var near := step * 1.5
+	var relevant: Array[Swell] = []
+	var total_lean := 0.0
+	# (Otra ola puede traer hasta acá vértices de una ola que no llega sola.)
+	var max_lean := 0.0
+	for s in swells:
+		max_lean = maxf(max_lean, s.lean())
+	for s in swells:
+		if s.amplitude <= 0.0:
+			continue
+		var lean := s.lean()
+		var uw := s.local_coords(p)
+		var margin := step * 2.0 + max_lean
+		if absf(uw.y) >= s.half_length + margin:
+			continue
+		if uw.x < -s.width * 4.0 - margin or uw.x > s.width * 4.0 + lean + margin:
+			continue
+		relevant.append(s)
+		total_lean += lean
+	# Los vértices que terminan en q vienen de a lo sumo `reach` metros (lo que
+	# los puede correr el labio). Se achica: cada ola solo corre de verdad cerca
+	# de su cresta (n³), así que con la zona más chica el corrimiento máximo
+	# también baja. Cada paso sigue siendo una cota segura.
+	var reach := total_lean + near
+	if debug_exact:
+		reach = 12.0
+	var leans: Array[float] = []
+	var nmax: Array[float] = []
+	leans.resize(relevant.size())
+	nmax.resize(relevant.size())
+	for it in 3:
+		var next := near
+		for k in relevant.size():
+			var s := relevant[k]
+			var uw := s.local_coords(p)
+			var u_near := clampf(0.0, uw.x - reach, uw.x + reach)
+			var w_near := maxf(absf(uw.y) - reach, 0.0)
+			nmax[k] = exp(-(u_near * u_near) / (s.width * s.width)) * s._edge(w_near)
+			leans[k] = s.lean() * nmax[k] * nmax[k] * nmax[k]
+			next += leans[k]
+		if next >= reach or debug_exact:
+			break
+		reach = next
+	# Techo: lo más alto que puede estar el agua dibujada justo acá.
+	var ceiling := waves.max_height() + (ring_wave.amplitude if ring_wave else 0.0)
+	for k in relevant.size():
+		ceiling += relevant[k].amplitude * nmax[k]
+	if q.y > ceiling + 0.05 and not debug_exact:
+		return 0.0
+	var i0 := floori((p.x - reach - near) / step)
+	var i1 := ceili((p.x + reach + near) / step)
+	var j0 := floori((p.y - reach - near) / step)
+	var j1 := ceili((p.y + reach + near) / step)
+	var limit := reach + near
+	# Lejos de toda isla el apagado de las olas es 1 en toda la zona.
+	_far_from_islands = true
+	for isl in islands:
+		if p.distance_to(Vector2(isl.x, isl.y)) - limit < isl.z + 28.0:
+			_far_from_islands = false
+			break
+	var cache := {}
+	var above: Array[float] = []
+	for j in range(j0, j1 + 1):
+		for i in range(i0, i1 + 1):
+			# Celda con esquinas en los vértices (i-1..i, j-1..j); su centro sin
+			# mover está en (i, j) * step. Solo sirven las que el corrimiento
+			# puede traer hasta q.
+			# Sirve si el corrimiento (suma de cada ola en su dirección, entre 0 y
+			# su máximo acá) puede llevar la celda hasta q.
+			var d := p - Vector2(i * step, j * step)
+			var dist := d.length()
+			var useful := dist < near
+			if not useful and dist < limit:
+				for k in relevant.size():
+					var others := reach - near - leans[k]
+					var dir := relevant[k].direction
+					var along := d.dot(dir)
+					var perp := absf(d.x * dir.y - d.y * dir.x)
+					if (
+						along > -near - others and along < leans[k] + near + others
+						and perp < near + others
+					):
+						useful = true
+						break
+			if not useful:
+				continue
+			var a := _cached_vertex(cache, i - 1, j - 1, step)
+			var b := _cached_vertex(cache, i, j - 1, step)
+			var c := _cached_vertex(cache, i - 1, j, step)
+			var e := _cached_vertex(cache, i, j, step)
+			# Igual que PlaneMesh: (a, b, c) y (b, e, c).
+			var y1 := _tri_height(p, a, b, c)
+			if not is_nan(y1) and y1 > q.y:
+				above.append(y1)
+			var y2 := _tri_height(p, b, e, c)
+			if not is_nan(y2) and y2 > q.y:
+				above.append(y2)
+	_far_from_islands = false
+	if above.size() % 2 == 0:
+		return 0.0
+	return above.min() - q.y
+
+
+func _cached_vertex(cache: Dictionary, i: int, j: int, step: float) -> Vector3:
+	var key := Vector2i(i, j)
+	if cache.has(key):
+		return cache[key]
+	var v := drawn_vertex(Vector2((i + 0.5) * step, (j + 0.5) * step))
+	cache[key] = v
+	return v
+
+
+## Altura del triángulo (a, b, c) en el punto p (visto desde arriba), o NAN si
+## p cae afuera.
+static func _tri_height(p: Vector2, a: Vector3, b: Vector3, c: Vector3) -> float:
+	var v0 := Vector2(b.x - a.x, b.z - a.z)
+	var v1 := Vector2(c.x - a.x, c.z - a.z)
+	var v2 := Vector2(p.x - a.x, p.y - a.z)
+	var den := v0.x * v1.y - v1.x * v0.y
+	if absf(den) < 1e-9:
+		return NAN
+	var u := (v2.x * v1.y - v1.x * v2.y) / den
+	var v := (v0.x * v2.y - v2.x * v0.y) / den
+	if u < 0.0 or v < 0.0 or u + v > 1.0:
+		return NAN
+	return a.y + u * (b.y - a.y) + v * (c.y - a.y)
 
 
 func normal_at(x: float, z: float) -> Vector3:

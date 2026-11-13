@@ -88,6 +88,8 @@ var turbo_time: float = 0.0
 var _punch_cooldown: float = 0.0
 ## Apretó A fuera de tiempo en esta ola: ya no hay pop hasta la próxima.
 var pop_locked: bool = false
+## Tiempo mínimo entre dos chapuzones (s).
+const PUNCH_MIN_GAP := 0.3
 ## La cara estaba adentro de una ola el frame anterior.
 var _face_in_wave: bool = false
 var _steer_smoothed: float = 0.0
@@ -285,14 +287,16 @@ func jump() -> void:
 	jumped.emit()
 
 
-## "Atraviesa la ola" (animación y chapuzón) solo cuando la cara del modelo
-## entra al agua de una ola grande tal como se ve (no los pies ni el cuerpo).
+## "Atraviesa la ola" (animación y chapuzón) cuando la cara del modelo entra al
+## agua tal como se dibuja (no los pies ni el cuerpo), venga de donde venga.
 func _check_wave_punch() -> void:
 	if water == null or visual == null:
 		return
 	var inside := water.face_in_wave(visual.face_position())
+	# Cada vez que la cara entra al agua (un mínimo de tiempo entre una y otra
+	# para que el borde de la superficie no lo dispare a cada cuadro).
 	if inside and not _face_in_wave and _punch_cooldown <= 0.0:
-		_punch_cooldown = 1.2
+		_punch_cooldown = PUNCH_MIN_GAP
 		wave_punched.emit()
 	_face_in_wave = inside
 
