@@ -69,6 +69,9 @@ func _ready() -> void:
 	rider = get_parent() as Rider
 	if difficulty == null:
 		difficulty = AIDifficulty.preset(1)
+	if rider:
+		rider.skill_speed_mult = difficulty.speed_bonus
+		rider.skill_nitro_mult = difficulty.nitro_bonus
 	_rng.randomize()
 	_pick_path()
 	course = get_tree().get_first_node_in_group("course") as Course
