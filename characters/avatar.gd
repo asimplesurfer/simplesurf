@@ -15,11 +15,11 @@ extends Node3D
 
 const OUTLINE_SHADER := preload("res://assets/shaders/outline.gdshader")
 ## Grosor del contorno en unidades del avatar.
-const OUTLINE := 0.06
+const OUTLINE := 0.024
 
 ## Animaciones disponibles.
 const ANIMS := [
-	&"idle",       # parado tranquilo (menú): saluda de vez en cuando
+	&"idle",       # parado tranquilo (menú)
 	&"ride",       # sobre la tabla: brazos abiertos para el equilibrio
 	&"air",        # en el aire: brazos arriba, piernas recogidas
 	&"trick",      # truco: brazos bien abiertos
@@ -55,7 +55,11 @@ var _offset: Dictionary = {}
 var _time: float = 0.0
 var _anim_time: float = 0.0
 var _last_anim: StringName = &""
-var _eyes: Array[MeshInstance3D] = []
+var _features := AvatarFeatures.new()
+## El cuerpo que se ve: las piezas del surfista original, deformadas y con
+## accesorios (ver SurferKit). Las piezas de AvatarCore quedan como esqueleto
+## invisible que mueven las animaciones.
+var _kit: SurferKit
 
 
 func _init() -> void:
@@ -74,76 +78,50 @@ func _ready() -> void:
 ## Vuelve a calcular las piezas (llamar al cambiar peso o colores).
 func rebuild() -> void:
 	var parts := AvatarCore.get_avatar(data.weight, data.skin_color(), data.shorts_color())
+	# Forma de la cabeza: se agranda / achica y se sube para no hundirse en el pecho.
+	for part in parts:
+		if part.id == "head":
+			var r0: Vector3 = part.radii
+			var r1 := r0 * data.head_scale()
+			part.radii = r1
+			part.pos = (part.pos as Vector3) + Vector3(0.0, (r1.y - r0.y) * 0.8, 0.0)
 	for part in parts:
 		var id: String = part.id
-		var piece: MeshInstance3D = _pieces.get(id)
+		var piece: Node3D = _pieces.get(id)
 		if piece == null:
-			piece = MeshInstance3D.new()
+			piece = Node3D.new()
 			piece.name = id
-			piece.mesh = _sphere
 			add_child(piece)
 			_pieces[id] = piece
-		var radii: Vector3 = part.radii
-		var min_r := minf(radii.x, minf(radii.y, radii.z))
-		piece.visible = min_r >= 0.05
 		piece.position = part.pos
-		piece.scale = radii
-		piece.material_override = _material_for(part.color, radii)
+		piece.scale = part.radii
 		_base[id] = part.pos
 		if not _offset.has(id):
 			_offset[id] = Vector3.ZERO
-	_place_eyes()
+	if _kit:
+		_kit.free_model()
+	_kit = SurferKit.new()
+	_kit.build(self, data, _features)
+	_kit.apply(_offset, anim, 1.0)
 
 
-## Material plano con contorno. El contorno se infla en el espacio de la esfera
-## (antes de escalar), así que se compensa con el tamaño medio de la pieza.
-func _material_for(color: Color, radii: Vector3) -> StandardMaterial3D:
-	var avg := (radii.x + radii.y + radii.z) / 3.0
-	var key := "%s_%.3f" % [color.to_html(), avg]
-	if _materials.has(key):
-		return _materials[key]
-	var m := StandardMaterial3D.new()
-	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.albedo_color = color
-	var outline := ShaderMaterial.new()
-	outline.shader = OUTLINE_SHADER
-	outline.set_shader_parameter("outline_width", OUTLINE / maxf(avg, 0.05))
-	m.next_pass = outline
-	_materials[key] = m
-	return m
+## Centro y alto de la cabeza (en el espacio del Avatar), para encuadrarla.
+func head_center() -> Vector3:
+	if _kit and _kit.head and is_inside_tree():
+		return to_local(_kit.head.global_position)
+	return Vector3(0.0, 2.1, 0.0)
 
 
-func _place_eyes() -> void:
-	var head: MeshInstance3D = _pieces.get("head")
-	if head == null:
-		return
-	if _eyes.is_empty():
-		var eye_mesh := SphereMesh.new()
-		eye_mesh.radius = 0.07
-		eye_mesh.height = 0.14
-		var black := StandardMaterial3D.new()
-		black.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		black.albedo_color = Color.BLACK
-		eye_mesh.material = black
-		for i in 2:
-			var eye := MeshInstance3D.new()
-			eye.mesh = eye_mesh
-			add_child(eye)
-			_eyes.append(eye)
-	# Sobre el frente de la cabeza (+Z), un poco arriba del centro.
-	var r := head.scale
-	for i in _eyes.size():
-		var side := -1.0 if i == 0 else 1.0
-		_eyes[i].position = head.position + Vector3(side * r.x * 0.36, r.y * 0.15, r.z * 0.9)
+func head_radius() -> float:
+	if _kit and _kit.head:
+		return 0.53 * _kit.head.basis.get_scale().y
+	return 0.53
 
 
 ## Punto de la cara en el mundo (entre los ojos, sobre el frente de la cabeza).
 func face_position() -> Vector3:
-	if _eyes.size() == 2 and _eyes[0].is_inside_tree():
-		return (_eyes[0].global_position + _eyes[1].global_position) * 0.5
-	var head: MeshInstance3D = _pieces.get("head")
-	if head and head.is_inside_tree():
-		return head.global_position
+	if _kit and _kit.head and _kit.head.is_inside_tree():
+		return _kit.face_position()
 	return global_position
 
 
@@ -159,9 +137,10 @@ func _process(delta: float) -> void:
 	for id in _base:
 		var goal: Vector3 = target.get(id, Vector3.ZERO)
 		_offset[id] = (_offset[id] as Vector3).lerp(goal, k)
-		var piece: MeshInstance3D = _pieces[id]
+		var piece: Node3D = _pieces[id]
 		piece.position = _base[id] + _offset[id]
-	_place_eyes()
+	if _kit:
+		_kit.apply(_offset, anim, delta)
 
 
 ## Desplazamiento de cada pieza para la animación actual.
@@ -218,17 +197,11 @@ func _hand_to_head(o: Dictionary, id: String, above: float, out: float, forward:
 
 
 func _idle(o: Dictionary) -> void:
+	# Parado tranquilo: respira y balancea un poco las manos (sin gestos).
 	var breath := sin(_time * 1.8) * 0.02
 	_torso(o, Vector3(0.0, breath, 0.0))
-	_add(o, "hand_L", Vector3(0.0, sin(_time * 2.4) * 0.05, 0.0))
-	# Saluda con la mano derecha cada tanto.
-	var cycle := fmod(_time, 5.0)
-	if cycle < 1.6:
-		var w := sin(cycle / 1.6 * PI)
-		_hand_to_head(o, "hand_R", 0.15 * w, 0.1 + sin(_time * 12.0) * 0.12 * w, 0.0)
-		o["hand_R"] = (o["hand_R"] as Vector3) * w
-	else:
-		_add(o, "hand_R", Vector3(0.0, sin(_time * 2.4 + 1.3) * 0.05, 0.0))
+	_add(o, "hand_L", Vector3(0.0, sin(_time * 2.4) * 0.04, 0.0))
+	_add(o, "hand_R", Vector3(0.0, sin(_time * 2.4 + 1.3) * 0.04, 0.0))
 
 
 func _ride(o: Dictionary) -> void:

@@ -17,7 +17,6 @@ extends Node3D
 
 ## Cómo se ve el personaje. Se asigna antes de agregar el Rider al árbol.
 @export var character: CharacterData
-@export var stripe_color: Color = Color(0.2, 0.55, 0.95)
 
 ## Escala del avatar (AvatarCore mide ~2.7 de alto; así queda de ~1.75 m).
 const AVATAR_SCALE := 0.65
@@ -104,14 +103,7 @@ func _build() -> void:
 	)
 	_board_pivot.add_child(board)
 
-	var stripe_mesh := BoxMesh.new()
-	stripe_mesh.size = Vector3(0.09, 0.01, BOARD_LENGTH * 0.75)
-	stripe_mesh.material = ToonMaterial.make(stripe_color, 0.0)
-	var stripe := MeshInstance3D.new()
-	stripe.name = "Stripe"
-	stripe.mesh = stripe_mesh
-	stripe.position.y = BOARD_TOP - 0.002
-	_board_pivot.add_child(stripe)
+	BoardDesign.add_to(_board_pivot, character, BOARD_LENGTH, BOARD_WIDTH, BOARD_TOP)
 
 	# Personaje: la pastilla, con el origen del pivot en los pies.
 	_body_pivot = Node3D.new()

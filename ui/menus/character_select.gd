@@ -1,7 +1,7 @@
 class_name CharacterSelect
 extends Control
-## Menú de personaje: cada jugador arma su surfista (peso, piel, short, tabla)
-## y marca "listo". J1 además elige cuántos bots y su dificultad.
+## Menú de personaje: cada jugador arma su surfista (estilos armados, cuerpo,
+## piel, cara, pelo, accesorios, short y tabla, o uno al azar) y marca "listo". J1 además elige cuántos bots y su dificultad.
 ## Cuando todos están listos, empieza la carrera.
 ##
 ## Controles por jugador: ↑↓ elegir fila · ←→ cambiar · A / ESPACIO listo ·
@@ -10,7 +10,25 @@ extends Control
 signal start_requested
 
 const RACE_SCENE := "res://main.tscn"
-const ROWS_PLAYER := ["Peso", "Piel", "Short", "Tabla"]
+const ROWS_PLAYER := [
+	"Estilo", "Sorpresa", "Panza", "Músculos", "Piel", "Tamaño de cabeza", "Cabeza", "Pelo", "Color de pelo", "Ojos", "Anteojos",
+	"Nariz", "Boca", "Cara", "Orejas", "Collar", "Short", "Estampado", "Tabla", "Diseño de tabla",
+]
+## Fila del menú -> campo de CharacterData.
+const ROW_FIELDS := {
+	"Piel": "skin", "Cabeza": "head", "Pelo": "hair", "Color de pelo": "hair_color", "Ojos": "eyes",
+	"Anteojos": "glasses", "Nariz": "nose", "Boca": "mouth", "Cara": "extra", "Orejas": "ears",
+	"Collar": "neck", "Short": "shorts", "Estampado": "shorts_pattern", "Tabla": "board",
+	"Diseño de tabla": "board_design",
+}
+## Con estas filas la cámara se acerca a la cara.
+## Barras del menú -> propiedad de CharacterData.
+const ROW_SLIDERS := {"Panza": "weight", "Músculos": "muscle", "Tamaño de cabeza": "head_size"}
+const FACE_ROWS := [
+	"Tamaño de cabeza", "Cabeza", "Pelo", "Color de pelo", "Ojos", "Anteojos", "Nariz", "Boca", "Cara", "Orejas",
+]
+## Filas visibles a la vez (el resto se ve al bajar).
+const VISIBLE_ROWS := 11
 const ROWS_GLOBAL := ["Bots", "Dificultad", "Olas", "Mapa"]
 const WEIGHT_STEP := 0.05
 const REPEAT_DELAY := 0.35
@@ -116,19 +134,15 @@ func _build_panel(player: int) -> Control:
 	var avatar := Avatar.new()
 	avatar.data = data
 	pivot.add_child(avatar)
-	var board := MeshInstance3D.new()
-	var board_mesh := CapsuleMesh.new()
-	board_mesh.radius = 0.5
-	board_mesh.height = 3.6
-	board.mesh = board_mesh
-	board.basis = Basis(Vector3.RIGHT, PI / 2.0) * Basis.from_scale(Vector3(1.0, 1.0, 0.18))
-	board.position.y = -0.06
+	var board := Node3D.new()
+	board.name = "Board"
 	pivot.add_child(board)
 	var cam := Camera3D.new()
 	cam.transform = Transform3D(Basis.IDENTITY, Vector3(0.0, 1.5, 6.2)).looking_at(
 		Vector3(0.0, 1.3, 0.0), Vector3.UP
 	)
 	cam.fov = 38.0
+	cam.set_meta("zoom", 0.0)
 	vp.add_child(cam)
 	var sun := DirectionalLight3D.new()
 	sun.rotation = Vector3(-0.8, 0.5, 0.0)
@@ -151,11 +165,18 @@ func _build_panel(player: int) -> Control:
 	if player == 0:
 		rows.append_array(ROWS_GLOBAL)
 	var row_labels: Array[Label] = []
-	for r in rows:
-		var l := _label("", 22, Color.WHITE)
+	# Indicadores de que hay más filas arriba / abajo.
+	var up_label := _label("", 16, Color(0.8, 0.9, 1.0))
+	up_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	right.add_child(up_label)
+	for r in mini(rows.size(), VISIBLE_ROWS):
+		var l := _label("", 21, Color.WHITE)
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		right.add_child(l)
 		row_labels.append(l)
+	var down_label := _label("", 16, Color(0.8, 0.9, 1.0))
+	down_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	right.add_child(down_label)
 	var ready_label := _label("", 30, YELLOW)
 	right.add_child(ready_label)
 
@@ -167,6 +188,11 @@ func _build_panel(player: int) -> Control:
 		"board": board,
 		"rows": rows,
 		"row_labels": row_labels,
+		"up_label": up_label,
+		"down_label": down_label,
+		"cam": cam,
+		"preset": -1,
+		"rng": RandomNumberGenerator.new(),
 		"ready_label": ready_label,
 		"row": 0,
 		"ready": false,
@@ -192,9 +218,31 @@ func _process(delta: float) -> void:
 		_start_demo()
 		return
 	for p in _panels:
-		var pivot: Node3D = p.pivot
-		pivot.rotation.y += delta * 0.8
+		_animate_preview(p, delta)
 		_handle_stick(p, delta)
+
+
+## Gira el personaje; con una fila de la cara, la cámara se acerca y él mira
+## al frente (moviéndose un poco), para ver bien lo que se elige.
+func _animate_preview(p: Dictionary, delta: float) -> void:
+	var pivot: Node3D = p.pivot
+	var cam: Camera3D = p.cam
+	var face: bool = not p.ready and p.rows[p.row] in FACE_ROWS
+	var zoom: float = move_toward(cam.get_meta("zoom"), 1.0 if face else 0.0, delta * 3.0)
+	cam.set_meta("zoom", zoom)
+	var z := smoothstep(0.0, 1.0, zoom)
+	var avatar: Avatar = p.avatar
+	# Encuadre de la cara según el tamaño real de la cabeza.
+	var head_y := avatar.head_center().y
+	var head_r := avatar.head_radius()
+	var eye := Vector3(0.0, 1.5, 6.2).lerp(Vector3(0.0, head_y - 0.05, 1.7 + head_r * 4.5), z)
+	var look := Vector3(0.0, 1.3, 0.0).lerp(Vector3(0.0, head_y - 0.25, 0.0), z)
+	cam.transform = Transform3D(Basis.IDENTITY, eye).looking_at(look, Vector3.UP)
+	if face:
+		var target := sin(Time.get_ticks_msec() * 0.0012) * 0.55
+		pivot.rotation.y = lerp_angle(pivot.rotation.y, target, 1.0 - exp(-5.0 * delta))
+	else:
+		pivot.rotation.y += delta * 0.8
 
 
 ## Stick / flechas mantenidos: repite el movimiento.
@@ -233,15 +281,26 @@ func _move(p: Dictionary, dir: Vector2i) -> void:
 
 func _change(p: Dictionary, row: String, step: int) -> void:
 	var data: CharacterData = p.data
+	if ROW_FIELDS.has(row):
+		data.step_option(ROW_FIELDS[row], step)
+		p.preset = -1
 	match row:
-		"Peso":
-			data.weight = clampf(snappedf(data.weight + step * WEIGHT_STEP, WEIGHT_STEP), 0.0, 1.0)
-		"Piel":
-			data.skin_index = posmod(data.skin_index + step, CharacterData.SKIN_COLORS.size())
-		"Short":
-			data.shorts_index = posmod(data.shorts_index + step, CharacterData.SHORTS_COLORS.size())
-		"Tabla":
-			data.board_index = posmod(data.board_index + step, CharacterData.BOARD_COLORS.size())
+		"Estilo":
+			p.preset = posmod(int(p.preset) + step, CharacterData.PRESETS.size())
+			data.apply_preset(p.preset)
+		"Sorpresa":
+			var rng: RandomNumberGenerator = p.rng
+			rng.randomize()
+			var r := CharacterData.random(rng)
+			for slider in CharacterData.SLIDERS:
+				data.set(CharacterData.SLIDERS[slider], r.get(CharacterData.SLIDERS[slider]))
+			for field in CharacterData.FIELDS:
+				data.set(CharacterData.FIELDS[field][0], r.get_option(field))
+			p.preset = -1
+		"Panza", "Músculos", "Tamaño de cabeza":
+			var prop: String = ROW_SLIDERS[row]
+			data.set(prop, clampf(snappedf(float(data.get(prop)) + step * WEIGHT_STEP, WEIGHT_STEP), 0.0, 1.0))
+			p.preset = -1
 		"Bots":
 			GameSettings.bot_count = clampi(GameSettings.bot_count + step, 0, 3)
 		"Dificultad":
@@ -318,18 +377,26 @@ func _refresh_all() -> void:
 func _refresh(p: Dictionary) -> void:
 	var data: CharacterData = p.data
 	var labels: Array[Label] = p.row_labels
-	for i in p.rows.size():
-		var row: String = p.rows[i]
+	var rows: Array = p.rows
+	# Ventana de filas visibles alrededor de la elegida.
+	var first := clampi(int(p.row) - VISIBLE_ROWS / 2, 0, maxi(rows.size() - VISIBLE_ROWS, 0))
+	for k in labels.size():
+		var i := first + k
+		var row: String = rows[i]
 		var value := ""
+		if ROW_FIELDS.has(row):
+			value = data.option_name(ROW_FIELDS[row])
 		match row:
-			"Peso":
-				value = "%s  %s" % [_bar(data.weight), AvatarCore.stage_name(data.weight)]
-			"Piel":
-				value = CharacterData.SKIN_NAMES[data.skin_index]
-			"Short":
-				value = CharacterData.SHORTS_NAMES[data.shorts_index]
-			"Tabla":
-				value = CharacterData.BOARD_NAMES[data.board_index]
+			"Estilo":
+				value = CharacterData.PRESET_NAMES[p.preset] if p.preset >= 0 else "a tu gusto"
+			"Sorpresa":
+				value = "uno al azar"
+			"Panza":
+				value = "%s  %s" % [_bar(data.weight), "Musculoso" if data.weight < 0.15 else AvatarCore.stage_name(data.weight)]
+			"Músculos":
+				value = _bar(data.muscle)
+			"Tamaño de cabeza":
+				value = _bar(data.head_size)
 			"Bots":
 				value = str(GameSettings.bot_count)
 			"Dificultad":
@@ -339,12 +406,29 @@ func _refresh(p: Dictionary) -> void:
 			"Mapa":
 				value = GameSettings.track_layout_name()
 		var selected: bool = i == p.row and not p.ready
-		labels[i].text = ("> " if selected else "   ") + "%s:  < %s >" % [row, value]
-		labels[i].add_theme_color_override("font_color", YELLOW if selected else Color.WHITE)
+		labels[k].text = ("> " if selected else "   ") + "%s:  < %s >" % [row, value]
+		labels[k].add_theme_color_override("font_color", YELLOW if selected else Color.WHITE)
+	(p.up_label as Label).text = "      ▲ más" if first > 0 else ""
+	(p.down_label as Label).text = "      ▼ más" if first + labels.size() < rows.size() else ""
 	var ready_label: Label = p.ready_label
 	ready_label.text = "¡LISTO!" if p.ready else "Apretá ESPACIO / A"
-	var board: MeshInstance3D = p.board
-	board.material_override = ToonMaterial.make(data.board_color(), 0.05)
+	_rebuild_board(p.board, data)
+
+
+## Tabla del menú: la misma forma que en la carrera (más grande) con su diseño.
+func _rebuild_board(board: Node3D, data: CharacterData) -> void:
+	for c in board.get_children():
+		c.queue_free()
+	var mesh := CapsuleMesh.new()
+	mesh.radius = 0.5
+	mesh.height = 3.6
+	mesh.material = ToonMaterial.make(data.board_color(), 0.05)
+	var body := MeshInstance3D.new()
+	body.mesh = mesh
+	body.basis = Basis(Vector3.RIGHT, PI / 2.0) * Basis.from_scale(Vector3(1.0, 1.0, 0.18))
+	body.position.y = -0.06
+	board.add_child(body)
+	BoardDesign.add_to(board, data, 3.6, 1.0, 0.03)
 
 
 func _bar(t: float) -> String:
