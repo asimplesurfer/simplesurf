@@ -66,6 +66,11 @@ func _ready() -> void:
 	_push_swells()
 
 
+## El material del agua (la tormenta le cambia colores y olitas).
+func shader_material() -> ShaderMaterial:
+	return _material
+
+
 ## Paso de la grilla fina del agua (m). Los vértices finos están siempre en
 ## (n + 0,5) · step del mundo, para todas las cámaras.
 func grid_step() -> float:

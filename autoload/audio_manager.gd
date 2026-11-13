@@ -28,7 +28,7 @@ var _in_race: bool = false
 ## Efectos de sonido (assets/audio/sfx/<nombre>.wav, generados con tools/make_sfx.py).
 const SFX_NAMES := [
 	"splash", "wave_punch", "pop", "hop", "land", "turbo", "ring", "trick_ok", "trick_fail",
-	"crash", "bonk", "mash", "beep", "go", "lap", "finish",
+	"crash", "bonk", "mash", "beep", "go", "lap", "finish", "thunder",
 ]
 const SFX_VOICES := 16
 ## Más allá de esta distancia a un jugador, los sonidos de otros no se escuchan (m).
