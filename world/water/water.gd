@@ -36,6 +36,8 @@ const MID_CELLS := 10
 static var debug_exact: bool = false
 ## Cuánto tiene que quedar la cara debajo del agua dibujada para que cuente (m).
 const FACE_MIN_DEPTH := 0.02
+## Altura mínima de una ola para que atravesarla cuente como chapuzón (m).
+const BIG_WAVE_MIN := 1.0
 
 var _plane: ArrayMesh
 var _material: ShaderMaterial
@@ -220,6 +222,21 @@ func breaking_at(x: float, z: float) -> float:
 ## true si el punto (la cara de alguien) está debajo del agua TAL COMO SE DIBUJA.
 func face_in_wave(q: Vector3) -> bool:
 	return drawn_depth(q) > FACE_MIN_DEPTH
+
+
+## true si hay una ola grande (o la ola constante) que puede tapar el punto q:
+## el agua que lo cubre es de la ola, no el mar de fondo.
+func big_wave_near(q: Vector3) -> bool:
+	if ring_wave and ring_wave.height_at(Vector2(q.x, q.z)) > BIG_WAVE_MIN:
+		return true
+	var p := Vector2(q.x, q.z)
+	for s in swells:
+		if s.amplitude < BIG_WAVE_MIN:
+			continue
+		var uw := s.local_coords(p)
+		if absf(uw.y) < s.half_length + 2.0 and uw.x > -s.width * 3.0 - 2.0 and uw.x < s.width * 3.0 + s.lean() + 2.0:
+			return true
+	return false
 
 
 ## Vértice de la malla del agua en el punto de grilla p, movido igual que en
