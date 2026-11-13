@@ -108,7 +108,7 @@ func _check_rider(r: Rider) -> void:
 	var visual := r.get_node("Visual") as RiderVisual
 	var face := visual.face_position()
 	var avatar: Avatar = visual._body
-	var head: MeshInstance3D = avatar._pieces.get("head")
+	var head := avatar.find_child("Head", true, false) as Node3D
 	var head_c := head.global_position if head else face
 	_frames_checked += 1
 	var gt := _rendered_under(face)

@@ -32,6 +32,9 @@ const LEAN_ANGLE := 0.35
 const DRIFT_YAW := 1.15
 
 var rider: Rider
+## Para los golpes de despegue y aterrizaje de la animación.
+var _was_in_air: bool = false
+var _last_air_vy: float = 0.0
 
 var _tilt: Node3D
 var _board_pivot: Node3D
@@ -274,12 +277,19 @@ func _process(delta: float) -> void:
 ## Elige la animación del personaje según lo que está haciendo el Rider.
 func _update_avatar_anim(delta: float) -> void:
 	_stage_time += delta
+	var was_ducking := duck_time > 0.0
 	duck_time = maxf(duck_time - delta, 0.0)
+	# Terminó de atravesar la ola: se seca la cara.
+	if was_ducking and duck_time <= 0.0 and rider.recovery_stage == Rider.RecoveryStage.STANDING:
+		_body.shake_off()
 	var stage := rider.recovery_stage
 	var a: StringName = &"ride"
 	_body.effort = clampf(_punch * 1.5, 0.0, 1.0)
 	_body.charge = rider.jump_charge
 	_body.steer = rider.steer_amount
+	_body.speed = clampf(rider.speed / maxf(rider.stats.max_speed, 0.1), 0.0, 1.2)
+	_body.vertical_speed = rider.vertical_speed
+	_body.turbo = rider.turbo_active
 	match stage:
 		Rider.RecoveryStage.IN_WATER:
 			a = &"flail" if _stage_time < 1.4 or _punch > 0.3 else &"tread"
@@ -298,6 +308,15 @@ func _update_avatar_anim(delta: float) -> void:
 				_body.drift_side = rider.drift_side
 			elif rider.race_finished:
 				a = &"celebrate"
+	# Despegó (salto o la ola lo lanzó) / aterrizó: golpes de la animación.
+	var in_air := a == &"air" or a == &"trick"
+	if in_air and not _was_in_air:
+		_body.pop()
+	elif not in_air and _was_in_air and stage == Rider.RecoveryStage.STANDING:
+		_body.land(clampf(absf(_last_air_vy) / 9.0, 0.35, 1.0))
+	if in_air:
+		_last_air_vy = rider.vertical_speed
+	_was_in_air = in_air
 	_body.anim = a
 
 
