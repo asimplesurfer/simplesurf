@@ -29,7 +29,6 @@ const PART_MAP := {
 	"hand_L": ["HandL"],
 	"hand_R": ["HandR"],
 }
-const STANCE_ANIMS := [&"idle", &"ride", &"air", &"trick", &"drift", &"duck"]
 const STANCE_YAW := PI / 2.0
 const FRONT_YAW := 0.0
 ## Punto entre los ojos, en el espacio de la cabeza del modelo.
@@ -42,6 +41,11 @@ var character: Node3D
 var head: Node3D
 var _parts: Dictionary = {}
 var _base: Dictionary = {}
+## Partes animadas: nombre -> nodo, con su transformación original.
+var _nodes: Dictionary = {}
+var _base_xf: Dictionary = {}
+## Pose actual (suavizada): parte -> {pos, rot}.
+var _pose: Dictionary = {}
 var _yaw: float = STANCE_YAW
 var _materials: Dictionary = {}
 
@@ -67,6 +71,8 @@ func build(parent: Node3D, data: CharacterData, features: AvatarFeatures) -> voi
 				_bake(n)
 				nodes.append(n)
 				_base[n] = n.position
+				_nodes[node_name] = n
+				_base_xf[node_name] = n.transform
 		_parts[id] = nodes
 	head = character.find_child("Head", false, false) as Node3D
 	# Accesorios armados (pelo, ojos, nariz, boca, orejas, collar, estampado).
@@ -91,20 +97,32 @@ func free_model() -> void:
 	_base.clear()
 
 
-## Mueve las partes con el desplazamiento (en el espacio del Avatar) de su pieza
-## equivalente, y gira el cuerpo de costado o de frente.
-func apply(offsets: Dictionary, anim: StringName, delta: float) -> void:
+## Pone al personaje en la pose de la animación (ver SurferAnim), suavizando
+## el paso de una pose a otra. `snap` = sin suavizar.
+func animate(state: Dictionary, delta: float, snap: bool = false) -> void:
 	if character == null:
 		return
-	var target := STANCE_YAW if anim in STANCE_ANIMS else FRONT_YAW
-	_yaw = lerp_angle(_yaw, target, 1.0 - exp(-10.0 * delta))
-	character.basis = Basis(Vector3.UP, _yaw)
-	var to_local := character.basis.inverse()
-	for id in _parts:
-		var off: Vector3 = offsets.get(id, Vector3.ZERO)
-		for n in (_parts[id] as Array):
-			var node := n as Node3D
-			node.position = (_base[node] as Vector3) + to_local * off
+	var target_pose := SurferAnim.pose(state)
+	var k := 1.0 if snap else 1.0 - exp(-16.0 * delta)
+	for part in target_pose:
+		var goal: Dictionary = target_pose[part]
+		if not _pose.has(part) or snap:
+			_pose[part] = {"pos": goal.pos, "rot": goal.rot}
+		else:
+			var cur: Dictionary = _pose[part]
+			cur.pos = (cur.pos as Vector3).lerp(goal.pos, k)
+			cur.rot = (cur.rot as Vector3).lerp(goal.rot, k)
+	var target_yaw := STANCE_YAW if SurferAnim.is_stance(state.anim) else FRONT_YAW
+	_yaw = target_yaw if snap else lerp_angle(_yaw, target_yaw, 1.0 - exp(-10.0 * delta))
+	var root: Dictionary = _pose["root"]
+	character.transform = Transform3D(
+		Basis(Vector3.UP, _yaw) * Basis.from_euler(root.rot), Vector3(0.0, 0.05, 0.0) + root.pos
+	)
+	for part in _nodes:
+		var node := _nodes[part] as Node3D
+		var base: Transform3D = _base_xf[part]
+		var pp: Dictionary = _pose.get(part, {"pos": Vector3.ZERO, "rot": Vector3.ZERO})
+		node.transform = Transform3D(Basis.from_euler(pp.rot) * base.basis, base.origin + pp.pos)
 
 
 func face_position() -> Vector3:

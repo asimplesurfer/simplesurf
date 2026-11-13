@@ -17,6 +17,7 @@ var _takeoff_y: float = 0.0
 ## Veces que atravesó una ola que rompía, y si se vieron sus efectos.
 var _punches: int = 0
 var _punch_without_face: bool = false
+var _shake_seen: bool = false
 ## Si el último salto de ola fue con pop.
 var _last_did_pop: bool = false
 var _early_pressed: bool = false
@@ -452,6 +453,7 @@ func _test_wave_jump() -> void:
 	_check(_punches > 0, "atravesar una ola que rompe se detecta (%d veces)" % _punches)
 	_check_face_geometry()
 	_check(_duck_seen, "al atravesarla el personaje se agacha y se cubre")
+	_check(_shake_seen, "y después sacude la cabeza y se seca la cara")
 	_check(_splash_seen, "y la cámara queda mojada medio segundo")
 	await _wait(1.0)
 	var hud2 := (_main.get_node("Views") as SplitScreen).huds[0]
@@ -673,6 +675,8 @@ func _ride_into_swell(
 			_splash_seen = true
 		if visual.duck_time > 0.0:
 			_duck_seen = true
+		if visual._body._shake > 0.0:
+			_shake_seen = true
 		if release_next:
 			_set_action(&"p1_a", false)
 			release_next = false
