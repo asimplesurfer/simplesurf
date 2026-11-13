@@ -30,20 +30,22 @@ uniform vec3 islands[16];
 uniform int island_count = 0;
 // Pista (centro x, centro z, radio de adentro, radio de afuera). 0 = sin pista.
 uniform vec4 track_band = vec4(0.0);
-uniform vec3 outside_color : source_color = vec3(0.02, 0.17, 0.34);
+uniform vec3 outside_color : source_color = vec3(0.03, 0.15, 0.27);
 
-uniform vec3 deep_color : source_color = vec3(0.02, 0.24, 0.48);
-uniform vec3 shallow_color : source_color = vec3(0.08, 0.48, 0.7);
+uniform vec3 deep_color : source_color = vec3(0.03, 0.2, 0.34);
+uniform vec3 shallow_color : source_color = vec3(0.08, 0.35, 0.48);
 uniform vec3 foam_color : source_color = vec3(0.93, 0.98, 1.0);
 uniform float foam_height = 0.42;
-uniform vec3 wave_color : source_color = vec3(0.1, 0.68, 0.72);
+uniform vec3 wave_color : source_color = vec3(0.14, 0.55, 0.6);
 // Agua donde se está por levantar una ola (más oscura, como una sombra).
-uniform vec3 rising_color : source_color = vec3(0.01, 0.16, 0.36);
+uniform vec3 rising_color : source_color = vec3(0.02, 0.14, 0.28);
 // Luz que atraviesa la parte fina de la ola (cerca de la cresta).
 uniform vec3 glow_color : source_color = vec3(0.25, 0.95, 0.8);
-uniform float glow_strength = 0.35;
+uniform float glow_strength = 0.25;
 // Color del cielo que se refleja en ángulos rasantes.
-uniform vec3 sky_tint : source_color = vec3(0.72, 0.92, 1.0);
+uniform vec3 sky_tint : source_color = vec3(0.6, 0.76, 0.86);
+// Cuánto refleja el cielo en ángulos rasantes (la tormenta usa 0,6).
+uniform float sky_reflect = 0.42;
 
 varying float v_height;
 // 0..1: cuerpo de una ola grande (para el color turquesa de la ola).
@@ -238,7 +240,7 @@ void fragment() {
 	// Reflejo del cielo en ángulos rasantes (fresnel): el mar de lejos brilla.
 	float facing = clamp(dot(NORMAL, VIEW), 0.0, 1.0);
 	float fresnel = pow(1.0 - facing, 4.0);
-	col = mix(col, sky_tint, fresnel * 0.6);
+	col = mix(col, sky_tint, fresnel * sky_reflect);
 
 	// Espuma con textura: se deshace en bordes irregulares y se mueve.
 	float n1 = fx_noise(wp * 0.9 + vec2(t * 0.35, t * 0.2));

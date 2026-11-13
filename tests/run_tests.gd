@@ -1904,6 +1904,13 @@ func _test_atoll() -> void:
 	_check((m.get_node("Sun") as DirectionalLight3D).light_energy < 0.7, "hay menos luz de sol")
 	var water := m.get_node("Water") as Water
 	_check(water.waves.max_height() > 1.4, "el mar está mucho más picado (%.1f m)" % water.waves.max_height())
+	var wm := water.shader_material()
+	_check(
+		wm.get_shader_parameter("deep_color") == Color(0.05, 0.15, 0.23)
+		and wm.get_shader_parameter("sky_tint") == Color(0.5, 0.55, 0.62)
+		and is_equal_approx(wm.get_shader_parameter("sky_reflect"), 0.6),
+		"el agua de la tormenta tiene sus colores propios (no depende del día)"
+	)
 	storm.strike()
 	var flashed := false
 	var thunder := false
@@ -1917,6 +1924,20 @@ func _test_atoll() -> void:
 	_check(thunder, "y después suena el trueno")
 	_check(storm.last_strike.length() > 400.0, "los rayos caen lejos")
 	_check(storm.rain.size() == (m.get_node("Views") as SplitScreen).views.size(), "llueve en cada pantalla")
+	var drops := storm.rain[0].get_node("Drops") as CPUParticles3D
+	_check(drops.emitting and not drops.local_coords, "la lluvia son gotas 3D que caen en el mundo")
+	# Si una vista pierde la lluvia, vuelve sola.
+	var lost := storm.rain[0]
+	lost.get_parent().remove_child(lost)
+	lost.free()
+	await process_frame
+	await process_frame
+	_check(
+		storm.rain.size() == (m.get_node("Views") as SplitScreen).views.size()
+		and storm.rain[0].get_node_or_null("Drops") != null,
+		"si se pierde la lluvia de una vista, vuelve"
+	)
+	_check(storm._rain_clock >= 0.0 and storm._rain_clock < 1.0, "el reloj de la lluvia no crece sin parar")
 	_check(storm._rain_sound.playing, "se escucha la lluvia")
 	var on_track := true
 	for g in course.geysers:

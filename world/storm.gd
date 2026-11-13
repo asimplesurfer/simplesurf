@@ -20,6 +20,10 @@ const BOLT_TIME := 0.42
 const CHOP_SCALE := 2.4
 const CHOP_SPEED := 1.25
 const RAIN_SHADER := preload("res://world/sky/rain.gdshader")
+const CURTAIN_SHADER := preload("res://world/sky/rain_curtain.gdshader")
+## Gotas 3D cerca de cada cámara (menos con muchas pantallas).
+const DROPS := 900
+const DROPS_MANY_VIEWS := 450
 
 var _env: Environment
 var _sky_mat: ShaderMaterial
@@ -34,9 +38,16 @@ var _base_sun: float = 0.0
 var _base_fog: Color
 ## Brillo del relámpago (0..1), para los tests.
 var flash: float = 0.0
-## Lluvia: una cortina por vista.
-var rain: Array[ColorRect] = []
+## Lluvia de cada vista (gotas 3D + cortinas), colgada de su cámara.
+var rain: Array[Node3D] = []
+## Velo gris + destello de cada vista.
+var veils: Array[ColorRect] = []
 var _rain_mat: ShaderMaterial
+var _split: SplitScreen
+var _curtain_mats: Array[ShaderMaterial] = []
+var _drop_mat: StandardMaterial3D
+var _drop_mesh: BoxMesh
+var _rain_clock: float = 0.0
 var _rain_sound: AudioStreamPlayer
 ## Rayos que cayeron (para los tests).
 var strikes: int = 0
@@ -87,19 +98,103 @@ func _ready() -> void:
 
 
 func _add_rain(main: Node) -> void:
-	var split := main.get_node_or_null("Views") as SplitScreen
-	if split == null:
+	_split = main.get_node_or_null("Views") as SplitScreen
+	_drop_mat = StandardMaterial3D.new()
+	_drop_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_drop_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_drop_mat.albedo_color = Color(0.8, 0.85, 0.92, 0.42)
+	_drop_mesh = BoxMesh.new()
+	_drop_mesh.size = Vector3(0.016, 0.85, 0.016)
+	_drop_mesh.material = _drop_mat
+	for spec in [[16.0, 90.0, 0.4], [38.0, 170.0, 0.3]]:
+		var m := ShaderMaterial.new()
+		m.shader = CURTAIN_SHADER
+		m.set_shader_parameter("columns", spec[1])
+		m.set_shader_parameter("tint", Color(0.78, 0.83, 0.9, spec[2]))
+		_curtain_mats.append(m)
+	_ensure_rain()
+
+
+## Pone la lluvia en cada vista que no la tenga (si las vistas se rearman,
+## vuelve a aparecer sola).
+func _ensure_rain() -> void:
+	if _split == null:
 		return
-	for vp in split.views:
-		var r := ColorRect.new()
-		r.name = "Rain"
-		r.material = _rain_mat
-		r.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		r.set_anchors_preset(Control.PRESET_FULL_RECT)
-		r.size = Vector2(vp.size)
-		vp.size_changed.connect(func() -> void: r.size = Vector2(vp.size))
-		vp.add_child(r)
-		rain.append(r)
+	var many := _split.cameras.size() >= 3
+	for i in _split.cameras.size():
+		var cam := _split.cameras[i]
+		if is_instance_valid(cam) and cam.get_node_or_null("Rain") == null:
+			var rig := _rain_rig(i, DROPS_MANY_VIEWS if many else DROPS)
+			cam.add_child(rig)
+			rain.append(rig)
+		var vp := _split.views[i]
+		if is_instance_valid(vp) and vp.get_node_or_null("Veil") == null:
+			var r := ColorRect.new()
+			r.name = "Veil"
+			r.material = _rain_mat
+			r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			r.set_anchors_preset(Control.PRESET_FULL_RECT)
+			r.size = Vector2(vp.size)
+			vp.size_changed.connect(func() -> void: r.size = Vector2(vp.size))
+			vp.add_child(r)
+			veils.append(r)
+	for i in range(rain.size() - 1, -1, -1):
+		if not is_instance_valid(rain[i]):
+			rain.remove_at(i)
+	for i in range(veils.size() - 1, -1, -1):
+		if not is_instance_valid(veils[i]):
+			veils.remove_at(i)
+
+
+## Lluvia de una vista: solo la ve esa cámara (capa propia).
+func _rain_rig(view: int, amount: int) -> Node3D:
+	var layer := 1 << (Water.FOLLOWER_LAYER_BASE + view)
+	var rig := Node3D.new()
+	rig.name = "Rain"
+	# Gotas cerca: caen en el mundo (no se mueven con la cámara), un poco
+	# adelante para que no falten cuando se avanza rápido.
+	var drops := CPUParticles3D.new()
+	drops.name = "Drops"
+	drops.mesh = _drop_mesh
+	drops.amount = amount
+	drops.lifetime = 0.75
+	drops.preprocess = 0.75
+	drops.local_coords = false
+	drops.position = Vector3(0.0, 3.0, -9.0)
+	drops.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	drops.emission_box_extents = Vector3(13.0, 7.0, 13.0)
+	drops.direction = Vector3(0.22, -1.0, 0.08)
+	drops.spread = 3.0
+	drops.gravity = Vector3.ZERO
+	drops.initial_velocity_min = 22.0
+	drops.initial_velocity_max = 28.0
+	drops.particle_flag_align_y = true
+	drops.scale_amount_min = 0.7
+	drops.scale_amount_max = 1.2
+	drops.layers = layer
+	drops.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	rig.add_child(drops)
+	# Cortinas: siguen la posición de la cámara pero no su giro (al girar se
+	# ve que la lluvia está en el mundo).
+	for m in _curtain_mats:
+		var cyl := CylinderMesh.new()
+		var radius: float = 16.0 if m == _curtain_mats[0] else 38.0
+		cyl.top_radius = radius
+		cyl.bottom_radius = radius
+		cyl.height = 44.0
+		cyl.cap_top = false
+		cyl.cap_bottom = false
+		cyl.radial_segments = 24
+		cyl.rings = 1
+		cyl.material = m
+		var mi := MeshInstance3D.new()
+		mi.name = "Curtain"
+		mi.mesh = cyl
+		mi.top_level = true
+		mi.layers = layer
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		rig.add_child(mi)
+	return rig
 
 
 func _paint_sky() -> void:
@@ -139,6 +234,7 @@ func _roughen(water: Water) -> void:
 	mat.set_shader_parameter("rising_color", Color(0.03, 0.1, 0.17))
 	mat.set_shader_parameter("sky_tint", Color(0.5, 0.55, 0.62))
 	mat.set_shader_parameter("glow_strength", 0.15)
+	mat.set_shader_parameter("sky_reflect", 0.6)
 	# Espuma solo en las crestas más altas (si no, el mar picado se llena de manchas).
 	mat.set_shader_parameter("foam_height", 0.42 * CHOP_SCALE * 0.5)
 
@@ -177,6 +273,16 @@ func _process(delta: float) -> void:
 		_sun.light_energy = _base_sun + flash * 0.9
 	if _rain_mat:
 		_rain_mat.set_shader_parameter("flash", flash)
+	# Lluvia: reloj que da la vuelta cada segundo (sin saltos ni números grandes).
+	_rain_clock = fmod(_rain_clock + delta, 1.0)
+	for m in _curtain_mats:
+		m.set_shader_parameter("rain_time", _rain_clock)
+	_ensure_rain()
+	for r in rain:
+		var cam := r.get_parent() as Node3D
+		for c in r.get_children():
+			if c is MeshInstance3D:
+				(c as MeshInstance3D).global_position = cam.global_position + Vector3(0.0, 6.0, 0.0)
 
 
 ## Cae un rayo lejos (en una dirección al azar). Se dibuja en el cielo, así
