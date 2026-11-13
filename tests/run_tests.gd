@@ -244,7 +244,7 @@ func _test_demo() -> void:
 func _test_avatar() -> void:
 	print("Personaje:")
 	var parts := AvatarCore.get_avatar(0.0)
-	_check(parts.size() == 12, "el personaje tiene 12 piezas (%d)" % parts.size())
+	_check(parts.size() == 14, "el personaje tiene 14 piezas, con las piernas del short (%d)" % parts.size())
 	_check(AvatarCore.stage_name(0.0) == "Musculoso", "t=0 es Musculoso")
 	_check(AvatarCore.stage_name(1.0) == "Cervecero", "t=1 es Cervecero")
 	_check(AvatarCore.stage_name(0.45) == "Delgado", "t=0.45 es Delgado")
@@ -261,6 +261,33 @@ func _test_avatar() -> void:
 	_check(belly_big, "Cervecero: panza grande")
 	var green := AvatarCore.get_avatar(0.5, CharacterData.SKIN_COLORS[5])
 	_check(green[0].color == CharacterData.SKIN_COLORS[5], "se puede cambiar el color de piel")
+	# Creador: estilos, guardado y opciones de chiste.
+	var c := CharacterData.new()
+	c.apply_preset(0)
+	var back := CharacterData.from_dict(c.to_dict())
+	_check(back.to_dict() == c.to_dict(), "el personaje se guarda y se carga igual")
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 3
+	var all_ok := true
+	for i in 30:
+		var r := CharacterData.random(rng)
+		var av := Avatar.new()
+		av.data = r
+		root.add_child(av)
+		if av.find_child("HeadFeatures", true, false) == null:
+			all_ok = false
+		av.free()
+	_check(all_ok, "30 personajes al azar se arman sin errores")
+	var big := CharacterData.new()
+	big.head_size = 1.0
+	var av2 := Avatar.new()
+	av2.data = big
+	root.add_child(av2)
+	var head_r := av2.head_radius()
+	var face := av2.face_position()
+	av2.free()
+	_check(head_r > 0.65, "cabezón: la cabeza es más grande (%.2f)" % head_r)
+	_check(face.z > 0.3 and face.y > 1.9, "la cara está adelante de la cabeza (%s)" % face)
 
 
 func _test_menu() -> void:
@@ -274,20 +301,47 @@ func _test_menu() -> void:
 	await process_frame
 	await process_frame
 	var data := GameSettings.character_for(0)
+	var panel: Dictionary = menu._panels[0]
 	var w := data.weight
+	await _menu_go(panel, "Panza")
 	await _press(&"p1_right")
-	_check(data.weight > w, "derecha cambia el peso (%.2f -> %.2f)" % [w, data.weight])
+	if is_equal_approx(data.weight, w):
+		await _press(&"p1_left")
+		await _press(&"p1_left")
+	_check(not is_equal_approx(data.weight, w), "la barra Panza cambia el peso (%.2f -> %.2f)" % [w, data.weight])
 	var skin := data.skin_index
-	await _press(&"p1_down")
+	await _menu_go(panel, "Piel")
 	await _press(&"p1_right")
-	_check(data.skin_index != skin, "abajo y derecha cambian la piel")
-	var avatar := menu._panels[0].avatar as Avatar
-	var head := avatar.get_node("head") as MeshInstance3D
-	var mat := head.material_override as StandardMaterial3D
-	_check(mat.albedo_color == data.skin_color(), "el personaje del menú muestra la piel elegida")
-	# Fila "Olas" (la última del jugador 1): cambia el modo de olas.
-	for i in 5:
-		await _press(&"p1_down")
+	_check(data.skin_index != skin, "la fila Piel cambia la piel")
+	var avatar := panel.avatar as Avatar
+	_check(_kit_color(avatar, "skin") == data.skin_color(), "el personaje del menú muestra la piel elegida")
+	# Estilo armado: el surfista rubio (melena, anteojos de sol, collar, flores).
+	await _menu_go(panel, "Estilo")
+	while panel.preset != 0:
+		await _press(&"p1_right")
+	_check(data.get_option("hair") == 2 and data.get_option("glasses") == 1, "estilo Surfista rubio: melena y anteojos de sol")
+	await process_frame
+	# Es el modelo original: melena, anteojos de sol, sonrisa, perlas y flores.
+	var kit_head := avatar.find_child("Head", true, false) as Node3D
+	_check(_kit_has(avatar, "hair") and _kit_has(avatar, "lens"), "el surfista rubio usa la melena y los anteojos del modelo")
+	_check(_kit_has(avatar, "pearl") and _kit_has(avatar, "flower"), "con el collar de perlas y las flores del short")
+	_check(kit_head.get_child_count() <= 3, "cada parte se dibuja junta (pocas mallas)")
+	# Con una fila de la cara, la cámara se acerca.
+	await _menu_go(panel, "Ojos")
+	await _wait(0.6)
+	_check((panel.cam as Camera3D).get_meta("zoom") > 0.9, "en las filas de la cara, la cámara se acerca")
+	var eyes := data.get_option("eyes")
+	await _press(&"p1_right")
+	_check(data.get_option("eyes") != eyes and panel.preset == -1, "cambiar los ojos deja el estilo a tu gusto")
+	# Sorpresa: uno al azar.
+	await _menu_go(panel, "Sorpresa")
+	var before := data.to_dict()
+	await _press(&"p1_right")
+	_check(data.to_dict() != before, "Sorpresa arma uno al azar")
+	await _wait(0.6)
+	_check((panel.cam as Camera3D).get_meta("zoom") < 0.1, "fuera de la cara, la cámara se aleja")
+	# Fila "Olas" (de las de J1): cambia el modo de olas.
+	await _menu_go(panel, "Olas")
 	var mode_before := GameSettings.wave_mode
 	await _press(&"p1_right")
 	_check(GameSettings.wave_mode != mode_before, "en el menú, la fila Olas cambia el modo de olas")
@@ -1791,6 +1845,28 @@ func _set_action(action: StringName, pressed: bool) -> void:
 
 ## Toca un botón. Los eventos simulados llegan al juego un frame después,
 ## por eso se espera un frame extra tras soltar.
+## Color de un material del cuerpo del personaje (por nombre), o negro si no está.
+func _kit_color(avatar: Avatar, mat_name: String) -> Color:
+	for mi in avatar.find_children("*", "MeshInstance3D", true, false):
+		var mesh := (mi as MeshInstance3D).mesh
+		for i in mesh.get_surface_count():
+			var m := mesh.surface_get_material(i) as BaseMaterial3D
+			if m and m.resource_name == mat_name:
+				return m.albedo_color
+	return Color.BLACK
+
+
+func _kit_has(avatar: Avatar, mat_name: String) -> bool:
+	return _kit_color(avatar, mat_name) != Color.BLACK
+
+
+## En el menú de personaje, baja / sube hasta la fila con ese nombre.
+func _menu_go(panel: Dictionary, row_name: String) -> void:
+	var target: int = (panel.rows as Array).find(row_name)
+	while panel.row != target:
+		await _press(&"p1_down" if panel.row < target else &"p1_up")
+
+
 func _press(action: StringName) -> void:
 	_set_action(action, true)
 	await process_frame
