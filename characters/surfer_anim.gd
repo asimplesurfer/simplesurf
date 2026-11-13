@@ -13,7 +13,8 @@ extends RefCounted
 ## Estado (Dictionary): anim, t (tiempo de la animación), time, steer (-1..1),
 ## charge (0..1), drift_side, effort (0..1), speed (0..1), vy (velocidad
 ## vertical), land (0..1, recién aterrizó), pop (0..1, recién despegó), turbo,
-## shake (0..1, se está secando la cara después de un chapuzón).
+## shake (0..1, se está secando la cara después de un chapuzón), look (giro
+## de la cabeza hacia un rival, + = hacia las puntas), cheer (0..1, festeja).
 
 const PARTS := [
 	"Head", "Torso", "ShortsHips", "SleeveL", "SleeveR", "ThighL", "ThighR", "ShinL", "ShinR",
@@ -72,6 +73,15 @@ static func pose(s: Dictionary) -> Dictionary:
 			_celebrate(p, s)
 		_:
 			_idle(p, s)
+	# Mira al rival que tiene cerca (o hacia donde gira).
+	if is_stance(s.anim):
+		_turn(p, "Head", Vector3(0.0, clampf(s.get("look", 0.0), -1.0, 1.0) * 0.8, 0.0))
+	# Festejo (clavó un truco, tiró a alguien): puño arriba.
+	if is_stance(s.anim) and s.get("cheer", 0.0) > 0.0:
+		var c: float = s.cheer
+		var env := sin(clampf(c, 0.0, 1.0) * PI)
+		_reach(p, "HandR", Vector3(0.65, 2.55 + sin(s.time * 14.0) * 0.12, 0.25) + p["Torso"].pos, env)
+		_turn(p, "Head", Vector3(-0.25 * env, 0.0, 0.0))
 	# Después del chapuzón: sacude la cabeza y se pasa la mano por los ojos.
 	if is_stance(s.anim) and s.get("shake", 0.0) > 0.0:
 		_shake_off(p, s)
@@ -259,7 +269,7 @@ static func _paddle(p: Dictionary, s: Dictionary) -> void:
 		var side := -1.0 if i == 0 else 1.0
 		var a := ph + PI * i
 		# Adelante (+Y) por arriba (-Z), atrás por el agua (+Z), bien grande.
-		var target := Vector3(side * 0.48, 1.7 + cos(a) * 0.95, -sin(a) * 0.6 + 0.2)
+		var target := Vector3(side * 0.66, 1.7 + cos(a) * 0.95, -sin(a) * 0.6 + 0.2)
 		_reach(p, hand, target, 1.0)
 	_turn(p, "Torso", Vector3(0.0, sin(ph) * 0.3, 0.0))
 	_turn(p, "Head", Vector3(-0.6, sin(ph) * 0.12, 0.0))

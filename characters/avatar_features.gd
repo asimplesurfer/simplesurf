@@ -75,14 +75,17 @@ const SKULL_PROFILE := [
 ## Cabeza: ojos, anteojos, nariz, boca, cara, orejas y pelo, apoyados sobre el
 ## cráneo del modelo (el grupo es hijo de la cabeza). Las opciones que vienen
 ## del modelo (melena, anteojos de sol, sonrisa de costado) no se arman acá.
-func build_head(group: Node3D, data: CharacterData, skin: Color) -> void:
-	_begin(group)
+## El pelo va en su propio grupo (`hair_group`), así se puede mover solo.
+func build_head(group: Node3D, hair_group: Node3D, data: CharacterData, skin: Color) -> void:
 	# Parte de arriba del cráneo como un elipsoide (para pelos y orejas).
 	_r = Vector3(0.51, 0.53, 0.45)
 	_hs = 1.0
 	var hair := data.hair_color()
-	_ears(data.get_option("ears"), skin)
+	_begin(hair_group)
 	_hair(data.get_option("hair"), hair)
+	_commit()
+	_begin(group)
+	_ears(data.get_option("ears"), skin)
 	_eyes(data.get_option("eyes"), data.get_option("glasses"))
 	_extra(data.get_option("extra"), hair)
 	_nose(data.get_option("nose"), skin)

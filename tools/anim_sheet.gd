@@ -179,4 +179,4 @@ func _pose(cell: Dictionary) -> void:
 		at = Vector3(0.0, 0.3, -0.3)
 	elif stage == Rider.RecoveryStage.IN_WATER:
 		at = Vector3(0.6, -0.1, 0.2)
-	_cam.transform = Transform3D(Basis.IDENTITY, at + Vector3(-2.6, 1.3, -2.4)).looking_at(at, Vector3.UP)
+	_cam.transform = Transform3D(Basis.IDENTITY, at + Vector3(-1.9, 0.9, -1.7)).looking_at(at, Vector3.UP)
