@@ -28,12 +28,16 @@ var ring_wave: RingWave = null
 var islands: Array[Vector3] = []
 ## Islas que entiende el shader (islands[0..15]).
 const MAX_ISLANDS := 16
+## Grilla fina: celdas a cada lado del centro de la malla (~40 m). Después,
+## MID_CELLS celdas de 2 pasos y el resto de 4 pasos hasta el borde.
+const FINE_HALF_CELLS := 26
+const MID_CELLS := 10
 ## Solo para diagnóstico: revisar sin atajos.
 static var debug_exact: bool = false
 ## Cuánto tiene que quedar la cara debajo del agua dibujada para que cuente (m).
 const FACE_MIN_DEPTH := 0.02
 
-var _plane: PlaneMesh
+var _plane: ArrayMesh
 var _material: ShaderMaterial
 ## Cada uno: {node: Node3D, mesh: MeshInstance3D}
 var _followers: Array[Dictionary] = []
@@ -52,16 +56,65 @@ func _ready() -> void:
 	_material.shader = SHADER
 	waves.apply_to(_material)
 
-	_plane = PlaneMesh.new()
-	_plane.size = Vector2(size, size)
-	_plane.subdivide_width = subdivisions
-	_plane.subdivide_depth = subdivisions
-	_plane.material = _material
+	_plane = _build_mesh()
 
 	var follow := get_node_or_null(follow_path) as Node3D
 	if follow:
 		add_follower(follow, -1)
 	_push_swells()
+
+
+## Paso de la grilla fina del agua (m). Los vértices finos están siempre en
+## (n + 0,5) · step del mundo, para todas las cámaras.
+func grid_step() -> float:
+	return size / float(subdivisions + 1)
+
+
+## Malla del agua: grilla con paso fino cerca del centro (donde está el jugador)
+## y celdas de 2 y 4 pasos más lejos. Es una sola grilla (filas y columnas
+## enteras), así que no quedan grietas entre zonas. Los triángulos se arman
+## igual que PlaneMesh (drawn_depth cuenta con eso).
+func _build_mesh() -> ArrayMesh:
+	var step := grid_step()
+	var half := size * 0.5
+	var coords: Array[float] = []
+	for k in range(-FINE_HALF_CELLS, FINE_HALF_CELLS):
+		coords.append((k + 0.5) * step)
+	var edge := (FINE_HALF_CELLS - 0.5) * step
+	for m in MID_CELLS:
+		edge += step * 2.0
+		coords.append(edge)
+		coords.push_front(-edge)
+	while edge < half - 0.001:
+		edge += step * 4.0
+		coords.append(edge)
+		coords.push_front(-edge)
+	var n := coords.size()
+	var verts := PackedVector3Array()
+	var normals := PackedVector3Array()
+	verts.resize(n * n)
+	normals.resize(n * n)
+	for j in n:
+		for i in n:
+			verts[j * n + i] = Vector3(coords[i], 0.0, coords[j])
+			normals[j * n + i] = Vector3.UP
+	var indices := PackedInt32Array()
+	for j in range(1, n):
+		for i in range(1, n):
+			var a := (j - 1) * n + i - 1
+			var b := (j - 1) * n + i
+			var c := j * n + i - 1
+			var e := j * n + i
+			indices.append_array([a, b, c, b, e, c])
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	mesh.surface_set_material(0, _material)
+	return mesh
 
 
 ## Agrega un plano de agua que sigue a `node`. layer_index = -1: capa normal (1);
@@ -71,7 +124,7 @@ func add_follower(node: Node3D, layer_index: int = -1) -> MeshInstance3D:
 	mi.name = "Surface%d" % _followers.size()
 	mi.mesh = _plane
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	mi.extra_cull_margin = 6.0
+	mi.extra_cull_margin = 8.0
 	if layer_index >= 0:
 		mi.layers = 1 << (FOLLOWER_LAYER_BASE + layer_index)
 	add_child(mi)
@@ -110,7 +163,9 @@ func _process(delta: float) -> void:
 
 ## Mueve el plano en pasos del tamaño de una celda para que la malla no "nade".
 func _snap(mi: MeshInstance3D, node: Node3D) -> void:
-	var step := size / float(subdivisions + 1)
+	# En pasos de la celda más grande: así todos los vértices (finos y gruesos)
+	# quedan siempre en el mismo lugar del mundo y la malla no "nada".
+	var step := grid_step() * 4.0
 	var p := node.global_position
 	mi.global_position = Vector3(snappedf(p.x, step), 0.0, snappedf(p.z, step))
 
@@ -198,7 +253,7 @@ func drawn_vertex(p: Vector2) -> Vector3:
 ## y los triángulos como los arma PlaneMesh. Cuenta las capas de agua que hay
 ## arriba del punto (impar = adentro; debajo del rulo pero en el aire da par).
 func drawn_depth(q: Vector3) -> float:
-	var step := size / float(subdivisions + 1)
+	var step := grid_step()
 	var p := Vector2(q.x, q.z)
 	# Olas que pueden correr vértices hasta acá.
 	var near := step * 1.5

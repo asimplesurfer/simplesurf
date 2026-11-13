@@ -514,6 +514,24 @@ func _check_face_geometry() -> void:
 		if (_water.drawn_depth(q) > 0.0) != (_full_mesh_depth(q) > 0.0):
 			mismatches += 1
 	_check(mismatches == 0, "el chequeo rápido coincide con la malla completa (%d diferencias en 300)" % mismatches)
+	# La malla con menos detalle lejos: cerca del jugador, los vértices están en
+	# la grilla fina del mundo (lo que supone drawn_depth) y son muchos menos.
+	var mi := _water.get_child(0) as MeshInstance3D
+	var arrays := mi.mesh.surface_get_arrays(0)
+	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var step := _water.grid_step()
+	var on_grid := true
+	var fine := 0
+	for v in verts:
+		var w := mi.global_position + v
+		if absf(v.x) < 30.0 and absf(v.z) < 30.0:
+			fine += 1
+			var fx := w.x / step - 0.5
+			var fz := w.z / step - 0.5
+			if absf(fx - roundf(fx)) > 0.001 or absf(fz - roundf(fz)) > 0.001:
+				on_grid = false
+	_check(on_grid and fine > 1000, "cerca del jugador la malla es la grilla fina del mundo (%d vértices)" % fine)
+	_check(verts.size() < 12000, "la malla del agua tiene muchos menos vértices (%d, antes 29584)" % verts.size())
 	_water.clear_swells()
 
 

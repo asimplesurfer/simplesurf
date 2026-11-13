@@ -88,6 +88,13 @@ var turbo_time: float = 0.0
 var _punch_cooldown: float = 0.0
 ## Apretó A fuera de tiempo en esta ola: ya no hay pop hasta la próxima.
 var pop_locked: bool = false
+## Tiene una pantalla propia que lo sigue (jugador, o bot en la demo).
+var has_view: bool = false
+## Para repartir entre cuadros el chequeo de los bots sin pantalla.
+var _punch_tick: int = 0
+## Bots sin pantalla: el chapuzón se revisa cada tantos cuadros (solo se ve
+## de lejos en la pantalla de otro).
+const PUNCH_CHECK_EVERY_NO_VIEW := 3
 ## Tiempo mínimo entre dos chapuzones (s).
 const PUNCH_MIN_GAP := 0.3
 ## La cara estaba adentro de una ola el frame anterior.
@@ -292,6 +299,10 @@ func jump() -> void:
 func _check_wave_punch() -> void:
 	if water == null or visual == null:
 		return
+	if not has_view:
+		_punch_tick += 1
+		if (_punch_tick + player_index) % PUNCH_CHECK_EVERY_NO_VIEW != 0:
+			return
 	var inside := water.face_in_wave(visual.face_position())
 	# Cada vez que la cara entra al agua (un mínimo de tiempo entre una y otra
 	# para que el borde de la superficie no lo dispare a cada cuadro).
