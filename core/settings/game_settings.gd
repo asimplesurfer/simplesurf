@@ -54,7 +54,7 @@ static func load_settings() -> void:
 		) as TrackLayout
 		wave_mode = clampi(int(cfg.get_value("gameplay", "wave_mode", WaveMode.SURGES)), 0, 1) as WaveMode
 		bot_count = clampi(int(cfg.get_value("gameplay", "bot_count", 1)), 0, 3)
-		bot_level = clampi(int(cfg.get_value("gameplay", "bot_level", 1)), 0, 2)
+		bot_level = clampi(int(cfg.get_value("gameplay", "bot_level", 1)), 0, AIDifficulty.NAMES.size() - 1)
 		for i in 2:
 			var key := "player_%d" % i
 			if not cfg.has_section_key("characters", key):

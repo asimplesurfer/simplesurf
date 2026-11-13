@@ -34,15 +34,18 @@ extends Resource
 ## el más rápido (Difícil) es el 75 % de lo que spameaban antes todos (10/s).
 ## Cada caída sale entre MASH_SPREAD y 100 % de esto, así no se paran todos igual.
 @export var mash_rate: float = 6.0
+## Ventaja física (solo en los niveles más altos): velocidad máxima y nitro que gana.
+@export var speed_bonus: float = 1.0
+@export var nitro_bonus: float = 1.0
 
 const MASH_SPREAD := 0.8
 
-const NAMES := ["Fácil", "Normal", "Difícil"]
+const NAMES := ["Fácil", "Normal", "Difícil", "Profesional", "Imposible"]
 
 
 static func preset(level: int) -> AIDifficulty:
 	var d := AIDifficulty.new()
-	match clampi(level, 0, 2):
+	match clampi(level, 0, NAMES.size() - 1):
 		0:
 			d.display_name = "Fácil"
 			d.max_throttle = 0.82
@@ -76,4 +79,40 @@ static func preset(level: int) -> AIDifficulty:
 			d.pop_skill = 0.9
 			d.wave_seek = 0.9
 			d.mash_rate = 7.5
+		3:
+			# Juega perfecto: sin errores, siempre al mejor camino, turbo con cada
+			# carga en recta, todos los pops y todas las olas.
+			d.display_name = "Profesional"
+			d.max_throttle = 1.0
+			d.think_interval = 0.05
+			d.steer_noise = 0.02
+			d.ring_seek = 1.0
+			d.trick_fail_chance = 0.02
+			d.trick_jump_rate = 0.35
+			d.aggression = 0.95
+			d.turbo_threshold = 0.34
+			d.turbo_steer_limit = 0.25
+			d.look_ahead = 38.0
+			d.pop_skill = 0.97
+			d.wave_seek = 0.97
+			d.mash_rate = 8.5
+		4:
+			# Como Profesional pero sin un solo error, y con ventaja física:
+			# un poco más rápido y carga más nitro. Para ganarle hay que jugar perfecto.
+			d.display_name = "Imposible"
+			d.max_throttle = 1.0
+			d.think_interval = 0.03
+			d.steer_noise = 0.0
+			d.ring_seek = 1.0
+			d.trick_fail_chance = 0.0
+			d.trick_jump_rate = 0.45
+			d.aggression = 1.0
+			d.turbo_threshold = 0.34
+			d.turbo_steer_limit = 0.25
+			d.look_ahead = 45.0
+			d.pop_skill = 1.0
+			d.wave_seek = 1.0
+			d.mash_rate = 10.0
+			d.speed_bonus = 1.12
+			d.nitro_bonus = 1.7
 	return d

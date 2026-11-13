@@ -731,7 +731,13 @@ func _test_bot_paths() -> void:
 		easy_m < normal_m and normal_m < hard_m,
 		"los bots se levantan más rápido cuanto más difíciles (%.1f / %.1f / %.1f)" % [easy_m, normal_m, hard_m]
 	)
-	_check(is_equal_approx(hard_m, 7.5), "el más rápido spamea al 75 %% de antes (%.1f/s)" % hard_m)
+	_check(is_equal_approx(hard_m, 7.5), "Difícil spamea al 75 %% de antes (%.1f/s)" % hard_m)
+	# Niveles extra: Profesional (perfecto) e Imposible (perfecto y con ventaja).
+	_check(AIDifficulty.NAMES.size() == 5, "hay 5 dificultades: %s" % str(AIDifficulty.NAMES))
+	var pro := AIDifficulty.preset(3)
+	var imp := AIDifficulty.preset(4)
+	_check(pro.display_name == "Profesional" and pro.trick_fail_chance < 0.05, "Profesional casi no se equivoca")
+	_check(imp.trick_fail_chance == 0.0 and imp.speed_bonus > 1.0, "Imposible no se equivoca y es más rápido")
 	print("Caminos de los bots:")
 	var ai := AIController.new()
 	var values: Array[float] = []
