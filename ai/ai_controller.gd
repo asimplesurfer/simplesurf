@@ -39,6 +39,8 @@ var _think_timer: float = 0.0
 var _target_lateral: float = 0.0
 var _noise: float = 0.0
 var _mash_timer: float = 0.0
+## Ritmo de spam de esta caída (se sortea al caer).
+var _mash_rate: float = 0.0
 var _jump_hold: float = 0.0
 var _jump_started: bool = false
 var _drift_timer: float = 0.0
@@ -83,6 +85,7 @@ func get_input(delta: float) -> RiderInput:
 		_jump_hold = 0.0
 		_turbo_on = false
 		return _mash(delta, input)
+	_mash_rate = 0.0
 	if state == &"airborne":
 		_air(delta, input)
 	else:
@@ -92,9 +95,14 @@ func get_input(delta: float) -> RiderInput:
 
 
 func _mash(delta: float, input: RiderInput) -> RiderInput:
+	if _mash_rate <= 0.0:
+		# Recién se cayó: cada caída a un ritmo algo distinto (nunca más rápido
+		# que el de su dificultad).
+		_mash_rate = difficulty.mash_rate * _rng.randf_range(AIDifficulty.MASH_SPREAD, 1.0)
+		_mash_timer = 1.0 / _mash_rate
 	_mash_timer -= delta
 	if _mash_timer <= 0.0:
-		_mash_timer = 1.0 / difficulty.mash_rate
+		_mash_timer = 1.0 / _mash_rate
 		input.mash_presses = 1
 	return input
 

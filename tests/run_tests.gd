@@ -587,6 +587,15 @@ func _ride_into_swell(
 
 
 func _test_bot_paths() -> void:
+	# Levantarse escala con la dificultad; el más rápido es el 75 % de antes (10/s).
+	var easy_m := AIDifficulty.preset(0).mash_rate
+	var normal_m := AIDifficulty.preset(1).mash_rate
+	var hard_m := AIDifficulty.preset(2).mash_rate
+	_check(
+		easy_m < normal_m and normal_m < hard_m,
+		"los bots se levantan más rápido cuanto más difíciles (%.1f / %.1f / %.1f)" % [easy_m, normal_m, hard_m]
+	)
+	_check(is_equal_approx(hard_m, 7.5), "el más rápido spamea al 75 %% de antes (%.1f/s)" % hard_m)
 	print("Caminos de los bots:")
 	var ai := AIController.new()
 	var values: Array[float] = []

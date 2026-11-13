@@ -30,8 +30,12 @@ extends Resource
 @export_range(0.0, 1.0) var turbo_steer_limit: float = 0.35
 ## Distancia a la que ve las rocas (m).
 @export var look_ahead: float = 26.0
-## Pulsaciones por segundo al spamear para levantarse (siempre al máximo).
-@export var mash_rate: float = 10.0
+## Pulsaciones por segundo al spamear para levantarse. Escala con la dificultad;
+## el más rápido (Difícil) es el 75 % de lo que spameaban antes todos (10/s).
+## Cada caída sale entre MASH_SPREAD y 100 % de esto, así no se paran todos igual.
+@export var mash_rate: float = 6.0
+
+const MASH_SPREAD := 0.8
 
 const NAMES := ["Fácil", "Normal", "Difícil"]
 
@@ -55,6 +59,7 @@ static func preset(level: int) -> AIDifficulty:
 			d.look_ahead = 18.0
 			d.pop_skill = 0.25
 			d.wave_seek = 0.3
+			d.mash_rate = 4.5
 		1:
 			d.display_name = "Normal"
 		2:
@@ -70,4 +75,5 @@ static func preset(level: int) -> AIDifficulty:
 			d.look_ahead = 32.0
 			d.pop_skill = 0.9
 			d.wave_seek = 0.9
+			d.mash_rate = 7.5
 	return d
