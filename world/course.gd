@@ -95,7 +95,7 @@ func _ready() -> void:
 	add_to_group("course")
 	GameSettings.load_settings()
 	if layout < 0:
-		layout = GameSettings.track_layout
+		layout = GameSettings.current_layout()
 	_water = get_tree().get_first_node_in_group("water") as Water
 
 	if is_archipelago():
@@ -132,7 +132,7 @@ func _ready() -> void:
 	if is_atoll():
 		_build_atoll_extras()
 	if weather < 0:
-		weather = GameSettings.weather
+		weather = GameSettings.current_weather()
 	if weather == GameSettings.Weather.STORM:
 		storm = Storm.new()
 		storm.name = "Storm"

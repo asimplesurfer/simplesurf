@@ -167,46 +167,36 @@ func _test_demo() -> void:
 	menu.queue_free()
 	await process_frame
 
-	# La demo usa lo armado en el menú: 1 jugador + 1 bot en Fácil -> 1 vs 1 de bots.
-	var saved := [GameSettings.player_count, GameSettings.bot_count, GameSettings.bot_level]
+	# La demo es siempre igual, elija lo que elija el menú: dos bots en
+	# Imposible, en El Atolón con tormenta (y no cambia lo elegido).
+	var saved := [GameSettings.player_count, GameSettings.bot_count, GameSettings.bot_level,
+		GameSettings.track_layout, GameSettings.weather]
 	GameSettings.player_count = 1
-	GameSettings.bot_count = 1
-	GameSettings.bot_level = 0
-	var duel: Node = load("res://main.tscn").instantiate()
-	root.add_child(duel)
-	await process_frame
-	await process_frame
-	var duel_race := duel.get_node("RaceManager") as RaceManager
-	var duel_split := duel.get_node("Views") as SplitScreen
-	_check(
-		duel_race.racers.size() == 2 and duel_race.humans().is_empty(),
-		"con 1 jugador + 1 bot en el menú, la demo es un 1 vs 1 de bots"
-	)
-	var easy := (duel_race.racers[0].controller as AIController).difficulty.display_name == "Fácil"
-	_check(easy, "en la dificultad elegida en el menú")
-	_check(duel_split.views.size() == 2, "con la pantalla en 2")
-	duel.queue_free()
-	await process_frame
-
-	# 1 jugador + 3 bots en Difícil -> 4 bots.
 	GameSettings.bot_count = 3
-	GameSettings.bot_level = 2
+	GameSettings.bot_level = 0
+	GameSettings.track_layout = GameSettings.TrackLayout.CLASSIC
+	GameSettings.weather = GameSettings.Weather.SUNNY
 	var demo: Node = load("res://main.tscn").instantiate()
 	root.add_child(demo)
 	await process_frame
 	await process_frame
 	var race := demo.get_node("RaceManager") as RaceManager
 	var split := demo.get_node("Views") as SplitScreen
-	_check(race.racers.size() == 4, "con 1 jugador + 3 bots, la demo tiene 4 corredores")
-	_check(race.humans().is_empty(), "son bots")
-	var hard := true
+	var demo_course := demo.get_node("Course") as Course
+	_check(race.racers.size() == 2 and race.humans().is_empty(), "la demo es un mano a mano de 2 bots")
+	var impossible := true
 	for r in race.racers:
 		var ai := r.controller as AIController
-		if ai == null or ai.difficulty.display_name != "Difícil":
-			hard = false
-	_check(hard, "en la dificultad elegida (Difícil)")
-	_check(split.views.size() == 4, "con la pantalla en 4 (una vista por bot)")
-	_check(split.get_child(0) is GridContainer, "en grilla de 2x2")
+		if ai == null or ai.difficulty.display_name != "Imposible":
+			impossible = false
+	_check(impossible, "los dos en Imposible")
+	_check(demo_course.is_atoll() and demo_course.storm != null, "en El Atolón con tormenta")
+	_check(race.config.laps == 3, "a 3 vueltas")
+	_check(
+		GameSettings.track_layout == GameSettings.TrackLayout.CLASSIC and GameSettings.weather == GameSettings.Weather.SUNNY,
+		"sin cambiar el mapa ni el clima elegidos"
+	)
+	_check(split.views.size() == 2, "con la pantalla en 2 (una vista por bot)")
 	var weights: Array[float] = []
 	for r in race.racers:
 		weights.append((r.get_node("Visual") as RiderVisual).character.weight)
@@ -238,6 +228,8 @@ func _test_demo() -> void:
 	GameSettings.player_count = saved[0]
 	GameSettings.bot_count = saved[1]
 	GameSettings.bot_level = saved[2]
+	GameSettings.track_layout = saved[3]
+	GameSettings.weather = saved[4]
 	GameSettings.demo_mode = false
 	demo.queue_free()
 	await process_frame

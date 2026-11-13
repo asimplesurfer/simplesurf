@@ -39,6 +39,11 @@ static var bot_count: int = 1
 static var bot_level: int = 1
 ## Modo demo: carrera de bots que arranca sola si nadie toca el menú (no se guarda).
 static var demo_mode: bool = false
+## La demo siempre es igual: dos bots en Imposible, en El Atolón con tormenta.
+const DEMO_LAYOUT := TrackLayout.ATOLL
+const DEMO_WEATHER := Weather.STORM
+const DEMO_BOTS := 2
+const DEMO_LEVEL := 4
 ## Personaje de cada jugador (índice -> CharacterData).
 static var characters: Dictionary = {}
 static var _loaded: bool = false
@@ -132,4 +137,14 @@ static func track_layout_name() -> String:
 ## Vueltas de la carrera según el mapa (el archipiélago y el atolón son mucho
 ## más largos que la isla).
 static func laps_for_layout() -> int:
-	return 5 if track_layout == TrackLayout.CLASSIC else 3
+	return 5 if current_layout() == TrackLayout.CLASSIC else 3
+
+
+## El mapa de esta carrera (en la demo, el de la demo; no toca lo elegido).
+static func current_layout() -> TrackLayout:
+	return DEMO_LAYOUT if demo_mode else track_layout
+
+
+## El clima de esta carrera (en la demo, el de la demo).
+static func current_weather() -> Weather:
+	return DEMO_WEATHER if demo_mode else weather
