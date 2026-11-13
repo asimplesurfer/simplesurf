@@ -139,6 +139,8 @@ func _roughen(water: Water) -> void:
 	mat.set_shader_parameter("rising_color", Color(0.03, 0.1, 0.17))
 	mat.set_shader_parameter("sky_tint", Color(0.5, 0.55, 0.62))
 	mat.set_shader_parameter("glow_strength", 0.15)
+	# Espuma solo en las crestas más altas (si no, el mar picado se llena de manchas).
+	mat.set_shader_parameter("foam_height", 0.42 * CHOP_SCALE * 0.5)
 
 
 func _process(delta: float) -> void:
