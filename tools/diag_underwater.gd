@@ -105,15 +105,19 @@ func _check_rider(r: Rider) -> void:
 	if fallen and not _was_fallen.get(r, false):
 		_falls[r] = int(_falls.get(r, 0)) + 1
 	_was_fallen[r] = fallen
+	# (El chapuzón es solo de pie o en el aire, atravesando una ola grande.)
+	if fallen:
+		_end_episode(r)
+		return
 	var visual := r.get_node("Visual") as RiderVisual
 	var face := visual.face_position()
 	var avatar: Avatar = visual._body
 	var head := avatar.find_child("Head", true, false) as Node3D
 	var head_c := head.global_position if head else face
 	_frames_checked += 1
-	var gt := _rendered_under(face)
+	var gt := _rendered_under(face) if _water.big_wave_near(face) else 0.0
 	var t0 := Time.get_ticks_usec()
-	var calc := _water.face_in_wave(face)
+	var calc := _water.face_in_wave(face) and _water.big_wave_near(face)
 	var dt := Time.get_ticks_usec() - t0
 	_calc_usec += dt
 	_calc_max = maxi(_calc_max, dt)

@@ -1177,12 +1177,14 @@ func _has_button(action: StringName, button: int) -> bool:
 
 func _test_get_up() -> void:
 	print("Levantarse:")
+	var punches_before := _punches
 	await _press(&"p1_debug_fall")
 	_check(_rider.is_fallen(), "F tira al jugador al agua")
 	_check(_rider.recovery_stage == Rider.RecoveryStage.IN_WATER, "cae al agua")
 
 	await _wait(1.0)
 	_check(_rider.is_fallen(), "sin pulsar nada sigue caído")
+	_check(_punches == punches_before, "caerse al agua no hace el chapuzón (solo atravesar una ola)")
 
 	# Una sola barra que se llena con una cantidad fija de pulsaciones y no baja.
 	var hud := (_main.get_node("Views") as SplitScreen).huds[0]

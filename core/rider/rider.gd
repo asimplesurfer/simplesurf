@@ -295,7 +295,8 @@ func jump() -> void:
 
 
 ## "Atraviesa la ola" (animación y chapuzón) cuando la cara del modelo entra al
-## agua tal como se dibuja (no los pies ni el cuerpo), venga de donde venga.
+## agua de una ola grande tal como se dibuja (no los pies ni el cuerpo), de pie
+## o en el aire. Caído o nadando no cuenta.
 func _check_wave_punch() -> void:
 	if water == null or visual == null:
 		return
@@ -303,7 +304,13 @@ func _check_wave_punch() -> void:
 		_punch_tick += 1
 		if (_punch_tick + player_index) % PUNCH_CHECK_EVERY_NO_VIEW != 0:
 			return
-	var inside := water.face_in_wave(visual.face_position())
+	# Solo atravesando una ola grande de pie o en el aire: caerse al agua o
+	# nadar no cuenta (aunque la cabeza se moje).
+	if is_fallen():
+		_face_in_wave = false
+		return
+	var face := visual.face_position()
+	var inside := water.face_in_wave(face) and water.big_wave_near(face)
 	# Cada vez que la cara entra al agua (un mínimo de tiempo entre una y otra
 	# para que el borde de la superficie no lo dispare a cada cuadro).
 	if inside and not _face_in_wave and _punch_cooldown <= 0.0:
