@@ -311,8 +311,9 @@ func _test_wave_jump() -> void:
 	await _wait(2.0)
 	await _press(&"p1_a")
 	_check(_state() == &"airborne", "en agua plana, A hace un saltito")
-	var hop := await _measure_air()
-	_check(hop.x < 1.0, "el saltito es bajo (%.2f m)" % hop.x)
+	# Medido desde donde despegó (sobre el agua cambia con las olitas de fondo).
+	var hop := await _measure_jump_height()
+	_check(hop < 1.0, "el saltito es bajo (%.2f m)" % hop)
 	await _wait_until_state(&"riding", 2.0)
 	await _wait(0.5)
 	# Golpe de palanca hacia arriba (o W) = lo mismo que A.
@@ -1204,7 +1205,7 @@ func _test_jump_and_tricks() -> void:
 	await _wait(3.0)
 	GameSettings.jump_mode = GameSettings.JumpMode.TAP
 
-	# Turbo en el aire: sigue subiendo y queda más tiempo en el aire.
+	# Turbo en el aire: un empujón hacia arriba (sube más y queda más tiempo).
 	await _press(&"p1_a")
 	var plain := await _measure_air()
 	await _wait(0.5)
@@ -1223,7 +1224,7 @@ func _test_jump_and_tricks() -> void:
 		"turbo en el aire: sube mucho más (%.1f m contra %.1f m)" % [boosted.x, plain.x]
 	)
 	_check(
-		boosted.y > plain.y + 0.5,
+		boosted.y > plain.y + 0.3,
 		"turbo en el aire: más tiempo para trucos (%.1f s contra %.1f s)" % [boosted.y, plain.y]
 	)
 	_check(_rider.nitro < 1.0, "el turbo en el aire gasta nitro")
@@ -1256,31 +1257,35 @@ func _test_jump_and_tricks() -> void:
 		await _mash_until_standing(8.0, 5.0)
 	await _wait(1.0)
 
-	# Aire fino: aunque el nitro no se acabe nunca, la subida se va frenando
-	# de a poco (sin chocar con un techo) y después baja.
+	# Turbo en el aire sin flotar: aunque se disparen ráfagas sin parar, solo
+	# la primera empuja; después la gravedad es siempre la normal (parábola).
 	await _press(&"p1_a")
-	_set_action(&"p1_b", true)
 	var top := 0.0
-	var max_dv := 0.0
+	var worst_g := 0.0
 	var prev_vs := _rider.vertical_speed
 	var landed := false
+	var g := _rider.stats.gravity
+	var frames := 0
 	for i in int(8.0 * FPS):
 		if _state() != &"airborne":
 			landed = true
 			break
-		_rider.add_nitro(1.0)
-		top = maxf(top, _rider.global_position.y - _water_height_here())
-		max_dv = maxf(max_dv, absf(_rider.vertical_speed - prev_vs))
-		prev_vs = _rider.vertical_speed
+		if i % 10 == 0:
+			_rider.add_nitro(1.0)
+			_rider.fire_turbo()
 		await process_frame
-	_set_action(&"p1_b", false)
-	var soft := _rider.stats.air_soft_height
+		frames += 1
+		top = maxf(top, _rider.global_position.y - _water_height_here())
+		# Aceleración vertical de este frame (sin contar el frame del empujón
+		# ni el aire fino, que frena la subida más que la gravedad).
+		var acc := (_rider.vertical_speed - prev_vs) * FPS
+		var kicked := _rider.vertical_speed > prev_vs
+		if frames > 2 and not kicked and _rider.vertical_speed <= 0.0:
+			worst_g = maxf(worst_g, absf(acc + g))
+		prev_vs = _rider.vertical_speed
 	var cap := _rider.stats.air_max_height
-	_check(
-		top > soft and top < cap,
-		"con nitro infinito sube alto pero no sin fin (%.1f m; aire fino desde %.0f m)" % [top, soft]
-	)
-	_check(max_dv < 1.5, "la subida se frena de a poco, sin chocar con un techo (%.2f m/s por frame)" % max_dv)
+	_check(top < cap, "con turbo sin parar no vuela sin fin (%.1f m)" % top)
+	_check(worst_g < 0.5, "al caer con turbo, la gravedad es la normal (desvío %.2f m/s²)" % worst_g)
 	_check(landed, "después baja y aterriza aunque siga con turbo")
 	await _wait_until_state(&"riding", 8.0)
 	# Volver a la velocidad normal antes del próximo test.
