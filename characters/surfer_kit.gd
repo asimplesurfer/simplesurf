@@ -31,6 +31,12 @@ const PART_MAP := {
 }
 const STANCE_YAW := PI / 2.0
 const FRONT_YAW := 0.0
+## De dónde cuelga el pelo (coronilla) y el collar (cuello), en su parte.
+const HAIR_PIVOT := Vector3(0.0, 0.42, -0.05)
+const NECK_PIVOT := Vector3(0.0, 0.62, 0.04)
+## Resortes de la pose: rigidez y amortiguación (un poco menos que crítica).
+const SPRING_K := 240.0
+const SPRING_D := 21.0
 ## Punto entre los ojos, en el espacio de la cabeza del modelo.
 const FACE_LOCAL := Vector3(0.0, 0.1, 0.45)
 ## Medio tamaño del pecho y de la cadera del modelo (para ubicar collares y estampados).
@@ -44,8 +50,23 @@ var _base: Dictionary = {}
 ## Partes animadas: nombre -> nodo, con su transformación original.
 var _nodes: Dictionary = {}
 var _base_xf: Dictionary = {}
-## Pose actual (suavizada): parte -> {pos, rot}.
+## Pose actual: parte -> {pos, rot, vpos, vrot} (resortes: con velocidad, así
+## los movimientos tienen peso, se pasan un poco y vuelven).
 var _pose: Dictionary = {}
+## Pelo y collar: se mueven solos (con la velocidad, los saltos, los giros).
+var hair_rig: Node3D
+var necklace_rig: Node3D
+var _hair_rot := Vector3.ZERO
+var _hair_vel := Vector3.ZERO
+var _neck_rot := Vector3.ZERO
+var _neck_vel := Vector3.ZERO
+var _prev_head := Vector3.ZERO
+var _prev_head_vel := Vector3.ZERO
+var _prev_chest := Vector3.ZERO
+var _prev_chest_vel := Vector3.ZERO
+var _has_prev: bool = false
+## Piernas (cinemática inversa): puntos de cadera, rodilla y tobillo del modelo.
+var _legs: Dictionary = {}
 var _yaw: float = STANCE_YAW
 var _materials: Dictionary = {}
 
@@ -62,6 +83,14 @@ func build(parent: Node3D, data: CharacterData, features: AvatarFeatures) -> voi
 	_choose_accessories(data)
 	_apply_sliders(data)
 	_make_materials(data)
+	# Pelo y collar del modelo en sus propios nodos (colgando de la coronilla y
+	# del cuello), para que se muevan solos.
+	var head_node := character.find_child("Head", false, false) as Node3D
+	hair_rig = _rig(head_node, "HairRig", HAIR_PIVOT, ["Hair", "HairStrand"])
+	var torso_node := character.find_child("Torso", false, false) as Node3D
+	necklace_rig = _rig(torso_node, "NecklaceRig", NECK_PIVOT, ["PearlNecklace"])
+	_bake(hair_rig)
+	_bake(necklace_rig)
 	# Juntar las piezas de cada parte animada en una malla por color.
 	for id in PART_MAP:
 		var nodes: Array[Node3D] = []
@@ -77,11 +106,13 @@ func build(parent: Node3D, data: CharacterData, features: AvatarFeatures) -> voi
 	head = character.find_child("Head", false, false) as Node3D
 	# Accesorios armados (pelo, ojos, nariz, boca, orejas, collar, estampado).
 	var head_group := _group(head, "HeadFeatures")
-	features.build_head(head_group, data, data.skin_color())
-	var torso := character.find_child("Torso", false, false) as Node3D
-	var chest_group := _group(torso, "ChestFeatures")
-	chest_group.position = Vector3(0.0, 0.24, 0.0)
+	var hair_group := _group(hair_rig, "HairFeatures")
+	hair_group.position = -HAIR_PIVOT
+	features.build_head(head_group, hair_group, data, data.skin_color())
+	var chest_group := _group(necklace_rig, "ChestFeatures")
+	chest_group.position = Vector3(0.0, 0.24, 0.0) - NECK_PIVOT
 	features.build_chest(chest_group, data, CHEST_RADII)
+	_setup_legs()
 	var hips := character.find_child("ShortsHips", false, false) as Node3D
 	features.build_hips(_group(hips, "HipsFeatures"), data, HIPS_RADII)
 
@@ -103,15 +134,17 @@ func animate(state: Dictionary, delta: float, snap: bool = false) -> void:
 	if character == null:
 		return
 	var target_pose := SurferAnim.pose(state)
-	var k := 1.0 if snap else 1.0 - exp(-16.0 * delta)
+	var dt := clampf(delta, 0.0, 1.0 / 30.0)
 	for part in target_pose:
 		var goal: Dictionary = target_pose[part]
 		if not _pose.has(part) or snap:
-			_pose[part] = {"pos": goal.pos, "rot": goal.rot}
-		else:
-			var cur: Dictionary = _pose[part]
-			cur.pos = (cur.pos as Vector3).lerp(goal.pos, k)
-			cur.rot = (cur.rot as Vector3).lerp(goal.rot, k)
+			_pose[part] = {"pos": goal.pos, "rot": goal.rot, "vpos": Vector3.ZERO, "vrot": Vector3.ZERO}
+			continue
+		var cur: Dictionary = _pose[part]
+		cur.vpos += ((goal.pos - cur.pos) * SPRING_K - cur.vpos * SPRING_D) * dt
+		cur.vrot += ((goal.rot - cur.rot) * SPRING_K - cur.vrot * SPRING_D) * dt
+		cur.pos += cur.vpos * dt
+		cur.rot += cur.vrot * dt
 	var target_yaw := STANCE_YAW if SurferAnim.is_stance(state.anim) else FRONT_YAW
 	_yaw = target_yaw if snap else lerp_angle(_yaw, target_yaw, 1.0 - exp(-10.0 * delta))
 	var root: Dictionary = _pose["root"]
@@ -119,10 +152,129 @@ func animate(state: Dictionary, delta: float, snap: bool = false) -> void:
 		Basis(Vector3.UP, _yaw) * Basis.from_euler(root.rot), Vector3(0.0, 0.05, 0.0) + root.pos
 	)
 	for part in _nodes:
+		if part in ["ThighL", "ThighR", "ShinL", "ShinR", "SleeveL", "SleeveR"]:
+			continue
 		var node := _nodes[part] as Node3D
 		var base: Transform3D = _base_xf[part]
 		var pp: Dictionary = _pose.get(part, {"pos": Vector3.ZERO, "rot": Vector3.ZERO})
 		node.transform = Transform3D(Basis.from_euler(pp.rot) * base.basis, base.origin + pp.pos)
+	_solve_legs()
+	_secondary(state, dt, snap)
+
+
+## Piernas: con la cadera y el pie donde los pone la pose, se calcula dónde
+## queda la rodilla (doblándose hacia adelante, como en el modelo) y se
+## acomodan muslo, canilla y pierna del short.
+func _setup_legs() -> void:
+	for side in ["L", "R"]:
+		var thigh: Transform3D = _base_xf.get("Thigh" + side, Transform3D())
+		var shin: Transform3D = _base_xf.get("Shin" + side, Transform3D())
+		var t_ends := _ends(thigh, 0.21)
+		var s_ends := _ends(shin, 0.223)
+		var hip: Vector3 = t_ends[0]
+		var knee: Vector3 = (t_ends[1] + s_ends[0]) * 0.5
+		var ankle: Vector3 = s_ends[1]
+		var mid := (hip + ankle) * 0.5
+		_legs[side] = {
+			"hip": hip, "knee": knee, "ankle": ankle,
+			"l1": hip.distance_to(knee), "l2": knee.distance_to(ankle),
+			"pole": (knee - mid).normalized(),
+		}
+
+
+## Extremos (arriba, abajo) de una parte alargada: su eje Y local, `half` de largo.
+func _ends(xf: Transform3D, half: float) -> Array:
+	var a := xf.origin + xf.basis.y * half
+	var b := xf.origin - xf.basis.y * half
+	return [a, b] if a.y >= b.y else [b, a]
+
+
+func _solve_legs() -> void:
+	var hips_off: Vector3 = (_pose.get("ShortsHips", {"pos": Vector3.ZERO}) as Dictionary).pos
+	for side in _legs:
+		var leg: Dictionary = _legs[side]
+		var foot_off: Vector3 = (_pose.get("Foot" + side, {"pos": Vector3.ZERO}) as Dictionary).pos
+		var hip: Vector3 = leg.hip + hips_off
+		var ankle: Vector3 = leg.ankle + foot_off
+		var l1: float = leg.l1
+		var l2: float = leg.l2
+		var to_ankle := ankle - hip
+		var d := clampf(to_ankle.length(), 0.01, l1 + l2 - 0.001)
+		var dir := to_ankle.normalized()
+		var a := (l1 * l1 - l2 * l2 + d * d) / (2.0 * d)
+		var h := sqrt(maxf(l1 * l1 - a * a, 0.0))
+		var pole: Vector3 = leg.pole - dir * (leg.pole as Vector3).dot(dir)
+		if pole.length() < 0.001:
+			pole = Vector3.BACK
+		var knee := hip + dir * a + pole.normalized() * h
+		# Muslo y pierna del short giran sobre la cadera; la canilla sobre la rodilla.
+		var r1 := _rotation_between((leg.knee as Vector3) - leg.hip, knee - hip)
+		var r2 := _rotation_between((leg.ankle as Vector3) - leg.knee, (ankle - knee))
+		for part in ["Thigh" + side, "Sleeve" + side]:
+			if _nodes.has(part):
+				var base: Transform3D = _base_xf[part]
+				(_nodes[part] as Node3D).transform = Transform3D(r1 * base.basis, hip + r1 * (base.origin - leg.hip))
+		if _nodes.has("Shin" + side):
+			var base: Transform3D = _base_xf["Shin" + side]
+			(_nodes["Shin" + side] as Node3D).transform = Transform3D(r2 * base.basis, knee + r2 * (base.origin - leg.knee))
+
+
+func _rotation_between(from: Vector3, to: Vector3) -> Basis:
+	var a := from.normalized()
+	var b := to.normalized()
+	var axis := a.cross(b)
+	if axis.length() < 0.00001:
+		return Basis.IDENTITY
+	return Basis(axis.normalized(), a.angle_to(b))
+
+
+## Pelo y collar: resortes que reaccionan al movimiento de la cabeza y del
+## pecho (se quedan atrás al arrancar, flamean con la velocidad, rebotan en los
+## saltos y en los giros).
+func _secondary(state: Dictionary, dt: float, snap: bool) -> void:
+	if hair_rig == null or not hair_rig.is_inside_tree() or dt <= 0.0:
+		return
+	var head_pos := head.global_position
+	var chest_pos := necklace_rig.global_position
+	if not _has_prev or snap:
+		_prev_head = head_pos
+		_prev_chest = chest_pos
+		_prev_head_vel = Vector3.ZERO
+		_prev_chest_vel = Vector3.ZERO
+		_has_prev = true
+		return
+	var hv := (head_pos - _prev_head) / dt
+	var ha := (hv - _prev_head_vel) / dt
+	var cv := (chest_pos - _prev_chest) / dt
+	var ca := (cv - _prev_chest_vel) / dt
+	_prev_head = head_pos
+	_prev_chest = chest_pos
+	_prev_head_vel = hv
+	_prev_chest_vel = cv
+	# Al espacio de la cabeza (sin escala): la velocidad empuja el pelo para
+	# atrás (viento) y la aceleración lo sacude.
+	var hb := head.global_transform.basis.orthonormalized().inverse()
+	var v_local := hb * hv
+	var a_local := hb * ha
+	var target := Vector3(
+		clampf(v_local.z * 0.035 - a_local.z * 0.004 + a_local.y * 0.003, -0.6, 0.6),
+		0.0,
+		clampf(-v_local.x * 0.035 + a_local.x * 0.004, -0.5, 0.5)
+	)
+	_hair_vel += ((target - _hair_rot) * 120.0 - _hair_vel * 9.0) * dt
+	_hair_rot += _hair_vel * dt
+	hair_rig.basis = Basis.from_euler(_hair_rot)
+	var tb: Basis = (necklace_rig.get_parent() as Node3D).global_transform.basis.orthonormalized().inverse()
+	var cv_local := tb * cv
+	var ca_local := tb * ca
+	var neck_target := Vector3(
+		clampf(cv_local.z * 0.02 - ca_local.z * 0.006 + ca_local.y * 0.004, -0.5, 0.5),
+		0.0,
+		clampf(-cv_local.x * 0.02 + ca_local.x * 0.006, -0.4, 0.4)
+	)
+	_neck_vel += ((neck_target - _neck_rot) * 90.0 - _neck_vel * 5.0) * dt
+	_neck_rot += _neck_vel * dt
+	necklace_rig.basis = Basis.from_euler(_neck_rot)
 
 
 func face_position() -> Vector3:
@@ -249,6 +401,8 @@ func _bake(part: Node3D) -> void:
 	var batches := {}
 	for mi in part.find_children("*", "MeshInstance3D", true, false):
 		var inst := mi as MeshInstance3D
+		if _inside_rig(inst, part):
+			continue
 		var mat := inst.mesh.surface_get_material(0) as BaseMaterial3D
 		var key := mat.resource_name if mat else "skin"
 		var xf := _relative(inst, part)
@@ -276,6 +430,8 @@ func _bake(part: Node3D) -> void:
 			else:
 				b[2].append_array([base + indices[t], base + indices[t + 1], base + indices[t + 2]])
 	for c in part.get_children():
+		if c == hair_rig or c == necklace_rig:
+			continue
 		part.remove_child(c)
 		c.free()
 	var mesh := ArrayMesh.new()
@@ -293,6 +449,38 @@ func _bake(part: Node3D) -> void:
 	out.mesh = mesh
 	out.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	part.add_child(out)
+
+
+## Crea un nodo colgando de `pivot` dentro de `parent` y le pasa las partes
+## cuyos nombres empiezan con alguno de `prefixes` (manteniendo su lugar).
+func _rig(parent: Node3D, rig_name: String, pivot: Vector3, prefixes: Array) -> Node3D:
+	var rig := Node3D.new()
+	rig.name = rig_name
+	rig.position = pivot
+	var moving: Array[Node3D] = []
+	for c in parent.get_children():
+		for prefix in prefixes:
+			if String(c.name).begins_with(prefix):
+				moving.append(c)
+				break
+	parent.add_child(rig)
+	for c in moving:
+		var xf := c.transform
+		parent.remove_child(c)
+		rig.add_child(c)
+		c.transform = Transform3D(Basis.IDENTITY, -pivot) * xf
+	return rig
+
+
+func _inside_rig(node: Node, part: Node3D) -> bool:
+	if part == hair_rig or part == necklace_rig:
+		return false
+	var n := node.get_parent()
+	while n != null and n != part:
+		if n == hair_rig or n == necklace_rig:
+			return true
+		n = n.get_parent()
+	return false
 
 
 ## Transformación de `node` vista desde `ancestor`.

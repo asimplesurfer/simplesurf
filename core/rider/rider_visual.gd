@@ -30,6 +30,8 @@ const BOARD_TOP := 0.06
 const LEAN_ANGLE := 0.35
 ## Cuánto se pone de costado la tabla al derrapar (radianes).
 const DRIFT_YAW := 1.15
+## Duración del revolcón al caerse (s).
+const TUMBLE_TIME := 0.7
 
 var rider: Rider
 ## Para los golpes de despegue y aterrizaje de la animación.
@@ -78,6 +80,9 @@ func setup(p_rider: Rider) -> void:
 	rider.recovery_stage_changed.connect(_on_recovery_stage_changed)
 	rider.mash_pressed.connect(_on_mash_pressed)
 	rider.wave_punched.connect(_on_wave_punched)
+	# Festeja cuando clava un truco o tira a un rival.
+	rider.trick_landed.connect(func(_spins: int) -> void: _body.cheer())
+	rider.drift_hit.connect(func(_victim: Rider) -> void: _body.cheer())
 	_trail.setup(rider)
 	_snap_to(rider.recovery_stage)
 
@@ -172,13 +177,23 @@ static func body_pose(stage: Rider.RecoveryStage) -> Transform3D:
 			# En el agua al costado de la tabla, casi parado y hundido hasta el
 			# pecho (así se ven la cabeza y los brazos agitándose).
 			var b := Basis(Vector3.FORWARD, 0.25) * Basis(Vector3.RIGHT, -0.35)
-			return Transform3D(b, Vector3(1.0, -BODY_HEIGHT * 0.62, 0.3))
+			return Transform3D(b, Vector3(1.0, -BODY_HEIGHT * 0.54, 0.3))
 		Rider.RecoveryStage.PRONE:
 			# Acostado boca abajo sobre la tabla, con la cabeza hacia adelante.
 			var b := Basis(Vector3.RIGHT, -PI / 2.0)
 			return Transform3D(b, Vector3(0.0, BOARD_TOP + BODY_RADIUS, BODY_HEIGHT * 0.5))
 		_:
 			return Transform3D(Basis.IDENTITY, Vector3(0.0, BOARD_TOP, 0.0))
+
+
+## Revolcón al caerse: da una vuelta entera hacia adelante mientras sale
+## despedido (t = 0..1 del vuelo), frenando al llegar al agua.
+static func tumble(t: float) -> Basis:
+	# Gira rápido al principio y llega acostado de espaldas (se termina de
+	# acomodar con la pose de "en el agua").
+	var k := clampf(t, 0.0, 1.0)
+	var spin := (1.0 - pow(1.0 - k, 2.5)) * (TAU + PI * 0.5)
+	return Basis(Vector3.RIGHT, -spin) * Basis(Vector3.RIGHT, PI * 0.5 * k * k)
 
 
 ## Orientación de la tabla para cada etapa (caída: un poco ladeada y girada).
@@ -210,9 +225,9 @@ func _on_recovery_stage_changed(stage: Rider.RecoveryStage) -> void:
 	_pose_t = 0.0
 	_stage_time = 0.0
 	match stage:
-		Rider.RecoveryStage.IN_WATER:  # Sale volando de la tabla.
-			_pose_duration = 0.35
-			_pose_arc = 0.6
+		Rider.RecoveryStage.IN_WATER:  # Sale volando de la tabla con un revolcón.
+			_pose_duration = TUMBLE_TIME
+			_pose_arc = 1.1
 		Rider.RecoveryStage.PRONE:  # Se trepa a la tabla.
 			_pose_duration = rider.stats.climb_time
 			_pose_arc = 0.55
@@ -254,6 +269,8 @@ func _process(delta: float) -> void:
 	var t := smoothstep(0.0, 1.0, _pose_t)
 	var xf := _pose_from.interpolate_with(_pose_to, t)
 	xf.origin.y += sin(_pose_t * PI) * _pose_arc
+	if stage == Rider.RecoveryStage.IN_WATER and _pose_t < 1.0:
+		xf.basis = tumble(_pose_t) * xf.basis
 	xf.origin += _idle_offset(stage)
 	# Cargando el salto: se agacha e inclina hacia adelante.
 	var charge := rider.jump_charge
@@ -274,6 +291,23 @@ func _process(delta: float) -> void:
 	)
 
 
+## Hacia dónde mirar: al rival más cercano (si está cerca y no atrás del
+## todo), o un poco hacia la curva.
+func _look_target() -> float:
+	var best := 7.0
+	var target := -rider.steer_amount * 0.3
+	for other in get_tree().get_nodes_in_group("riders"):
+		if other == rider or not other is Node3D:
+			continue
+		var rel := _body.to_local((other as Node3D).global_position)
+		var dist := Vector2(rel.x, rel.z).length() * AVATAR_SCALE
+		var ang := atan2(rel.x, rel.z)
+		if dist < best and absf(ang) < 2.0:
+			best = dist
+			target = clampf(ang, -1.0, 1.0)
+	return target
+
+
 ## Elige la animación del personaje según lo que está haciendo el Rider.
 func _update_avatar_anim(delta: float) -> void:
 	_stage_time += delta
@@ -290,6 +324,7 @@ func _update_avatar_anim(delta: float) -> void:
 	_body.speed = clampf(rider.speed / maxf(rider.stats.max_speed, 0.1), 0.0, 1.2)
 	_body.vertical_speed = rider.vertical_speed
 	_body.turbo = rider.turbo_active
+	_body.look_yaw = lerpf(_body.look_yaw, _look_target(), 1.0 - exp(-6.0 * delta))
 	match stage:
 		Rider.RecoveryStage.IN_WATER:
 			a = &"flail" if _stage_time < 1.4 or _punch > 0.3 else &"tread"

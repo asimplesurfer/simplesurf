@@ -41,11 +41,14 @@ var speed: float = 0.0
 var vertical_speed: float = 0.0
 ## Turbo encendido (se agacha aerodinámico).
 var turbo: bool = false
+## Hacia dónde gira la cabeza para mirar a un rival (radianes, + = puntas).
+var look_yaw: float = 0.0
 
 ## Golpes cortos que se van apagando solos: recién aterrizó / recién despegó.
 var _land: float = 0.0
 var _pop: float = 0.0
 var _shake: float = 0.0
+var _cheer: float = 0.0
 var _time: float = 0.0
 var _anim_time: float = 0.0
 var _last_anim: StringName = &""
@@ -84,6 +87,11 @@ func shake_off() -> void:
 	_shake = 1.0
 
 
+## Festeja (puño arriba) un momento.
+func cheer() -> void:
+	_cheer = 1.0
+
+
 ## Centro de la cabeza (en el espacio del Avatar), para encuadrarla.
 func head_center() -> Vector3:
 	if _kit and _kit.head and is_inside_tree():
@@ -113,6 +121,7 @@ func _process(delta: float) -> void:
 	_land = move_toward(_land, 0.0, delta / 0.35)
 	_pop = move_toward(_pop, 0.0, delta / 0.25)
 	_shake = move_toward(_shake, 0.0, delta / 1.0)
+	_cheer = move_toward(_cheer, 0.0, delta / 0.9)
 	if _kit:
 		_kit.animate(_state(), delta)
 
@@ -132,4 +141,6 @@ func _state() -> Dictionary:
 		"pop": _pop,
 		"turbo": turbo,
 		"shake": _shake,
+		"cheer": _cheer,
+		"look": look_yaw,
 	}
