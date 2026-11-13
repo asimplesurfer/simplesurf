@@ -21,6 +21,9 @@ const WHITE := Color(0.98, 0.98, 0.96)
 var _sphere: SphereMesh
 var _cone: CylinderMesh
 var _box: BoxMesh
+## Aros de anteojos (fino y grueso).
+var _ring: TorusMesh
+var _ring_thick: TorusMesh
 var _materials: Dictionary = {}
 ## Vértices de cada malla base (se transforman y se copian a la malla del grupo).
 var _source: Dictionary = {}
@@ -48,6 +51,16 @@ func _init() -> void:
 	_cone.radial_segments = 8
 	_box = BoxMesh.new()
 	_box.size = Vector3(2.0, 2.0, 2.0)
+	_ring = TorusMesh.new()
+	_ring.inner_radius = 0.82
+	_ring.outer_radius = 1.0
+	_ring.rings = 20
+	_ring.ring_segments = 6
+	_ring_thick = TorusMesh.new()
+	_ring_thick.inner_radius = 0.7
+	_ring_thick.outer_radius = 1.0
+	_ring_thick.rings = 20
+	_ring_thick.ring_segments = 6
 
 
 ## Forma del cráneo del modelo (mitad del ancho y frente de la cara, en z, a
@@ -70,7 +83,7 @@ func build_head(group: Node3D, data: CharacterData, skin: Color) -> void:
 	var hair := data.hair_color()
 	_ears(data.get_option("ears"), skin)
 	_hair(data.get_option("hair"), hair)
-	_eyes(data.get_option("eyes"))
+	_eyes(data.get_option("eyes"), data.get_option("glasses"))
 	_extra(data.get_option("extra"), hair)
 	_nose(data.get_option("nose"), skin)
 	_mouth(data.get_option("mouth"))
@@ -153,45 +166,54 @@ func _eye_pos(side: float) -> Vector3:
 	return _face(side * 0.2, 0.1)
 
 
-func _eyes(style: int) -> void:
+## Ojos. Con anteojos de sol no se ven (no se dibujan); con lentes, antiparras
+## o monóculo se achican para quedar detrás del vidrio (que no lo atraviesen).
+func _eyes(style: int, glasses: int = 0) -> void:
+	if glasses == 1:
+		return
+	var k := 1.0 if glasses == 0 else 0.68
 	for side in [-1.0, 1.0]:
 		var p := _eye_pos(side)
 		match style:
 			0:
-				_piece(_sphere, p, Vector3.ONE * 0.065, BLACK, false)
+				_piece(_sphere, p, Vector3.ONE * 0.065 * maxf(k, 0.8), BLACK, false)
 			1, 2:
-				var big := 0.13 if style == 1 else 0.11
-				_piece(_sphere, p + Vector3(0, 0, 0.03), Vector3.ONE * big, WHITE)
+				var big := (0.13 if style == 1 else 0.11) * k
+				var bulge := 0.03 * k
+				_piece(_sphere, p + Vector3(0, 0, bulge), Vector3.ONE * big, WHITE)
 				var look := 0.0
 				if style == 2:
-					look = -side * 0.045
-				_piece(_sphere, p + Vector3(look, 0.0, 0.03 + big - 0.02), Vector3(0.05, 0.05, 0.03), BLACK,
-					false)
+					look = -side * 0.045 * k
+				_piece(_sphere, p + Vector3(look, 0.0, bulge + big - 0.02 * k), Vector3(0.05, 0.05, 0.03) * k,
+					BLACK, false)
 			3:
 				_piece(_sphere, p + Vector3(0, -0.01, 0.01), Vector3(0.085, 0.017, 0.03), BLACK, false,
 					Basis(Vector3.FORWARD, side * 0.15))
 			4:
 				if side < 0.0:
-					_piece(_sphere, p + Vector3(0, 0.02, 0.04), Vector3.ONE * 0.16, WHITE)
-					_piece(_sphere, p + Vector3(0.02, 0.02, 0.18), Vector3(0.055, 0.055, 0.03), BLACK, false)
+					_piece(_sphere, p + Vector3(0, 0.02, 0.04 * k), Vector3.ONE * 0.16 * k, WHITE)
+					_piece(_sphere, p + Vector3(0.02, 0.02, 0.18 * k), Vector3(0.055, 0.055, 0.03) * k, BLACK,
+						false)
 				else:
 					_piece(_sphere, p, Vector3.ONE * 0.05, BLACK, false)
 
 
-## Anteojos armados (los de sol son del modelo).
+## Anteojos armados (los de sol son del modelo): aros, con el ojo a la vista adentro.
 func _glasses(style: int) -> void:
-	var front := Vector3(0, 0, 0.06)
+	var front := Vector3(0, 0, 0.05)
+	var facing := Basis(Vector3.RIGHT, PI / 2.0)
 	match style:
 		2:
 			_piece(_sphere, Vector3(0.0, 0.1, -0.02), Vector3(0.53, 0.07, 0.48), Color("#23305e"), false)
 			for side in [-1.0, 1.0]:
-				_piece(_sphere, _eye_pos(side) + front, Vector3(0.16, 0.14, 0.06), Color("#9fe8ff"))
+				_piece(_ring_thick, _eye_pos(side) + front, Vector3(0.15, 0.15, 0.15), Color("#2c7fd6"), true,
+					facing)
 		3:
 			for side in [-1.0, 1.0]:
-				_piece(_sphere, _eye_pos(side) + front * 0.8, Vector3(0.13, 0.13, 0.025), Color(0.85, 0.95, 1.0))
-			_piece(_sphere, _face(0.0, 0.13, 0.04), Vector3(0.08, 0.017, 0.02), BLACK, false)
+				_piece(_ring, _eye_pos(side) + front, Vector3(0.13, 0.13, 0.13), BLACK, false, facing)
+			_piece(_sphere, _face(0.0, 0.12, 0.05), Vector3(0.07, 0.015, 0.015), BLACK, false)
 		4:
-			_piece(_sphere, _eye_pos(1.0) + front * 0.8, Vector3(0.13, 0.13, 0.025), Color(0.85, 0.95, 1.0))
+			_piece(_ring, _eye_pos(1.0) + front, Vector3(0.13, 0.13, 0.13), Color("#d9a520"), false, facing)
 			_piece(_sphere, _eye_pos(1.0) + Vector3(0.06, -0.28, 0.07), Vector3(0.011, 0.2, 0.011),
 				Color("#f2c230"), false, Basis(Vector3.FORWARD, 0.25))
 

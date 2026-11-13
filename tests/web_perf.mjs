@@ -58,7 +58,10 @@ await sleep(2500);
 report('menú', await fps(4000));
 
 for (let race = 1; race <= 3; race++) {
-  await tap('Space');
+  // Menú: ENTER (armar la partida) y ENTER (¡a surfear!).
+  await tap('Enter');
+  await sleep(600);
+  await tap('Enter');
   await sleep(7000);
   report(`carrera ${race} (al empezar)`, await fps(6000));
   if (race === 1) {

@@ -68,16 +68,19 @@ await sleep(12000);
 await page.mouse.click(480, 270);
 await sleep(2500);
 await shot('0_menu');
-// Más peso, piel alien verde, y listo.
-await tap('ArrowRight', 6);
-await tap('ArrowDown');
-await tap('ArrowRight', 3);
-// Fila "Olas" (5 más abajo): ola constante a la izquierda.
-await tap('ArrowDown', 5);
+// Creador: bajar a la categoría Pelo (las fotos de cada peinado) y elegir uno.
+await tap('ArrowDown', 3);
+await sleep(2500);
+await shot('0b_creador_pelo');
 await tap('ArrowRight');
-await sleep(500);
-await shot('0b_menu_personalizado');
 await tap('Space');
+await sleep(800);
+await shot('0c_creador_elegido');
+// ENTER: armar la partida; ENTER: ¡a surfear!
+await tap('Enter');
+await sleep(800);
+await shot('0d_partida');
+await tap('Enter');
 // Carga de la carrera y cuenta regresiva.
 await sleep(6000);
 await shot('1_largada');
