@@ -33,6 +33,7 @@ func enter(_previous: StringName) -> void:
 
 func exit() -> void:
 	rider.trick_angle = 0.0
+	rider.live_spins = 0
 
 
 func update(delta: float, input: RiderInput) -> void:
@@ -70,6 +71,9 @@ func update(delta: float, input: RiderInput) -> void:
 		if rider.trick_angle >= target - 0.0001:
 			_spins += roundi(target / TAU)
 			rider.trick_angle = 0.0
+
+	# Contador del HUD: vueltas ya completas del truco en curso.
+	rider.live_spins = _spins + int(floor(rider.trick_angle / TAU + 0.0001))
 
 	var thin := _thin_air()
 	if thin > 0.0:

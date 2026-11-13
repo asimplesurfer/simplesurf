@@ -8,7 +8,7 @@ var _errors: int = 0
 
 func _init() -> void:
 	_check_dir("res://")
-	for scene in ["res://main.tscn", "res://ui/menus/character_select.tscn"]:
+	for scene in ["res://main.tscn", "res://sandbox.tscn", "res://ui/menus/character_select.tscn"]:
 		if ResourceLoader.load(scene) == null:
 			print("NO CARGA: %s" % scene)
 			_errors += 1

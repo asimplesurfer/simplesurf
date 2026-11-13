@@ -12,8 +12,11 @@ extends Control
 ## volver. Sin tocar nada 10 s arranca la demo (carrera de bots).
 
 signal start_requested
+## Eligió el modo libre (mar abierto).
+signal sandbox_requested
 
 const RACE_SCENE := "res://main.tscn"
+const SANDBOX_SCENE := "res://sandbox.tscn"
 const YELLOW := Color(1.0, 0.86, 0.2)
 const PANEL_BG := Color(0.05, 0.15, 0.3, 0.82)
 const TILE := Vector2(104.0, 122.0)
@@ -499,6 +502,10 @@ func _build_setup() -> void:
 	var hint := _label("ESPACIO / A: elegir · ENTER / Start: ¡a surfear! · ESC: volver", 16, Color.WHITE)
 	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bar.add_child(hint)
+	var free := _button("Modo libre", 22)
+	free.custom_minimum_size = Vector2(170.0, 48.0)
+	free.pressed.connect(start_sandbox)
+	bar.add_child(free)
 	var go := _button("¡A surfear!  →", 28)
 	go.custom_minimum_size = Vector2(220.0, 52.0)
 	go.pressed.connect(start_race)
@@ -579,6 +586,16 @@ func start_race() -> void:
 	start_requested.emit()
 	if auto_start:
 		get_tree().change_scene_to_file(RACE_SCENE)
+
+
+## Modo libre: mar abierto para practicar (sin carrera ni bots).
+func start_sandbox() -> void:
+	GameSettings.save_settings()
+	GameSettings.demo_mode = false
+	GameSettings.sandbox_mode = true
+	sandbox_requested.emit()
+	if auto_start:
+		get_tree().change_scene_to_file(SANDBOX_SCENE)
 
 
 func _start_demo() -> void:

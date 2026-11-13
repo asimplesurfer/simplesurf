@@ -35,6 +35,12 @@ extends Node
 @export var ahead_max: float = 95.0
 
 var mode: GameSettings.WaveMode = GameSettings.WaveMode.SURGES
+## Modo libre: multiplica la altura de las olas nuevas (0 = no aparecen olas
+## grandes; 1 = como en una carrera).
+var amplitude_scale: float = 1.0
+var _target_scale: float = 1.0
+## Qué tan rápido cambia la altura de las olas (escala por segundo).
+const SCALE_RATE := 0.35
 var _ensure_timer: float = 0.0
 
 var _rng := RandomNumberGenerator.new()
@@ -68,6 +74,33 @@ func set_mode(new_mode: GameSettings.WaveMode) -> void:
 		_water.set_ring_wave(null)
 
 
+## Modo libre: cambia la altura de las olas. Va de a poco (las que ya están
+## crecen o se achican durante un par de segundos); con 0 se van todas.
+func set_amplitude_scale(value: float) -> void:
+	_target_scale = maxf(value, 0.0)
+
+
+## Altura a la que van las olas (modo libre).
+func target_scale() -> float:
+	return _target_scale
+
+
+func _ramp_scale(delta: float) -> void:
+	if is_equal_approx(amplitude_scale, _target_scale):
+		return
+	var next := move_toward(amplitude_scale, _target_scale, SCALE_RATE * delta)
+	if _water:
+		for s in _water.swells:
+			if next <= 0.0:
+				s.retire()
+			elif amplitude_scale > 0.0:
+				var k := next / amplitude_scale
+				s.max_amplitude *= k
+				s.width *= k
+	amplitude_scale = next
+	_ensure_timer = 0.0
+
+
 ## La ola constante, alrededor de la isla por el lado de afuera de la pista.
 func make_ring_wave() -> RingWave:
 	var rw := RingWave.new()
@@ -79,7 +112,8 @@ func make_ring_wave() -> RingWave:
 
 
 func _process(delta: float) -> void:
-	if not enabled or _water == null or mode != GameSettings.WaveMode.SURGES:
+	_ramp_scale(delta)
+	if not enabled or _water == null or mode != GameSettings.WaveMode.SURGES or amplitude_scale <= 0.0:
 		return
 	_retire_passed()
 	# Nunca un rato largo sin olas: cada jugador tiene que tener una viniendo.
@@ -134,7 +168,7 @@ func has_wave_ahead(r: Rider) -> bool:
 	var dir := _track_dir(r)
 	var side := Vector2(-dir.y, dir.x)
 	for s in _water.swells:
-		if s.max_amplitude < amplitude_min * 0.9 or s.lifetime - s.age < 3.0:
+		if s.max_amplitude < amplitude_min * amplitude_scale * 0.9 or s.lifetime - s.age < 3.0:
 			continue
 		var rel := s.center - pos
 		var along := rel.dot(dir)
@@ -228,7 +262,7 @@ func make_swell() -> Swell:
 		# Avanza más o menos hacia el jugador.
 		s.direction = (player - s.center).normalized().rotated(_rng.randf_range(-0.8, 0.8))
 		s.speed = _rng.randf_range(2.5, 5.0)
-		s.max_amplitude = _rng.randf_range(amplitude_min, amplitude_max)
+		s.max_amplitude = _rng.randf_range(amplitude_min, amplitude_max) * amplitude_scale
 		# Más alta = más ancha, para que se pueda subir.
 		s.width = s.max_amplitude * _rng.randf_range(1.6, 2.0)
 		s.half_length = _rng.randf_range(22.0, 40.0)
@@ -262,7 +296,7 @@ func _make_incoming(target: Rider, player: Vector2) -> Swell:
 		s.direction = (player - s.center).normalized()
 		s.half_length = 30.0
 	s.speed = _rng.randf_range(4.0, 6.5)
-	s.max_amplitude = _rng.randf_range(amplitude_min, amplitude_max)
+	s.max_amplitude = _rng.randf_range(amplitude_min, amplitude_max) * amplitude_scale
 	s.width = s.max_amplitude * _rng.randf_range(1.6, 2.0)
 	s.lifetime = _rng.randf_range(18.0, 26.0)
 	# Crece mientras se acerca (se ve venir) y rompe más o menos cuando llega.

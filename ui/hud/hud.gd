@@ -25,6 +25,19 @@ var show_help: bool = true
 var demo: bool = false
 ## Vista chica (pantalla en 4): todo el HUD se dibuja más chico.
 var compact: bool = false
+## Modo libre: sin vuelta ni posición; muestra el nivel de las olas.
+var free_ride: bool = false
+
+## Colores del contador de trucos: cuanto más vueltas, más "caliente".
+const TRICK_COLORS: Array[Color] = [
+	Color(1.0, 1.0, 1.0),
+	Color(0.45, 0.9, 1.0),
+	Color(0.5, 1.0, 0.5),
+	Color(1.0, 0.9, 0.25),
+	Color(1.0, 0.6, 0.2),
+	Color(1.0, 0.32, 0.3),
+	Color(1.0, 0.35, 0.9),
+]
 
 const COMPACT_SCALE := 0.6
 
@@ -58,6 +71,12 @@ var _pop_key: ButtonPrompt
 var _nitro_label: Label
 var _speed_lines_material: ShaderMaterial
 var _message_time: float = 0.0
+## Contador de vueltas del truco mientras está en el aire (x1, x2...).
+var _trick_label: Label
+var _trick_pop: float = 0.0
+## Modo libre: nivel de las olas (barritas).
+var _waves_box: HBoxContainer
+var _wave_bars: Array[ColorRect] = []
 var _center_time: float = 0.0
 var _flash: float = 0.0
 var _lines: float = 0.0
@@ -91,6 +110,7 @@ func _connect_rider() -> void:
 		_nitro_bar.value = value / max_value
 	)
 	rider.trick_landed.connect(_on_trick_landed)
+	rider.live_spins_changed.connect(_on_live_spins)
 	rider.trick_failed.connect(func() -> void: show_message("¡Truco fallido!", BAD_COLOR))
 	rider.drift_hit.connect(func(_victim: Rider) -> void: show_message("¡Lo tiraste!", PROMPT_COLOR))
 	rider.ring_collected.connect(func() -> void: show_message("+ NITRO", NITRO_COLOR))
@@ -128,6 +148,19 @@ func show_center(text: String, color: Color, seconds: float) -> void:
 func _on_trick_landed(spins: int) -> void:
 	var text := "¡Truco!" if spins <= 1 else "¡Truco x%d!" % spins
 	show_message(text, NITRO_COLOR)
+
+
+## Contador del truco en el aire: x1, x2... cambia de color al subir.
+func _on_live_spins(spins: int) -> void:
+	if spins <= 0:
+		return
+	_trick_label.text = "x%d" % spins
+	_trick_label.add_theme_color_override("font_color", trick_color(spins))
+	_trick_pop = 1.0
+
+
+static func trick_color(spins: int) -> Color:
+	return TRICK_COLORS[clampi(spins - 1, 0, TRICK_COLORS.size() - 1)]
 
 
 func _on_countdown_tick(value: int) -> void:
@@ -198,7 +231,21 @@ func _process(delta: float) -> void:
 	_nitro_label.text = "NITRO ×%.1f" % mult if mult >= 1.15 else "NITRO"
 	_name_label.text = rider.display_name
 
-	if race_manager:
+	# Contador del truco: visible mientras gira en el aire; late al sumar una vuelta.
+	_trick_label.visible = rider.live_spins > 0 and not rider.grounded
+	_trick_pop = move_toward(_trick_pop, 0.0, delta * 4.0)
+	_trick_label.pivot_offset = _trick_label.size * 0.5
+	_trick_label.scale = Vector2.ONE * (1.0 + 0.45 * _trick_pop * _trick_pop)
+
+	if free_ride:
+		_place_label.visible = false
+		_lap_label.visible = false
+		_waves_box.visible = true
+		var level := GameSettings.sandbox_wave_level
+		for k in _wave_bars.size():
+			_wave_bars[k].color = Color(0.3, 0.85, 1.0) if k < level else Color(0.0, 0.0, 0.0, 0.45)
+		_center_label.visible = _center_time > 0.0
+	elif race_manager:
 		var laps := race_manager.config.laps
 		_lap_label.text = "VUELTA %d/%d" % [race_manager.lap_of(rider), laps]
 		_place_label.text = "%dº" % race_manager.place_of(rider)
@@ -290,6 +337,18 @@ func _update_help() -> void:
 	var layout := "estándar"
 	if rider and rider.controller is PlayerController:
 		layout = (rider.controller as PlayerController).layout_name()
+	if free_ride:
+		_help.text = (
+			"MODO LIBRE · mar abierto\n"
+			+ "Avanzar: W / stick adelante (soltá y te frenás; lento, remás acostado)\n"
+			+ "Girar: A / D o stick   ·   Pop / truco: ESPACIO / botón de abajo\n"
+			+ "Turbo: E o botón derecho   ·   Mirar atrás: Q o gatillo izquierdo\n"
+			+ "Olas: X sube · Z baja (mando: RB / LB)\n"
+			+ "Tormenta: T (mando: Select)\n"
+			+ "Circuitos a lo lejos: slalom (rojo), círculos (celeste), géiseres (naranja)\n"
+			+ "Esc: menú   ·   H: ocultar ayuda"
+		)
+		return
 	_help.text = (
 		"Avanza solo (atrás frena)   ·   Girar: A / D o stick\n"
 		+ "Pop: ESPACIO / botón de abajo o golpe de palanca (W) hacia arriba\n"
@@ -402,6 +461,22 @@ func _build() -> void:
 	_speed_label = _make_label(22, Color.WHITE)
 	_speed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	right_box.add_child(_speed_label)
+	# Modo libre: nivel de las olas (barritas de alto creciente).
+	_waves_box = HBoxContainer.new()
+	_waves_box.alignment = BoxContainer.ALIGNMENT_END
+	_waves_box.add_theme_constant_override("separation", 5)
+	_waves_box.visible = false
+	right_box.add_child(_waves_box)
+	var waves_label := _make_label(20, Color.WHITE)
+	waves_label.text = "OLAS"
+	_waves_box.add_child(waves_label)
+	for k in GameSettings.SANDBOX_WAVE_LEVELS:
+		var bar := ColorRect.new()
+		bar.custom_minimum_size = Vector2(12.0, 10.0 + k * 5.0)
+		bar.size_flags_vertical = Control.SIZE_SHRINK_END
+		bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_waves_box.add_child(bar)
+		_wave_bars.append(bar)
 
 	# Nombre del jugador, abajo a la derecha.
 	_name_label = _make_label(28, Color.WHITE)
@@ -425,6 +500,17 @@ func _build() -> void:
 	_message.offset_top = 70.0
 	_message.visible = false
 	root.add_child(_message)
+
+	# Contador del truco en el aire (x1, x2...), arriba, debajo de los mensajes.
+	_trick_label = _make_label(72, Color.WHITE)
+	_trick_label.anchor_left = 0.5
+	_trick_label.anchor_right = 0.5
+	_trick_label.offset_left = -150.0
+	_trick_label.offset_right = 150.0
+	_trick_label.offset_top = 120.0
+	_trick_label.offset_bottom = 210.0
+	_trick_label.visible = false
+	root.add_child(_trick_label)
 
 	# Botón del pop (en la cresta de la ola), un poco abajo del centro.
 	_pop_box = HBoxContainer.new()
