@@ -1,7 +1,7 @@
 class_name Swell
 extends RefCounted
 ## Una ola grande y localizada: una "loma" alargada que avanza, crece al nacer
-## y se desvanece al morir. La misma fórmula está en water.gdshader (add_swell).
+## y se desvanece al morir. La misma fórmula está en water_surface.gdshaderinc (add_swell); tests/water_match.gd comprueba que coincidan.
 ##
 ## En su sistema local: u = a lo largo de la dirección de avance, w = a lo ancho.
 ## altura = amplitud * exp(-(u/ancho)²) * borde(w)
@@ -87,7 +87,7 @@ func _edge_derivative(aw: float) -> float:
 	return -6.0 * t * (1.0 - t) / edge
 
 
-## Cuánto se corre la cresta hacia adelante (m), igual que en water.gdshader.
+## Cuánto se corre la cresta hacia adelante (m), igual que en water_surface.gdshaderinc.
 func lean() -> float:
 	return (0.35 + 0.95 * breaking) * amplitude
 

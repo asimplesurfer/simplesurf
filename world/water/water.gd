@@ -260,7 +260,7 @@ func big_wave_near(q: Vector3) -> bool:
 
 
 ## Vértice de la malla del agua en el punto de grilla p, movido igual que en
-## water.gdshader (altura de todas las olas y corrimiento del labio).
+## water_surface.gdshaderinc (altura de todas las olas y corrimiento del labio).
 func drawn_vertex(p: Vector2) -> Vector3:
 	var h := waves.height_at(p.x, p.y, time)
 	var sh := 0.0
@@ -435,7 +435,7 @@ func normal_at(x: float, z: float) -> Vector3:
 
 
 ## 0 pegado a la isla, 1 lejos: las olas grandes no se meten en la playa.
-## (Igual que island_fade en water.gdshader.)
+## (Igual que island_fade en water_surface.gdshaderinc; tests/water_match.gd lo comprueba.)
 func _island_fade(p: Vector2) -> float:
 	var fade := 1.0
 	for i in mini(islands.size(), MAX_ISLANDS):

@@ -102,6 +102,16 @@ jobs:
         if: always()
         run: python3 tests/fps_compare.py godot
 
+      - name: El agua que se ve coincide con la física
+        if: always()
+        run: |
+          # Necesita pantalla (virtual) y OpenGL por software.
+          if ! command -v xvfb-run > /dev/null; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq xvfb libgl1-mesa-dri > /dev/null
+          fi
+          xvfb-run -a -s "-screen 0 640x480x24" godot --path . --rendering-driver opengl3 --script res://tests/water_match.gd 2>&1 | tee water.log
+          grep -q "WATER_MATCH OK" water.log
+
       - name: Exportar para web (para la prueba en navegador)
         if: always()
         run: |
