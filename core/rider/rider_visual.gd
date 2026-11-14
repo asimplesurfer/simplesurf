@@ -68,7 +68,7 @@ var _climbing: bool = false
 var _spray: DriftSpray
 ## Pared de agua al girar rápido (hacia afuera de la curva). Solo se ve: no
 ## tumba a nadie (eso es del derrape).
-var _carve: DriftSpray
+var _carve: CarveSpray
 const CARVE_ANGLE := 55.0
 ## Chapuzón al atravesar una ola que rompe.
 var _splash: CPUParticles3D
@@ -150,11 +150,8 @@ func _build() -> void:
 	_spray = DriftSpray.new()
 	_spray.name = "Spray"
 	add_child(_spray)
-	_carve = DriftSpray.new()
+	_carve = CarveSpray.new()
 	_carve.name = "CarveSpray"
-	_carve.length = 3.6
-	_carve.half_angle = 20.0
-	_carve.height = 1.0
 	add_child(_carve)
 
 	# Gotas que salen al atravesar la ola: hacia arriba y para los costados.
@@ -182,7 +179,7 @@ func face_position() -> Vector3:
 func _on_wave_punched() -> void:
 	duck_time = DUCK_DURATION
 	_splash.restart()
-	_splash.emitting = true
+	WaterFx.emit(_splash, true)
 
 
 ## Pose del personaje (transform del BodyPivot) para cada etapa.
@@ -412,7 +409,7 @@ func _update_particles(delta: float) -> void:
 	# Salpicadura al girar: sale del borde de afuera de la curva.
 	var turn := absf(rider.steer_amount) * rider.speed
 	var turning := on_water and drift_side == 0 and turn > 3.0
-	_wake.emitting = turning
+	WaterFx.emit(_wake, turning)
 	if turning:
 		var outside := -signf(rider.steer_amount)
 		_wake.position = Vector3(outside * 0.35, 0.1, 0.8)

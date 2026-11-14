@@ -52,7 +52,7 @@ func update_spray(side: int, strength: float, delta: float) -> void:
 	_sheet.scale = Vector3(0.6 + 0.4 * _amount, _amount, 0.4 + 0.6 * _amount)
 	_sheet_material.set_shader_parameter("intensity", _amount)
 
-	_mist.emitting = active
+	WaterFx.emit(_mist, active)
 	_mist.direction = Vector3(0.0, 0.7, 1.0).normalized()
 
 
