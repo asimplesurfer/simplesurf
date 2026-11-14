@@ -21,9 +21,12 @@ const CHOP_SCALE := 2.4
 const CHOP_SPEED := 1.25
 const RAIN_SHADER := preload("res://world/sky/rain.gdshader")
 const CURTAIN_SHADER := preload("res://world/sky/rain_curtain.gdshader")
+const DROP_SHADER := preload("res://world/sky/rain_drop.gdshader")
+## Dirección en la que caen las gotas (con un poco de viento).
+const FALL_DIR := Vector3(0.22, -1.0, 0.08)
 ## Gotas 3D cerca de cada cámara (menos con muchas pantallas).
-const DROPS := 900
-const DROPS_MANY_VIEWS := 450
+const DROPS := 1400
+const DROPS_MANY_VIEWS := 700
 
 var _env: Environment
 var _sky_mat: ShaderMaterial
@@ -45,8 +48,8 @@ var veils: Array[ColorRect] = []
 var _rain_mat: ShaderMaterial
 var _split: SplitScreen
 var _curtain_mats: Array[ShaderMaterial] = []
-var _drop_mat: StandardMaterial3D
-var _drop_mesh: BoxMesh
+var _drop_mat: ShaderMaterial
+var _drop_mesh: QuadMesh
 var _rain_clock: float = 0.0
 var _rain_sound: AudioStreamPlayer
 ## Rayos que cayeron (para los tests).
@@ -119,12 +122,12 @@ func _add_rain(main: Node) -> void:
 	if _stopped:
 		return
 	_split = main.get_node_or_null("Views") as SplitScreen
-	_drop_mat = StandardMaterial3D.new()
-	_drop_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_drop_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_drop_mat.albedo_color = Color(0.8, 0.85, 0.92, 0.42)
-	_drop_mesh = BoxMesh.new()
-	_drop_mesh.size = Vector3(0.016, 0.85, 0.016)
+	# Gotas: rayas cortas y finas que miran a la cámara (ver rain_drop.gdshader).
+	_drop_mat = ShaderMaterial.new()
+	_drop_mat.shader = DROP_SHADER
+	_drop_mat.set_shader_parameter("fall_dir", FALL_DIR)
+	_drop_mesh = QuadMesh.new()
+	_drop_mesh.size = Vector2.ONE
 	_drop_mesh.material = _drop_mat
 	for spec in [[16.0, 90.0, 0.4], [38.0, 170.0, 0.3]]:
 		var m := ShaderMaterial.new()
@@ -181,14 +184,13 @@ func _rain_rig(view: int, amount: int) -> Node3D:
 	drops.position = Vector3(0.0, 3.0, -9.0)
 	drops.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
 	drops.emission_box_extents = Vector3(13.0, 7.0, 13.0)
-	drops.direction = Vector3(0.22, -1.0, 0.08)
+	drops.direction = FALL_DIR
 	drops.spread = 3.0
 	drops.gravity = Vector3.ZERO
 	drops.initial_velocity_min = 22.0
 	drops.initial_velocity_max = 28.0
-	drops.particle_flag_align_y = true
 	drops.scale_amount_min = 0.7
-	drops.scale_amount_max = 1.2
+	drops.scale_amount_max = 1.25
 	drops.layers = layer
 	drops.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	rig.add_child(drops)
@@ -257,6 +259,8 @@ func _roughen(water: Water) -> void:
 	_set_water(mat, "sky_reflect", 0.6)
 	# Espuma solo en las crestas más altas (si no, el mar picado se llena de manchas).
 	_set_water(mat, "foam_height", 0.42 * CHOP_SCALE * 0.5)
+	# Las gotas pegan en el mar: circulitos que se abren y salpicaduras.
+	_set_water(mat, "rain_ripples", 1.0)
 
 
 ## Cambia un parámetro del agua, recordando el que tenía (para stop()).
@@ -333,6 +337,8 @@ func _process(delta: float) -> void:
 		_sun.light_energy = _base_sun + flash * 0.9
 	if _rain_mat:
 		_rain_mat.set_shader_parameter("flash", flash)
+	if _drop_mat:
+		_drop_mat.set_shader_parameter("flash", flash)
 	# Lluvia: reloj que da la vuelta cada segundo (sin saltos ni números grandes).
 	_rain_clock = fmod(_rain_clock + delta, 1.0)
 	for m in _curtain_mats:
