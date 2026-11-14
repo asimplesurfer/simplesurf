@@ -8,7 +8,7 @@ render_mode unshaded, cull_disabled, depth_draw_never, shadows_disabled;
 
 uniform float rain_time = 0.0;
 uniform float columns = 90.0;
-uniform float rows = 6.0;
+uniform float rows = 10.0;
 uniform vec4 tint : source_color = vec4(0.78, 0.83, 0.9, 0.35);
 
 float h(float n) {
@@ -25,9 +25,10 @@ void fragment() {
 	float cell = floor(y);
 	float f = y - cell;
 	float x = fract(uv.x) - 0.5 - (h(c + 3.7) - 0.5) * 0.4;
-	float line = 1.0 - smoothstep(0.03, 0.09, abs(x));
-	float body = smoothstep(0.0, 0.06, f) * (1.0 - smoothstep(0.22, 0.38, f));
-	float on = step(0.35, h(c * 1.31 + mod(cell, 32.0) * 7.13));
+	// Rayas cortas y nítidas (las largas y borrosas parecen niebla, no lluvia).
+	float line = 1.0 - smoothstep(0.015, 0.04, abs(x));
+	float body = smoothstep(0.0, 0.5, f / 0.09) * (1.0 - step(0.09, f));
+	float on = step(0.45, h(c * 1.31 + mod(cell, 32.0) * 7.13));
 	float a = line * body * on * tint.a;
 	// Se apaga arriba y abajo (no se ven los bordes del cilindro).
 	a *= smoothstep(0.0, 0.2, UV.y) * (1.0 - smoothstep(0.7, 0.95, UV.y));

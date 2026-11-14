@@ -46,6 +46,9 @@ uniform float glow_strength = 0.25;
 uniform vec3 sky_tint : source_color = vec3(0.6, 0.76, 0.86);
 // Cuánto refleja el cielo en ángulos rasantes (la tormenta usa 0,6).
 uniform float sky_reflect = 0.42;
+// Lluvia pegando en el mar (0 = no llueve): circulitos que se abren donde cae
+// una gota, con un puntito de salpicadura al principio.
+uniform float rain_ripples = 0.0;
 
 varying float v_height;
 // 0..1: cuerpo de una ola grande (para el color turquesa de la ola).
@@ -183,6 +186,24 @@ float island_fade(vec2 p) {
 	return fade;
 }
 
+// Una capa de gotas: en cada celda cae una gota cada tanto (en un lugar y
+// momento al azar) y abre un anillo que se desvanece.
+float rain_layer(vec2 p, float t, float cell, float seed) {
+	vec2 g = p / cell;
+	vec2 id = floor(g);
+	vec2 f = g - id;
+	float h1 = fx_hash(id + seed);
+	float h2 = fx_hash(id + seed + 17.3);
+	float h3 = fx_hash(id + seed + 41.7);
+	vec2 c = vec2(0.2) + 0.6 * vec2(h1, h2);
+	float life = fract(t * (0.8 + 0.5 * h3) + h3 * 7.0);
+	float d = length(f - c);
+	float r = 0.06 + life * 0.38;
+	float ring = (1.0 - smoothstep(0.0, 0.028, abs(d - r))) * (1.0 - life) * (1.0 - life);
+	float splash = (1.0 - smoothstep(0.0, 0.07, d)) * (1.0 - smoothstep(0.0, 0.14, life));
+	return max(ring, splash);
+}
+
 void vertex() {
 	vec3 world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	float h = 0.0;
@@ -256,6 +277,16 @@ void fragment() {
 	float streak = smoothstep(0.78, 0.82, fx_noise(wp * vec2(0.18, 0.6) + vec2(t * 0.05, 0.0)));
 	foam = max(foam, streak * 0.35 * (1.0 - v_body));
 	col = mix(col, foam_color, clamp(foam, 0.0, 1.0) * 0.9);
+
+	// Lluvia: gotas pegando en el agua (solo cerca: de lejos no se distinguen).
+	if (rain_ripples > 0.0) {
+		float near = 1.0 - smoothstep(18.0, 40.0, distance(v_world, CAMERA_POSITION_WORLD));
+		if (near > 0.0) {
+			float tt = mod(t, 600.0);
+			float drops = max(rain_layer(wp, tt, 1.4, 0.0), rain_layer(wp + 0.7, tt * 1.13, 1.1, 5.0));
+			col = mix(col, foam_color, drops * near * rain_ripples * 0.4);
+		}
+	}
 
 	// Destellos del sol: puntitos que titilan.
 	float sparkle = step(0.95, fx_noise(wp * 3.5 + vec2(t * 0.9, -t * 0.7)))
