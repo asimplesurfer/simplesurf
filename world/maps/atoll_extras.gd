@@ -24,8 +24,8 @@ static func build(course: Course) -> void:
 	arch.name = "RockArch"
 	arch.position = Vector3(0.0, 0.0, -143.4)
 	course.add_child(arch)
-	var stone := ToonMaterial.make(Color(0.5, 0.42, 0.36), 0.12)
-	var moss := ToonMaterial.make(Color(0.36, 0.55, 0.3), 0.12)
+	var stone := ToonMaterial.make(Palette.STONE, 0.12)
+	var moss := ToonMaterial.make(Palette.MOSS, 0.12)
 	var arng := RandomNumberGenerator.new()
 	arng.seed = 77
 	var steps := 15
@@ -67,7 +67,7 @@ static func _shipwreck(at: Vector3) -> Node3D:
 	ship.position = at
 	ship.rotation = Vector3(0.18, 0.7, 0.35)
 	ship.scale = Vector3.ONE * 1.5
-	var wood := ToonMaterial.make(Color(0.42, 0.27, 0.15), 0.12)
+	var wood := ToonMaterial.make(Palette.WOOD, 0.12)
 	var hull := MeshInstance3D.new()
 	var cap := CapsuleMesh.new()
 	cap.radius = 3.0
@@ -90,7 +90,7 @@ static func _shipwreck(at: Vector3) -> Node3D:
 	var sail := MeshInstance3D.new()
 	var quad := BoxMesh.new()
 	quad.size = Vector3(5.0, 4.0, 0.1)
-	quad.material = ToonMaterial.make(Color(0.92, 0.88, 0.78), 0.08)
+	quad.material = ToonMaterial.make(Palette.SAIL, 0.08)
 	sail.mesh = quad
 	sail.position = Vector3(0.6, 7.0, -1.5)
 	sail.rotation = Vector3(0.0, 0.3, 0.3)
@@ -98,7 +98,7 @@ static func _shipwreck(at: Vector3) -> Node3D:
 	var flag := MeshInstance3D.new()
 	var fq := BoxMesh.new()
 	fq.size = Vector3(1.6, 1.0, 0.05)
-	fq.material = ToonMaterial.make(Color(0.08, 0.08, 0.1), 0.0)
+	fq.material = ToonMaterial.make(Palette.UI_INK, 0.0)
 	flag.mesh = fq
 	flag.position = Vector3(1.9, 10.4, -1.5)
 	ship.add_child(flag)

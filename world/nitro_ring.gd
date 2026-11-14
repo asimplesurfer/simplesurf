@@ -7,7 +7,7 @@ extends Node3D
 ## Segundos antes de que el mismo Rider pueda volver a agarrarlo.
 @export var cooldown: float = 2.0
 
-const COLOR := Color(0.25, 0.9, 1.0)
+const COLOR := Palette.AQUA
 
 var _ring: MeshInstance3D
 var _cooldowns: Dictionary = {}

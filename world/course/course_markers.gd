@@ -56,8 +56,8 @@ func _process(_delta: float) -> void:
 ## Bordes de la pista: una corchera continua a cada lado (flotadores cada
 ## pocos metros, de dos colores) y boyas grandes cada tanto para verlas de lejos.
 func _build_buoys() -> void:
-	var yellow := Color(1.0, 0.82, 0.2)
-	var red := Color(0.95, 0.28, 0.25)
+	var yellow := Palette.BUTTER
+	var red := Palette.CORAL
 	# Adentro (derecha del que corre) amarilla; afuera (izquierda) roja.
 	_add_rope(-half_width, yellow)
 	_add_rope(half_width, red)
@@ -92,7 +92,7 @@ func _add_rope(lateral: float, color: Color) -> void:
 		var a := TAU * i / count
 		var p := track.position_at(a, lateral)
 		mm.set_instance_transform(i, Transform3D(Basis.IDENTITY, p))
-		mm.set_instance_color(i, color if (i / 2) % 2 == 0 else Color(0.97, 0.97, 0.97))
+		mm.set_instance_color(i, color if (i / 2) % 2 == 0 else Palette.WHITE)
 	var mmi := MultiMeshInstance3D.new()
 	mmi.name = "Rope"
 	mmi.multimesh = mm
@@ -117,7 +117,7 @@ func _add_buoy_circle(lateral: float, color: Color, spacing: float) -> void:
 	top_mesh.height = 0.5
 	top_mesh.radial_segments = 8
 	top_mesh.rings = 4
-	top_mesh.material = ToonMaterial.make(Color(0.97, 0.97, 0.97), 0.03)
+	top_mesh.material = ToonMaterial.make(Palette.WHITE, 0.03)
 	# Todas las boyas de un borde en dos MultiMesh (base y punta): pocas
 	# llamadas de dibujo. Flotan igual que las corcheras.
 	var points: Array[Vector3] = []
@@ -162,7 +162,7 @@ func _build_finish_line() -> void:
 	pole_mesh.top_radius = 0.5
 	pole_mesh.bottom_radius = 0.6
 	pole_mesh.height = 11.0
-	pole_mesh.material = ToonMaterial.make(Color(0.95, 0.95, 0.95), 0.06)
+	pole_mesh.material = ToonMaterial.make(Palette.WHITE, 0.06)
 	for p in [inner, outer]:
 		var pole := MeshInstance3D.new()
 		pole.mesh = pole_mesh

@@ -266,9 +266,13 @@ func _test_atoll() -> void:
 	root.add_child(sunny)
 	await process_frame
 	var sunny_env := (sunny.get_node("WorldEnvironment") as WorldEnvironment).environment
+	# La luz ambiente de día, tal como viene en la escena.
+	var fresh: Node = load("res://main.tscn").instantiate()
+	var day_ambient: float = (fresh.get_node("WorldEnvironment") as WorldEnvironment).environment.ambient_light_energy
+	fresh.free()
 	_check(
 		(sunny.get_node("Course") as Course).storm == null and sunny_env.sky.sky_material.get_shader_parameter("zenith_color") == null
-		and absf(sunny_env.ambient_light_energy - 0.45) < 0.01
+		and absf(sunny_env.ambient_light_energy - day_ambient) < 0.01
 		and (sunny.get_node("Water") as Water).waves.max_height() < 1.0,
 		"con sol, sin tormenta (cielo azul y mar normal)"
 	)
