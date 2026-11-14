@@ -150,6 +150,7 @@ func _run() -> void:
 	_test_outline_width()
 	await _test_boost_camera()
 	await _test_rare_transitions()
+	await _test_carve_spray()
 	_finish()
 
 
@@ -2376,6 +2377,57 @@ func _test_rare_transitions() -> void:
 	_set_action(&"p1_a", false)
 	_check(_state() == &"fallen" and r.nitro == 0.0, "aterrizar a mitad de una vuelta: se cae y pierde el nitro")
 
+	m.queue_free()
+	await process_frame
+	GameSettings.player_count = saved[0]
+	GameSettings.bot_count = saved[1]
+
+
+## Girar rápido levanta una pared de agua hacia afuera de la curva (solo se
+## ve: no tumba a nadie).
+func _test_carve_spray() -> void:
+	print("Agua al girar:")
+	var saved := [GameSettings.player_count, GameSettings.bot_count]
+	GameSettings.player_count = 1
+	GameSettings.bot_count = 1
+	var m: Node = load("res://main.tscn").instantiate()
+	root.add_child(m)
+	await process_frame
+	await process_frame
+	var race := m.get_node("RaceManager") as RaceManager
+	race.skip_countdown()
+	var course := m.get_node("Course") as Course
+	course.hazards_enabled = false
+	course.bounds_enabled = false
+	(m.get_node("WaveManager") as WaveManager).enabled = false
+	(m.get_node("Water") as Water).clear_swells()
+	var r: Rider = race.humans()[0]
+	var bot: Rider = race.racers[1]
+	bot.controls_locked = true
+	var carve := (r.get_node("Visual") as RiderVisual)._carve
+	await _wait(2.0)
+	_set_action(&"p1_right", true)
+	var shown := false
+	var bot_fell := false
+	for i in int(1.5 * FPS):
+		# El rival, justo donde vuela el agua (afuera de la curva, atrás).
+		bot.position = r.position - r.right() * 2.0 + r.forward() * -1.5
+		if carve._sheet.visible:
+			shown = true
+		if bot.is_fallen():
+			bot_fell = true
+		await process_frame
+	_set_action(&"p1_right", false)
+	_check(shown, "girando rápido levanta agua hacia afuera de la curva")
+	_check(not bot_fell, "y no tumba a nadie (solo se ve)")
+	# Despacio, no.
+	_set_action(&"p1_down", true)
+	await _wait(3.0)
+	_set_action(&"p1_right", true)
+	await _wait(0.8)
+	_check(not carve._sheet.visible or r.speed > 6.0, "despacio no levanta agua (%.1f m/s)" % r.speed)
+	_set_action(&"p1_right", false)
+	_set_action(&"p1_down", false)
 	m.queue_free()
 	await process_frame
 	GameSettings.player_count = saved[0]

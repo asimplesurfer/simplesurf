@@ -66,6 +66,10 @@ var _stage_time: float = 0.0
 var _last_stage: Rider.RecoveryStage = Rider.RecoveryStage.STANDING
 var _climbing: bool = false
 var _spray: DriftSpray
+## Pared de agua al girar rápido (hacia afuera de la curva). Solo se ve: no
+## tumba a nadie (eso es del derrape).
+var _carve: DriftSpray
+const CARVE_ANGLE := 55.0
 ## Chapuzón al atravesar una ola que rompe.
 var _splash: CPUParticles3D
 ## Tiempo que queda de la animación de atravesar la ola (agachado, brazos sobre la cabeza).
@@ -146,6 +150,12 @@ func _build() -> void:
 	_spray = DriftSpray.new()
 	_spray.name = "Spray"
 	add_child(_spray)
+	_carve = DriftSpray.new()
+	_carve.name = "CarveSpray"
+	_carve.length = 3.6
+	_carve.half_angle = 20.0
+	_carve.height = 1.0
+	add_child(_carve)
 
 	# Gotas que salen al atravesar la ola: hacia arriba y para los costados.
 	_splash = WaterFx.soft_particles(70, 0.9, 0.35)
@@ -388,6 +398,16 @@ func _update_particles(delta: float) -> void:
 	if drift_side != 0:
 		_spray.position = Vector3(0.0, 0.05, 0.8)
 	_spray.update_spray(drift_side, clampf(rider.speed / 8.0, 0.5, 1.0), delta)
+
+	# Al girar rápido, el canto de la tabla levanta una pared de agua hacia
+	# afuera de la curva (más alta cuanto más rápido y más cerrado gira).
+	var carve := absf(rider.steer_amount) * rider.speed
+	var carving := on_water and drift_side == 0 and rider.speed > 6.0 and carve > 3.0
+	if carving:
+		var side := -signf(rider.steer_amount)
+		_carve.position = Vector3(side * 0.35, 0.05, 0.45)
+		_carve.rotation.y = side * deg_to_rad(CARVE_ANGLE)
+	_carve.update_spray(1 if carving else 0, clampf((carve - 3.0) / 6.0, 0.0, 1.0), delta)
 
 	# Salpicadura al girar: sale del borde de afuera de la curva.
 	var turn := absf(rider.steer_amount) * rider.speed
