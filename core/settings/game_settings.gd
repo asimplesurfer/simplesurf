@@ -142,5 +142,5 @@ static func track_layout_name() -> String:
 ## Vueltas de la carrera según el mapa (el archipiélago y el atolón son mucho
 ## más largos que la isla).
 static func laps_for(layout: TrackLayout) -> int:
-	return 5 if layout == TrackLayout.CLASSIC else 3
+	return TrackMap.for_layout(layout).laps
 
