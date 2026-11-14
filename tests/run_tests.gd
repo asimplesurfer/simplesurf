@@ -2010,7 +2010,8 @@ func _test_sandbox() -> void:
 	var saved_players := GameSettings.player_count
 	GameSettings.weather = GameSettings.Weather.SUNNY
 	GameSettings.player_count = 1
-	GameSettings.sandbox_wave_level = 3
+	# Mar calmo para probar el remo (una ola al azar podría llevarlo).
+	GameSettings.sandbox_wave_level = 0
 	var m: Node = load("res://sandbox.tscn").instantiate()
 	root.add_child(m)
 	await process_frame
@@ -2021,6 +2022,8 @@ func _test_sandbox() -> void:
 	var water := m.get_node("Water") as Water
 	_check(sb.free_ride() and GameSettings.sandbox_mode, "es el modo libre")
 	_check(sb.racers.size() == 1 and sb.humans().size() == 1, "sin bots: solo el jugador")
+	# Arranca sin olas grandes (nivel 0): la escala se pone de una.
+	waves.amplitude_scale = 0.0
 	_check(get_nodes_in_group("island").is_empty(), "en mar abierto (sin islas)")
 	_check(world.rings.size() >= 10 and world.geysers.size() >= 5, "con circuitos de práctica (círculos y géiseres)")
 	var far := true
