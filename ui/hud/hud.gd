@@ -77,6 +77,8 @@ var _trick_pop: float = 0.0
 ## Modo libre: nivel de las olas (barritas).
 var _waves_box: HBoxContainer
 var _wave_bars: Array[ColorRect] = []
+## Para avisar cuando se cambia la distancia de la cámara con turbo (tecla B).
+var _seen_boost_option: int = -1
 var _center_time: float = 0.0
 var _flash: float = 0.0
 var _lines: float = 0.0
@@ -211,6 +213,15 @@ func _process(delta: float) -> void:
 		]
 	if rider == null:
 		return
+	if _seen_boost_option != ChaseCamera.boost_option:
+		if _seen_boost_option >= 0:
+			show_message(
+				"Cámara turbo %d/%d  (+%.1f m)" % [
+					ChaseCamera.boost_option + 1, ChaseCamera.BOOST_PULLBACKS.size(), ChaseCamera.boost_pullback()
+				],
+				Color.WHITE
+			)
+		_seen_boost_option = ChaseCamera.boost_option
 	_update_splash(delta)
 	_update_mash(delta)
 
@@ -346,6 +357,7 @@ func _update_help() -> void:
 			+ "Olas: X sube · Z baja (mando: RB / LB)\n"
 			+ "Tormenta: T (mando: Select)\n"
 			+ "Circuitos a lo lejos: slalom (rojo), círculos (celeste), géiseres (naranja)\n"
+			+ "B: probar distancia de cámara con turbo (1/2/3)\n"
 			+ "Esc: menú   ·   H: ocultar ayuda"
 		)
 		return
@@ -360,6 +372,7 @@ func _update_help() -> void:
 		+ "J2: flechas, ENTER salta, . derrapa, - turbo   ·   Esc: menú\n"
 		+ "Olas: %s (se cambia en el menú)\n" % GameSettings.wave_mode_name()
 		+ "Mando: %s (M cambia)   ·   H: ocultar ayuda   ·   P: FPS\n" % layout
+		+ "B: probar distancia de cámara con turbo (1/2/3)\n"
 		+ "Si no responde, haz clic en el juego"
 	)
 
