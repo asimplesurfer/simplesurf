@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="TrackMap" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://world/maps/track_map.gd" id="1_map"]
+[ext_resource type="Script" path="res://world/maps/atoll_extras.gd" id="2_extras"]
+
+[resource]
+script = ExtResource("1_map")
+path = PackedVector2Array(215, 0, 200, -85, 150, -160, 80, -205, 30, -200, 5, -158, -6, -112, -46, -86, -76, -55, -87, -10, -82, 34, -57, 74, -20, 102, -2, 140, 4, 182, 40, 207, 105, 212, 170, 168, 208, 88)
+half_width = 20.0
+islands = Array[Vector3]([Vector3(0, 0, 40), Vector3(43.9, -143.4, 16), Vector3(98.4, -113.2, 21), Vector3(137, -61, 24), Vector3(150, 0, 20), Vector3(137, 61, 23), Vector3(98.4, 113.2, 19), Vector3(43.9, 143.4, 16), Vector3(-43.9, 143.4, 16), Vector3(-98.4, 113.2, 22), Vector3(-135.9, 63.4, 19), Vector3(-150, 0, 24), Vector3(-137, -61, 20), Vector3(-98.4, -113.2, 22), Vector3(-43.9, -143.4, 16), Vector3(58, -38, 9), Vector3(66, 40, 8), Vector3(330, 0, 40), Vector3(250, -245, 35), Vector3(-55, -335, 38), Vector3(-300, -170, 40), Vector3(-320, 120, 36), Vector3(-110, 325, 35), Vector3(225, 265, 38), Vector3(-245, -30, 24)])
+volcano_index = 0
+ring_count = 14
+rock_count = 12
+laps = 3
+extras = ExtResource("2_extras")
