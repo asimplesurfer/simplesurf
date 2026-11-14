@@ -18,7 +18,9 @@ const SPLASH_WASH := 0.22
 
 ## Se pueden asignar antes de agregar el HUD al árbol (lo hace SplitScreen).
 var rider: Rider
-var race_manager: RaceManager
+## La partida (carrera o modo libre). Lo de carrera (vuelta, posición, cuenta
+## regresiva) se pide solo si es una carrera (ver `_race()`).
+var session: GameSession
 ## Mostrar la ayuda al empezar.
 var show_help: bool = true
 ## Demo: muestra "DEMO" y cómo salir.
@@ -90,10 +92,11 @@ func _ready() -> void:
 		rider = get_node_or_null(rider_path) as Rider
 	if rider:
 		_connect_rider()
-	if race_manager:
-		race_manager.countdown_tick.connect(_on_countdown_tick)
-		race_manager.lap_started.connect(_on_lap_started)
-		race_manager.racer_finished.connect(_on_racer_finished)
+	var race := _race()
+	if race:
+		race.countdown_tick.connect(_on_countdown_tick)
+		race.lap_started.connect(_on_lap_started)
+		race.racer_finished.connect(_on_racer_finished)
 	_help.visible = show_help
 	_update_help()
 	if demo:
@@ -133,6 +136,11 @@ func _connect_rider() -> void:
 			show_message("Salto: " + mode_name, Color.WHITE)
 			_update_help()
 		)
+
+
+## La carrera, si la partida es una carrera (en el modo libre, null).
+func _race() -> RaceManager:
+	return session as RaceManager
 
 
 func show_message(text: String, color: Color) -> void:
@@ -175,7 +183,7 @@ func _on_countdown_tick(value: int) -> void:
 func _on_lap_started(r: Rider, lap: int) -> void:
 	if r != rider or lap <= 1:
 		return
-	if lap == race_manager.config.laps:
+	if lap == session.config.laps:
 		show_center("¡Última vuelta!", PROMPT_COLOR, 1.5)
 	else:
 		show_center("Vuelta %d" % lap, Color.WHITE, 1.2)
@@ -256,11 +264,11 @@ func _process(delta: float) -> void:
 		for k in _wave_bars.size():
 			_wave_bars[k].color = Color(0.3, 0.85, 1.0) if k < level else Color(0.0, 0.0, 0.0, 0.45)
 		_center_label.visible = _center_time > 0.0
-	elif race_manager:
-		var laps := race_manager.config.laps
-		_lap_label.text = "VUELTA %d/%d" % [race_manager.lap_of(rider), laps]
-		_place_label.text = "%dº" % race_manager.place_of(rider)
-		if race_manager.is_wrong_way(rider) and _center_time <= 0.0:
+	elif _race():
+		var race := _race()
+		_lap_label.text = "VUELTA %d/%d" % [race.lap_of(rider), race.config.laps]
+		_place_label.text = "%dº" % race.place_of(rider)
+		if race.is_wrong_way(rider) and _center_time <= 0.0:
 			_center_label.text = "¡Al revés!"
 			_center_label.add_theme_color_override("font_color", BAD_COLOR)
 			_center_label.visible = true

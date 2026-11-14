@@ -14,6 +14,8 @@ extends Control
 signal start_requested
 ## Eligió el modo libre (mar abierto).
 signal sandbox_requested
+## La configuración de la última partida que se abrió desde este menú.
+var started_config: RaceConfig
 
 const RACE_SCENE := "res://main.tscn"
 const SANDBOX_SCENE := "res://sandbox.tscn"
@@ -102,7 +104,6 @@ var _rng := RandomNumberGenerator.new()
 
 
 func _ready() -> void:
-	GameSettings.demo_mode = false
 	GameSettings.load_settings()
 	for i in 2:
 		InputSetup.ensure_player_actions(i)
@@ -583,33 +584,33 @@ func go_creator(p: int) -> void:
 
 func start_race() -> void:
 	GameSettings.save_settings()
-	start_requested.emit()
-	if auto_start:
-		get_tree().change_scene_to_file(RACE_SCENE)
+	_launch(RACE_SCENE, RaceConfig.from_settings(), start_requested)
 
 
 ## Modo libre: mar abierto para practicar (sin carrera ni bots).
 func start_sandbox() -> void:
 	GameSettings.save_settings()
-	GameSettings.demo_mode = false
-	GameSettings.sandbox_mode = true
-	sandbox_requested.emit()
-	if auto_start:
-		get_tree().change_scene_to_file(SANDBOX_SCENE)
+	_launch(SANDBOX_SCENE, RaceConfig.sandbox(), sandbox_requested)
 
 
 func _start_demo() -> void:
 	_idle_time = -1e9
-	GameSettings.demo_mode = true
-	start_requested.emit()
+	_launch(RACE_SCENE, RaceConfig.demo(), start_requested)
+
+
+## Arma la partida y la abre (la configuración viaja con la escena: nada
+## global). En los tests (auto_start = false) solo la deja en `started_config`.
+func _launch(scene_path: String, config: RaceConfig, done: Signal) -> void:
+	started_config = config
+	done.emit()
 	if auto_start:
-		get_tree().change_scene_to_file(RACE_SCENE)
+		GameSession.launch(get_tree(), scene_path, config)
 
 
 func _input(event: InputEvent) -> void:
 	# Cualquier cosa que toque el jugador reinicia la espera de la demo.
 	var moved := event is InputEventJoypadMotion and absf(event.axis_value) > 0.5
-	if RaceManager.is_any_press(event) or moved or event is InputEventMouseButton:
+	if GameSession.is_any_press(event) or moved or event is InputEventMouseButton:
 		_idle_time = 0.0
 	# ENTER / Start: seguir (antes que los botones, que usan ENTER para elegir).
 	var key := event as InputEventKey

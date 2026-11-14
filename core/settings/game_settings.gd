@@ -1,6 +1,8 @@
 class_name GameSettings
 extends RefCounted
-## Opciones del juego que se eligen en partida y se guardan para la próxima vez.
+## Preferencias del jugador (las elige en el menú y se guardan para la próxima
+## vez). Lo propio de cada partida (modo, mapa, clima, corredores) va en su
+## RaceConfig, que se arma con estas opciones al empezar.
 
 enum JumpMode { CHARGE, TAP }
 ## WAVES: la altura la dan las olas (A en el agua: saltito; A en la ola: "pop").
@@ -37,15 +39,12 @@ static var split_vertical: bool = true
 ## Bots en la carrera (0 a 3) y su dificultad (0 Fácil, 1 Normal, 2 Difícil).
 static var bot_count: int = 1
 static var bot_level: int = 1
-## Modo demo: carrera de bots que arranca sola si nadie toca el menú (no se guarda).
-static var demo_mode: bool = false
-## Modo libre (mar abierto, sin carrera). No se guarda.
-static var sandbox_mode: bool = false
 ## Modo libre: nivel de las olas (0 = sin olas grandes .. SANDBOX_WAVE_LEVELS =
 ## como en una carrera). Se recuerda mientras el juego está abierto.
 const SANDBOX_WAVE_LEVELS := 5
 static var sandbox_wave_level: int = 3
-## La demo siempre es igual: dos bots en Imposible, en El Atolón con tormenta.
+## La demo siempre es igual: dos bots en Imposible, en El Atolón con tormenta
+## (ver RaceConfig.demo; el modo de la partida va en su RaceConfig, no acá).
 const DEMO_LAYOUT := TrackLayout.ATOLL
 const DEMO_WEATHER := Weather.STORM
 const DEMO_BOTS := 2
@@ -142,15 +141,6 @@ static func track_layout_name() -> String:
 
 ## Vueltas de la carrera según el mapa (el archipiélago y el atolón son mucho
 ## más largos que la isla).
-static func laps_for_layout() -> int:
-	return 5 if current_layout() == TrackLayout.CLASSIC else 3
+static func laps_for(layout: TrackLayout) -> int:
+	return 5 if layout == TrackLayout.CLASSIC else 3
 
-
-## El mapa de esta carrera (en la demo, el de la demo; no toca lo elegido).
-static func current_layout() -> TrackLayout:
-	return DEMO_LAYOUT if demo_mode else track_layout
-
-
-## El clima de esta carrera (en la demo, el de la demo).
-static func current_weather() -> Weather:
-	return DEMO_WEATHER if demo_mode else weather
