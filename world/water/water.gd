@@ -51,6 +51,7 @@ func _ready() -> void:
 	add_to_group("water")
 	# Se procesa antes que el resto para que todos usen el mismo estado en el frame.
 	process_priority = -10
+	process_physics_priority = -10
 	if waves == null:
 		waves = WaveDefinition.new()
 
@@ -150,10 +151,11 @@ static func camera_cull_mask(layer_index: int, max_players: int = 4) -> int:
 	return mask
 
 
-func _process(delta: float) -> void:
-	delta = minf(delta, 1.0 / 20.0)
+## El agua avanza en pasos fijos, igual que la física de los surfistas (así la
+## altura que "sienten" no depende de los FPS).
+func _physics_process(delta: float) -> void:
 	time += delta
-	_material.set_shader_parameter("wave_time", time)
+	_push_time()
 
 	for i in range(swells.size() - 1, -1, -1):
 		swells[i].update(delta)
@@ -163,6 +165,19 @@ func _process(delta: float) -> void:
 		ring_wave.update(delta)
 	_push_swells()
 
+
+## Reloj de los efectos del shader (espuma, destellos, lluvia): da la vuelta cada
+## tanto para que nunca sea un número grande.
+const FX_WRAP := 1200.0
+
+
+func _push_time() -> void:
+	_material.set_shader_parameter("fx_time", fmod(time, FX_WRAP))
+	for i in WaveDefinition.MAX_WAVES:
+		_material.set_shader_parameter("wave_phase_%d" % i, waves.phase(i, time))
+
+
+func _process(_delta: float) -> void:
 	for f in _followers:
 		if is_instance_valid(f.node):
 			_snap(f.mesh, f.node)

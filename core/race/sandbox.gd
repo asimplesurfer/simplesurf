@@ -35,7 +35,7 @@ func _ready() -> void:
 	if waves:
 		# Mar abierto: solo olas que aparecen (la ola constante es de la isla).
 		waves.set_mode(GameSettings.WaveMode.SURGES)
-	set_wave_level(GameSettings.sandbox_wave_level)
+	set_wave_level(GameSettings.sandbox_wave_level, true)
 	set_storm(GameSettings.weather == GameSettings.Weather.STORM)
 
 
@@ -64,7 +64,7 @@ func free_ride() -> bool:
 	return true
 
 
-func _process(_delta: float) -> void:
+func _physics_process(_delta: float) -> void:
 	pass
 
 
@@ -82,12 +82,12 @@ func is_wrong_way(_r: Rider) -> bool:
 
 ## Nivel de las olas: 0 (sin olas grandes) .. SANDBOX_WAVE_LEVELS (como en una
 ## carrera). Cambia de a poco.
-func set_wave_level(level: int) -> void:
+func set_wave_level(level: int, instant: bool = false) -> void:
 	wave_level = clampi(level, 0, GameSettings.SANDBOX_WAVE_LEVELS)
 	GameSettings.sandbox_wave_level = wave_level
 	var waves := get_parent().get_node_or_null("WaveManager") as WaveManager
 	if waves:
-		waves.set_amplitude_scale(float(wave_level) / GameSettings.SANDBOX_WAVE_LEVELS)
+		waves.set_amplitude_scale(float(wave_level) / GameSettings.SANDBOX_WAVE_LEVELS, instant)
 
 
 func storm_on() -> bool:

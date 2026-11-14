@@ -41,8 +41,18 @@ func height_at(x: float, z: float, t: float) -> float:
 		var wa := 0.22 * w.w
 		var q := p + wa * Vector2(sin(p.dot(WARP_A[i]) + SEED[i]), sin(p.dot(WARP_B[i]) + SEED[i] * 1.37))
 		var m := 0.65 + 0.35 * sin(p.dot(GROUP[i]) + SEED[i] * 1.7)
-		h += w.z * m * sin(k * d.dot(q) - omega * t)
+		h += w.z * m * sin(k * d.dot(q) - fmod(omega * t, TAU))
 	return h
+
+
+## Fase de cada onda en el tiempo t, ya "dada la vuelta" (0..TAU). Se calcula
+## acá, con precisión doble, y el shader recibe solo números chicos: así el
+## agua no pierde precisión en partidas muy largas (en placas de celular).
+func phase(i: int, t: float) -> float:
+	if i >= waves.size() or waves[i].w <= 0.0:
+		return 0.0
+	var k := TAU / waves[i].w
+	return fmod(sqrt(GRAVITY * k) * speed_scale * t, TAU)
 
 
 ## Lo más alto que pueden llegar las olitas de fondo (suma de amplitudes).
@@ -68,7 +78,7 @@ func gradient_at(x: float, z: float, t: float) -> Vector2:
 		var s1 := p.dot(WARP_A[i]) + SEED[i]
 		var s2 := p.dot(WARP_B[i]) + SEED[i] * 1.37
 		var q := p + wa * Vector2(sin(s1), sin(s2))
-		var phase := k * d.dot(q) - omega * t
+		var phase := k * d.dot(q) - fmod(omega * t, TAU)
 		var dphase := k * (d + d.x * wa * cos(s1) * WARP_A[i] + d.y * wa * cos(s2) * WARP_B[i])
 		var sg := p.dot(GROUP[i]) + SEED[i] * 1.7
 		var m := 0.65 + 0.35 * sin(sg)

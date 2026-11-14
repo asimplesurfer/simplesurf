@@ -150,8 +150,7 @@ func _add_tower(at: Vector2, color: Color) -> void:
 	floaters.append(tower)
 
 
-func _process(delta: float) -> void:
-	_time += delta
+func _process(_delta: float) -> void:
 	# Lo que flota sigue al agua (solo lo que está cerca de alguien: de lejos
 	# no se nota y ahorra cálculos).
 	var near: Array[Vector2] = []
@@ -162,9 +161,14 @@ func _process(delta: float) -> void:
 	for f in floaters:
 		if _is_near(near, f.position.x, f.position.z):
 			f.position.y = _water_height(f.position.x, f.position.z)
+
+
+## Lo que afecta al juego (círculos, géiseres) va en pasos fijos, igual que la
+## física de los surfistas.
+func _physics_process(delta: float) -> void:
+	_time += delta
 	for ring in rings:
-		if _is_near(near, ring.position.x, ring.position.z):
-			ring.position.y = _water_height(ring.position.x, ring.position.z) + ring.radius * 0.8
+		ring.position.y = _water_height(ring.position.x, ring.position.z) + ring.radius * 0.8
 	for node in get_tree().get_nodes_in_group("riders"):
 		var rider := node as Rider
 		if rider == null:

@@ -98,6 +98,10 @@ jobs:
           fi
           grep -q "TESTS OK" tests.log
 
+      - name: La física no depende de los FPS
+        if: always()
+        run: python3 tests/fps_compare.py godot
+
       - name: Exportar para web (para la prueba en navegador)
         if: always()
         run: |

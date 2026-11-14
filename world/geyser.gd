@@ -111,7 +111,8 @@ func covers(x: float, z: float) -> bool:
 	return Vector2(x - global_position.x, z - global_position.z).length() < RADIUS
 
 
-func _process(delta: float) -> void:
+## En pasos fijos: el momento en que explota no depende de los FPS.
+func _physics_process(delta: float) -> void:
 	_t = fmod(_t + delta, CYCLE)
 	var st := stage()
 	var warn := clampf((_t - CALM) / WARN, 0.0, 1.0) if st >= 1 else 0.0
