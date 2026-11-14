@@ -34,7 +34,7 @@ const BOOST_FOV := 82.0
 ## velocidad). Tres distancias para probar: la tecla B pasa a la siguiente y
 ## hace un alejamiento de muestra.
 const BOOST_PULLBACKS: Array[float] = [0.7, 1.4, 2.3]
-static var boost_option: int = 1
+static var boost_option: int = 2
 ## Muestra del alejamiento (s que quedan), al apretar B.
 const PREVIEW_TIME := 1.6
 var _preview: float = 0.0
