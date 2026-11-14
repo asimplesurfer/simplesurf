@@ -132,7 +132,8 @@ func _start_race() -> void:
 	race_started.emit()
 
 
-func _process(delta: float) -> void:
+## En pasos fijos (cuenta regresiva, progreso, tiempos): igual con cualquier FPS.
+func _physics_process(delta: float) -> void:
 	if state == State.COUNTDOWN:
 		_countdown -= delta
 		var tick := ceili(_countdown)

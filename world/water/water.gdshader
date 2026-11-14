@@ -11,7 +11,14 @@ uniform vec4 wave_1;
 uniform vec4 wave_2;
 uniform vec4 wave_3;
 uniform float speed_scale = 1.0;
-uniform float wave_time = 0.0; // lo actualiza water.gd cada frame
+// Fase de cada onda de fondo (0..2π), calculada por water.gd con precisión
+// doble: el shader nunca recibe un tiempo grande.
+uniform float wave_phase_0 = 0.0;
+uniform float wave_phase_1 = 0.0;
+uniform float wave_phase_2 = 0.0;
+uniform float wave_phase_3 = 0.0;
+// Reloj de los efectos (espuma, destellos, lluvia): da la vuelta cada 20 min.
+uniform float fx_time = 0.0;
 
 // Olas grandes (ver swell.gd). a = (centro.x, centro.z, dir.x, dir.z); b = (amplitud, ancho, medio largo, rompiente 0..1)
 uniform vec4 swell_a0; uniform vec4 swell_b0;
@@ -68,17 +75,16 @@ const vec2 WARP_B[4] = vec2[](vec2(-0.029, 0.021), vec2(0.018, 0.034), vec2(-0.0
 const vec2 GROUP[4] = vec2[](vec2(0.011, 0.014), vec2(-0.016, 0.008), vec2(0.009, -0.015), vec2(-0.013, -0.012));
 const float SEED[4] = float[](0.0, 2.1, 4.3, 1.2);
 
-void add_wave(vec4 w, int i, vec2 p, inout float h, inout vec2 g) {
+void add_wave(vec4 w, int i, float wave_phase, vec2 p, inout float h, inout vec2 g) {
 	if (w.w <= 0.0) {
 		return;
 	}
 	float k = 6.28318530718 / w.w;
-	float omega = sqrt(9.8 * k) * speed_scale;
 	float wa = 0.22 * w.w;
 	float s1 = dot(p, WARP_A[i]) + SEED[i];
 	float s2 = dot(p, WARP_B[i]) + SEED[i] * 1.37;
 	vec2 q = p + wa * vec2(sin(s1), sin(s2));
-	float phase = k * dot(w.xy, q) - omega * wave_time;
+	float phase = k * dot(w.xy, q) - wave_phase;
 	vec2 dphase = k * (w.xy + w.x * wa * cos(s1) * WARP_A[i] + w.y * wa * cos(s2) * WARP_B[i]);
 	float sg = dot(p, GROUP[i]) + SEED[i] * 1.7;
 	float m = 0.65 + 0.35 * sin(sg);
@@ -208,10 +214,10 @@ void vertex() {
 	vec3 world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	float h = 0.0;
 	vec2 g = vec2(0.0);
-	add_wave(wave_0, 0, world.xz, h, g);
-	add_wave(wave_1, 1, world.xz, h, g);
-	add_wave(wave_2, 2, world.xz, h, g);
-	add_wave(wave_3, 3, world.xz, h, g);
+	add_wave(wave_0, 0, wave_phase_0, world.xz, h, g);
+	add_wave(wave_1, 1, wave_phase_1, world.xz, h, g);
+	add_wave(wave_2, 2, wave_phase_2, world.xz, h, g);
+	add_wave(wave_3, 3, wave_phase_3, world.xz, h, g);
 	float ambient_h = h;
 	float sh = 0.0;
 	vec2 sg = vec2(0.0);
@@ -243,7 +249,7 @@ void vertex() {
 }
 
 void fragment() {
-	float t = wave_time;
+	float t = fx_time;
 	vec2 wp = v_world.xz;
 	// Color base: valles profundos, crestas claras.
 	vec3 col = mix(deep_color, shallow_color, smoothstep(-0.5, 0.5, v_height));

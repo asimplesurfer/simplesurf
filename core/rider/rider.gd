@@ -138,10 +138,10 @@ func _ready() -> void:
 	sounds.setup(self)
 
 
-func _process(delta: float) -> void:
-	# Se actualiza en _process (no en física) para que se vea fluido con
-	# cualquier tasa de refresco. Se limita delta para evitar saltos grandes.
-	delta = minf(delta, 1.0 / 20.0)
+func _physics_process(delta: float) -> void:
+	# La física va en pasos fijos (1/60 s, ver project.godot): la misma altura,
+	# velocidad y distancia con cualquier cantidad de FPS. Lo visual (animación,
+	# cámara, HUD) se dibuja en _process y solo lee este estado.
 	input = controller.get_input(delta)
 	if controls_locked:
 		input = RiderInput.new()

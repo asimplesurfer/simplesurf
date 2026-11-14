@@ -281,8 +281,7 @@ func inner_limit() -> float:
 	return track_radius - half_width
 
 
-func _process(delta: float) -> void:
-	_time += delta
+func _process(_delta: float) -> void:
 	# Boyas y corcheras flotan con el agua. Solo las que están cerca de algún
 	# corredor (las lejanas casi no se ven y calcular todas es caro).
 	var near: Array[Vector2] = []
@@ -302,9 +301,14 @@ func _process(delta: float) -> void:
 			if _is_near(near, q.x, q.y):
 				var y := _water_height(q.x, q.y) + y_offset
 				mm.set_instance_transform(i, Transform3D(Basis.IDENTITY, Vector3(q.x, y, q.y)))
+
+
+## Lo que afecta al juego (círculos, choques, géiseres, límites) va en pasos
+## fijos, igual que la física de los surfistas.
+func _physics_process(delta: float) -> void:
+	_time += delta
 	for ring in rings:
 		ring.position.y = _water_height(ring.position.x, ring.position.z) + ring.radius * 0.8
-
 	for node in get_tree().get_nodes_in_group("riders"):
 		var rider := node as Rider
 		if rider:

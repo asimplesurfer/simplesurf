@@ -76,8 +76,11 @@ func set_mode(new_mode: GameSettings.WaveMode) -> void:
 
 ## Modo libre: cambia la altura de las olas. Va de a poco (las que ya están
 ## crecen o se achican durante un par de segundos); con 0 se van todas.
-func set_amplitude_scale(value: float) -> void:
+## Con `instant`, sin transición (al arrancar el modo libre en el nivel guardado).
+func set_amplitude_scale(value: float, instant: bool = false) -> void:
 	_target_scale = maxf(value, 0.0)
+	if instant:
+		amplitude_scale = _target_scale
 
 
 ## Altura a la que van las olas (modo libre).
@@ -111,7 +114,8 @@ func make_ring_wave() -> RingWave:
 	return rw
 
 
-func _process(delta: float) -> void:
+## En pasos fijos: cuándo y dónde nacen las olas no depende de los FPS.
+func _physics_process(delta: float) -> void:
 	_ramp_scale(delta)
 	if not enabled or _water == null or mode != GameSettings.WaveMode.SURGES or amplitude_scale <= 0.0:
 		return
