@@ -6,9 +6,9 @@ extends CanvasLayer
 
 @export var rider_path: NodePath
 
-const PROMPT_COLOR := Color(1.0, 0.86, 0.2)
-const NITRO_COLOR := Color(0.25, 0.85, 1.0)
-const BAD_COLOR := Color(1.0, 0.4, 0.35)
+const PROMPT_COLOR := Palette.BUTTER
+const NITRO_COLOR := Palette.AQUA
+const BAD_COLOR := Palette.CORAL
 const SPEED_LINES_SHADER := preload("res://ui/shaders/speed_lines.gdshader")
 const SPLASH_SHADER := preload("res://ui/shaders/wave_splash.gdshader")
 ## Duración del efecto de atravesar una ola (s): golpe de agua y gotas que chorrean.
@@ -32,13 +32,13 @@ var free_ride: bool = false
 
 ## Colores del contador de trucos: cuanto más vueltas, más "caliente".
 const TRICK_COLORS: Array[Color] = [
-	Color(1.0, 1.0, 1.0),
-	Color(0.45, 0.9, 1.0),
-	Color(0.5, 1.0, 0.5),
-	Color(1.0, 0.9, 0.25),
-	Color(1.0, 0.6, 0.2),
-	Color(1.0, 0.32, 0.3),
-	Color(1.0, 0.35, 0.9),
+	Palette.WHITE,
+	Palette.AQUA,
+	Palette.MINT,
+	Palette.BUTTER,
+	Palette.PEACH,
+	Palette.CORAL,
+	Palette.PINK,
 ]
 
 const COMPACT_SCALE := 0.6
@@ -262,7 +262,7 @@ func _process(delta: float) -> void:
 		_waves_box.visible = true
 		var level := GameSettings.sandbox_wave_level
 		for k in _wave_bars.size():
-			_wave_bars[k].color = Color(0.3, 0.85, 1.0) if k < level else Color(0.0, 0.0, 0.0, 0.45)
+			_wave_bars[k].color = Palette.AQUA if k < level else Color(0.0, 0.0, 0.0, 0.45)
 		_center_label.visible = _center_time > 0.0
 	elif _race():
 		var race := _race()

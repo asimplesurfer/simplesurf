@@ -14,10 +14,10 @@ const RING_RADIUS := 45.0
 const RING_COUNT := 14
 const GEYSER_CENTER := Vector2(-165.0, 70.0)
 
-const RED := Color(0.95, 0.28, 0.25)
-const YELLOW := Color(1.0, 0.85, 0.2)
-const CYAN := Color(0.25, 0.9, 1.0)
-const ORANGE := Color(1.0, 0.55, 0.15)
+const RED := Palette.CORAL
+const YELLOW := Palette.BUTTER
+const CYAN := Palette.AQUA
+const ORANGE := Palette.PEACH
 
 var rings: Array[NitroRing] = []
 var geysers: Array[Geyser] = []
@@ -82,7 +82,7 @@ func _build_geyser_field() -> void:
 		geysers.append(g)
 	for k in 16:
 		var a := TAU * k / 16.0
-		_add_buoy(GEYSER_CENTER + Vector2(cos(a), sin(a)) * 34.0, ORANGE if k % 2 == 0 else Color(0.97, 0.97, 0.97))
+		_add_buoy(GEYSER_CENTER + Vector2(cos(a), sin(a)) * 34.0, ORANGE if k % 2 == 0 else Palette.WHITE)
 
 
 func _add_buoy(at: Vector2, color: Color) -> void:
@@ -105,7 +105,7 @@ func _add_buoy(at: Vector2, color: Color) -> void:
 	sph.height = 0.56
 	sph.radial_segments = 8
 	sph.rings = 4
-	sph.material = ToonMaterial.make(Color(0.97, 0.97, 0.97), 0.03)
+	sph.material = ToonMaterial.make(Palette.WHITE, 0.03)
 	top.mesh = sph
 	top.position.y = 1.45
 	buoy.add_child(top)
@@ -123,7 +123,7 @@ func _add_tower(at: Vector2, color: Color) -> void:
 	base.top_radius = 1.4
 	base.bottom_radius = 1.8
 	base.height = 1.2
-	base.material = ToonMaterial.make(Color(0.97, 0.97, 0.97), 0.05)
+	base.material = ToonMaterial.make(Palette.WHITE, 0.05)
 	float_mesh.mesh = base
 	float_mesh.position.y = 0.3
 	tower.add_child(float_mesh)

@@ -10,10 +10,10 @@ extends Node3D
 ## Volcán: un cono de roca con lava en el cráter y humo (en vez de la loma).
 @export var volcano: bool = false
 
-const SAND := Color(0.98, 0.86, 0.6)
-const GRASS := Color(0.45, 0.78, 0.35)
-const TRUNK := Color(0.6, 0.42, 0.25)
-const LEAVES := Color(0.25, 0.65, 0.3)
+const SAND := Palette.SAND
+const GRASS := Palette.GRASS
+const TRUNK := Palette.TRUNK
+const LEAVES := Palette.LEAVES
 
 
 func _ready() -> void:
@@ -71,7 +71,7 @@ func _build_volcano() -> void:
 	cone.bottom_radius = radius * 0.78
 	cone.height = radius * 0.95
 	cone.radial_segments = 32
-	cone.material = ToonMaterial.make(Color(0.42, 0.34, 0.3), 0.0)
+	cone.material = ToonMaterial.make(Palette.VOLCANO, 0.0)
 	var top_y := 0.6 + cone.height
 	_add_mesh(cone, Vector3(0.0, 0.6 + cone.height * 0.5, 0.0))
 	# Lava en el cráter (brilla aunque sea de noche).
@@ -81,7 +81,7 @@ func _build_volcano() -> void:
 	lava.height = 0.6
 	var lava_mat := StandardMaterial3D.new()
 	lava_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	lava_mat.albedo_color = Color(1.0, 0.45, 0.1)
+	lava_mat.albedo_color = Palette.LAVA
 	lava.material = lava_mat
 	_add_mesh(lava, Vector3(0.0, top_y - 0.1, 0.0))
 	# Chorros de lava bajando por la ladera.
@@ -212,7 +212,7 @@ func _add_multimesh(mesh: Mesh, transforms: Array[Transform3D], node_name: Strin
 
 
 func _add_lighthouse(base: Vector3) -> void:
-	var colors := [Color(0.97, 0.97, 0.97), Color(0.9, 0.25, 0.25)]
+	var colors := [Palette.WHITE, Palette.CORAL]
 	var y := 0.0
 	for i in 5:
 		var seg := CylinderMesh.new()
@@ -225,5 +225,5 @@ func _add_lighthouse(base: Vector3) -> void:
 	var lamp := SphereMesh.new()
 	lamp.radius = 1.4
 	lamp.height = 2.8
-	lamp.material = ToonMaterial.make(Color(1.0, 0.9, 0.4), 0.06)
+	lamp.material = ToonMaterial.make(Palette.BUTTER, 0.06)
 	_add_mesh(lamp, base + Vector3(0.0, y + 0.8, 0.0))

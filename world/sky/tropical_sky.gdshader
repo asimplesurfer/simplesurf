@@ -4,18 +4,18 @@
 // despacio, e islas volcánicas en el horizonte.
 shader_type sky;
 
-uniform vec3 zenith_color : source_color = vec3(0.05, 0.38, 0.82);
-uniform vec3 sky_color : source_color = vec3(0.25, 0.68, 0.96);
+uniform vec3 zenith_color : source_color = vec3(0.36, 0.62, 0.92);
+uniform vec3 sky_color : source_color = vec3(0.58, 0.82, 0.98);
 // Igual al color de la niebla del Environment, para que no se note el borde.
-uniform vec3 horizon_color : source_color = vec3(0.70, 0.90, 0.98);
-uniform vec3 glow_color : source_color = vec3(1.0, 0.80, 0.55);
-uniform vec3 sun_color : source_color = vec3(1.0, 0.96, 0.82);
+uniform vec3 horizon_color : source_color = vec3(0.93, 0.9, 0.96);
+uniform vec3 glow_color : source_color = vec3(1.0, 0.8, 0.74);
+uniform vec3 sun_color : source_color = vec3(1.0, 0.97, 0.88);
 uniform vec3 cloud_color : source_color = vec3(1.0, 1.0, 1.0);
-uniform vec3 cloud_shade : source_color = vec3(0.70, 0.82, 0.95);
-uniform vec3 cloud_warm : source_color = vec3(1.0, 0.90, 0.78);
-uniform vec3 island_color : source_color = vec3(0.13, 0.38, 0.36);
-uniform vec3 island_far_color : source_color = vec3(0.38, 0.62, 0.70);
-uniform vec3 ocean_color : source_color = vec3(0.06, 0.38, 0.62);
+uniform vec3 cloud_shade : source_color = vec3(0.84, 0.84, 0.98);
+uniform vec3 cloud_warm : source_color = vec3(1.0, 0.9, 0.86);
+uniform vec3 island_color : source_color = vec3(0.42, 0.68, 0.66);
+uniform vec3 island_far_color : source_color = vec3(0.7, 0.8, 0.88);
+uniform vec3 ocean_color : source_color = vec3(0.4, 0.72, 0.84);
 uniform float cloud_coverage : hint_range(0.0, 1.0) = 0.48;
 uniform float cloud_speed = 0.008;
 // Rayo a lo lejos (tormenta): azimut, semilla del zigzag y brillo (0 = no hay).

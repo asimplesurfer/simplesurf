@@ -19,8 +19,8 @@ var started_config: RaceConfig
 
 const RACE_SCENE := "res://main.tscn"
 const SANDBOX_SCENE := "res://sandbox.tscn"
-const YELLOW := Color(1.0, 0.86, 0.2)
-const PANEL_BG := Color(0.05, 0.15, 0.3, 0.82)
+const YELLOW := Palette.BUTTER
+const PANEL_BG := Palette.UI_PANEL
 const TILE := Vector2(104.0, 122.0)
 ## Segundos sin tocar nada para que arranque la demo (carrera de bots).
 const IDLE_DEMO_TIME := 10.0
@@ -131,7 +131,7 @@ func _build() -> void:
 	_cam = null
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	var bg := ColorRect.new()
-	bg.color = Color(0.36, 0.7, 0.9)
+	bg.color = Palette.UI_SKY
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
 	_thumbs = ThumbRenderer.new()
@@ -140,7 +140,7 @@ func _build() -> void:
 		_build_creator()
 	else:
 		_build_setup()
-	_demo_label = _label("", 16, Color(0.9, 0.97, 1.0))
+	_demo_label = _label("", 16, Palette.UI_SOFT_TEXT)
 	_demo_label.position = Vector2(20.0, 4.0)
 	add_child(_demo_label)
 
@@ -689,12 +689,12 @@ func _style_tile(b: Button, selected: bool) -> void:
 	b.set_meta("selected", selected)
 	for state in ["normal", "hover", "pressed", "focus"]:
 		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.1, 0.25, 0.45) if state != "hover" else Color(0.16, 0.34, 0.58)
+		sb.bg_color = Palette.UI_TILE if state != "hover" else Palette.UI_TILE_HOVER
 		if selected or state == "pressed":
-			sb.bg_color = Color(0.2, 0.42, 0.7)
+			sb.bg_color = Palette.UI_TILE_ON
 		sb.set_corner_radius_all(12)
 		sb.set_border_width_all(5 if selected else 2)
-		sb.border_color = YELLOW if selected else Color(0.02, 0.05, 0.1)
+		sb.border_color = YELLOW if selected else Palette.UI_INK
 		if state == "focus":
 			sb.bg_color = Color(0, 0, 0, 0)
 			sb.set_border_width_all(4)
