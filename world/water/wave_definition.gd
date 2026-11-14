@@ -5,7 +5,7 @@ extends Resource
 ## Es una suma de senoidales; cada una viaja en su dirección.
 
 const GRAVITY := 9.8
-## Cantidad de olas que entiende water.gdshader (wave_0 .. wave_3).
+## Cantidad de olas que entiende water_surface.gdshaderinc (wave_0 .. wave_3).
 const MAX_WAVES := 4
 
 ## Cada ola: x, y = dirección (en el plano XZ); z = amplitud (m); w = longitud de onda (m).
@@ -21,7 +21,7 @@ const MAX_WAVES := 4
 
 ## Para que el oleaje no forme un enrejado que se repite, cada onda se tuerce
 ## (sus crestas se curvan) y crece y baja por zonas, cada una distinto. Mismos
-## números que water.gdshader.
+## números que water_surface.gdshaderinc (tests/water_match.gd lo comprueba).
 const WARP_A: Array[Vector2] = [Vector2(0.023, 0.031), Vector2(-0.033, 0.017), Vector2(0.027, -0.026), Vector2(-0.019, -0.035)]
 const WARP_B: Array[Vector2] = [Vector2(-0.029, 0.021), Vector2(0.018, 0.034), Vector2(-0.031, -0.022), Vector2(0.036, -0.012)]
 const GROUP: Array[Vector2] = [Vector2(0.011, 0.014), Vector2(-0.016, 0.008), Vector2(0.009, -0.015), Vector2(-0.013, -0.012)]

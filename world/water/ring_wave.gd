@@ -4,7 +4,7 @@ extends RefCounted
 ## isla por el lado de afuera de la pista (a la izquierda de quien corre).
 ## No desaparece nunca. Por la cresta avanzan picos más altos en contra del
 ## sentido de la carrera: vienen de frente y sirven de rampa.
-## La misma fórmula está en water.gdshader (add_ring).
+## La misma fórmula está en water_surface.gdshaderinc (add_ring); tests/water_match.gd comprueba que coincidan.
 ##
 ## altura = amplitud * (base + (1 - base) * pico(ángulo)) * exp(-(d/ancho)²)
 ## d = distancia (radial) a la línea de la cresta.

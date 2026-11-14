@@ -197,7 +197,7 @@ func _near_swell(q: Vector3) -> bool:
 	return _water.ring_wave != null
 
 
-## Vértice de la malla del agua tal como lo mueve water.gdshader.
+## Vértice de la malla del agua tal como lo mueve water_surface.gdshaderinc.
 func _vertex(p: Vector2) -> Vector3:
 	var h := _water.waves.height_at(p.x, p.y, _water.time)
 	var sh := 0.0
