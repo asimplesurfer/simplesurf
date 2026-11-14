@@ -30,6 +30,20 @@ var looking_back: bool = false
 const BASE_FOV := 70.0
 const BOOST_FOV := 82.0
 
+## Con turbo o motivación la cámara se aleja un poco hacia atrás (sensación de
+## velocidad). Tres distancias para probar: la tecla B pasa a la siguiente y
+## hace un alejamiento de muestra.
+const BOOST_PULLBACKS: Array[float] = [0.7, 1.4, 2.3]
+static var boost_option: int = 1
+## Muestra del alejamiento (s que quedan), al apretar B.
+const PREVIEW_TIME := 1.6
+var _preview: float = 0.0
+## 0..1: cuánto se alejó (se acerca y aleja suave).
+var _boost: float = 0.0
+## Cuadro en que se cambió la opción (con pantalla dividida hay varias cámaras
+## y todas reciben la tecla: cambia una sola vez).
+static var _cycled_frame: int = -1
+
 
 func _ready() -> void:
 	# Después del Rider, para seguir su posición de este frame.
@@ -50,6 +64,9 @@ func _process(delta: float) -> void:
 	var follow_target := 0.6 if target.grounded else 1.0
 	_follow_y = lerpf(_follow_y, follow_target, 1.0 - exp(-3.0 * delta))
 	var w := 1.0 - exp(-follow_sharpness * minf(delta, 0.1))
+	_preview = maxf(_preview - delta, 0.0)
+	var boosting_now := boosting()
+	_boost = move_toward(_boost, 1.0 if boosting_now else 0.0, delta * (2.5 if boosting_now else 1.5))
 	var back := target.input != null and target.input.look_back and not target.is_fallen()
 	var desired := _desired_position()
 	if back != looking_back:
@@ -75,8 +92,27 @@ func _process(delta: float) -> void:
 		rotate_object_local(Vector3.UP, randf_range(-1.0, 1.0) * 0.05 * s)
 		global_position += Vector3(randf_range(-1, 1), randf_range(-1, 1), 0.0) * 0.25 * s
 	# Más ángulo de visión con turbo / motivación: sensación de velocidad.
-	var boosting := target.turbo_active or target.motivation_timer > 0.0
-	fov = lerpf(fov, BOOST_FOV if boosting else BASE_FOV, 1.0 - exp(-4.0 * delta))
+	fov = lerpf(fov, BOOST_FOV if boosting_now else BASE_FOV, 1.0 - exp(-4.0 * delta))
+
+
+## true con turbo o motivación (o la muestra de la tecla B).
+func boosting() -> bool:
+	return target.turbo_active or target.motivation_timer > 0.0 or _preview > 0.0
+
+
+## Cuántos metros se aleja con turbo, según la opción elegida.
+static func boost_pullback() -> float:
+	return BOOST_PULLBACKS[boost_option]
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	var key := event as InputEventKey
+	if key and key.pressed and not key.echo and key.physical_keycode == KEY_B:
+		var frame := Engine.get_process_frames()
+		if _cycled_frame != frame:
+			_cycled_frame = frame
+			boost_option = (boost_option + 1) % BOOST_PULLBACKS.size()
+		_preview = PREVIEW_TIME
 
 
 ## Sacude la cámara (0..1).
@@ -86,7 +122,7 @@ func shake(amount: float) -> void:
 
 func _desired_position() -> Vector3:
 	var fallen := target.is_fallen()
-	var dist := fallen_distance if fallen else distance
+	var dist := fallen_distance if fallen else distance + boost_pullback() * _boost * _boost * (3.0 - 2.0 * _boost)
 	var h := fallen_height if fallen else height
 	var base := target.global_position
 	base.y *= _follow_y

@@ -148,6 +148,7 @@ func _run() -> void:
 	await _test_sandbox()
 	await _test_trick_counter()
 	_test_outline_width()
+	await _test_boost_camera()
 	_finish()
 
 
@@ -2197,6 +2198,62 @@ func _test_outline_width() -> void:
 				outlines += 1
 	_check(outlines > 5, "el personaje tiene sus contornos (%d)" % outlines)
 	a.queue_free()
+
+
+## Con turbo la cámara se aleja un poco; B cambia la distancia (3 opciones).
+func _test_boost_camera() -> void:
+	print("Cámara con turbo:")
+	var saved_players := GameSettings.player_count
+	GameSettings.player_count = 2
+	var m: Node = load("res://main.tscn").instantiate()
+	root.add_child(m)
+	await process_frame
+	await process_frame
+	var race := m.get_node("RaceManager") as RaceManager
+	race.skip_countdown()
+	var cam := (m.get_node("Views") as SplitScreen).cameras[0]
+	var r := cam.target
+	await _wait(3.0)
+	# Distancia real antes (a toda velocidad la cámara va un poco más atrás).
+	var base := Vector2(cam.global_position.x - r.global_position.x, cam.global_position.z - r.global_position.z).length()
+	var before := ChaseCamera.boost_option
+	var ev := InputEventKey.new()
+	ev.physical_keycode = KEY_B
+	ev.pressed = true
+	Input.parse_input_event(ev)
+	await process_frame
+	await process_frame
+	var up := InputEventKey.new()
+	up.physical_keycode = KEY_B
+	up.pressed = false
+	Input.parse_input_event(up)
+	_check(
+		ChaseCamera.boost_option == (before + 1) % ChaseCamera.BOOST_PULLBACKS.size(),
+		"B pasa a la siguiente distancia (una sola vez, aunque haya 2 pantallas)"
+	)
+	_check(ChaseCamera.BOOST_PULLBACKS.size() == 3, "hay 3 distancias para probar")
+	# La muestra de B aleja la cámara.
+	var far := 0.0
+	for i in int(1.2 * FPS):
+		var flat := Vector2(cam.global_position.x - r.global_position.x, cam.global_position.z - r.global_position.z)
+		far = maxf(far, flat.length())
+		await process_frame
+	_check(
+		far > base + ChaseCamera.boost_pullback() * 0.7,
+		"la cámara se aleja (%.1f m, antes %.1f m)" % [far, base]
+	)
+	await _wait(2.5)
+	var flat_after := Vector2(cam.global_position.x - r.global_position.x, cam.global_position.z - r.global_position.z)
+	_check(flat_after.length() < base + 0.5, "y vuelve a su lugar (%.1f m)" % flat_after.length())
+	# Con turbo también se aleja.
+	r.add_nitro(Rider.NITRO_MAX)
+	r.fire_turbo()
+	await _wait(0.3)
+	_check(cam.boosting() and cam._boost > 0.3, "con turbo la cámara se aleja")
+	m.queue_free()
+	await process_frame
+	GameSettings.player_count = saved_players
+	ChaseCamera.boost_option = before
 
 
 func _finish() -> void:
