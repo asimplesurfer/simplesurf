@@ -41,6 +41,11 @@ const SPRING_D := 21.0
 const FACE_LOCAL := Vector3(0.0, 0.1, 0.45)
 ## Medio tamaño del pecho y de la cadera del modelo (para ubicar collares y estampados).
 const CHEST_RADII := Vector3(0.426, 0.326, 0.276)
+## Grosor del contorno, igual en todo el cuerpo y en todos los accesorios, sea
+## cual sea el tamaño de cada parte (como en pixel art: un solo grosor de trazo).
+## Se mide en el espacio del personaje: agrandar la panza o la cabeza no lo
+## engorda.
+const OUTLINE_WIDTH := 0.025
 const HIPS_RADII := Vector3(0.321, 0.326, 0.246)
 
 var character: Node3D
@@ -105,6 +110,7 @@ func build(parent: Node3D, data: CharacterData, features: AvatarFeatures) -> voi
 		_parts[id] = nodes
 	head = character.find_child("Head", false, false) as Node3D
 	# Accesorios armados (pelo, ojos, nariz, boca, orejas, collar, estampado).
+	features.char_root = character
 	var head_group := _group(head, "HeadFeatures")
 	var hair_group := _group(hair_rig, "HairFeatures")
 	hair_group.position = -HAIR_PIVOT
@@ -399,12 +405,19 @@ func _make_materials(data: CharacterData) -> void:
 ## con las posiciones relativas a `part`, y borra las piezas sueltas.
 func _bake(part: Node3D) -> void:
 	var batches := {}
+	# De la parte al personaje (con la escala de las barras: cabeza, panza...).
+	var to_char := _relative(part, character).basis
 	for mi in part.find_children("*", "MeshInstance3D", true, false):
 		var inst := mi as MeshInstance3D
 		if _inside_rig(inst, part):
 			continue
 		var mat := inst.mesh.surface_get_material(0) as BaseMaterial3D
 		var key := mat.resource_name if mat else "skin"
+		# El contorno del modelo no se usa tal cual (se agrandaría con la pieza):
+		# se vuelve a armar abajo a partir de la pieza, con el grosor de siempre.
+		if key == "outline":
+			continue
+		var outlined := _has_outline(inst)
 		var xf := _relative(inst, part)
 		var nb := xf.basis.inverse().transposed()
 		var arrays := inst.mesh.surface_get_arrays(0)
@@ -429,6 +442,17 @@ func _bake(part: Node3D) -> void:
 				b[2].append_array([base + indices[t], base + indices[t + 2], base + indices[t + 1]])
 			else:
 				b[2].append_array([base + indices[t], base + indices[t + 1], base + indices[t + 2]])
+		if outlined:
+			if not batches.has("outline"):
+				batches["outline"] = [PackedVector3Array(), PackedVector3Array(), PackedInt32Array()]
+			var ob: Array = batches["outline"]
+			var count := verts.size()
+			var part_verts := (b[0] as PackedVector3Array).slice(base, base + count)
+			var part_normals := (b[1] as PackedVector3Array).slice(base, base + count)
+			var part_indices := (b[2] as PackedInt32Array).slice(b[2].size() - indices.size())
+			for t in part_indices.size():
+				part_indices[t] -= base
+			append_hull(ob, part_verts, part_normals, part_indices, to_char, OUTLINE_WIDTH)
 	for c in part.get_children():
 		if c == hair_rig or c == necklace_rig:
 			continue
@@ -449,6 +473,35 @@ func _bake(part: Node3D) -> void:
 	out.mesh = mesh
 	out.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	part.add_child(out)
+
+
+## true si la pieza tenía contorno en el modelo original (una malla "_outline"
+## al lado de la "_fill").
+func _has_outline(inst: MeshInstance3D) -> bool:
+	var n := String(inst.name)
+	if not n.ends_with("_fill"):
+		return false
+	return inst.get_parent().has_node(n.replace("_fill", "_outline"))
+
+
+## Contorno estilo "casco invertido" de una malla: la misma malla inflada por sus
+## normales, con los triángulos dados vuelta (se ve solo por dentro, detrás de la
+## pieza). `to_char` lleva del espacio de la malla al del personaje: el inflado
+## mide `width` en el personaje, así el trazo es igual de grueso aunque la pieza
+## esté estirada o agrandada. Se agrega a `batch` ([verts, normals, indices]).
+static func append_hull(
+	batch: Array, verts: PackedVector3Array, normals: PackedVector3Array,
+	indices: PackedInt32Array, to_char: Basis, width: float
+) -> void:
+	var inv := to_char.inverse()
+	var normal_to_char := inv.transposed()
+	var base := (batch[0] as PackedVector3Array).size()
+	for i in verts.size():
+		var n_char := (normal_to_char * normals[i]).normalized()
+		batch[0].append(verts[i] + inv * (n_char * width))
+		batch[1].append(normals[i])
+	for t in range(0, indices.size(), 3):
+		batch[2].append_array([base + indices[t], base + indices[t + 2], base + indices[t + 1]])
 
 
 ## Crea un nodo colgando de `pivot` dentro de `parent` y le pasa las partes
