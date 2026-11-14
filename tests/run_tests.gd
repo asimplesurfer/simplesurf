@@ -147,6 +147,7 @@ func _run() -> void:
 	await _test_atoll()
 	await _test_sandbox()
 	await _test_trick_counter()
+	_test_outline_width()
 	_finish()
 
 
@@ -2158,6 +2159,41 @@ func _test_trick_counter() -> void:
 	_check(not hud._trick_label.visible, "al caer se va")
 	m.queue_free()
 	await process_frame
+
+
+## El contorno mide siempre lo mismo, aunque la pieza esté estirada o agrandada.
+func _test_outline_width() -> void:
+	print("Contorno parejo:")
+	var sphere := SphereMesh.new()
+	var arr := sphere.get_mesh_arrays()
+	var verts: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+	var normals: PackedVector3Array = arr[Mesh.ARRAY_NORMAL]
+	var indices: PackedInt32Array = arr[Mesh.ARRAY_INDEX]
+	var worst := 0.0
+	for scale in [Vector3.ONE, Vector3(2.2, 1.4, 2.7), Vector3(0.4, 0.4, 0.4)]:
+		var to_char := Basis.from_scale(scale) * Basis(Vector3.UP, 0.7)
+		var hull := [PackedVector3Array(), PackedVector3Array(), PackedInt32Array()]
+		SurferKit.append_hull(hull, verts, normals, indices, to_char, SurferKit.OUTLINE_WIDTH)
+		for i in range(0, verts.size(), 7):
+			var gap := (to_char * (hull[0] as PackedVector3Array)[i]).distance_to(to_char * verts[i])
+			worst = maxf(worst, absf(gap - SurferKit.OUTLINE_WIDTH))
+	_check(worst < 0.002, "el trazo tiene el mismo grosor en piezas chicas, grandes y estiradas (error %.4f)" % worst)
+	# Un personaje gordo y cabezón: todo su contorno sale del mismo grosor.
+	var d := CharacterData.new()
+	d.weight = 1.0
+	d.head_size = 1.0
+	var a := Avatar.new()
+	a.data = d
+	root.add_child(a)
+	var outlines := 0
+	for mi in a.find_children("*", "MeshInstance3D", true, false):
+		var mesh := (mi as MeshInstance3D).mesh
+		for k in mesh.get_surface_count():
+			var m := mesh.surface_get_material(k) as BaseMaterial3D
+			if m and m.albedo_color.v < 0.15 and m.shading_mode == BaseMaterial3D.SHADING_MODE_UNSHADED and mesh.surface_get_arrays(k)[Mesh.ARRAY_VERTEX].size() > 30:
+				outlines += 1
+	_check(outlines > 5, "el personaje tiene sus contornos (%d)" % outlines)
+	a.queue_free()
 
 
 func _finish() -> void:

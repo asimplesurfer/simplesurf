@@ -11,10 +11,8 @@ extends RefCounted
 ## de cabeza": (1, 1, 1) es el borde de la esfera; +Z es la cara.
 
 ## Grosor del contorno de los detalles (más fino que el del cuerpo).
-const OUTLINE := 0.02
 ## Distancia a la cámara (m) desde la que no se dibujan los detalles.
 const FAR_HIDE := 28.0
-const OUTLINE_SHADER := preload("res://assets/shaders/outline.gdshader")
 const BLACK := Color(0.05, 0.05, 0.06)
 const WHITE := Color(0.98, 0.98, 0.96)
 
@@ -25,6 +23,10 @@ var _box: BoxMesh
 var _ring: TorusMesh
 var _ring_thick: TorusMesh
 var _materials: Dictionary = {}
+## Raíz del personaje (la pone SurferKit): el contorno se mide ahí, así tiene
+## el mismo grosor que el del cuerpo aunque la cabeza esté agrandada.
+var char_root: Node3D
+var _outline_mat: StandardMaterial3D
 ## Vértices de cada malla base (se transforman y se copian a la malla del grupo).
 var _source: Dictionary = {}
 ## Malla en armado: outline (bool) -> {verts, normals, colors, indices}.
@@ -440,10 +442,23 @@ func _commit() -> void:
 		arrays[Mesh.ARRAY_INDEX] = b.indices
 		var mesh := ArrayMesh.new()
 		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+		if outline:
+			# Contorno: casco invertido con el grosor de todo el personaje.
+			var hull := [PackedVector3Array(), PackedVector3Array(), PackedInt32Array()]
+			SurferKit.append_hull(
+				hull, b.verts, b.normals, b.indices, _to_char(_group), SurferKit.OUTLINE_WIDTH
+			)
+			var hull_arrays := []
+			hull_arrays.resize(Mesh.ARRAY_MAX)
+			hull_arrays[Mesh.ARRAY_VERTEX] = hull[0]
+			hull_arrays[Mesh.ARRAY_NORMAL] = hull[1]
+			hull_arrays[Mesh.ARRAY_INDEX] = hull[2]
+			mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, hull_arrays)
+			mesh.surface_set_material(1, _hull_material())
 		var mi := MeshInstance3D.new()
 		mi.name = "Outlined" if outline else "Plain"
 		mi.mesh = mesh
-		mi.material_override = _material(outline)
+		mesh.surface_set_material(0, _material(outline))
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		# De lejos los detalles no se distinguen: no se dibujan.
 		mi.visibility_range_end = FAR_HIDE
@@ -458,10 +473,24 @@ func _material(outline: bool) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	m.vertex_color_use_as_albedo = true
-	if outline:
-		var o := ShaderMaterial.new()
-		o.shader = OUTLINE_SHADER
-		o.set_shader_parameter("outline_width", OUTLINE)
-		m.next_pass = o
 	_materials[outline] = m
 	return m
+
+
+func _hull_material() -> StandardMaterial3D:
+	if _outline_mat == null:
+		_outline_mat = StandardMaterial3D.new()
+		_outline_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_outline_mat.albedo_color = Color.BLACK
+	return _outline_mat
+
+
+## Del espacio del grupo al del personaje (con la escala de la cabeza, etc.).
+func _to_char(node: Node3D) -> Basis:
+	var b := Basis.IDENTITY
+	var n: Node = node
+	while n != null and n != char_root:
+		if n is Node3D:
+			b = (n as Node3D).basis * b
+		n = n.get_parent()
+	return b
