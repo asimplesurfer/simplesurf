@@ -5,7 +5,7 @@ extends Control
 ## Cada vista es un SubViewport sobre el mismo mundo, con su cámara, su HUD,
 ## sus rayas de velocidad y su propio plano de agua.
 
-@export var race_manager_path: NodePath
+@export var session_path: NodePath
 @export var water_path: NodePath
 
 var views: Array[SubViewport] = []
@@ -16,14 +16,14 @@ var huds: Array[Hud] = []
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var race_manager := get_node(race_manager_path) as RaceManager
+	var session := get_node(session_path) as GameSession
 	var water := get_node_or_null(water_path) as Water
 
 	# Una vista por persona; si no hay personas (demo), una por corredor (hasta 4).
-	var humans := race_manager.humans()
+	var humans := session.humans()
 	var spectating := humans.is_empty()
 	if spectating:
-		humans = race_manager.racers.slice(0, 4)
+		humans = session.racers.slice(0, 4)
 
 	# 3 o 4 vistas: grilla de 2x2. Si no, lado a lado o una arriba de la otra.
 	var box: Container
@@ -68,11 +68,11 @@ func _ready() -> void:
 
 		var hud := Hud.new()
 		hud.rider = rider
-		hud.race_manager = race_manager
+		hud.session = session
 		hud.show_help = humans.size() == 1 and not spectating
 		hud.demo = spectating
 		hud.compact = humans.size() >= 3
-		hud.free_ride = race_manager.free_ride()
+		hud.free_ride = session.free_ride()
 		vp.add_child(hud)
 		huds.append(hud)
 

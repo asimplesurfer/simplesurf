@@ -63,7 +63,7 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("5_split")
-race_manager_path = NodePath("../RaceManager")
+session_path = NodePath("../RaceManager")
 water_path = NodePath("../Water")
 
 [node name="Results" type="CanvasLayer" parent="."]

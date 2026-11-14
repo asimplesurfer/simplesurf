@@ -95,7 +95,7 @@ func _ready() -> void:
 	add_to_group("course")
 	GameSettings.load_settings()
 	if layout < 0:
-		layout = GameSettings.current_layout()
+		layout = _session_config().layout
 	_water = get_tree().get_first_node_in_group("water") as Water
 
 	if is_archipelago():
@@ -132,11 +132,18 @@ func _ready() -> void:
 	if is_atoll():
 		_build_atoll_extras()
 	if weather < 0:
-		weather = GameSettings.current_weather()
+		weather = _session_config().weather
 	if weather == GameSettings.Weather.STORM:
 		storm = Storm.new()
 		storm.name = "Storm"
 		add_child(storm)
+
+
+## Configuración de la partida (mapa, clima). Sin partida (una pista suelta en
+## un test), la del menú.
+func _session_config() -> RaceConfig:
+	var session := GameSession.of(self)
+	return session.config if session else RaceConfig.from_settings()
 
 
 func is_archipelago() -> bool:

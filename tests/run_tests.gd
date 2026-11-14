@@ -168,7 +168,11 @@ func _test_demo() -> void:
 	await _wait(9.0)
 	_check(not started[0], "tocar algo reinicia la espera")
 	await _wait(1.5)
-	_check(started[0] and GameSettings.demo_mode, "a los 10 s sin tocar nada arranca la demo")
+	var demo_config := menu.started_config
+	_check(
+		started[0] and demo_config != null and demo_config.mode == RaceConfig.Mode.DEMO,
+		"a los 10 s sin tocar nada arranca la demo"
+	)
 	menu.queue_free()
 	await process_frame
 
@@ -182,6 +186,8 @@ func _test_demo() -> void:
 	GameSettings.track_layout = GameSettings.TrackLayout.CLASSIC
 	GameSettings.weather = GameSettings.Weather.SUNNY
 	var demo: Node = load("res://main.tscn").instantiate()
+	# La configuración viaja con la escena (como hace el menú al abrirla).
+	(demo.get_node("RaceManager") as RaceManager).config = demo_config
 	root.add_child(demo)
 	await process_frame
 	await process_frame
@@ -235,7 +241,6 @@ func _test_demo() -> void:
 	GameSettings.bot_level = saved[2]
 	GameSettings.track_layout = saved[3]
 	GameSettings.weather = saved[4]
-	GameSettings.demo_mode = false
 	demo.queue_free()
 	await process_frame
 
@@ -1685,7 +1690,13 @@ func _test_memory() -> void:
 	var in_race_growth := 0
 	for round_i in 4:
 		var m: Node = load("res://main.tscn").instantiate()
-		(m.get_node("RaceManager") as RaceManager).config = RaceConfig.demo()
+		# Carrera de bots normal (no modo demo: en la demo cualquier tecla
+		# vuelve al menú), en la isla y con sol, como siempre midió este test.
+		var cfg := RaceConfig.demo()
+		cfg.mode = RaceConfig.Mode.RACE
+		cfg.layout = GameSettings.TrackLayout.CLASSIC
+		cfg.weather = GameSettings.Weather.SUNNY
+		(m.get_node("RaceManager") as RaceManager).config = cfg
 		root.add_child(m)
 		await _wait(5.0)
 		var nodes_a := int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))
@@ -1768,7 +1779,7 @@ func _test_archipelago() -> void:
 		track.length() > 700.0 and track.length() < 1000.0,
 		"una vuelta mide %.0f m" % track.length()
 	)
-	_check(config.laps == 1 and GameSettings.laps_for_layout() == 3, "en el archipiélago se corren 3 vueltas")
+	_check(config.laps == 1 and GameSettings.laps_for(GameSettings.TrackLayout.ARCHIPELAGO) == 3, "en el archipiélago se corren 3 vueltas")
 
 	# Ida y vuelta: posición <-> (ángulo, lateral).
 	var roundtrip := true
@@ -2020,11 +2031,11 @@ func _test_sandbox() -> void:
 	root.add_child(m)
 	await process_frame
 	await process_frame
-	var sb := m.get_node("RaceManager") as Sandbox
+	var sb := m.get_node("Session") as Sandbox
 	var world := m.get_node("World") as SandboxWorld
 	var waves := m.get_node("WaveManager") as WaveManager
 	var water := m.get_node("Water") as Water
-	_check(sb.free_ride() and GameSettings.sandbox_mode, "es el modo libre")
+	_check(sb.free_ride() and sb.config.mode == RaceConfig.Mode.SANDBOX, "es el modo libre")
 	_check(sb.racers.size() == 1 and sb.humans().size() == 1, "sin bots: solo el jugador")
 	# Arranca sin olas grandes (nivel 0): la escala se pone de una.
 	waves.amplitude_scale = 0.0
@@ -2117,9 +2128,11 @@ func _test_sandbox() -> void:
 	await process_frame
 	await process_frame
 	_check(r.nitro > 0.0, "pasar por un círculo de práctica da nitro")
-	# Escape vuelve al menú y apaga el modo libre.
-	sb.back_to_menu()
-	_check(not GameSettings.sandbox_mode, "al volver al menú se apaga el modo libre")
+	var as_node: Node = sb
+	_check(
+		as_node is GameSession and not as_node is RaceManager,
+		"el modo libre no es una carrera (base común: GameSession)"
+	)
 	m.queue_free()
 	await process_frame
 	await process_frame

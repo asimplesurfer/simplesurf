@@ -58,8 +58,11 @@ func _run() -> void:
 	GameSettings.player_count = 1
 	GameSettings.bot_count = 3
 	GameSettings.bot_level = 2
-	GameSettings.demo_mode = true
 	var main: Node = load("res://main.tscn").instantiate()
+	# Una carrera de bots (sin personas), como la demo.
+	var config := RaceConfig.create(0, GameSettings.player_count + GameSettings.bot_count, GameSettings.bot_level)
+	config.mode = RaceConfig.Mode.DEMO
+	(main.get_node("RaceManager") as RaceManager).config = config
 	root.add_child(main)
 	await process_frame
 	await process_frame

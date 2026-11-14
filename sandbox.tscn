@@ -48,9 +48,9 @@ script = ExtResource("3_waves")
 
 [node name="Riders" type="Node3D" parent="."]
 
-[node name="RaceManager" type="Node" parent="."]
+[node name="Session" type="Node" parent="."]
 script = ExtResource("4_race")
-course_path = NodePath("../World")
+world_path = NodePath("../World")
 riders_path = NodePath("../Riders")
 
 [node name="Views" type="Control" parent="."]
@@ -62,5 +62,5 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("5_split")
-race_manager_path = NodePath("../RaceManager")
+session_path = NodePath("../Session")
 water_path = NodePath("../Water")
