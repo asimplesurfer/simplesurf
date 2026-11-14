@@ -89,6 +89,7 @@ func _particles(amount: int, lifetime: float, size: float, gravity: Vector3, sz:
 	p.scale_amount_min = size * 0.5
 	p.scale_amount_max = size
 	p.emitting = false
+	p.visible = false
 	add_child(p)
 	return p
 
@@ -116,8 +117,8 @@ func _physics_process(delta: float) -> void:
 	_t = fmod(_t + delta, CYCLE)
 	var st := stage()
 	var warn := clampf((_t - CALM) / WARN, 0.0, 1.0) if st >= 1 else 0.0
-	_bubbles.emitting = st >= 1
-	_spray.emitting = st == 2
+	WaterFx.emit(_bubbles, st >= 1)
+	WaterFx.emit(_spray, st == 2)
 	var pulse := 1.0 + sin(Time.get_ticks_msec() * 0.02) * 0.06 * warn
 	_foam.scale = Vector3.ONE * (0.45 + 0.55 * warn) * pulse
 	_foam_mat.albedo_color.a = 0.25 + 0.6 * warn if st < 2 else 0.9
