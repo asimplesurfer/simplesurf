@@ -108,6 +108,9 @@ func _ready() -> void:
 	for i in 2:
 		InputSetup.ensure_player_actions(i)
 	InputSetup.apply_keyboard_layout(GameSettings.player_count)
+	# En el navegador el mando "aparece" recién al tocar un botón (a veces ya en
+	# el menú): se reasignan los mandos apenas se conecta o desconecta uno.
+	Input.joy_connection_changed.connect(_on_joy_connection_changed)
 	_rng.randomize()
 	_build()
 	var audio := get_node_or_null("/root/AudioManager")
@@ -580,6 +583,10 @@ func go_creator(p: int) -> void:
 	screen = "creator"
 	preset = -1
 	_build()
+
+
+func _on_joy_connection_changed(_device: int, _connected: bool) -> void:
+	InputSetup.refresh_player_devices()
 
 
 func start_race() -> void:

@@ -79,6 +79,9 @@ func run() -> void:
 
 func _test_pad_layouts() -> void:
 	print("Mandos:")
+	# Sin mando conectado no se registran botones (se asignan al ID real del
+	# mando cuando se conecta): se simula uno conectado como el mando 0.
+	InputSetup.set_player_device(0, 0)
 	InputSetup.set_pad_layout(0, InputSetup.PadLayout.GENERIC)
 	_check(_has_button(&"p1_a", 2), "mando genérico: ✕ (botón 2) es A")
 	_check(_has_button(&"p1_debug_fall", 0), "mando genérico: △ (botón 0) es caerse")
@@ -87,6 +90,7 @@ func _test_pad_layouts() -> void:
 	_check(_has_button(&"p1_a", JOY_BUTTON_A), "mando estándar: A es A")
 	_check(_has_button(&"p1_drift", JOY_BUTTON_X), "mando estándar: X derrapa")
 	_check(_has_button(&"p1_left", JOY_BUTTON_DPAD_LEFT), "la cruceta sigue funcionando")
+	InputSetup.refresh_player_devices()
 
 
 func _test_race_start() -> void:
@@ -391,9 +395,12 @@ func _test_look_back() -> void:
 	)
 	_check(InputMap.has_action(&"p1_look_back"), "existe la acción de mirar atrás")
 	var has_trigger := false
+	# Con un mando conectado (simulado), el gatillo izquierdo mira atrás.
+	InputSetup.set_player_device(0, 0)
 	for ev in InputMap.action_get_events(&"p1_look_back"):
 		if ev is InputEventJoypadMotion and (ev as InputEventJoypadMotion).axis == JOY_AXIS_TRIGGER_LEFT:
 			has_trigger = true
+	InputSetup.refresh_player_devices()
 	_check(has_trigger, "el gatillo izquierdo del mando mira atrás")
 
 
