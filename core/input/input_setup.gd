@@ -107,6 +107,7 @@ const KEYBOARD_2P := {
 }
 
 static var _layouts: Dictionary = {}
+static var _devices: Dictionary = {}
 
 
 static func prefix(player_index: int) -> String:
