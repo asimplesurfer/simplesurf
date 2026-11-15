@@ -92,6 +92,7 @@ func _test_sandbox() -> void:
 	var sun_before := sun.light_energy
 	var waves_before := water.waves
 	var amp_before := waves.amplitude_max
+	var color_before: Variant = water.shader_material().get_shader_parameter("deep_color")
 	await _press(&"p1_storm")
 	_check(sb.storm_on() and sb.storm != null, "T prende la tormenta")
 	await process_frame
@@ -105,7 +106,7 @@ func _test_sandbox() -> void:
 		and is_equal_approx(sun.light_energy, sun_before)
 		and water.waves == waves_before
 		and is_equal_approx(waves.amplitude_max, amp_before)
-		and water.shader_material().get_shader_parameter("deep_color") == null,
+		and water.shader_material().get_shader_parameter("deep_color") == color_before,
 		"y queda todo como estaba (cielo, luz, agua y olas)"
 	)
 	var cam := (m.get_node("Views") as SplitScreen).cameras[0]
@@ -123,37 +124,37 @@ func _test_sandbox() -> void:
 		as_node is GameSession and not as_node is RaceManager,
 		"el modo libre no es una carrera (base común: GameSession)"
 	)
-	# Panel de ajustes de prueba: color del agua y distancia de la cámara.
+	# Panel de ajustes de prueba: el color del agua (escondido de entrada).
 	await process_frame
 	var panel := m.get_node_or_null("Views/TuningPanel") as TuningPanel
-	_check(panel != null, "hay panel de ajustes con sliders")
-	var saved_dark := Tuning.water_dark
-	var saved_dist := Tuning.camera_distance
+	_check(panel != null and not panel.visible, "el panel de ajustes está, escondido de entrada (F9)")
+	var day: Variant = water.shader_material().get_shader_parameter("deep_color")
+	_check(
+		Tuning.water_dark == Tuning.WATER_DARK_DEFAULT and day is Color
+		and (day as Color).is_equal_approx(Water.DAY_COLORS["deep_color"].lerp(Water.NAVY_COLORS["deep_color"], Tuning.WATER_DARK_DEFAULT)),
+		"el agua arranca en el color elegido"
+	)
 	Tuning.water_dark = 1.0
 	await process_frame
 	var deep: Variant = water.shader_material().get_shader_parameter("deep_color")
 	_check(deep is Color and (deep as Color).is_equal_approx(Water.NAVY_COLORS["deep_color"]), "el slider del agua la lleva a azul marino")
 	Tuning.water_dark = 0.0
 	await process_frame
-	_check(water.shader_material().get_shader_parameter("deep_color") == null, "en 0 vuelve al color de siempre")
+	_check(water.shader_material().get_shader_parameter("deep_color") == null, "en 0 vuelve al color original")
+	Tuning.water_dark = Tuning.WATER_DARK_DEFAULT
+	# Cámara: a 3 m; con turbo, a la misma distancia de siempre (8,3 m).
 	var chase := (m.get_node("Views") as SplitScreen).cameras[0]
 	var flat_dist := func() -> float:
 		var d := chase._desired_position() - r.global_position
 		return Vector2(d.x, d.z).length()
-	Tuning.camera_distance = 4.5
 	chase._boost = 0.0
-	_check(absf(flat_dist.call() - 4.5) < 0.01, "el slider acerca la cámara (%.2f m)" % flat_dist.call())
+	_check(absf(flat_dist.call() - 3.0) < 0.01, "la cámara va a 3 m (%.2f m)" % flat_dist.call())
 	chase._boost = 1.0
-	var turbo_close: float = flat_dist.call()
-	Tuning.camera_distance = Tuning.CAMERA_DISTANCE_DEFAULT
-	var turbo_default: float = flat_dist.call()
 	_check(
-		absf(turbo_close - turbo_default) < 0.01,
-		"con turbo la cámara queda a la misma distancia de siempre (%.2f m)" % turbo_close
+		absf(flat_dist.call() - (ChaseCamera.TURBO_BASE + ChaseCamera.boost_pullback())) < 0.01,
+		"con turbo se aleja a la distancia de siempre (%.2f m)" % flat_dist.call()
 	)
 	chase._boost = 0.0
-	Tuning.water_dark = saved_dark
-	Tuning.camera_distance = saved_dist
 
 	# Reiniciar: la escena nueva entra antes de que se borre la vieja, y todo
 	# (surfista, olas, cámara) tiene que quedarse con el agua de la nueva.

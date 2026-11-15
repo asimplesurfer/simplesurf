@@ -1,17 +1,14 @@
 class_name TuningPanel
 extends PanelContainer
-## Panel de ajustes para probar (abajo a la derecha): color del agua y
-## distancia de la cámara, con el número a la vista. F9 lo muestra / esconde.
+## Panel de ajustes para probar (abajo a la derecha): color del agua, con el
+## número a la vista. Escondido de entrada; F9 lo muestra / esconde.
 ## Los sliders no toman el foco: las flechas y el teclado siguen siendo del juego.
 
 var _water_slider: HSlider
 var _water_label: Label
-var _cam_slider: HSlider
-var _cam_label: Label
 
 
 func _ready() -> void:
-	Tuning.load_values()
 	# Pegado abajo a la derecha (crece hacia arriba y a la izquierda).
 	anchor_left = 1.0
 	anchor_right = 1.0
@@ -21,7 +18,7 @@ func _ready() -> void:
 	grow_vertical = Control.GROW_DIRECTION_BEGIN
 	offset_left = -330.0
 	offset_right = -16.0
-	offset_top = -170.0
+	offset_top = -120.0
 	offset_bottom = -64.0
 	size_flags_horizontal = Control.SIZE_SHRINK_END
 	size_flags_vertical = Control.SIZE_SHRINK_END
@@ -47,16 +44,6 @@ func _ready() -> void:
 	_water_slider.value_changed.connect(func(v: float) -> void:
 		Tuning.water_dark = v
 		_refresh())
-	_cam_label = _label(box)
-	_cam_slider = _slider(
-		box, Tuning.CAMERA_DISTANCE_MIN, Tuning.CAMERA_DISTANCE_MAX, 0.1, Tuning.camera_distance
-	)
-	_cam_slider.value_changed.connect(func(v: float) -> void:
-		Tuning.camera_distance = v
-		_refresh())
-	# Se guarda al soltar el slider (no a cada paso del arrastre).
-	_water_slider.drag_ended.connect(func(_c: bool) -> void: Tuning.save_values())
-	_cam_slider.drag_ended.connect(func(_c: bool) -> void: Tuning.save_values())
 	visible = Tuning.panel_visible
 	_refresh()
 
@@ -81,9 +68,8 @@ func _slider(parent: Control, lo: float, hi: float, step: float, value: float) -
 
 
 func _refresh() -> void:
-	_water_label.text = "Color del agua: %.2f   (0 = actual, 1 = marino)" % Tuning.water_dark
-	_cam_label.text = "Distancia de cámara: %.1f m   (antes %.1f)" % [
-		Tuning.camera_distance, Tuning.CAMERA_DISTANCE_DEFAULT
+	_water_label.text = "Color del agua: %.2f   (elegido %.2f; 0 original, 1 marino)" % [
+		Tuning.water_dark, Tuning.WATER_DARK_DEFAULT
 	]
 
 
@@ -92,6 +78,4 @@ func _unhandled_input(event: InputEvent) -> void:
 	if key and key.pressed and not key.echo and key.physical_keycode == KEY_F9:
 		Tuning.panel_visible = not Tuning.panel_visible
 		visible = Tuning.panel_visible
-		Tuning.save_values()
-		# Al guardar también quedan los valores de los sliders.
 		get_viewport().set_input_as_handled()
