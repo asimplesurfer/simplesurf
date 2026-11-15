@@ -24,6 +24,8 @@ signal motivation_started
 ## Atravesó una ola que estaba rompiendo (para la animación, el chapuzón y la cámara).
 signal wave_punched
 signal turbo_fired
+## Apretó turbo y no salió (ya hay una ráfaga en curso, o no tiene carga).
+signal turbo_blocked
 signal popped
 signal ring_collected
 signal crashed
@@ -163,8 +165,8 @@ func _physics_process(delta: float) -> void:
 	_top_up_first_charge(delta)
 	# Turbo en ráfagas: cada toque dispara una (mantener no hace nada).
 	turbo_time = maxf(0.0, turbo_time - delta)
-	if input.turbo_pressed and not is_fallen():
-		fire_turbo()
+	if input.turbo_pressed and not is_fallen() and not fire_turbo():
+		turbo_blocked.emit()
 	if wave_air_time >= 0.0:
 		wave_air_time += delta
 	turbo_active = false

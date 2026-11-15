@@ -8,6 +8,11 @@ extends CanvasLayer
 
 const PROMPT_COLOR := Color(1.0, 0.86, 0.2)
 const NITRO_COLOR := Color(0.25, 0.85, 1.0)
+## Turbo en curso: toda la barra en naranja fuerte, con fuego que la consume.
+const BURN_COLOR := Color(1.0, 0.45, 0.05)
+## Barra llena (3 cargas): roja, vibra y parpadea.
+const FULL_COLOR := Color(1.0, 0.12, 0.1)
+const NITRO_FIRE_SHADER := preload("res://ui/shaders/nitro_fire.gdshader")
 const BAD_COLOR := Color(1.0, 0.4, 0.35)
 const SPEED_LINES_SHADER := preload("res://ui/shaders/speed_lines.gdshader")
 const SPLASH_SHADER := preload("res://ui/shaders/wave_splash.gdshader")
@@ -65,7 +70,6 @@ var splash_overlay: ColorRect
 var _splash_material: ShaderMaterial
 var _splash_t: float = 0.0
 var _speed_lines: ColorRect
-## Pop en la cresta: íconos (palanca arriba y botón de abajo, o la tecla).
 var _nitro_label: Label
 var _speed_lines_material: ShaderMaterial
 var _message_time: float = 0.0
@@ -80,6 +84,19 @@ var _seen_boost_option: int = -1
 var _center_time: float = 0.0
 var _flash: float = 0.0
 var _lines: float = 0.0
+## Detrás de la barra de nitro: la carga del turbo en curso, que se consume.
+var _burn_bar: ProgressBar
+var _burn_fill: StyleBoxFlat
+var _nitro_fill: StyleBoxFlat
+## Llamas sobre la parte llena de la barra (turbo y barra llena).
+var _fire: ColorRect
+var _fire_mat: ShaderMaterial
+## 0..1: cuánto se ve el turbo / la barra llena (para entrar y salir suave).
+var _turbo_look: float = 0.0
+var _full_look: float = 0.0
+var _nitro_box: VBoxContainer
+## Amague de la barra al apretar turbo cuando no se puede (0..1).
+var _blocked: float = 0.0
 
 
 func _ready() -> void:
@@ -114,6 +131,7 @@ func _connect_rider() -> void:
 	rider.live_spins_changed.connect(_on_live_spins)
 	rider.trick_failed.connect(func() -> void: show_message("¡Truco fallido!", BAD_COLOR))
 	rider.drift_hit.connect(func(_victim: Rider) -> void: show_message("¡Lo tiraste!", PROMPT_COLOR))
+	rider.turbo_blocked.connect(func() -> void: _blocked = 1.0)
 	rider.ring_collected.connect(func() -> void: show_message("+ NITRO", NITRO_COLOR))
 	rider.crashed.connect(func() -> void: show_message("¡Pum!", BAD_COLOR))
 	rider.popped.connect(func() -> void: show_message("¡POP!", PROMPT_COLOR))
@@ -270,6 +288,50 @@ func _process(delta: float) -> void:
 	_lines = move_toward(_lines, 1.0 if boosting else 0.0, delta * 4.0)
 	_speed_lines.visible = _lines > 0.01
 	_speed_lines_material.set_shader_parameter("intensity", _lines)
+	_update_turbo_meter(delta)
+
+
+## Barra de nitro según el turbo:
+## - Con turbo en curso: toda la barra en naranja fuerte, con fuego; la carga
+##   gastada se consume de a poco y al terminar vuelve al celeste. Mientras
+##   tanto otro toque no hace nada (si se aprieta, la barra hace un amague).
+## - Llena (3 cargas): roja, vibra y parpadea (nitro al máximo).
+func _update_turbo_meter(delta: float) -> void:
+	var burning := rider.turbo_time / rider.stats.turbo_burst_time * Rider.TURBO_CHARGE
+	_nitro_bar.value = rider.nitro / Rider.NITRO_MAX
+	_burn_bar.value = (rider.nitro + burning) / Rider.NITRO_MAX
+	var turbo_on := rider.turbo_time > 0.0
+	var full := not turbo_on and rider.turbo_charges() >= Rider.TURBO_CHARGES
+	# Entra de golpe y se va rápido (a mitad de camino entre celeste y naranja
+	# el color queda feo).
+	_turbo_look = 1.0 if turbo_on else move_toward(_turbo_look, 0.0, delta * 7.0)
+	_full_look = 0.0 if turbo_on else move_toward(_full_look, 1.0 if full else 0.0, delta * 6.0)
+	var t := Time.get_ticks_msec() * 0.001
+	# Parpadeo de la barra llena (rápido y marcado).
+	var blink := 0.5 + 0.5 * sin(t * 18.0)
+	var full_color := FULL_COLOR.lerp(Color(1.0, 0.75, 0.6), blink * 0.55)
+	var base := NITRO_COLOR.lerp(BURN_COLOR, _turbo_look).lerp(full_color, _full_look)
+	_nitro_fill.bg_color = base
+	_burn_fill.bg_color = BURN_COLOR.lerp(Color(1.0, 0.7, 0.2), 0.5 + 0.5 * sin(t * 12.0))
+	_nitro_label.add_theme_color_override("font_color", base)
+	# Fuego: naranja con turbo; rojo y más nervioso con la barra llena.
+	var fire := maxf(_turbo_look, _full_look)
+	_fire.visible = fire > 0.01
+	if _fire.visible:
+		_fire_mat.set_shader_parameter("fill", _burn_bar.value)
+		_fire_mat.set_shader_parameter("intensity", fire * (0.6 + 0.4 * blink * _full_look))
+		_fire_mat.set_shader_parameter("aspect", _burn_bar.size.x / maxf(_burn_bar.size.y, 1.0))
+		_fire_mat.set_shader_parameter("cold", Color(0.85, 0.2, 0.02).lerp(Color(0.6, 0.0, 0.02), _full_look))
+		_fire_mat.set_shader_parameter("hot", Color(1.0, 0.85, 0.25).lerp(Color(1.0, 0.45, 0.35), _full_look))
+		_fire_mat.set_shader_parameter("flow", lerpf(3.0, 7.0, _full_look))
+	_blocked = move_toward(_blocked, 0.0, delta * 4.0)
+	# Vibración: amague al apretar de más; temblor fino con la barra llena.
+	var shake := sin(_blocked * 18.0) * 4.0 * _blocked
+	shake += sin(t * 70.0) * 1.6 * _full_look
+	var shake_y := cos(t * 83.0) * 1.0 * _full_look
+	_nitro_box.position.x = 24.0 + shake
+	_nitro_box.offset_bottom = -20.0 + shake_y
+	_nitro_box.offset_top = -80.0 + shake_y
 
 
 func _update_mash(delta: float) -> void:
@@ -356,7 +418,7 @@ func _update_help() -> void:
 		return
 	_help.text = (
 		"Avanza solo (atrás frena)   ·   Girar: A / D o stick\n"
-		+ "Pop: ESPACIO / botón de abajo o golpe de palanca (W) hacia arriba\n"
+		+ "Saltar: ESPACIO / botón de abajo\n"
 		+ "Salto: %s (O cambia)   ·   Pantalla dividida: V\n" % GameSettings.jump_style_name()
 		+ "Truco: en el aire, mantener ESPACIO / botón de abajo\n"
 		+ "Derrapar: SHIFT o botón izquierdo / RB   ·   Turbo (tocar, gasta 1 carga): E o botón derecho\n"
@@ -435,7 +497,28 @@ func _build() -> void:
 	nitro_label.text = "NITRO"
 	nitro_box.add_child(nitro_label)
 	_nitro_bar = _make_bar(NITRO_COLOR, 18.0)
-	nitro_box.add_child(_nitro_bar)
+	_nitro_fill = _nitro_bar.get_theme_stylebox("fill") as StyleBoxFlat
+	# Llamas arriba de la parte llena (debajo de las marcas de las cargas).
+	_fire = ColorRect.new()
+	_fire.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_fire.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_fire.offset_left = 3.0
+	_fire.offset_right = -3.0
+	_fire.offset_top = 3.0
+	_fire.offset_bottom = -3.0
+	_fire_mat = ShaderMaterial.new()
+	_fire_mat.shader = NITRO_FIRE_SHADER
+	_fire.material = _fire_mat
+	_fire.visible = false
+	_nitro_bar.add_child(_fire)
+	_nitro_box = nitro_box
+	# Atrás, la carga del turbo que se está usando; adelante, el nitro.
+	_burn_bar = _make_bar(BURN_COLOR, 18.0)
+	_burn_fill = _burn_bar.get_theme_stylebox("fill") as StyleBoxFlat
+	nitro_box.add_child(_burn_bar)
+	_burn_bar.add_child(_nitro_bar)
+	_nitro_bar.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_nitro_bar.add_theme_stylebox_override("background", StyleBoxEmpty.new())
 	# La barra tiene 3 cargas de turbo (cada toque gasta una): marcas divisorias.
 	for k in range(1, Rider.TURBO_CHARGES):
 		var mark := ColorRect.new()
