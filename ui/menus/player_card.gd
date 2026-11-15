@@ -58,7 +58,7 @@ var _title: Label
 var _status: Label
 var _editor: VBoxContainer
 var _icons: Array[Button] = []
-var _icon_pics: Array[TextureRect] = []
+var _icon_marks: Array[CategoryIcon] = []
 var _style: StyleBoxFlat
 var _rng := RandomNumberGenerator.new()
 
@@ -128,7 +128,7 @@ func _build() -> void:
 	# Opciones de la categoría (o la ayuda).
 	_editor = VBoxContainer.new()
 	_editor.add_theme_constant_override("separation", 2)
-	_editor.custom_minimum_size.y = 96.0
+	_editor.custom_minimum_size.y = 118.0
 	box.add_child(_editor)
 
 	# Íconos de lo que se puede cambiar.
@@ -140,29 +140,23 @@ func _build() -> void:
 	for i in ICONS.size():
 		var b := Button.new()
 		b.focus_mode = Control.FOCUS_NONE
-		b.custom_minimum_size = Vector2(50.0, 62.0)
+		b.custom_minimum_size = Vector2(46.0, 46.0)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.tooltip_text = ICONS[i][0]
-		var inner := VBoxContainer.new()
-		inner.set_anchors_preset(Control.PRESET_FULL_RECT)
-		inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		inner.add_theme_constant_override("separation", 0)
-		b.add_child(inner)
-		var pic := TextureRect.new()
-		pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		pic.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		inner.add_child(pic)
-		var cap := _label(ICONS[i][0], 11, Color.WHITE)
-		cap.clip_text = true
-		cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		inner.add_child(cap)
+		# Silueta minimalista, sin texto.
+		var mark := CategoryIcon.new()
+		mark.kind = i as CategoryIcon.Kind
+		mark.set_anchors_preset(Control.PRESET_FULL_RECT)
+		mark.offset_left = 6.0
+		mark.offset_right = -6.0
+		mark.offset_top = 6.0
+		mark.offset_bottom = -6.0
+		b.add_child(mark)
+		_icon_marks.append(mark)
 		var at := i
 		b.pressed.connect(func() -> void: _click_icon(at))
 		grid.add_child(b)
 		_icons.append(b)
-		_icon_pics.append(pic)
 
 	_status = _label("", 16, Color.WHITE)
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -177,7 +171,6 @@ func _build() -> void:
 			elif not in_category:
 				toggle_ready()
 	)
-	_refresh_icons()
 	refresh()
 
 
@@ -255,14 +248,14 @@ func randomize_character() -> void:
 	for f in CharacterData.FIELDS:
 		data().set(CharacterData.FIELDS[f][0], r.get_option(f))
 	preset = -1
-	_changed(true)
+	_changed()
 
 
-## Filas de la categoría elegida: [título, tipo, campo].
+## Filas de la categoría elegida: [título, tipo, campo, encuadre de la foto].
 func category_rows() -> Array:
 	var out := []
 	for section in CharacterSelect.CATEGORIES[ICONS[cat_index][0]]:
-		out.append([section[0], section[1], section[2]])
+		out.append([section[0], section[1], section[2], section[3]])
 	return out
 
 
@@ -280,7 +273,7 @@ func change(r: Array, step: int) -> void:
 		_:
 			data().step_option(field, step)
 			preset = -1
-	_changed(kind == "preset" or kind == "color")
+	_changed()
 
 
 # ---------------------------------------------------------------- vista
@@ -297,24 +290,10 @@ func _click_icon(i: int) -> void:
 	refresh()
 
 
-func _changed(all_icons: bool) -> void:
+func _changed() -> void:
 	_avatar.rebuild()
 	_rebuild_board()
-	if all_icons:
-		_refresh_icons()
-	else:
-		_refresh_icon(cat_index)
 	refresh()
-
-
-func _refresh_icons() -> void:
-	for i in ICONS.size():
-		_refresh_icon(i)
-
-
-func _refresh_icon(i: int) -> void:
-	if thumbs and i < _icon_pics.size():
-		thumbs.request(CharacterData.from_dict(data().to_dict()), ICONS[i][1], _icon_pics[i])
 
 
 ## Actualiza textos, marcos y opciones.
@@ -332,7 +311,10 @@ func refresh() -> void:
 	_style.set_border_width_all(6 if is_ready else 4)
 	_view.modulate = Color(1, 1, 1, 1.0 if joined() else 0.35)
 	for i in _icons.size():
-		_style_icon(_icons[i], i == cat_index and joined(), i == cat_index and in_category)
+		var focused := i == cat_index and joined()
+		_style_icon(_icons[i], focused, focused and in_category)
+		_icon_marks[i].color = YELLOW if focused else Color(1, 1, 1, 0.9 if joined() else 0.5)
+		_icon_marks[i].hole = Palette.UI_TILE_ON if focused and in_category else Palette.UI_TILE
 	for c in _editor.get_children():
 		_editor.remove_child(c)
 		c.queue_free()
@@ -354,9 +336,84 @@ func refresh() -> void:
 		_status.text = "%s: listo · %s: al azar" % ["Start" if pad else "ENTER", "Y" if pad else "R"]
 		return
 	var rows := category_rows()
-	for i in rows.size():
-		_editor.add_child(_row_view(rows[i], i == row))
+	# Fila actual: su nombre y las opciones con su vista previa.
+	var r: Array = rows[row]
+	var head := _label("%s%s" % [r[0], "   ▲▼ %d/%d" % [row + 1, rows.size()] if rows.size() > 1 else ""], 16, YELLOW)
+	_editor.add_child(head)
+	_editor.add_child(_strip(r))
 	_status.text = "◀ ▶ cambiar · ▲ ▼ fila · %s volver" % ("B" if pad else "ESC")
+
+
+## Tira de opciones de la fila: la elegida en el medio (marcada) y las de los
+## costados, cada una con su foto (o su color). Las barras, como una barra.
+func _strip(r: Array) -> Control:
+	var kind: String = r[1]
+	var field: String = r[2]
+	if kind == "slider":
+		return _row_view(r, true)
+	var line := HBoxContainer.new()
+	line.alignment = BoxContainer.ALIGNMENT_CENTER
+	line.add_theme_constant_override("separation", 6)
+	var count: int = CharacterData.PRESET_NAMES.size() if kind == "preset" else (CharacterData.FIELDS[field][1] as Array).size()
+	var current: int = preset if kind == "preset" else data().get_option(field)
+	var side := 1 if compact else 2
+	var shown := mini(count, side * 2 + 1)
+	var first := current - (shown - 1) / 2 if current >= 0 else 0
+	for k in shown:
+		var i := posmod(first + k, count)
+		var tile := PanelContainer.new()
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Palette.UI_TILE
+		sb.set_corner_radius_all(8)
+		sb.set_border_width_all(4 if i == current else 2)
+		sb.border_color = YELLOW if i == current else Palette.UI_INK
+		tile.add_theme_stylebox_override("panel", sb)
+		var big := 64.0 if i == current else 50.0
+		tile.custom_minimum_size = Vector2(big, big)
+		tile.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		if kind == "color":
+			var sw := ColorRect.new()
+			sw.color = (CharacterSelect.COLOR_LISTS[field] as Array)[i]
+			sw.custom_minimum_size = Vector2(big - 16.0, big - 16.0)
+			tile.add_child(sw)
+		else:
+			var pic := TextureRect.new()
+			pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			pic.custom_minimum_size = Vector2(big - 8.0, big - 8.0)
+			tile.add_child(pic)
+			if thumbs:
+				thumbs.request(_variant(field if kind != "preset" else "preset", i), r[3], pic)
+		var step := i - current
+		tile.gui_input.connect(func(ev: InputEvent) -> void:
+			var mb := ev as InputEventMouseButton
+			if mb and mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT and step != 0:
+				change(r, step)
+		)
+		line.add_child(tile)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 2)
+	box.add_child(line)
+	var value_name := "a tu gusto"
+	if kind != "preset":
+		value_name = data().option_name(field)
+	elif current >= 0:
+		value_name = CharacterData.PRESET_NAMES[current]
+	box.add_child(_label("◀ %s ▶" % value_name, 15, Color.WHITE))
+	return box
+
+
+## El personaje con esa opción cambiada (para la foto de la opción).
+func _variant(field: String, i: int) -> CharacterData:
+	var d := CharacterData.from_dict(data().to_dict())
+	if field == "preset":
+		d.apply_preset(i)
+	else:
+		d.set(CharacterData.FIELDS[field][0], i)
+		# Para ver los ojos y las cejas, la foto va sin anteojos.
+		if field in ["eyes", "extra"]:
+			d.glasses_index = 0
+	return d
 
 
 func _row_view(r: Array, current: bool) -> Control:
