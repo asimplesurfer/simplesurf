@@ -126,8 +126,6 @@ static func ensure_player_actions(player_index: int) -> void:
 		if not InputMap.has_action(p + action):
 			InputMap.add_action(p + action, BUTTON_DEADZONE)
 
-	if player_index == 0:
-		apply_keyboard_layout(1)
 	refresh_player_devices()
 
 
