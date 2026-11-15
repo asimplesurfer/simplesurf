@@ -850,6 +850,16 @@ func _test_turbo_and_wrong_way() -> void:
 	_rider.add_nitro(1.0)
 	await _press(&"p1_b")
 	await _press(&"p1_b")
+	var hud_t := (_main.get_node("Views") as SplitScreen).huds[0]
+	await process_frame
+	_check(
+		hud_t._burn_bar.value > hud_t._nitro_bar.value + 0.05,
+		"con turbo en curso, la carga que se usa se ve consumiéndose en la barra"
+	)
+	var blocked := [false]
+	_rider.turbo_blocked.connect(func() -> void: blocked[0] = true, CONNECT_ONE_SHOT)
+	await _press(&"p1_b")
+	_check(blocked[0] and hud_t._blocked > 0.0, "apretar turbo mientras dura avisa (la barra tiembla)")
 	_check(
 		_rider.turbo_charges() == 2 and _rider.turbo_time <= _rider.stats.turbo_burst_time,
 		"no se puede volver a tirar turbo hasta que termina el actual (quedan %d cargas)" % _rider.turbo_charges()
