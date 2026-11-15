@@ -9,22 +9,22 @@ render_mode specular_schlick_ggx, cull_disabled;
 #include "res://world/water/water_surface.gdshaderinc"
 // Pista (centro x, centro z, radio de adentro, radio de afuera). 0 = sin pista.
 uniform vec4 track_band = vec4(0.0);
-uniform vec3 outside_color : source_color = vec3(0.11, 0.28, 0.42);
+uniform vec3 outside_color : source_color = vec3(0.03, 0.15, 0.27);
 
-uniform vec3 deep_color : source_color = vec3(0.09, 0.28, 0.43);
-uniform vec3 shallow_color : source_color = vec3(0.19, 0.46, 0.58);
+uniform vec3 deep_color : source_color = vec3(0.03, 0.2, 0.34);
+uniform vec3 shallow_color : source_color = vec3(0.08, 0.35, 0.48);
 uniform vec3 foam_color : source_color = vec3(0.93, 0.98, 1.0);
 uniform float foam_height = 0.42;
-uniform vec3 wave_color : source_color = vec3(0.32, 0.66, 0.7);
+uniform vec3 wave_color : source_color = vec3(0.14, 0.55, 0.6);
 // Agua donde se está por levantar una ola (más oscura, como una sombra).
-uniform vec3 rising_color : source_color = vec3(0.1, 0.26, 0.4);
+uniform vec3 rising_color : source_color = vec3(0.02, 0.14, 0.28);
 // Luz que atraviesa la parte fina de la ola (cerca de la cresta).
-uniform vec3 glow_color : source_color = vec3(0.6, 1.0, 0.9);
+uniform vec3 glow_color : source_color = vec3(0.25, 0.95, 0.8);
 uniform float glow_strength = 0.25;
 // Color del cielo que se refleja en ángulos rasantes.
-uniform vec3 sky_tint : source_color = vec3(0.72, 0.8, 0.92);
+uniform vec3 sky_tint : source_color = vec3(0.6, 0.76, 0.86);
 // Cuánto refleja el cielo en ángulos rasantes (la tormenta usa 0,6).
-uniform float sky_reflect = 0.36;
+uniform float sky_reflect = 0.42;
 // Lluvia pegando en el mar (0 = no llueve): circulitos que se abren donde cae
 // una gota, con un puntito de salpicadura al principio.
 uniform float rain_ripples = 0.0;
