@@ -56,7 +56,7 @@ extends Resource
 ## Tiempo manteniendo A en el aire antes de que empiece a girar la tabla (s).
 @export var trick_hold_delay: float = 0.12
 ## Velocidad de giro de la tabla en el truco (radianes por segundo).
-@export var trick_spin_speed: float = 13.2
+@export var trick_spin_speed: float = 20.0
 ## Nitro que carga por segundo girando (1.0 = barra llena).
 @export var trick_nitro_rate: float = 0.5
 

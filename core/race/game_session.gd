@@ -147,7 +147,7 @@ func back_to_menu() -> void:
 ## Cambia la cantidad de personas y vuelve a empezar (con la configuración
 ## de este modo armada de nuevo).
 func set_player_count(count: int) -> void:
-	count = clampi(count, 1, 2)
+	count = clampi(count, 1, InputSetup.MAX_PLAYERS)
 	if count == GameSettings.player_count:
 		return
 	GameSettings.player_count = count

@@ -67,16 +67,27 @@ await page.waitForSelector('canvas');
 await sleep(12000);
 await page.mouse.click(480, 270);
 await sleep(2500);
+// Título: si el clic cayó en JUGAR, ESC vuelve al botón. ESPACIO: JUGAR ->
+// cuántos juegan (1) -> tarjetas.
+await tap('Escape');
+await sleep(500);
 await shot('0_menu');
-// Creador: bajar a la categoría Pelo (las fotos de cada peinado) y elegir uno.
-await tap('ArrowDown', 3);
+await tap('Space');
+await sleep(500);
+await tap('Space');
+await sleep(1500);
+// Tarjeta de J1: ESPACIO une el teclado; ▶ x3 hasta Pelo; ESPACIO entra y ▶
+// cambia el peinado.
+await tap('Space');
+await tap('ArrowRight', 3);
 await sleep(2500);
 await shot('0b_creador_pelo');
-await tap('ArrowRight');
 await tap('Space');
+await tap('ArrowRight');
 await sleep(800);
 await shot('0c_creador_elegido');
-// ENTER: armar la partida; ENTER: ¡a surfear!
+// ENTER: listo -> armar la partida; ENTER: ¡a surfear!
+await tap('Escape');
 await tap('Enter');
 await sleep(800);
 await shot('0d_partida');

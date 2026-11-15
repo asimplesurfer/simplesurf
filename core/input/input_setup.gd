@@ -106,8 +106,17 @@ const KEYBOARD_2P := {
 	},
 }
 
+## Hasta cuántas personas pueden jugar a la vez.
+const MAX_PLAYERS := 4
+## "Dispositivo" del teclado (los mandos son 0, 1, 2...).
+const KEYBOARD := -2
+
 static var _layouts: Dictionary = {}
 static var _devices: Dictionary = {}
+## Quién juega con qué, elegido en el menú (cada uno se une con su teclado o
+## mando): jugador -> dispositivo (KEYBOARD o el id del mando). Vacío = se
+## reparte solo (por orden de conexión, como antes).
+static var _assigned: Dictionary = {}
 ## Cuántas personas juegan (lo fija apply_keyboard_layout).
 static var _player_count: int = 1
 
@@ -138,15 +147,52 @@ static func ensure_player_actions(player_index: int) -> void:
 ## Con 2 jugadores y un solo mando: J1 juega con el teclado (entero) y J2 con
 ## el mando. Así se puede jugar de a dos en la misma compu con teclado + mando.
 static func refresh_player_devices() -> void:
+	if not _assigned.is_empty():
+		_apply_assigned()
+		return
 	var connected: Array = Input.get_connected_joypads()
 	connected.sort()
 	var keyboard_and_pad := keyboard_and_pad_mode(connected.size())
-	for player in [0, 1]:
+	for player in MAX_PLAYERS:
 		var device := int(connected[player]) if player < connected.size() else -1
-		if keyboard_and_pad:
+		if keyboard_and_pad and player < 2:
 			device = int(connected[0]) if player == 1 else -1
 		set_player_device(player, device)
 	_apply_keys(connected.size())
+
+
+## Fija quién juega con qué (lo elige el menú): jugador -> KEYBOARD o el id de
+## un mando. El teclado es de una sola persona (con todas las teclas).
+static func assign_devices(assignment: Dictionary) -> void:
+	_assigned = assignment.duplicate()
+	for player in _assigned:
+		var device: int = _assigned[player]
+		if device >= 0 and not _layouts.has(player):
+			_layouts[player] = detect_pad_layout(device)
+	_apply_assigned()
+
+
+## Vuelve a repartir solo (por orden de conexión).
+static func clear_assignments() -> void:
+	_assigned.clear()
+	refresh_player_devices()
+
+
+static func has_assignments() -> bool:
+	return not _assigned.is_empty()
+
+
+## Dispositivo con el que se unió el jugador en el menú (-1 si ninguno).
+static func assigned_device(player_index: int) -> int:
+	return int(_assigned.get(player_index, -1))
+
+
+static func _apply_assigned() -> void:
+	for player in MAX_PLAYERS:
+		var device := assigned_device(player)
+		if InputMap.has_action(prefix(player) + "a"):
+			set_player_device(player, device if device >= 0 else -1)
+		_set_keys(player, KEYBOARD_1P[0] if device == KEYBOARD else {})
 
 
 ## true si juegan dos y hay un solo mando: J1 teclado, J2 mando.
@@ -195,7 +241,7 @@ static func set_player_device(player_index: int, device: int) -> void:
 ## teclas) y reasigna los mandos (con teclado + un mando, el mando pasa a J2).
 static func apply_keyboard_layout(player_count: int) -> void:
 	_player_count = player_count
-	if InputMap.has_action(prefix(0) + "a"):
+	if InputMap.has_action(prefix(0) + "a") or not _assigned.is_empty():
 		# Refresca mandos y teclas juntos (llama a _apply_keys).
 		refresh_player_devices()
 	else:
@@ -208,20 +254,25 @@ static func _apply_keys(pad_count: int) -> void:
 	var layout: Dictionary = KEYBOARD_1P
 	if _player_count >= 2 and not keyboard_and_pad_mode(pad_count):
 		layout = KEYBOARD_2P
-	for player in [0, 1]:
-		var p := prefix(player)
-		if not InputMap.has_action(p + "a"):
+	for player in MAX_PLAYERS:
+		_set_keys(player, layout.get(player, {}))
+
+
+## Cambia las teclas del jugador por `keys` (acción -> teclas).
+static func _set_keys(player: int, keys: Dictionary) -> void:
+	var p := prefix(player)
+	if not InputMap.has_action(p + "a"):
+		return
+	for action in InputMap.get_actions():
+		if not String(action).begins_with(p):
 			continue
-		for action in InputMap.get_actions():
-			if not String(action).begins_with(p):
-				continue
-			for ev in InputMap.action_get_events(action):
-				if ev is InputEventKey:
-					InputMap.action_erase_event(action, ev)
-		if layout.has(player):
-			for action in layout[player]:
-				for key in layout[player][action]:
-					_key(p + action, key)
+		for ev in InputMap.action_get_events(action):
+			if ev is InputEventKey:
+				InputMap.action_erase_event(action, ev)
+	for action in keys:
+		if InputMap.has_action(p + action):
+			for key in keys[action]:
+				_key(p + action, key)
 
 
 static func get_pad_layout(player_index: int) -> PadLayout:
