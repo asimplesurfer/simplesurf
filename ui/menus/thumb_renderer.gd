@@ -62,7 +62,8 @@ func _run() -> void:
 	_busy = true
 	while not _jobs.is_empty():
 		var job: Dictionary = _jobs.pop_front()
-		var target: TextureRect = job.target
+		# Sin tipo: el cuadrado pudo haberse borrado mientras esperaba.
+		var target: Variant = job.target
 		if not is_instance_valid(target):
 			continue
 		_frame_job(job.data, job.frame)
@@ -73,7 +74,7 @@ func _run() -> void:
 			continue
 		var img := _vp.get_texture().get_image()
 		if img and not img.is_empty():
-			target.texture = ImageTexture.create_from_image(img)
+			(target as TextureRect).texture = ImageTexture.create_from_image(img)
 	_busy = false
 
 
