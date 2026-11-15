@@ -11,6 +11,7 @@ extends SceneTree
 ## En orden: los primeros prueban lo básico.
 const SUITES := [
 	"res://tests/suites/test_menu.gd",
+	"res://tests/suites/test_input.gd",
 	"res://tests/suites/test_characters.gd",
 	"res://tests/suites/test_race.gd",
 	"res://tests/suites/test_bots.gd",
