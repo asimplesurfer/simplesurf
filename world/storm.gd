@@ -247,6 +247,7 @@ func _roughen(water: Water) -> void:
 	w.waves = list
 	w.speed_scale *= CHOP_SPEED
 	water.waves = w
+	water.storm_colors = true
 	var mat := water.shader_material()
 	w.apply_to(mat)
 	_set_water(mat, "deep_color", Color(0.05, 0.15, 0.23))
@@ -288,6 +289,7 @@ func stop() -> void:
 		_orig_waves.apply_to(mat)
 		for param in _orig_params:
 			mat.set_shader_parameter(param, _orig_params[param])
+		_water.storm_colors = false
 	if is_instance_valid(_wave_manager):
 		_wave_manager.amplitude_min = _orig_amp.x
 		_wave_manager.amplitude_max = _orig_amp.y

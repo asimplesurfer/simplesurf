@@ -123,6 +123,38 @@ func _test_sandbox() -> void:
 		as_node is GameSession and not as_node is RaceManager,
 		"el modo libre no es una carrera (base común: GameSession)"
 	)
+	# Panel de ajustes de prueba: color del agua y distancia de la cámara.
+	await process_frame
+	var panel := m.get_node_or_null("Views/TuningPanel") as TuningPanel
+	_check(panel != null, "hay panel de ajustes con sliders")
+	var saved_dark := Tuning.water_dark
+	var saved_dist := Tuning.camera_distance
+	Tuning.water_dark = 1.0
+	await process_frame
+	var deep: Variant = water.shader_material().get_shader_parameter("deep_color")
+	_check(deep is Color and (deep as Color).is_equal_approx(Water.NAVY_COLORS["deep_color"]), "el slider del agua la lleva a azul marino")
+	Tuning.water_dark = 0.0
+	await process_frame
+	_check(water.shader_material().get_shader_parameter("deep_color") == null, "en 0 vuelve al color de siempre")
+	var chase := (m.get_node("Views") as SplitScreen).cameras[0]
+	var flat_dist := func() -> float:
+		var d := chase._desired_position() - r.global_position
+		return Vector2(d.x, d.z).length()
+	Tuning.camera_distance = 4.5
+	chase._boost = 0.0
+	_check(absf(flat_dist.call() - 4.5) < 0.01, "el slider acerca la cámara (%.2f m)" % flat_dist.call())
+	chase._boost = 1.0
+	var turbo_close: float = flat_dist.call()
+	Tuning.camera_distance = Tuning.CAMERA_DISTANCE_DEFAULT
+	var turbo_default: float = flat_dist.call()
+	_check(
+		absf(turbo_close - turbo_default) < 0.01,
+		"con turbo la cámara queda a la misma distancia de siempre (%.2f m)" % turbo_close
+	)
+	chase._boost = 0.0
+	Tuning.water_dark = saved_dark
+	Tuning.camera_distance = saved_dist
+
 	# Reiniciar: la escena nueva entra antes de que se borre la vieja, y todo
 	# (surfista, olas, cámara) tiene que quedarse con el agua de la nueva.
 	sb.restart()
