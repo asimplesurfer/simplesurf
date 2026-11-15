@@ -100,11 +100,11 @@ const PRESETS := [
 		"shorts_pattern": 1, "board": 4, "board_design": 1},
 ]
 
-## Barras (0..1). Panza: 0 = Musculoso ... 1 = Cervecero.
+## Barra de cuerpo (0..1): 0 = musculoso ... 0.5 = normal ... 1 = panzón.
 @export_range(0.0, 1.0) var weight: float = 0.0
-## Músculos: 0 = flaquito ... 1 = musculoso (hombros grandes, pectorales).
+## Ya no se usan (los músculos salen de `weight` y la cabeza tiene un solo
+## tamaño); quedan para leer personajes guardados antes.
 @export_range(0.0, 1.0) var muscle: float = 1.0
-## Tamaño de cabeza: 0 = cabecita ... 0.5 = normal ... 1 = cabezón.
 @export_range(0.0, 1.0) var head_size: float = 0.5
 @export var skin_index: int = 2
 @export var shorts_index: int = 0

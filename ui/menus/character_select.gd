@@ -29,9 +29,7 @@ const IDLE_DEMO_TIME := 10.0
 const CATEGORIES := {
 	"Estilos": [["Estilos armados", "preset", "", ThumbRenderer.Frame.BODY]],
 	"Cuerpo": [
-		["Panza", "slider", "weight", 0],
-		["Músculos", "slider", "muscle", 0],
-		["Tamaño de cabeza", "slider", "head_size", 0],
+		["Cuerpo", "slider", "weight", 0],
 		["Forma de cabeza", "option", "head", ThumbRenderer.Frame.HEAD],
 	],
 	"Piel": [["Color de piel", "color", "skin", 0]],
@@ -70,8 +68,6 @@ const COLOR_LISTS := {
 }
 const SLIDER_ENDS := {
 	"weight": ["Musculoso", "Panzón"],
-	"muscle": ["Flaquito", "Musculoso"],
-	"head_size": ["Cabecita", "Cabezón"],
 }
 
 ## Si es false, no cambia de escena al empezar (para tests); solo emite la señal.
