@@ -142,6 +142,9 @@ func _connect_rider() -> void:
 	rider.trick_failed.connect(func() -> void: show_message("¡Truco fallido!", BAD_COLOR))
 	rider.drift_hit.connect(func(_victim: Rider) -> void: show_message("¡Lo tiraste!", PROMPT_COLOR))
 	rider.turbo_blocked.connect(func() -> void: _blocked = 1.0)
+	rider.trick_preview_started.connect(func(trick_name: String, index: int, total: int) -> void:
+		show_message("Truco %d/%d: %s" % [index + 1, total, trick_name], Color.WHITE)
+	)
 	rider.ring_collected.connect(func() -> void: show_message("+ NITRO", NITRO_COLOR))
 	rider.crashed.connect(func() -> void: show_message("¡Pum!", BAD_COLOR))
 	rider.popped.connect(func() -> void: show_message("¡POP!", PROMPT_COLOR))
@@ -451,7 +454,7 @@ func _update_help() -> void:
 			+ "Olas: X sube · Z baja (mando: RB / LB)\n"
 			+ "Tormenta: T (mando: Select)\n"
 			+ "Circuitos a lo lejos: slalom (rojo), círculos (celeste), géiseres (naranja)\n"
-			+ "B: probar distancia de cámara con turbo (1/2/3)\n"
+			+ "B: probar distancia de cámara con turbo (1/2/3)  ·  G: ver los trucos uno por uno (cámara lenta)\n"
 			+ "Esc: menú   ·   H: ocultar ayuda"
 		)
 		return
@@ -466,7 +469,7 @@ func _update_help() -> void:
 		+ "J2: flechas, ENTER salta, . derrapa, - turbo   ·   Esc: menú\n"
 		+ "Olas: %s (se cambia en el menú)\n" % GameSettings.wave_mode_name()
 		+ "Mando: %s (M cambia)   ·   H: ocultar ayuda   ·   P: FPS\n" % layout
-		+ "B: probar distancia de cámara con turbo (1/2/3)\n"
+		+ "B: probar distancia de cámara con turbo (1/2/3)  ·  G: ver los trucos uno por uno (cámara lenta)\n"
 		+ "Si no responde, haz clic en el juego"
 	)
 

@@ -6,6 +6,7 @@ func run() -> void:
 	await _test_trick_counter()
 	await _test_boost_camera()
 	await _test_carve_spray()
+	await _test_trick_preview()
 
 
 ## El HUD cuenta las vueltas del truco mientras está en el aire.
@@ -150,3 +151,43 @@ func _test_carve_spray() -> void:
 	await process_frame
 	GameSettings.player_count = saved[0]
 	GameSettings.bot_count = saved[1]
+
+
+## Visor de trucos (tecla G): salta, hace el siguiente truco solo, en cámara
+## lenta y con su nombre; al aterrizar todo vuelve a la normalidad.
+func _test_trick_preview() -> void:
+	print("Visor de trucos:")
+	var m: Node = load("res://main.tscn").instantiate()
+	root.add_child(m)
+	await process_frame
+	await process_frame
+	var race := m.get_node("RaceManager") as RaceManager
+	race.skip_countdown()
+	var r := race.humans()[0]
+	var hud := (m.get_node("Views") as SplitScreen).huds[0]
+	await _wait(0.5)
+	GameSession._preview_index = 0
+	await _key(KEY_G)
+	_check(r.trick_preview and not r.grounded and Engine.time_scale < 1.0, "G hace saltar y pone cámara lenta")
+	_check(hud._message.visible and "Giro de tabla" in hud._message.text, "muestra el nombre del truco (%s)" % hud._message.text)
+	var kinds_seen := {}
+	var max_units := 0.0
+	for i in 600:
+		await process_frame
+		max_units = maxf(max_units, r.trick_units_now())
+		if r.current_trick() >= 0:
+			kinds_seen[r.current_trick()] = true
+		if r.grounded and not r.trick_preview:
+			break
+	_check(kinds_seen.has(Rider.Trick.SPIN) and kinds_seen.size() == 1, "hace ese truco y solo ese (%s, %.2f tiempos)" % [str(kinds_seen.keys()), max_units])
+	_check(not r.is_fallen() and is_equal_approx(Engine.time_scale, 1.0), "aterriza bien y vuelve la velocidad normal")
+	await _wait(0.3)
+	await _key(KEY_G)
+	_check(r.trick_kinds.size() == 1 and r.trick_kinds[0] == 1, "la próxima vez muestra el siguiente truco")
+	for i in 600:
+		await process_frame
+		if r.grounded and not r.trick_preview:
+			break
+	Engine.time_scale = 1.0
+	m.queue_free()
+	await process_frame

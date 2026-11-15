@@ -72,9 +72,22 @@ enum Trick {
 	SPIN, KICKFLIP, TRE_FLIP, VARIAL,
 	HELICOPTER, BARREL_ROLL, SPIN_FLIP, OVERBOARD,
 	HEADSPIN, WINDMILL,
+	IMPOSSIBLE, BACKFLIP, SUPERMAN,
 }
+## Nombre de cada truco (para el visor de trucos, tecla G).
+const TRICK_NAMES: Array[String] = [
+	"Giro de tabla", "Kickflip", "360 flip", "Varial",
+	"Helicóptero", "Vuelta de costado", "Giro con flip", "Fuera de la tabla",
+	"Giro de cabeza", "Molino",
+	"Impossible", "Mortal hacia atrás", "Superman",
+]
+## Velocidad del juego mientras se mira un truco con el visor (cámara lenta).
+const TRICK_PREVIEW_TIME_SCALE := 0.35
+## Visor de trucos: salta solo y hace este truco, en cámara lenta.
+var trick_preview: bool = false
+signal trick_preview_started(trick_name: String, index: int, total: int)
 ## Cuántos tiempos dura cada truco.
-const TRICK_UNITS: Array[int] = [1, 1, 1, 1, 2, 2, 2, 2, 3, 3]
+const TRICK_UNITS: Array[int] = [1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 1, 2, 2]
 ## Trucos del salto actual, en orden (se eligen al empezar cada uno).
 var trick_kinds: Array[int] = []
 ## Tiempos de truco ya completos en este salto (lo lleva el estado del aire).
@@ -222,6 +235,36 @@ func trick_at(u: float) -> Array:
 			return [i, start, units]
 		start += units
 	return [-1, start, 0]
+
+
+## Visor de trucos: salta bien alto y hace el truco `kind` solo, en cámara
+## lenta, para mirarlo con calma. Al aterrizar todo vuelve a la normalidad.
+func preview_trick(kind: int) -> void:
+	if is_fallen():
+		return
+	var unit_time := TAU / stats.trick_spin_speed
+	# Aire suficiente para el truco y un margen (sin el freno del aire fino).
+	var air := TRICK_UNITS[kind] * unit_time + stats.trick_hold_delay + 0.5
+	position.y = water_height() + 0.3
+	vertical_speed = stats.gravity * air * 0.5
+	grounded = false
+	can_trick = true
+	did_pop = false
+	wave_air_time = -1.0
+	# Primero el estado (al salir de uno se apaga el visor), después el visor.
+	state_machine.transition_to(&"airborne")
+	trick_preview = true
+	trick_kinds.assign([kind])
+	trick_units_done = 0
+	Engine.time_scale = TRICK_PREVIEW_TIME_SCALE
+	trick_preview_started.emit(TRICK_NAMES[kind], kind, Trick.size())
+
+
+## Termina el visor de trucos (al aterrizar o caerse).
+func end_trick_preview() -> void:
+	if trick_preview:
+		trick_preview = false
+		Engine.time_scale = 1.0
 
 
 ## Truco en curso (-1 si no está haciendo ninguno).
