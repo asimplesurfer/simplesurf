@@ -202,10 +202,14 @@ func _test_demo() -> void:
 	race.skip_countdown()
 	await _wait(8.0)
 	var moving := true
+	var progress: Array[String] = []
 	for r in race.racers:
-		if race.progress_of(r) < 0.3:
+		progress.append("%s %.2f%s" % [r.name, race.progress_of(r), " (caído)" if r.is_fallen() else ""])
+		# Arrancar = avanzar algo (unos 20 m en el Atolón). Con tormenta y trucos al azar
+		# alguno puede caerse en los primeros segundos y quedar más atrás.
+		if race.progress_of(r) < 0.12:
 			moving = false
-	_check(moving, "los bots arrancan solos")
+	_check(moving, "los bots arrancan solos (%s)" % ", ".join(progress))
 	# Su vista muestra lo mismo que la de un jugador: al caerse, el cartel de
 	# levantarse con el ícono del botón.
 	var bot0 := race.racers[0]
