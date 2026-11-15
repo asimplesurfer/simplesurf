@@ -143,15 +143,19 @@ func _update_progress(r: Rider, delta: float) -> void:
 		_finish(r)
 
 
-## Handicap: cuanto más lejos del primero, más ayuda (hasta un tope).
+## Handicap: empareja a las personas entre sí. Cuanto más lejos de la persona
+## que va primera, más ayuda (hasta un tope). Contra bots solos no hay handicap:
+## para eso se elige la dificultad de los bots.
 func _update_catchup() -> void:
 	var leader := -1e9
+	var people := 0
 	for r in racers:
-		if not finished(r):
-			leader = maxf(leader, progress_of(r))
+		if r.is_human:
+			people += 1
+			if not finished(r):
+				leader = maxf(leader, progress_of(r))
 	for r in racers:
-		# Solo las personas reciben handicap: los bots corren a su nivel real.
-		if finished(r) or leader <= -1e8 or not catchup_enabled or not r.is_human:
+		if finished(r) or leader <= -1e8 or not catchup_enabled or not r.is_human or people < 2:
 			r.catchup = 0.0
 			continue
 		var gap_m := (leader - progress_of(r)) * course.track.radius

@@ -9,12 +9,6 @@ signal jump_mode_changed(mode_name: String)
 signal jump_style_changed(style_name: String)
 
 const SETTINGS_PATH := "user://settings.cfg"
-## Pop con la palanca: un golpe rápido hacia arriba (de suelta a casi tope en
-## menos de FLICK_TIME). Inclinarla de a poco o mantenerla no hace nada.
-const FLICK_LOW := 0.15
-const FLICK_HIGH := 0.75
-const FLICK_TIME := 0.12
-
 @export var player_index: int = 0
 
 ## true si lo último que tocó el jugador fue un mando (para mostrar "A" o "ESPACIO").
@@ -24,10 +18,6 @@ var _prefix: String = ""
 var _pending_mash: int = 0
 var _pending_debug_fall: bool = false
 var _pending_turbo: bool = false
-## Tiempo desde que la palanca estuvo suelta hacia arriba (para el golpe).
-var _since_up_low: float = 0.0
-## Ya contó este golpe (hay que soltar para el próximo).
-var _flick_armed: bool = true
 ## Distribución elegida a mano (-1 = automática).
 var _manual_layout: int = -1
 
@@ -114,10 +104,6 @@ func get_input(delta: float) -> RiderInput:
 		# Modo libre: avanza solo si empuja el stick (o W), y tanto como lo empuje.
 		if input.throttle > 0.0:
 			input.throttle = Input.get_action_strength(_prefix + "up")
-	# Golpe de palanca hacia arriba = lo mismo que apretar A (pop / saltito).
-	# (En el modo libre no: ahí la palanca adelante es para avanzar.)
-	if _update_flick(delta, input.steer) and not free:
-		_pending_mash += 1
 	input.trick = Input.is_action_pressed(_prefix + "a")
 	input.drift = Input.is_action_pressed(_prefix + "drift") and not free
 	input.turbo = Input.is_action_pressed(_prefix + "b")
@@ -130,23 +116,6 @@ func get_input(delta: float) -> RiderInput:
 	_pending_mash = 0
 	_pending_debug_fall = false
 	return input
-
-
-## true en el frame en que la palanca (o W / flecha arriba) se tira hacia arriba
-## de golpe y bastante derecha (en diagonal, al girar, no cuenta).
-func _update_flick(delta: float, steer: float) -> bool:
-	var up := Input.get_action_strength(_prefix + "up")
-	if up <= FLICK_LOW:
-		_since_up_low = 0.0
-		_flick_armed = true
-		return false
-	_since_up_low += delta
-	if not _flick_armed or up < FLICK_HIGH:
-		return false
-	_flick_armed = false
-	if _since_up_low > FLICK_TIME + 0.001:
-		return false
-	return not (using_joypad and absf(steer) > up * 0.6)
 
 
 func _load_manual_layout() -> int:

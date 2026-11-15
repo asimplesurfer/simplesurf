@@ -78,6 +78,8 @@ var race_finished: bool = false
 var pop_buffer: float = 0.0
 ## Tiempo desde que una ola lo lanzó (-1 si no fue una ola).
 var wave_air_time: float = -1.0
+## Velocidad hacia arriba con la que lo lanzó la ola (para el pop tardío).
+var launch_speed: float = 0.0
 ## Si ya hizo el pop en este salto.
 var did_pop: bool = false
 ## Si en este salto se puede hacer truco (en el saltito no: no daría el tiempo).
@@ -158,6 +160,7 @@ func _physics_process(delta: float) -> void:
 	# Handicap: nitro de a poco.
 	if catchup > 0.0 and not controls_locked:
 		add_nitro(stats.catchup_nitro_trickle * catchup * delta)
+	_top_up_first_charge(delta)
 	# Turbo en ráfagas: cada toque dispara una (mantener no hace nada).
 	turbo_time = maxf(0.0, turbo_time - delta)
 	if input.turbo_pressed and not is_fallen():
@@ -230,13 +233,13 @@ func turbo_charges() -> int:
 	return int(floor((nitro + 0.0001) / TURBO_CHARGE))
 
 
-## Dispara una ráfaga de turbo si tiene una carga. Si ya hay una en curso, la
-## alarga (se pueden encadenar). Devuelve true si salió.
+## Dispara una ráfaga de turbo si tiene una carga. Mientras dura una ráfaga no
+## se puede disparar otra (no gasta cargas de más). Devuelve true si salió.
 func fire_turbo() -> bool:
-	if turbo_charges() < 1:
+	if turbo_charges() < 1 or turbo_time > 0.0:
 		return false
 	add_nitro(-TURBO_CHARGE)
-	turbo_time = minf(turbo_time + stats.turbo_burst_time, stats.turbo_burst_time * 2.0)
+	turbo_time = stats.turbo_burst_time
 	turbo_fired.emit()
 	return true
 
@@ -296,6 +299,7 @@ func stick_to_water(delta: float, allow_launch: bool = true) -> bool:
 		if turbo_active:
 			boost *= stats.turbo_launch_mult
 		vertical_speed = (vertical_speed - stats.gravity * delta) * boost
+		launch_speed = vertical_speed
 		jump_charge = 0.0
 		grounded = false
 		wave_air_time = 0.0
@@ -362,7 +366,7 @@ func pop_ready() -> bool:
 			and pop_buffer <= 0.0
 			and crest_soon()
 		)
-	return wave_air_time >= 0.0 and wave_air_time < stats.pop_window
+	return wave_air_time >= 0.0 and wave_air_time < stats.pop_coyote
 
 
 ## true si está sobre una ola grande (o la ola constante) de al menos esa altura.
@@ -407,7 +411,7 @@ func try_pop_press() -> void:
 			pop_buffer = stats.pop_window
 		else:
 			pop_locked = true
-	elif wave_air_time >= 0.0 and wave_air_time < stats.pop_window:
+	elif wave_air_time >= 0.0 and wave_air_time < stats.pop_coyote:
 		do_pop()
 	else:
 		pop_locked = true
@@ -419,8 +423,22 @@ func do_pop() -> void:
 		return
 	did_pop = true
 	pop_buffer = 0.0
-	vertical_speed = maxf(vertical_speed, 0.0) * stats.pop_mult + stats.pop_extra
+	if grounded or wave_air_time < 0.0:
+		vertical_speed = pop_speed(maxf(vertical_speed, 0.0))
+	else:
+		# Pop tardío (coyote time): sale igual que si lo hubiera hecho justo al
+		# despegar; solo descuenta lo que ya frenó la gravedad desde entonces.
+		var lost := launch_speed - vertical_speed
+		vertical_speed = pop_speed(maxf(launch_speed, 0.0)) - lost
 	popped.emit()
+
+
+## Velocidad hacia arriba con pop, saliendo de la ola a `speed`. En los saltos
+## que ya son enormes (con turbo) el pop suma menos, hasta un 75 %.
+func pop_speed(speed: float) -> float:
+	var gain := speed * (stats.pop_mult - 1.0) + stats.pop_extra
+	var big := smoothstep(stats.pop_big_from, stats.pop_big_to, speed)
+	return speed + gain * lerpf(1.0, stats.pop_big_scale, big)
 
 
 ## Mueve en el aire. Devuelve true cuando toca el agua.
@@ -466,6 +484,16 @@ func add_nitro(amount: float) -> void:
 		amount *= nitro_gain_mult()
 	nitro = clampf(nitro + amount, 0.0, NITRO_MAX)
 	nitro_changed.emit(nitro, NITRO_MAX)
+
+
+## La primera barra de nitro, pasada cierta parte, se termina de llenar sola
+## (solo la primera, y ahí queda): quedarse a nada de poder usar el turbo frustra.
+func _top_up_first_charge(delta: float) -> void:
+	if controls_locked or is_fallen():
+		return
+	if nitro >= TURBO_CHARGE * stats.first_charge_autofill and nitro < TURBO_CHARGE:
+		nitro = minf(nitro + TURBO_CHARGE * stats.first_charge_fill_rate * delta, TURBO_CHARGE)
+		nitro_changed.emit(nitro, NITRO_MAX)
 
 
 func reset_nitro() -> void:

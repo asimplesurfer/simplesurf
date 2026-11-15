@@ -66,10 +66,6 @@ var _splash_material: ShaderMaterial
 var _splash_t: float = 0.0
 var _speed_lines: ColorRect
 ## Pop en la cresta: íconos (palanca arriba y botón de abajo, o la tecla).
-var _pop_box: HBoxContainer
-var _pop_stick: ButtonPrompt
-var _pop_face: ButtonPrompt
-var _pop_key: ButtonPrompt
 var _nitro_label: Label
 var _speed_lines_material: ShaderMaterial
 var _message_time: float = 0.0
@@ -232,17 +228,6 @@ func _process(delta: float) -> void:
 		_seen_boost_option = ChaseCamera.boost_option
 	_update_splash(delta)
 	_update_mash(delta)
-
-	# Momento justo para el pop: el botón aparece en grande y late.
-	# Cada vista muestra lo suyo: también las de los bots en la demo.
-	var pop := rider.pop_ready()
-	_pop_box.visible = pop
-	if pop:
-		var pad := _using_pad()
-		_pop_stick.visible = pad
-		_pop_face.visible = pad
-		_pop_key.visible = not pad
-		_pop_key.key_text = _key_name()
 
 	_speed_label.text = "%d km/h" % roundi(rider.speed * 3.6)
 	# Handicap: muestra cuánto más rápido carga el nitro.
@@ -532,28 +517,6 @@ func _build() -> void:
 	_trick_label.offset_bottom = 210.0
 	_trick_label.visible = false
 	root.add_child(_trick_label)
-
-	# Botón del pop (en la cresta de la ola), un poco abajo del centro.
-	_pop_box = HBoxContainer.new()
-	_pop_box.set_anchors_preset(Control.PRESET_CENTER)
-	_pop_box.offset_left = -250.0
-	_pop_box.offset_right = 250.0
-	_pop_box.offset_top = 30.0
-	_pop_box.offset_bottom = 150.0
-	_pop_box.alignment = BoxContainer.ALIGNMENT_CENTER
-	_pop_box.add_theme_constant_override("separation", 18)
-	_pop_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_pop_box.visible = false
-	root.add_child(_pop_box)
-	_pop_stick = ButtonPrompt.new()
-	_pop_stick.kind = ButtonPrompt.Kind.STICK_UP
-	_pop_box.add_child(_pop_stick)
-	_pop_face = ButtonPrompt.new()
-	_pop_box.add_child(_pop_face)
-	_pop_key = ButtonPrompt.new()
-	_pop_key.kind = ButtonPrompt.Kind.KEY
-	_pop_key.custom_minimum_size = Vector2(200.0, 110.0)
-	_pop_box.add_child(_pop_key)
 
 	# Cartel grande al centro (cuenta regresiva, vuelta, llegada, al revés).
 	_center_label = _make_label(84, Color.WHITE)

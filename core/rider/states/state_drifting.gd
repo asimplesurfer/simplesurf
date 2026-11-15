@@ -1,6 +1,6 @@
 extends RiderState
-## Derrape: la tabla se pone de costado, frena, gira más cerrado y tira agua
-## hacia atrás en forma de cono. Quien esté dentro del cono (y no esté saltando)
+## Derrape: frena y tira agua hacia atrás en forma de cono (la tabla sigue
+## derecha y se gira con el stick, como siempre). Quien esté dentro del cono (y no esté saltando)
 ## se cae de su tabla. Se hace mientras se mantiene el botón de derrape.
 
 
@@ -33,9 +33,7 @@ func update(delta: float, input: RiderInput) -> void:
 		return
 
 	rider.speed = move_toward(rider.speed, 0.0, stats.drift_decel * delta)
-	# Gira hacia el lado del derrape; el stick lo cierra o lo abre.
-	var steer := clampf(rider.drift_side * 0.6 + input.steer * 0.6, -1.0, 1.0)
-	rider.apply_steer(steer, delta, stats.drift_turn_factor)
+	rider.apply_steer(input.steer, delta)
 	rider.move_forward(delta)
 	_hit_riders_in_cone()
 	if rider.stick_to_water(delta):
