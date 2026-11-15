@@ -316,7 +316,11 @@ func _process(delta: float) -> void:
 const FLIP_CENTER := 0.9
 ## En el giro de cabeza, cuánto más abajo va el eje (con los brazos estirados
 ## el cuerpo se encoge un poco y si no, la cabeza quedaría flotando).
-const HEADSPIN_DROP := 0.06
+const HEADSPIN_DROP := -0.15
+## Giro de cabeza: parte del truco que dura la entrada (y la salida) en rueda,
+## y cuánto sube en arco mientras se da vuelta (m).
+const HEADSPIN_IN := 0.3
+const HEADSPIN_ARC := 0.45
 ## Pose del cuerpo en cada truco que no es la de siempre (agarrar la tabla).
 ## "air" con vertical_speed alto = brazos estirados hacia arriba.
 const TRICK_ANIMS := {
@@ -335,8 +339,8 @@ const WINDMILL_RAISE := 0.0
 ## su largo para quedar boca abajo, y dónde queda la tabla agarrada (m).
 const SUPERMAN_UP := 0.5
 const SUPERMAN_BACK := 0.45
-const SUPERMAN_TWIST := PI * 0.5
-const SUPERMAN_BOARD_UP := 0.8
+const SUPERMAN_TWIST := -PI * 0.5
+const SUPERMAN_BOARD_UP := 1.55
 const SUPERMAN_BOARD_FWD := -1.35
 
 
@@ -403,43 +407,46 @@ func _trick_transforms(kind: int, p: float) -> Array:
 			lift = Vector3(0.0, 0.85 * e, 0.0)
 			spin = Transform3D(Basis(Vector3.BACK, 2.0 * a), Vector3(0.0, -0.15 * e, 0.0))
 		Rider.Trick.HEADSPIN:
-			# Da la vuelta hacia un costado, apoya la cabeza y las manos en la
-			# tabla y gira de cabeza con la tabla (agarrada), y vuelve a quedar
-			# de pie (completa la vuelta).
-			var flip := 0.0
-			if p < 0.25:
-				flip = PI * smoothstep(0.0, 0.25, p)
-			elif p < 0.75:
-				flip = PI
-			else:
-				flip = PI + PI * smoothstep(0.75, 1.0, p)
-			var twirl := 0.0
-			if p > 0.2 and p < 0.8:
-				twirl = 2.0 * TAU * smoothstep(0.2, 0.8, p)
-			# Da vuelta alrededor de la mitad de su altura (menos lo que se encoge):
-			# queda con la coronilla sobre la tabla.
+			# Se tira de costado como una rueda (sube en arco mientras se da
+			# vuelta), apoya la cabeza y las manos en la tabla y gira de cabeza con
+			# la tabla agarrada; después sigue la rueda en arco hasta caer de pie
+			# (completa la vuelta, sin girar en el lugar).
+			var go_in := smoothstep(0.0, HEADSPIN_IN, p)
+			var go_out := smoothstep(1.0 - HEADSPIN_IN, 1.0, p)
+			var flip := PI * (go_in + go_out)
+			# Arco: sube mientras da vuelta (entrada y salida), no gira en el lugar.
+			var arc := HEADSPIN_ARC * (sin(go_in * PI) + sin(go_out * PI))
+			var twirl := 2.0 * TAU * smoothstep(HEADSPIN_IN * 0.8, 1.0 - HEADSPIN_IN * 0.8, p)
+			# Da vuelta alrededor de la mitad de su altura: queda con la coronilla
+			# apoyada sobre la tabla.
 			var mid := (BODY_HEIGHT + BOARD_TOP) * 0.5 - HEADSPIN_DROP
-			body = Transform3D(Basis(Vector3.UP, twirl), Vector3.ZERO) * _about_center(Basis(Vector3.FORWARD, flip), mid)
+			body = Transform3D(Basis(Vector3.UP, twirl), Vector3(0.0, arc, 0.0)) \
+				* _about_center(Basis(Vector3.FORWARD, flip), mid)
 			spin = Transform3D(Basis(Vector3.UP, twirl), Vector3.ZERO)
 		Rider.Trick.WINDMILL:
 			# Molino: apoya las manos en el medio de la tabla con el cuerpo
-			# acostado de costado, y las piernas dan vueltas alrededor.
-			var e := _hold_curve(p)
+			# acostado de costado, y las piernas (abiertas, pateando) dan vueltas
+			# alrededor. Para volver, las piernas bajan de un envión en arco y
+			# cae parado.
+			var e := _hold_curve(p, 0.3)
 			var around := 2.0 * TAU * smoothstep(0.15, 0.85, p)
-			body = Transform3D(Basis(Vector3.UP, around), Vector3(0.0, WINDMILL_RAISE * e, 0.0)) \
+			# Al entrar y salir sube un poco (envión con las piernas).
+			var swing := 0.35 * sin(smoothstep(0.0, 0.3, p) * PI) + 0.45 * sin(smoothstep(0.7, 1.0, p) * PI)
+			body = Transform3D(Basis(Vector3.UP, around), Vector3(0.0, WINDMILL_RAISE * e + swing, 0.0)) \
 				* _about_center(Basis(Vector3.FORWARD, WINDMILL_ROLL * e), CHEST_HEIGHT)
 		Rider.Trick.BACKFLIP:
 			# Vuelta mortal hacia atrás, con la tabla pegada a los pies.
 			whole = Transform3D(Basis.IDENTITY, Vector3(0.0, 0.3 * hop, 0.0)) * _about_center(Basis(Vector3.RIGHT, a))
 		Rider.Trick.SUPERMAN:
-			# Superman: agarra la tabla adelante con las dos manos y estira el
-			# cuerpo detrás, horizontal, boca abajo. Se pone de perfil a la cámara
-			# para que se vea, y vuelve.
-			var e := _hold_curve(p)
-			whole = Transform3D(Basis(Vector3.UP, -PI * 0.5 * e), Vector3(0.0, 0.3 * e, 0.0))
-			body = Transform3D(Basis.IDENTITY, Vector3(0.0, SUPERMAN_UP * e, SUPERMAN_BACK * e)) \
-				* _about_center(Basis(Vector3.RIGHT, -PI * 0.5 * e) * Basis(Vector3.UP, SUPERMAN_TWIST * e), CHEST_HEIGHT)
-			spin = Transform3D(Basis.IDENTITY, Vector3(0.0, SUPERMAN_BOARD_UP * e, SUPERMAN_BOARD_FWD * e))
+			# Superman, hacia adelante: tira la tabla hacia adelante, se agarra
+			# de la cola y vuela estirado detrás, boca abajo; después tira de la
+			# tabla hacia atrás para volver a ponerla bajo los pies mientras se
+			# para.
+			var board_out := smoothstep(0.0, 0.3, p) * (1.0 - smoothstep(0.68, 0.95, p))
+			var fly := smoothstep(0.1, 0.35, p) * (1.0 - smoothstep(0.65, 0.98, p))
+			body = Transform3D(Basis.IDENTITY, Vector3(0.0, SUPERMAN_UP * fly, SUPERMAN_BACK * fly)) \
+				* _about_center(Basis(Vector3.RIGHT, -PI * 0.5 * fly) * Basis(Vector3.UP, SUPERMAN_TWIST * fly), CHEST_HEIGHT)
+			spin = Transform3D(Basis.IDENTITY, Vector3(0.0, SUPERMAN_BOARD_UP * board_out, SUPERMAN_BOARD_FWD * board_out))
 	return [spin, lift, whole, body]
 
 

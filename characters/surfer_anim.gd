@@ -296,21 +296,28 @@ static func _paddle(p: Dictionary, s: Dictionary) -> void:
 ## de la cabeza). Piernas juntas y estiradas hacia arriba.
 static func _hands_down(p: Dictionary, s: Dictionary) -> void:
 	var w := sin(float(s.time) * 6.0) * 0.04
-	_reach(p, "HandL", Vector3(-0.95, 2.6 + w, 0.2), 1.0)
-	_reach(p, "HandR", Vector3(0.85, 2.6 - w, 0.2), 1.0)
+	_reach(p, "HandL", Vector3(-0.95, 2.85 + w, 0.2), 1.0)
+	_reach(p, "HandR", Vector3(0.85, 2.85 - w, 0.2), 1.0)
 	_move(p, "FootL", Vector3(0.3, 0.0, 0.0))
 	_move(p, "FootR", Vector3(-0.3, 0.0, 0.0))
 
 
-## Truco "molino": las manos adelante del pecho, apoyadas en la tabla, y el
-## cuerpo estirado (las piernas giran alrededor).
+## Truco "molino": las manos adelante del pecho, apoyadas en la tabla, y las
+## piernas abiertas en V barriendo en círculos (como un molino de break).
 static func _pommel(p: Dictionary, s: Dictionary) -> void:
 	_reach(p, "HandL", Vector3(-0.32, 1.1, 1.05), 1.0)
 	_reach(p, "HandR", Vector3(0.32, 1.1, 1.05), 1.0)
 	_turn(p, "Head", Vector3(0.35, 0.0, 0.0))
-	var kick := sin(float(s.time) * 8.0) * 0.08
-	_move(p, "FootL", Vector3(0.0, 0.0, kick))
-	_move(p, "FootR", Vector3(0.0, 0.0, -kick))
+	var t := float(s.time) * 9.0
+	for i in 2:
+		var side := "L" if i == 0 else "R"
+		var out := -1.0 if i == 0 else 1.0
+		var ph := t + PI * i
+		# Abiertas en V y cada una dibuja un círculo, a contratiempo.
+		var sweep := Vector3(out * (0.35 + 0.15 * cos(ph)), 0.12 * sin(ph), 0.45 * sin(ph))
+		_move(p, "Foot" + side, sweep)
+		_move(p, "Shin" + side, sweep * 0.7)
+		_move(p, "Thigh" + side, sweep * 0.35)
 
 
 ## Truco "superman": los dos brazos estirados por encima de la cabeza (agarran
