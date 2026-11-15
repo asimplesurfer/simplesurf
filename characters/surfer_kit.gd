@@ -332,21 +332,55 @@ func _choose_accessories(data: CharacterData) -> void:
 			n.free()
 
 
-## Barras: panza (0 musculoso ... 1 cervecero), músculos y tamaño de cabeza.
+## De normal a panzón la panza crece esta parte de lo que crecía antes (hacia
+## adelante y para abajo) y esta otra a los costados.
+const BELLY_GROWTH := 0.5
+const BELLY_SIDE := 0.25
+## Cuánto más adelante va el short con la panza (de normal a panzón).
+const SHORTS_FOLLOW := 1.4
+## Tamaño de la cabeza (ya no se elige).
+const HEAD_SCALE := 1.085
+## Músculos desde los que aparecen los hombros (0..1).
+const SHOULDERS_FROM := 0.45
+
+
+## Músculos (0..1) según la barra de cuerpo: 1 en musculoso, 0 desde normal.
+static func muscle_for(weight: float) -> float:
+	return clampf(1.0 - 2.0 * weight, 0.0, 1.0)
+
+
+## Una sola barra de cuerpo: 0 = musculoso ... 0.5 = normal ... 1 = panzón.
+## Los músculos salen de la misma barra (de musculoso a normal se van).
 func _apply_sliders(data: CharacterData) -> void:
-	var w := data.weight
-	var m := data.muscle
+	# Hasta normal (0.5), todo como siempre (`w`). De normal a panzón (`e`, 0..0.5)
+	# solo crece la panza, hacia adelante (cervecera): la mitad que antes, poco
+	# a los costados, y sin inflar el pecho ni los brazos.
+	var e := maxf(data.weight - 0.5, 0.0)
+	var w := minf(data.weight, 0.5)
+	var m := muscle_for(data.weight)
 	var torso := character.find_child("Torso", false, false) as Node3D
 	var waist := torso.find_child("Waist", false, false) as Node3D
 	var chest := torso.find_child("Chest", false, false) as Node3D
 	# Panza: la cintura se hace una panza redonda que sale para adelante.
-	waist.scale = Vector3(1.0 + 1.25 * w, 1.0 + 0.45 * w, 1.0 + 1.7 * w)
-	waist.position += Vector3(0.0, -0.06 * w, 0.13 * w)
+	# De normal a panzón crece solo hacia adelante (ni para arriba, que se
+	# vuelve pecho, ni para abajo, que tapa el short).
+	waist.scale = Vector3(
+		1.0 + 1.25 * w + 1.25 * BELLY_SIDE * e,
+		1.0 + 0.45 * w,
+		1.0 + 1.7 * w + 1.7 * BELLY_GROWTH * e
+	)
+	waist.position += Vector3(0.0, -0.06 * w, 0.13 * w + 0.13 * BELLY_GROWTH * e)
 	# Pecho: con músculos más ancho; con panza, más redondo.
 	chest.scale = Vector3((0.8 + 0.2 * m) * (1.0 + 0.08 * w), 0.92 + 0.08 * m, 1.0 + 0.3 * w)
-	var delt := (0.35 + 0.65 * m) * (1.0 - 0.45 * w)
+	# Hombros: solo del lado musculoso, y ya grandes (nunca hombritos chicos).
+	var shoulders := m >= SHOULDERS_FROM
+	var delt := lerpf(0.8, 1.0, inverse_lerp(SHOULDERS_FROM, 1.0, m))
 	for side in ["DeltL", "DeltR"]:
 		var d := torso.find_child(side, false, false) as Node3D
+		if not shoulders:
+			torso.remove_child(d)
+			d.free()
+			continue
 		d.scale = Vector3.ONE * delt
 		d.position.x *= 0.85 + 0.15 * m
 	var lines_visible := m > 0.55 and w < 0.4
@@ -361,7 +395,8 @@ func _apply_sliders(data: CharacterData) -> void:
 		pearls.scale = Vector3(chest.scale.x, 1.0, chest.scale.z)
 	# Short y piernas: más anchos con la panza.
 	var hips := character.find_child("ShortsHips", false, false) as Node3D
-	hips.scale = Vector3(1.0 + 0.35 * w, 1.0 + 0.08 * w, 1.0 + 0.45 * w)
+	# El short acompaña la panza por delante (así se sigue viendo).
+	hips.scale = Vector3(1.0 + 0.35 * w + 0.35 * BELLY_SIDE * e, 1.0 + 0.08 * w, 1.0 + 0.45 * w + SHORTS_FOLLOW * e)
 	for part in ["SleeveL", "SleeveR", "ThighL", "ThighR"]:
 		(character.find_child(part, false, false) as Node3D).scale *= Vector3(1.0 + 0.35 * w, 1.0, 1.0 + 0.35 * w)
 	for part in ["ShinL", "ShinR"]:
@@ -371,8 +406,9 @@ func _apply_sliders(data: CharacterData) -> void:
 		var hand := character.find_child(part, false, false) as Node3D
 		var out := Vector3(hand.position.x, 0.0, hand.position.z).normalized()
 		hand.position += out * 0.18 * w
-	# Cabeza: tamaño (barra) y forma; se sube para no hundirse en el pecho.
-	var s := lerpf(0.72, 1.45, data.head_size)
+	# Cabeza: siempre del mismo tamaño; la forma se elige. Se sube para no
+	# hundirse en el pecho.
+	var s := HEAD_SCALE
 	var shape := data.head_scale()
 	var h := character.find_child("Head", false, false) as Node3D
 	h.basis = h.basis * Basis.from_scale(shape * s)

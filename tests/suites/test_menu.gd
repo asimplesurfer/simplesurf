@@ -135,7 +135,7 @@ func _test_menu() -> void:
 	await _key(KEY_SPACE)
 	var w := d1.weight
 	await _key(KEY_RIGHT if w < 1.0 else KEY_LEFT)
-	_check(not is_equal_approx(d1.weight, w), "la barra de panza se mueve con ◀ ▶")
+	_check(not is_equal_approx(d1.weight, w), "la barra de cuerpo se mueve con < >")
 	await _key(KEY_ESCAPE)
 	var before := d1.to_dict()
 	await _key(KEY_R)

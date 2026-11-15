@@ -44,15 +44,27 @@ func _test_avatar() -> void:
 			all_ok = false
 		av.free()
 	_check(all_ok, "30 personajes al azar se arman sin errores")
-	var big := CharacterData.new()
-	big.head_size = 1.0
-	var av2 := Avatar.new()
-	av2.data = big
-	root.add_child(av2)
-	var head_r := av2.head_radius()
-	var face := av2.face_position()
-	av2.free()
-	_check(head_r > 0.65, "cabezón: la cabeza es más grande (%.2f)" % head_r)
+	# Una sola barra de cuerpo: los hombros solo del lado musculoso (y
+	# grandes); la cabeza siempre del mismo tamaño.
+	var radii: Array[float] = []
+	var face := Vector3.ZERO
+	for w in [0.0, 0.5, 1.0]:
+		var body := CharacterData.new()
+		body.weight = w
+		body.head_size = 1.0 if w > 0.7 else 0.0
+		var av2 := Avatar.new()
+		av2.data = body
+		root.add_child(av2)
+		radii.append(av2.head_radius())
+		if w == 0.5:
+			face = av2.face_position()
+		av2.free()
+	_check(SurferKit.muscle_for(0.0) >= SurferKit.SHOULDERS_FROM, "musculoso: con hombros")
+	_check(
+		SurferKit.muscle_for(0.5) < SurferKit.SHOULDERS_FROM and SurferKit.muscle_for(1.0) < SurferKit.SHOULDERS_FROM,
+		"normal y panzón: sin hombros (nada de hombritos chicos)"
+	)
+	_check(is_equal_approx(radii[0], radii[2]), "la cabeza es siempre del mismo tamaño (%.2f / %.2f)" % [radii[0], radii[2]])
 	_check(face.z > 0.3 and face.y > 1.9, "la cara está adelante de la cabeza (%s)" % face)
 
 
@@ -76,7 +88,6 @@ func _test_outline_width() -> void:
 	# Un personaje gordo y cabezón: todo su contorno sale del mismo grosor.
 	var d := CharacterData.new()
 	d.weight = 1.0
-	d.head_size = 1.0
 	var a := Avatar.new()
 	a.data = d
 	root.add_child(a)
