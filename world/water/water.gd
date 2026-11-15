@@ -39,6 +39,29 @@ const FACE_MIN_DEPTH := 0.02
 ## Altura mínima de una ola para que atravesarla cuente como chapuzón (m).
 const BIG_WAVE_MIN := 1.0
 
+## Colores del agua de día: los de siempre (los del shader) y el azul marino
+## al que se va con Tuning.water_dark = 1.
+const DAY_COLORS := {
+	"deep_color": Color(0.03, 0.2, 0.34),
+	"shallow_color": Color(0.08, 0.35, 0.48),
+	"wave_color": Color(0.14, 0.55, 0.6),
+	"outside_color": Color(0.03, 0.15, 0.27),
+	"rising_color": Color(0.02, 0.14, 0.28),
+}
+const NAVY_COLORS := {
+	"deep_color": Color(0.01, 0.06, 0.17),
+	"shallow_color": Color(0.03, 0.13, 0.3),
+	"wave_color": Color(0.06, 0.27, 0.42),
+	"outside_color": Color(0.01, 0.05, 0.14),
+	"rising_color": Color(0.01, 0.05, 0.15),
+}
+## Mientras hay tormenta, el agua tiene sus propios colores (no se tocan).
+var storm_colors: bool = false:
+	set(value):
+		storm_colors = value
+		_applied_dark = -1.0
+var _applied_dark: float = -1.0
+
 var _plane: ArrayMesh
 var _material: ShaderMaterial
 ## Cada uno: {node: Node3D, mesh: MeshInstance3D}
@@ -57,6 +80,7 @@ func _ready() -> void:
 
 	_material = ShaderMaterial.new()
 	_material.shader = SHADER
+	Tuning.load_values()
 	waves.apply_to(_material)
 
 	_plane = _build_mesh()
@@ -178,6 +202,8 @@ func _push_time() -> void:
 
 
 func _process(_delta: float) -> void:
+	if not storm_colors and _applied_dark != Tuning.water_dark:
+		_apply_day_colors(Tuning.water_dark)
 	for f in _followers:
 		if is_instance_valid(f.node):
 			_snap(f.mesh, f.node)
@@ -483,3 +509,14 @@ func _push_swells() -> void:
 		rb = ring_wave.shader_b()
 	_material.set_shader_parameter("ring_a", ra)
 	_material.set_shader_parameter("ring_b", rb)
+
+
+## Color del agua de día entre el de siempre (0) y azul marino (1). En 0 deja
+## los valores del shader (sin parámetros puestos).
+func _apply_day_colors(dark: float) -> void:
+	_applied_dark = dark
+	for param in DAY_COLORS:
+		if dark <= 0.0001:
+			_material.set_shader_parameter(param, null)
+		else:
+			_material.set_shader_parameter(param, (DAY_COLORS[param] as Color).lerp(NAVY_COLORS[param], dark))

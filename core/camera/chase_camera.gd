@@ -3,6 +3,7 @@ extends Camera3D
 ## Cámara que sigue al Rider desde atrás. Una por jugador (player_index).
 
 @export var target_path: NodePath
+## Distancia normal: la del panel de ajustes (Tuning.camera_distance).
 @export var distance: float = 6.0
 @export var height: float = 2.7
 @export var look_height: float = 1.0
@@ -53,6 +54,7 @@ func _ready() -> void:
 	if target:
 		target.wave_punched.connect(func() -> void: shake(0.6))
 	_water = GameSession.find_in_scene(self, "water") as Water
+	Tuning.load_values()
 	if target:
 		global_position = _desired_position()
 		look_at(_look_point(), Vector3.UP)
@@ -122,7 +124,11 @@ func shake(amount: float) -> void:
 
 func _desired_position() -> Vector3:
 	var fallen := target.is_fallen()
-	var dist := fallen_distance if fallen else distance + boost_pullback() * _boost * _boost * (3.0 - 2.0 * _boost)
+	# Con turbo va a la misma distancia de siempre (la de antes + el alejamiento),
+	# aunque la normal se acerque con el panel de ajustes.
+	var normal := Tuning.camera_distance
+	var turbo := maxf(Tuning.CAMERA_DISTANCE_DEFAULT + boost_pullback(), normal)
+	var dist := fallen_distance if fallen else lerpf(normal, turbo, _boost * _boost * (3.0 - 2.0 * _boost))
 	var h := fallen_height if fallen else height
 	var base := target.global_position
 	base.y *= _follow_y
