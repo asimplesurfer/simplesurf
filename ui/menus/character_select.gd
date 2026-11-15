@@ -45,10 +45,12 @@ const CATEGORIES := {
 		["Orejas", "option", "ears", ThumbRenderer.Frame.HEAD],
 	],
 	"Accesorios": [
+		["Sombrero", "option", "hat", ThumbRenderer.Frame.HEAD],
 		["Anteojos", "option", "glasses", ThumbRenderer.Frame.HEAD],
 		["Collar", "option", "neck", ThumbRenderer.Frame.CHEST],
 	],
-	"Short": [
+	"Ropa": [
+		["Arriba", "option", "top", ThumbRenderer.Frame.CHEST],
 		["Color del short", "color", "shorts", 0],
 		["Estampado", "option", "shorts_pattern", ThumbRenderer.Frame.HIPS],
 	],

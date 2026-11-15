@@ -57,6 +57,7 @@ const HEAD_SCALES := [
 ]
 const HAIR_STYLES := [
 	"Pelado", "Rapado", "Melena surfer", "Rulos", "Cresta", "Pinchos", "Moño", "Peluquín",
+	"Pelo largo", "Colita", "Dos colitas", "Carré", "Afro", "Rodetes", "Rastas",
 ]
 const HAIR_COLORS := [
 	Color("#f0c13a"),
@@ -69,16 +70,37 @@ const HAIR_COLORS := [
 	Color("#3b7bff"),
 ]
 const HAIR_COLOR_NAMES := ["Rubio", "Castaño", "Negro", "Colorado", "Canoso", "Rosa", "Verde", "Azul"]
-const EYES := ["Puntitos", "Saltones", "Bizcos", "Dormidos", "Desparejos"]
-const GLASSES := ["Ninguno", "De sol", "Antiparras", "Redondos", "Monóculo"]
+const EYES := [
+	"Puntitos", "Saltones", "Bizcos", "Dormidos", "Desparejos",
+	"Con pestañas", "Brillosos", "Felices", "Guiño", "Enojados",
+]
+const GLASSES := [
+	"Ninguno", "De sol", "Antiparras", "Redondos", "Monóculo",
+	"Aviador", "Corazones", "Estrellas", "Visera", "Parche pirata", "Snorkel",
+]
 const NOSES := ["Ninguna", "Botón", "Narigón", "De payaso", "Larga"]
-const MOUTHS := ["Ninguna", "Sonrisa", "De costado", "Abierta", "Dientes de conejo", "Mueca"]
+const MOUTHS := [
+	"Ninguna", "Sonrisa", "De costado", "Abierta", "Dientes de conejo", "Mueca",
+	"Labios pintados", "Lengua afuera", "Silbando",
+]
 const FACE_EXTRAS := ["Nada", "Bigote", "Barba", "Uniceja", "Cejas gruesas"]
 const EARS := ["Sin orejas", "Normales", "Grandes", "Dumbo"]
-const NECKLACES := ["Nada", "Perlas", "Collar de flores", "Cadena de oro"]
+const NECKLACES := [
+	"Nada", "Perlas", "Collar de flores", "Cadena de oro", "Dientes de tiburón", "Silbato", "Caracol",
+]
+## Sombreros y gorros (de playa y de mar).
+const HATS := [
+	"Nada", "Sombrero de paja", "Sombrero pirata", "Gorra de capitán", "Gorro de tiburón",
+	"Pañuelo", "Gorra", "Gorro de lana", "Corona de flores",
+]
+## Ropa de arriba (del color del short).
+const TOPS := ["Nada", "Bikini", "Musculosa"]
 
 ## Estilos armados (el primero es el surfista original del modelo 3D).
-const PRESET_NAMES := ["Surfista rubio", "Abuelo playero", "Payaso", "Nerd", "Alien", "Insolado"]
+const PRESET_NAMES := [
+	"Surfista rubio", "Abuelo playero", "Payaso", "Nerd", "Alien", "Insolado",
+	"Surfera", "Pirata", "Capitana", "Tiburoncito", "Isleña", "Navegante de paja",
+]
 const PRESETS := [
 	{"weight": 0.0, "muscle": 1.0, "head_size": 0.5, "skin": 2, "head": 0, "hair": 2, "hair_color": 0,
 		"eyes": 0, "glasses": 1, "nose": 0, "mouth": 2, "extra": 0, "ears": 0, "neck": 1, "shorts": 0,
@@ -98,6 +120,24 @@ const PRESETS := [
 	{"weight": 0.75, "muscle": 0.6, "head_size": 0.6, "skin": 5, "head": 1, "hair": 6, "hair_color": 3,
 		"eyes": 2, "glasses": 4, "nose": 2, "mouth": 5, "extra": 4, "ears": 3, "neck": 3, "shorts": 6,
 		"shorts_pattern": 1, "board": 4, "board_design": 1},
+	{"weight": 0.4, "skin": 1, "head": 0, "hair": 8, "hair_color": 2, "eyes": 5, "glasses": 0, "nose": 1,
+		"mouth": 6, "extra": 0, "ears": 1, "neck": 0, "shorts": 3, "shorts_pattern": 0, "board": 3,
+		"board_design": 1, "hat": 0, "top": 1},
+	{"weight": 0.65, "skin": 0, "head": 1, "hair": 3, "hair_color": 2, "eyes": 9, "glasses": 9, "nose": 2,
+		"mouth": 1, "extra": 2, "ears": 1, "neck": 3, "shorts": 5, "shorts_pattern": 3, "board": 7,
+		"board_design": 3, "hat": 2, "top": 0},
+	{"weight": 0.45, "skin": 3, "head": 0, "hair": 11, "hair_color": 4, "eyes": 6, "glasses": 0, "nose": 1,
+		"mouth": 6, "extra": 0, "ears": 1, "neck": 5, "shorts": 1, "shorts_pattern": 3, "board": 2,
+		"board_design": 2, "hat": 3, "top": 2},
+	{"weight": 0.3, "skin": 8, "head": 3, "hair": 0, "hair_color": 0, "eyes": 6, "glasses": 0, "nose": 0,
+		"mouth": 7, "extra": 0, "ears": 0, "neck": 4, "shorts": 0, "shorts_pattern": 2, "board": 3,
+		"board_design": 4, "hat": 4, "top": 0},
+	{"weight": 0.5, "skin": 2, "head": 0, "hair": 12, "hair_color": 2, "eyes": 7, "glasses": 6, "nose": 1,
+		"mouth": 1, "extra": 0, "ears": 1, "neck": 6, "shorts": 6, "shorts_pattern": 4, "board": 6,
+		"board_design": 1, "hat": 8, "top": 1},
+	{"weight": 0.15, "skin": 1, "head": 0, "hair": 1, "hair_color": 2, "eyes": 0, "glasses": 0, "nose": 1,
+		"mouth": 1, "extra": 0, "ears": 1, "neck": 0, "shorts": 0, "shorts_pattern": 0, "board": 1,
+		"board_design": 2, "hat": 1, "top": 0},
 ]
 
 ## Barra de cuerpo (0..1): 0 = musculoso ... 0.5 = normal ... 1 = panzón.
@@ -121,6 +161,8 @@ const PRESETS := [
 @export var neck_index: int = 0
 @export var shorts_pattern_index: int = 0
 @export var board_design_index: int = 0
+@export var hat_index: int = 0
+@export var top_index: int = 0
 
 ## Nombre del campo -> [propiedad, lista de opciones] (para el menú y el guardado).
 ## Barras: nombre -> propiedad.
@@ -137,6 +179,8 @@ const FIELDS := {
 	"extra": ["extra_index", FACE_EXTRAS],
 	"ears": ["ears_index", EARS],
 	"neck": ["neck_index", NECKLACES],
+	"hat": ["hat_index", HATS],
+	"top": ["top_index", TOPS],
 	"shorts": ["shorts_index", SHORTS_NAMES],
 	"shorts_pattern": ["shorts_pattern_index", SHORTS_PATTERNS],
 	"board": ["board_index", BOARD_NAMES],
