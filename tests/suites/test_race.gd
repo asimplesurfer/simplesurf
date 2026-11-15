@@ -849,7 +849,13 @@ func _test_turbo_and_wrong_way() -> void:
 	_rider.reset_nitro()
 	_rider.add_nitro(1.0)
 	var hud_full := (_main.get_node("Views") as SplitScreen).huds[0]
-	await _wait(0.4)
+	await process_frame
+	_check(
+		hud_full._gain_glow.visible and hud_full._gain_glow.anchor_right > hud_full._gain_glow.anchor_left + 0.5,
+		"el nitro recién ganado brilla en blanco en la barra"
+	)
+	await _wait(1.0)
+	_check(not hud_full._gain_glow.visible, "y el brillo se apaga solo")
 	var full_fill: Color = hud_full._nitro_fill.bg_color
 	_check(
 		full_fill.r > 0.9 and full_fill.g < 0.8 and full_fill.b < 0.7 and hud_full._fire.visible,
