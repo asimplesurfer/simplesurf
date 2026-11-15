@@ -848,13 +848,21 @@ func _test_turbo_and_wrong_way() -> void:
 	# Dos toques seguidos: el segundo no hace nada mientras dura la ráfaga.
 	_rider.reset_nitro()
 	_rider.add_nitro(1.0)
+	var hud_full := (_main.get_node("Views") as SplitScreen).huds[0]
+	await _wait(0.4)
+	var full_fill: Color = hud_full._nitro_fill.bg_color
+	_check(
+		full_fill.r > 0.9 and full_fill.g < 0.8 and full_fill.b < 0.7 and hud_full._fire.visible,
+		"con las 3 cargas la barra se pone roja y vibra"
+	)
 	await _press(&"p1_b")
 	await _press(&"p1_b")
 	var hud_t := (_main.get_node("Views") as SplitScreen).huds[0]
 	await process_frame
 	_check(
-		hud_t._burn_bar.value > hud_t._nitro_bar.value + 0.05,
-		"con turbo en curso, la carga que se usa se ve consumiéndose en la barra"
+		hud_t._burn_bar.value > hud_t._nitro_bar.value + 0.05 and hud_t._fire.visible
+		and hud_t._nitro_fill.bg_color.is_equal_approx(Hud.BURN_COLOR),
+		"con turbo en curso, la barra se pone naranja y se ve consumiéndose con fuego"
 	)
 	var blocked := [false]
 	_rider.turbo_blocked.connect(func() -> void: blocked[0] = true, CONNECT_ONE_SHOT)
