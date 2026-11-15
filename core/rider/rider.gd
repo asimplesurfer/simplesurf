@@ -67,9 +67,10 @@ var jump_charge: float = 0.0
 ## por tiempo: los trucos largos suman más.
 var trick_angle: float = 0.0
 ## Trucos en el aire: cortos (1 tiempo), medianos (2) y largos (3).
+## (Pensados para leerse desde la cámara, que va detrás.)
 enum Trick {
-	SPIN, KICKFLIP, IMPOSSIBLE, TRE_FLIP,
-	BACKFLIP, HELICOPTER, BARREL_ROLL, SUPERMAN,
+	SPIN, KICKFLIP, TRE_FLIP, VARIAL,
+	HELICOPTER, BARREL_ROLL, SPIN_FLIP, OVERBOARD,
 	HEADSPIN, WINDMILL,
 }
 ## Cuántos tiempos dura cada truco.
