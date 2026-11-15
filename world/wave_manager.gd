@@ -53,7 +53,7 @@ func _ready() -> void:
 		_rng.seed = random_seed
 	else:
 		_rng.randomize()
-	_water = get_tree().get_first_node_in_group("water") as Water
+	_water = GameSession.find_in_scene(self, "water") as Water
 	GameSettings.load_settings()
 	set_mode(GameSettings.wave_mode)
 
@@ -65,7 +65,7 @@ func set_mode(new_mode: GameSettings.WaveMode) -> void:
 		return
 	_water.clear_swells()
 	# La ola constante da la vuelta a la isla: solo existe en el mapa Isla.
-	var course := get_tree().get_first_node_in_group("course") as Course
+	var course := GameSession.find_in_scene(self, "course") as Course
 	if course and course.track is PathTrack and mode == GameSettings.WaveMode.CONSTANT_LEFT:
 		mode = GameSettings.WaveMode.SURGES
 	if mode == GameSettings.WaveMode.CONSTANT_LEFT:
@@ -107,7 +107,7 @@ func _ramp_scale(delta: float) -> void:
 ## La ola constante, alrededor de la isla por el lado de afuera de la pista.
 func make_ring_wave() -> RingWave:
 	var rw := RingWave.new()
-	var course := get_tree().get_first_node_in_group("course") as Course
+	var course := GameSession.find_in_scene(self, "course") as Course
 	if course:
 		rw.center = course.track.center
 		rw.radius = course.track.radius + constant_lateral
@@ -158,7 +158,7 @@ func _targets() -> Array[Rider]:
 
 ## Dirección de la pista donde está el corredor (o su frente, si no hay pista).
 func _track_dir(r: Rider) -> Vector2:
-	var course := get_tree().get_first_node_in_group("course") as Course
+	var course := GameSession.find_in_scene(self, "course") as Course
 	if course:
 		var t := course.track.tangent_at(course.track.angle_of(r.global_position))
 		return Vector2(t.x, t.z).normalized()
@@ -281,7 +281,7 @@ func make_swell() -> Swell:
 ## Ola que nace adelante del jugador, siguiendo la pista, y viene de frente
 ## hacia él (cruza todo el ancho de la pista).
 func _make_incoming(target: Rider, player: Vector2) -> Swell:
-	var course := get_tree().get_first_node_in_group("course") as Course
+	var course := GameSession.find_in_scene(self, "course") as Course
 	var s := Swell.new()
 	var dist := _rng.randf_range(incoming_distance_min, incoming_distance_max)
 	if course:

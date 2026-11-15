@@ -52,7 +52,7 @@ func _ready() -> void:
 		target = get_node_or_null(target_path) as Rider
 	if target:
 		target.wave_punched.connect(func() -> void: shake(0.6))
-	_water = get_tree().get_first_node_in_group("water") as Water
+	_water = GameSession.find_in_scene(self, "water") as Water
 	if target:
 		global_position = _desired_position()
 		look_at(_look_point(), Vector3.UP)

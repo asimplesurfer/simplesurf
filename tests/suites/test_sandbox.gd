@@ -123,6 +123,25 @@ func _test_sandbox() -> void:
 		as_node is GameSession and not as_node is RaceManager,
 		"el modo libre no es una carrera (base común: GameSession)"
 	)
+	# Reiniciar: la escena nueva entra antes de que se borre la vieja, y todo
+	# (surfista, olas, cámara) tiene que quedarse con el agua de la nueva.
+	sb.restart()
+	await _wait(0.5)
+	var fresh: Node = root.get_child(root.get_child_count() - 1)
+	var fresh_water := fresh.get_node("Water") as Water
+	var fresh_rider := (fresh.get_node("Session") as Sandbox).racers[0]
+	_check(
+		fresh != m and is_instance_valid(fresh_rider.water) and fresh_rider.water == fresh_water,
+		"al reiniciar, el surfista sigue el agua de la partida nueva (no la vieja)"
+	)
+	_check(
+		absf(fresh_rider.position.y - fresh_water.height_at(fresh_rider.position.x, fresh_rider.position.z)) < 0.01,
+		"y flota justo sobre las olas que se ven"
+	)
+	var fresh_cam := (fresh.get_node("Views") as SplitScreen).cameras[0]
+	_check(fresh_cam._water == fresh_water and (fresh.get_node("WaveManager") as WaveManager)._water == fresh_water,
+		"la cámara y las olas grandes también usan el agua nueva")
+	m = fresh
 	m.queue_free()
 	await process_frame
 	await process_frame

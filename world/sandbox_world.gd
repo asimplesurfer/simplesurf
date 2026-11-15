@@ -30,7 +30,7 @@ var _time: float = 0.0
 
 func _ready() -> void:
 	add_to_group("sandbox_world")
-	_water = get_tree().get_first_node_in_group("water") as Water
+	_water = GameSession.find_in_scene(self, "water") as Water
 	if _water:
 		var none: Array[Vector3] = []
 		_water.set_islands(none)

@@ -71,9 +71,9 @@ func _ready() -> void:
 		difficulty = AIDifficulty.preset(1)
 	_rng.randomize()
 	_pick_path()
-	course = get_tree().get_first_node_in_group("course") as Course
-	_water = get_tree().get_first_node_in_group("water") as Water
-	race = get_tree().get_first_node_in_group("race_manager") as RaceManager
+	course = GameSession.find_in_scene(self, "course") as Course
+	_water = GameSession.find_in_scene(self, "water") as Water
+	race = GameSession.find_in_scene(self, "race_manager") as RaceManager
 
 
 func get_input(delta: float) -> RiderInput:

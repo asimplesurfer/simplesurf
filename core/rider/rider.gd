@@ -122,7 +122,7 @@ func _ready() -> void:
 	add_to_group("riders")
 	if stats == null:
 		stats = RiderStats.new()
-	water = get_tree().get_first_node_in_group("water") as Water
+	water = GameSession.find_in_scene(self, "water") as Water
 	heading = rotation.y
 	position.y = water_height()
 	# Remar acostado (modo libre).

@@ -51,7 +51,7 @@ func _ready() -> void:
 	GameSettings.load_settings()
 	if layout < 0:
 		layout = _session_config().layout
-	_water = get_tree().get_first_node_in_group("water") as Water
+	_water = GameSession.find_in_scene(self, "water") as Water
 
 	map = TrackMap.for_layout(layout)
 	half_width = map.half_width
