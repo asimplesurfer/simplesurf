@@ -46,6 +46,20 @@ static func of(node: Node) -> GameSession:
 	return null
 
 
+## El primer nodo del grupo `group` que está en la misma escena que `node`.
+## Al reiniciar, la escena nueva entra antes de que se borre la vieja: buscar en
+## todo el juego podía devolver el agua (o la pista) de la escena que se va.
+static func find_in_scene(node: Node, group: StringName) -> Node:
+	var tree := node.get_tree()
+	var scene_root := node
+	while scene_root.get_parent() and scene_root.get_parent() != tree.root:
+		scene_root = scene_root.get_parent()
+	for n in tree.get_nodes_in_group(group):
+		if n == scene_root or scene_root.is_ancestor_of(n):
+			return n
+	return tree.get_first_node_in_group(group)
+
+
 ## Abre `scene_path` con esta configuración en lugar de `old` (por defecto, la
 ## escena actual).
 static func launch(tree: SceneTree, scene_path: String, session_config: RaceConfig, old: Node = null) -> void:
