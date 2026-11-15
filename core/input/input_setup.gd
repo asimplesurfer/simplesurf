@@ -153,7 +153,7 @@ static func set_player_device(player_index: int, device: int) -> void:
 
 	# Quitar eventos anteriores de joystick, conservando las teclas.
 	for action in actions:
-		var action_name := p + action
+		var action_name: String = p + action
 		if not InputMap.has_action(action_name):
 			continue
 		for ev in InputMap.action_get_events(action_name):
