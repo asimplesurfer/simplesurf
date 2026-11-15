@@ -25,7 +25,7 @@ const ICONS := [
 	["Pelo", ThumbRenderer.Frame.HEAD],
 	["Cara", ThumbRenderer.Frame.HEAD],
 	["Accesorios", ThumbRenderer.Frame.CHEST],
-	["Short", ThumbRenderer.Frame.HIPS],
+	["Ropa", ThumbRenderer.Frame.HIPS],
 	["Tabla", ThumbRenderer.Frame.BOARD],
 ]
 ## Paso de las barras (panza, músculos, cabeza).

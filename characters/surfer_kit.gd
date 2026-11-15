@@ -306,7 +306,9 @@ func _fist_left_hand() -> void:
 func _choose_accessories(data: CharacterData) -> void:
 	var keep_hair := data.get_option("hair") == 2
 	var keep_glasses := data.get_option("glasses") == 1
-	var keep_smirk := data.get_option("mouth") == 2
+	# La sonrisa de costado del modelo es una línea sin grosor que con el contorno
+	# parejo no se dibuja: la arma AvatarFeatures (boca 2).
+	var keep_smirk := false
 	var keep_pearls := data.get_option("neck") == 1
 	var keep_flowers := data.get_option("shorts_pattern") == 1
 	var to_remove: Array[Node] = []
