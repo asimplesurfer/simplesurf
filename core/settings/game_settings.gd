@@ -60,7 +60,7 @@ static func load_settings() -> void:
 	_loaded = true
 	var cfg := ConfigFile.new()
 	if cfg.load(PATH) == OK:
-		player_count = clampi(int(cfg.get_value("gameplay", "player_count", 1)), 1, 2)
+		player_count = clampi(int(cfg.get_value("gameplay", "player_count", 1)), 1, InputSetup.MAX_PLAYERS)
 		split_vertical = bool(cfg.get_value("gameplay", "split_vertical", true))
 		jump_style = int(cfg.get_value("gameplay", "jump_style", JumpStyle.WAVES)) as JumpStyle
 		track_layout = clampi(
@@ -70,7 +70,7 @@ static func load_settings() -> void:
 		wave_mode = clampi(int(cfg.get_value("gameplay", "wave_mode", WaveMode.SURGES)), 0, 1) as WaveMode
 		bot_count = clampi(int(cfg.get_value("gameplay", "bot_count", 1)), 0, 3)
 		bot_level = clampi(int(cfg.get_value("gameplay", "bot_level", 1)), 0, AIDifficulty.NAMES.size() - 1)
-		for i in 2:
+		for i in InputSetup.MAX_PLAYERS:
 			var key := "player_%d" % i
 			if not cfg.has_section_key("characters", key):
 				continue

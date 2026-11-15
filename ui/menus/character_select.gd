@@ -1,15 +1,15 @@
 class_name CharacterSelect
 extends Control
-## Menú del juego, en dos pantallas:
-## 1. "Creá tu surfista": categorías a la izquierda, el personaje en grande en
-##    el medio y, a la derecha, cuadrados con la foto de cada opción (o el
-##    color). Las barras (panza, músculos, cabeza) se mueven con ← →.
-## 2. "Armá la partida": jugadores, bots, dificultad, olas y mapa, también en
-##    cuadrados. De ahí arranca la carrera.
-##
-## Se maneja con el mouse, con el mando o con el teclado: flechas / stick para
-## moverse, ESPACIO / A para elegir, ENTER / Start para seguir, ESC / B para
-## volver. Sin tocar nada 10 s arranca la demo (carrera de bots).
+## Menú del juego, en tres pantallas:
+## 1. Título: JUGAR. Al apretarlo pasa a JUGADORES ◀ 1 ▶ (de 1 a 4).
+## 2. Personajes: una tarjeta por jugador (PlayerCard). Cada persona se une
+##    apretando A / ESPACIO con su mando o el teclado (el teclado es de una sola
+##    persona) y arma su surfista; todos a la vez. Cuando todos los que se
+##    unieron están listos (Start / ENTER), sigue.
+## 3. "Armá la partida": bots, dificultad, olas, mapa, clima. De ahí arranca la
+##    carrera (o el modo libre). Cada jugador juega con el dispositivo con el
+##    que se unió.
+## Sin tocar nada 10 s arranca la demo (carrera de bots).
 
 signal start_requested
 ## Eligió el modo libre (mar abierto).
@@ -21,8 +21,6 @@ const RACE_SCENE := "res://main.tscn"
 const SANDBOX_SCENE := "res://sandbox.tscn"
 const YELLOW := Palette.BUTTER
 const PANEL_BG := Palette.UI_PANEL
-const TILE := Vector2(104.0, 122.0)
-## Segundos sin tocar nada para que arranque la demo (carrera de bots).
 const IDLE_DEMO_TIME := 10.0
 
 ## Categorías del creador: nombre -> secciones. Cada sección es
@@ -78,48 +76,36 @@ const SLIDER_ENDS := {
 
 ## Si es false, no cambia de escena al empezar (para tests); solo emite la señal.
 var auto_start: bool = true
-
-## "creator" o "setup".
-var screen: String = "creator"
-## Jugador que se está armando.
-var player: int = 0
-var category: String = "Estilos"
-## Último estilo armado elegido (-1 = a tu gusto).
-var preset: int = -1
-
+## Pantalla actual: "title", "players" o "setup".
+var screen: String = "title"
+## En el título: false = botón JUGAR, true = elegir cuántos juegan.
+var choosing_count: bool = false
+## Tarjetas de los jugadores (pantalla "players").
+var cards: Array[PlayerCard] = []
+## Dispositivo de cada jugador que ya se unió (para volver a las tarjetas).
+var _joined: Dictionary = {}
 var _idle_time: float = 0.0
 var _demo_label: Label
 var _thumbs: ThumbRenderer
-var _avatar: Avatar
-var _pivot: Node3D
-var _board: Node3D
-var _cam: Camera3D
-var _zoom: float = 0.0
-var _options_box: VBoxContainer
-var _category_buttons: Dictionary = {}
-## Cuadrados de la categoría actual: campo (o "preset") -> Array de botones.
-var _tiles: Dictionary = {}
-var _sliders: Dictionary = {}
-var _rng := RandomNumberGenerator.new()
+var _count_label: Label
+## Stick ya movido (hay que soltarlo para el próximo paso): "device:eje" -> true.
+var _stick_armed: Dictionary = {}
 
 
 func _ready() -> void:
 	GameSettings.load_settings()
-	for i in 2:
+	for i in InputSetup.MAX_PLAYERS:
 		InputSetup.ensure_player_actions(i)
+	# En el menú cada uno se une con su dispositivo; hasta entonces se reparte solo.
+	InputSetup.clear_assignments()
 	InputSetup.apply_keyboard_layout(GameSettings.player_count)
 	# En el navegador el mando "aparece" recién al tocar un botón (a veces ya en
 	# el menú): se reasignan los mandos apenas se conecta o desconecta uno.
 	Input.joy_connection_changed.connect(_on_joy_connection_changed)
-	_rng.randomize()
 	_build()
 	var audio := get_node_or_null("/root/AudioManager")
 	if audio:
 		audio.menu_opened()
-
-
-func data() -> CharacterData:
-	return GameSettings.character_for(player)
 
 
 ## Arma la pantalla actual desde cero.
@@ -127,11 +113,8 @@ func _build() -> void:
 	for child in get_children():
 		remove_child(child)
 		child.queue_free()
-	_tiles.clear()
-	_sliders.clear()
-	_category_buttons.clear()
-	_options_box = null
-	_cam = null
+	cards.clear()
+	_count_label = null
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	var bg := ColorRect.new()
 	bg.color = Palette.UI_SKY
@@ -139,330 +122,175 @@ func _build() -> void:
 	add_child(bg)
 	_thumbs = ThumbRenderer.new()
 	add_child(_thumbs)
-	if screen == "creator":
-		_build_creator()
-	else:
-		_build_setup()
+	match screen:
+		"title":
+			_build_title()
+		"players":
+			_build_players()
+		_:
+			_build_setup()
 	_demo_label = _label("", 16, Palette.UI_SOFT_TEXT)
 	_demo_label.position = Vector2(20.0, 4.0)
 	add_child(_demo_label)
 
 
-# ---------------------------------------------------------------- creador
+# ---------------------------------------------------------------- título
 
-func _build_creator() -> void:
+func _build_title() -> void:
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(center)
+	var box := VBoxContainer.new()
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override("separation", 26)
+	center.add_child(box)
+	box.add_child(_label("SimpleSurf", 72, YELLOW))
+	if not choosing_count:
+		var play := _button("JUGAR", 44)
+		play.custom_minimum_size = Vector2(320.0, 96.0)
+		play.pressed.connect(func() -> void: _title_accept())
+		box.add_child(play)
+		box.add_child(_label("ESPACIO / A", 18, Color.WHITE))
+		return
+	box.add_child(_label("Jugadores", 34, Color.WHITE))
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 24)
+	box.add_child(row)
+	var less := _button("◀", 40)
+	less.custom_minimum_size = Vector2(90.0, 90.0)
+	less.focus_mode = Control.FOCUS_NONE
+	less.pressed.connect(func() -> void: change_player_count(-1))
+	row.add_child(less)
+	_count_label = _label(str(GameSettings.player_count), 64, YELLOW)
+	_count_label.custom_minimum_size = Vector2(90.0, 0.0)
+	row.add_child(_count_label)
+	var more := _button("▶", 40)
+	more.custom_minimum_size = Vector2(90.0, 90.0)
+	more.focus_mode = Control.FOCUS_NONE
+	more.pressed.connect(func() -> void: change_player_count(1))
+	row.add_child(more)
+	var go := _button("¡Vamos!", 30)
+	go.custom_minimum_size = Vector2(260.0, 70.0)
+	go.focus_mode = Control.FOCUS_NONE
+	go.pressed.connect(go_players)
+	box.add_child(go)
+	box.add_child(_label("◀ ▶ cuántos juegan · ESPACIO / A seguir · ESC / B volver", 18, Color.WHITE))
+
+
+func _title_accept() -> void:
+	if not choosing_count:
+		choosing_count = true
+		_build()
+	else:
+		go_players()
+
+
+func change_player_count(step: int) -> void:
+	GameSettings.player_count = clampi(GameSettings.player_count + step, 1, InputSetup.MAX_PLAYERS)
+	if _count_label:
+		_count_label.text = str(GameSettings.player_count)
+
+
+# ---------------------------------------------------------------- jugadores
+
+func _build_players() -> void:
 	var root := _root_box()
-	var title := "Creá tu surfista"
-	if GameSettings.player_count > 1:
-		title = "Jugador %d · creá tu surfista" % (player + 1)
-	root.add_child(_label(title, 40, YELLOW))
-
-	var body := HBoxContainer.new()
-	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	body.add_theme_constant_override("separation", 14)
-	root.add_child(body)
-
-	# Categorías.
-	var cats := VBoxContainer.new()
-	cats.add_theme_constant_override("separation", 6)
-	cats.custom_minimum_size.x = 160.0
-	body.add_child(_panel(cats))
-	for cat_name in CATEGORIES:
-		var b := _button(cat_name, 22)
-		b.custom_minimum_size = Vector2(150.0, 46.0)
-		b.pressed.connect(func() -> void: _select_category(cat_name))
-		b.focus_entered.connect(func() -> void: _select_category(cat_name))
-		cats.add_child(b)
-		_category_buttons[cat_name] = b
-
-	# Vista previa grande.
-	var view := SubViewportContainer.new()
-	view.stretch = true
-	view.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	view.custom_minimum_size = Vector2(300.0, 300.0)
-	body.add_child(_panel(view))
-	var vp := SubViewport.new()
-	vp.own_world_3d = true
-	vp.transparent_bg = true
-	view.add_child(vp)
-	_pivot = Node3D.new()
-	vp.add_child(_pivot)
-	_avatar = Avatar.new()
-	_avatar.data = data()
-	_pivot.add_child(_avatar)
-	_board = Node3D.new()
-	_pivot.add_child(_board)
-	_cam = Camera3D.new()
-	_cam.fov = 34.0
-	vp.add_child(_cam)
-	_cam.current = true
-	var env := WorldEnvironment.new()
-	env.environment = Environment.new()
-	env.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.environment.ambient_light_color = Color(0.8, 0.9, 1.0)
-	vp.add_child(env)
-	var sun := DirectionalLight3D.new()
-	sun.rotation = Vector3(-0.8, 0.5, 0.0)
-	vp.add_child(sun)
-	_rebuild_board()
-
-	# Opciones de la categoría (con desplazamiento).
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.custom_minimum_size.x = 470.0
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.follow_focus = true
-	body.add_child(_panel(scroll))
-	_options_box = VBoxContainer.new()
-	_options_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_options_box.add_theme_constant_override("separation", 8)
-	scroll.add_child(_options_box)
-
-	# Abajo: al azar, ayuda y seguir.
+	var title := "Uníte y armá tu surfista" if GameSettings.player_count == 1 else "Cada uno se une y arma su surfista"
+	root.add_child(_label(title, 34, YELLOW))
+	var row := HBoxContainer.new()
+	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 12)
+	root.add_child(row)
+	var count := GameSettings.player_count
+	for i in count:
+		var card := PlayerCard.new()
+		card.index = i
+		card.compact = count >= 3
+		card.thumbs = _thumbs
+		if count <= 2:
+			card.custom_minimum_size.x = 440.0
+		else:
+			card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(card)
+		cards.append(card)
+		card.ready_changed.connect(_check_all_ready)
+		card.join_clicked.connect(func() -> void: _join(InputSetup.KEYBOARD))
+		if _joined.has(i):
+			card.join(_joined[i])
 	var bar := HBoxContainer.new()
 	bar.add_theme_constant_override("separation", 16)
 	root.add_child(bar)
-	var random := _button("Al azar", 22)
-	random.custom_minimum_size = Vector2(140.0, 48.0)
-	random.pressed.connect(randomize_character)
-	bar.add_child(random)
-	var hint := _label("Flechas / stick: moverse · ESPACIO / A: elegir · ENTER / Start: seguir", 16, Color.WHITE)
+	var back := _button("←  Volver", 22)
+	back.custom_minimum_size = Vector2(150.0, 46.0)
+	back.focus_mode = Control.FOCUS_NONE
+	back.pressed.connect(go_title)
+	bar.add_child(back)
+	var hint := _label("Cuando todos están listos (Start / ENTER), sigue", 18, Color.WHITE)
 	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bar.add_child(hint)
-	var next := _button("Listo  →", 26)
-	next.custom_minimum_size = Vector2(170.0, 48.0)
-	next.pressed.connect(go_setup)
-	bar.add_child(next)
-	_show_category(category)
-	(_category_buttons[category] as Button).grab_focus.call_deferred()
 
 
-func _select_category(cat_name: String) -> void:
-	if cat_name != category:
-		_show_category(cat_name)
+## Une el dispositivo a la primera tarjeta libre. Devuelve la tarjeta (o null).
+func _join(device: int) -> PlayerCard:
+	if card_of(device):
+		return null
+	for card in cards:
+		if not card.joined():
+			card.join(device)
+			_joined[card.index] = device
+			return card
+	return null
 
 
-func _show_category(cat_name: String) -> void:
-	category = cat_name
-	for c in _category_buttons:
-		_style_tile(_category_buttons[c], c == cat_name)
-	_fill_options()
+## Tarjeta que maneja el dispositivo (o null).
+func card_of(device: int) -> PlayerCard:
+	for card in cards:
+		if card.device == device:
+			return card
+	return null
 
 
-func _fill_options() -> void:
-	if _options_box == null:
+func _check_all_ready() -> void:
+	for card in cards:
+		if not card.joined() or not card.is_ready:
+			return
+	var assignment := {}
+	for card in cards:
+		assignment[card.index] = card.device
+	InputSetup.assign_devices(assignment)
+	go_setup()
+
+
+## Lo que tocó un dispositivo en la pantalla de jugadores.
+func _players_action(device: int, action: String) -> void:
+	var card := card_of(device)
+	if card == null:
+		if action in ["accept", "start"]:
+			_join(device)
+		elif action == "back" and _joined.is_empty():
+			go_title()
 		return
-	for c in _options_box.get_children():
-		_options_box.remove_child(c)
-		c.queue_free()
-	_tiles.clear()
-	_sliders.clear()
-	_thumbs.clear()
-	for section in CATEGORIES[category]:
-		var title: String = section[0]
-		var kind: String = section[1]
-		var field: String = section[2]
-		var l := _label(title, 20, YELLOW)
-		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-		_options_box.add_child(l)
-		match kind:
-			"slider":
-				_add_slider(field)
-			"preset":
-				_add_grid("preset", CharacterData.PRESET_NAMES, kind, section[3])
-			_:
-				_add_grid(field, (CharacterData.FIELDS[field][1] as Array), kind, section[3])
-	_refresh_selection()
-
-
-func _add_slider(prop: String) -> void:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 10)
-	row.add_child(_label(SLIDER_ENDS[prop][0], 16, Color.WHITE))
-	var slider := HSlider.new()
-	slider.min_value = 0.0
-	slider.max_value = 1.0
-	slider.step = 0.05
-	slider.focus_mode = Control.FOCUS_ALL
-	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	slider.custom_minimum_size = Vector2(200.0, 40.0)
-	slider.value = float(data().get(prop))
-	slider.value_changed.connect(func(v: float) -> void: set_slider(prop, v))
-	row.add_child(slider)
-	row.add_child(_label(SLIDER_ENDS[prop][1], 16, Color.WHITE))
-	_options_box.add_child(row)
-	_sliders[prop] = slider
-
-
-func set_slider(prop: String, value: float) -> void:
-	data().set(prop, clampf(value, 0.0, 1.0))
-	preset = -1
-	if _sliders.has(prop):
-		(_sliders[prop] as HSlider).set_value_no_signal(value)
-	_changed()
-
-
-func _add_grid(field: String, names: Array, kind: String, frame: int) -> void:
-	var grid := GridContainer.new()
-	grid.columns = 4
-	grid.add_theme_constant_override("h_separation", 8)
-	grid.add_theme_constant_override("v_separation", 8)
-	_options_box.add_child(grid)
-	var buttons: Array[Button] = []
-	for i in names.size():
-		var b := Button.new()
-		b.custom_minimum_size = TILE
-		b.focus_mode = Control.FOCUS_ALL
-		b.tooltip_text = names[i]
-		_style_tile(b, false)
-		var box := VBoxContainer.new()
-		box.set_anchors_preset(Control.PRESET_FULL_RECT)
-		box.offset_left = 6.0
-		box.offset_right = -6.0
-		box.offset_top = 6.0
-		box.offset_bottom = -4.0
-		box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		box.add_theme_constant_override("separation", 2)
-		b.add_child(box)
-		if kind == "color":
-			var swatch := Panel.new()
-			var sb := StyleBoxFlat.new()
-			sb.bg_color = (COLOR_LISTS[field] as Array)[i]
-			sb.set_corner_radius_all(40)
-			sb.set_border_width_all(3)
-			sb.border_color = Color.BLACK
-			swatch.add_theme_stylebox_override("panel", sb)
-			swatch.custom_minimum_size = Vector2(70.0, 70.0)
-			swatch.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-			swatch.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			box.add_child(swatch)
-		else:
-			var pic := TextureRect.new()
-			pic.custom_minimum_size = Vector2(80.0, 80.0)
-			pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-			pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			pic.size_flags_vertical = Control.SIZE_EXPAND_FILL
-			pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			box.add_child(pic)
-			_thumbs.request(_variant(field, i), frame, pic)
-		var name_label := _label(names[i], 12, Color.WHITE)
-		name_label.clip_text = true
-		name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		box.add_child(name_label)
-		var index := i
-		b.pressed.connect(func() -> void: choose(field, index))
-		grid.add_child(b)
-		buttons.append(b)
-	_tiles[field] = buttons
-
-
-## El personaje actual con esa opción cambiada (para la foto del cuadrado).
-func _variant(field: String, index: int) -> CharacterData:
-	var d := CharacterData.from_dict(data().to_dict())
-	if field == "preset":
-		d.apply_preset(index)
-	else:
-		d.set(CharacterData.FIELDS[field][0], index)
-		# Para ver los ojos y las cejas, la foto va sin anteojos.
-		if field in ["eyes", "extra"]:
-			d.glasses_index = 0
-	return d
-
-
-## Elige la opción `index` del campo (o un estilo armado con field = "preset").
-func choose(field: String, index: int) -> void:
-	if field == "preset":
-		preset = index
-		data().apply_preset(index)
-		for prop in _sliders:
-			(_sliders[prop] as HSlider).set_value_no_signal(float(data().get(prop)))
-	else:
-		data().set(CharacterData.FIELDS[field][0], index)
-		preset = -1
-	_changed()
-	_refresh_selection()
-	# Un color cambia las fotos de esa categoría: se rehacen.
-	if field in COLOR_LISTS:
-		_refresh_thumbs()
-
-
-func randomize_character() -> void:
-	var r := CharacterData.random(_rng)
-	for prop in CharacterData.SLIDERS.values():
-		data().set(prop, r.get(prop))
-	for f in CharacterData.FIELDS:
-		data().set(CharacterData.FIELDS[f][0], r.get_option(f))
-	preset = -1
-	_changed()
-	_fill_options()
-
-
-## Vuelve a pedir las fotos de los cuadrados de la categoría.
-func _refresh_thumbs() -> void:
-	_thumbs.clear()
-	for section in CATEGORIES[category]:
-		var kind: String = section[1]
-		if kind != "option" and kind != "preset":
-			continue
-		var field: String = "preset" if kind == "preset" else section[2]
-		var buttons: Array = _tiles.get(field, [])
-		for i in buttons.size():
-			var pic := (buttons[i] as Button).find_children("*", "TextureRect", true, false)
-			if not pic.is_empty():
-				_thumbs.request(_variant(field, i), section[3], pic[0])
-
-
-func _changed() -> void:
-	_avatar.rebuild()
-	_rebuild_board()
-
-
-func _refresh_selection() -> void:
-	for field in _tiles:
-		var selected := preset if field == "preset" else data().get_option(field)
-		var buttons: Array = _tiles[field]
-		for i in buttons.size():
-			_style_tile(buttons[i], i == selected)
-
-
-func _rebuild_board() -> void:
-	for c in _board.get_children():
-		c.free()
-	var mesh := CapsuleMesh.new()
-	mesh.radius = 0.5
-	mesh.height = 3.6
-	mesh.material = ToonMaterial.make(data().board_color(), 0.04)
-	var body := MeshInstance3D.new()
-	body.mesh = mesh
-	body.basis = Basis(Vector3.RIGHT, PI / 2.0) * Basis.from_scale(Vector3(1.0, 1.0, 0.18))
-	body.position.y = -0.06
-	_board.add_child(body)
-	BoardDesign.add_to(_board, data(), 3.6, 1.0, 0.03)
-
-
-## Gira el personaje; en las categorías de la cara, la cámara se acerca y él
-## mira al frente.
-func _animate_preview(delta: float) -> void:
-	if _cam == null or not is_instance_valid(_cam):
-		return
-	var face := category in FACE_CATEGORIES
-	_zoom = move_toward(_zoom, 1.0 if face else 0.0, delta * 3.0)
-	var z := smoothstep(0.0, 1.0, _zoom)
-	var head_y := _avatar.head_center().y
-	var head_r := _avatar.head_radius()
-	var eye := Vector3(0.0, 1.7, 7.4).lerp(Vector3(0.0, head_y + 0.05, 1.6 + head_r * 4.6), z)
-	var look := Vector3(0.0, 1.35, 0.0).lerp(Vector3(0.0, head_y - 0.1, 0.0), z)
-	_cam.transform = Transform3D(Basis.IDENTITY, eye).looking_at(look, Vector3.UP)
-	if face:
-		var target := -0.35 + sin(Time.get_ticks_msec() * 0.001) * 0.35
-		_pivot.rotation.y = lerp_angle(_pivot.rotation.y, target, 1.0 - exp(-4.0 * delta))
-	else:
-		_pivot.rotation.y += delta * 0.6
-
-
-## 0 = lejos ... 1 = encima de la cara (para tests).
-func zoom() -> float:
-	return _zoom
+	match action:
+		"left":
+			card.move(Vector2i(-1, 0))
+		"right":
+			card.move(Vector2i(1, 0))
+		"up":
+			card.move(Vector2i(0, -1))
+		"down":
+			card.move(Vector2i(0, 1))
+		"accept":
+			card.accept()
+		"start":
+			card.toggle_ready()
+		"random":
+			card.randomize_character()
+		"back":
+			if not card.back():
+				_joined.erase(card.index)
+				card.leave()
 
 
 # ---------------------------------------------------------------- partida
@@ -474,9 +302,7 @@ func _build_setup() -> void:
 	box.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	box.add_theme_constant_override("separation", 10)
 	root.add_child(_panel(box))
-	var first := _setup_row(box, "Jugadores", ["1 jugador", "2 jugadores"], GameSettings.player_count - 1,
-		func(i: int) -> void: set_player_count(i + 1))
-	_setup_row(box, "Bots", ["Sin bots", "1 bot", "2 bots", "3 bots"], GameSettings.bot_count,
+	var first := _setup_row(box, "Bots", ["Sin bots", "1 bot", "2 bots", "3 bots"], GameSettings.bot_count,
 		func(i: int) -> void: GameSettings.bot_count = i)
 	_setup_row(box, "Dificultad", AIDifficulty.NAMES, GameSettings.bot_level,
 		func(i: int) -> void: GameSettings.bot_level = i)
@@ -488,20 +314,12 @@ func _build_setup() -> void:
 	if GameSettings.player_count == 2:
 		_setup_row(box, "Pantalla", ["Lado a lado", "Arriba y abajo"], 0 if GameSettings.split_vertical else 1,
 			func(i: int) -> void: GameSettings.split_vertical = i == 0)
-		var edit := HBoxContainer.new()
-		edit.add_theme_constant_override("separation", 10)
-		box.add_child(edit)
-		for p in 2:
-			var b := _button("Editar surfista J%d" % (p + 1), 20)
-			b.custom_minimum_size = Vector2(240.0, 50.0)
-			b.pressed.connect(func() -> void: go_creator(p))
-			edit.add_child(b)
 	var bar := HBoxContainer.new()
 	bar.add_theme_constant_override("separation", 16)
 	root.add_child(bar)
-	var back := _button("←  Personaje", 22)
+	var back := _button("←  Personajes", 22)
 	back.custom_minimum_size = Vector2(170.0, 48.0)
-	back.pressed.connect(func() -> void: go_creator(0))
+	back.pressed.connect(go_players)
 	bar.add_child(back)
 	var hint := _label("ESPACIO / A: elegir · ENTER / Start: ¡a surfear! · ESC: volver", 16, Color.WHITE)
 	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -552,14 +370,6 @@ func _setup_row(parent: Control, title: String, names: Array, selected: int, on_
 	return buttons[0]
 
 
-func set_player_count(count: int) -> void:
-	if count == GameSettings.player_count:
-		return
-	GameSettings.player_count = count
-	InputSetup.apply_keyboard_layout(count)
-	_build()
-
-
 func set_wave_mode(mode: int) -> void:
 	if GameSettings.wave_mode != mode:
 		GameSettings.toggle_wave_mode()
@@ -572,16 +382,27 @@ func set_track_layout(layout: int) -> void:
 
 # ---------------------------------------------------------------- flujo
 
-func go_setup() -> void:
-	GameSettings.save_settings()
-	screen = "setup"
+func go_title() -> void:
+	screen = "title"
+	choosing_count = true
+	_joined.clear()
+	InputSetup.clear_assignments()
 	_build()
 
 
-func go_creator(p: int) -> void:
-	player = p
-	screen = "creator"
-	preset = -1
+func go_players() -> void:
+	GameSettings.save_settings()
+	screen = "players"
+	# Si cambió la cantidad, se sueltan los que sobran.
+	for i in _joined.keys():
+		if i >= GameSettings.player_count:
+			_joined.erase(i)
+	_build()
+
+
+func go_setup() -> void:
+	GameSettings.save_settings()
+	screen = "setup"
 	_build()
 
 
@@ -614,30 +435,121 @@ func _launch(scene_path: String, config: RaceConfig, done: Signal) -> void:
 		GameSession.launch(get_tree(), scene_path, config)
 
 
+# ---------------------------------------------------------------- entrada
+
+## Traduce un evento a (dispositivo, acción): acción = left/right/up/down,
+## accept, back, start o random. Devuelve [] si no es nada de eso.
+func _read(event: InputEvent) -> Array:
+	var key := event as InputEventKey
+	if key and key.pressed:
+		var dir := ""
+		match key.physical_keycode:
+			KEY_LEFT, KEY_A:
+				dir = "left"
+			KEY_RIGHT, KEY_D:
+				dir = "right"
+			KEY_UP, KEY_W:
+				dir = "up"
+			KEY_DOWN, KEY_S:
+				dir = "down"
+		if dir != "":
+			return [InputSetup.KEYBOARD, dir]
+		if key.echo:
+			return []
+		match key.physical_keycode:
+			KEY_SPACE, KEY_J:
+				return [InputSetup.KEYBOARD, "accept"]
+			KEY_ENTER, KEY_KP_ENTER:
+				return [InputSetup.KEYBOARD, "start"]
+			KEY_ESCAPE, KEY_BACKSPACE:
+				return [InputSetup.KEYBOARD, "back"]
+			KEY_R:
+				return [InputSetup.KEYBOARD, "random"]
+		return []
+	var jb := event as InputEventJoypadButton
+	if jb and jb.pressed:
+		match jb.button_index:
+			JOY_BUTTON_DPAD_LEFT:
+				return [jb.device, "left"]
+			JOY_BUTTON_DPAD_RIGHT:
+				return [jb.device, "right"]
+			JOY_BUTTON_DPAD_UP:
+				return [jb.device, "up"]
+			JOY_BUTTON_DPAD_DOWN:
+				return [jb.device, "down"]
+		var buttons: Dictionary = InputSetup.PAD_BUTTONS[InputSetup.detect_pad_layout(jb.device)]
+		for role in buttons:
+			if buttons[role] == jb.button_index:
+				match role:
+					"bottom":
+						return [jb.device, "accept"]
+					"right":
+						return [jb.device, "back"]
+					"start":
+						return [jb.device, "start"]
+					"top":
+						return [jb.device, "random"]
+		return []
+	var jm := event as InputEventJoypadMotion
+	if jm and (jm.axis == JOY_AXIS_LEFT_X or jm.axis == JOY_AXIS_LEFT_Y):
+		var id := "%d:%d" % [jm.device, jm.axis]
+		if absf(jm.axis_value) < 0.3:
+			_stick_armed.erase(id)
+			return []
+		if absf(jm.axis_value) < 0.6 or _stick_armed.has(id):
+			return []
+		_stick_armed[id] = true
+		if jm.axis == JOY_AXIS_LEFT_X:
+			return [jm.device, "left" if jm.axis_value < 0.0 else "right"]
+		return [jm.device, "up" if jm.axis_value < 0.0 else "down"]
+	return []
+
+
 func _input(event: InputEvent) -> void:
 	# Cualquier cosa que toque el jugador reinicia la espera de la demo.
 	var moved := event is InputEventJoypadMotion and absf(event.axis_value) > 0.5
 	if GameSession.is_any_press(event) or moved or event is InputEventMouseButton:
 		_idle_time = 0.0
-	# ENTER / Start: seguir (antes que los botones, que usan ENTER para elegir).
-	var key := event as InputEventKey
-	var forward := key != null and key.pressed and not key.echo and key.physical_keycode in [KEY_ENTER, KEY_KP_ENTER]
-	for p in 2:
-		var prefix := InputSetup.prefix(p)
-		if InputMap.has_action(prefix + "start") and event.is_action_pressed(prefix + "start"):
-			forward = true
-	if forward:
-		get_viewport().set_input_as_handled()
-		if screen == "creator":
-			go_setup()
-		else:
+	if screen == "setup":
+		_setup_input(event)
+		return
+	var read := _read(event)
+	if read.is_empty():
+		return
+	get_viewport().set_input_as_handled()
+	var device: int = read[0]
+	var action: String = read[1]
+	if screen == "title":
+		match action:
+			"accept", "start":
+				_title_accept()
+			"back":
+				if choosing_count:
+					choosing_count = false
+					_build()
+			"left":
+				if choosing_count:
+					change_player_count(-1)
+			"right":
+				if choosing_count:
+					change_player_count(1)
+	else:
+		_players_action(device, action)
+
+
+## Armá la partida: ENTER / Start arranca; ESC / B vuelve a los personajes. El
+## resto lo manejan los botones (foco con flechas / stick).
+func _setup_input(event: InputEvent) -> void:
+	var read := _read(event)
+	if read.is_empty():
+		return
+	match read[1]:
+		"start":
+			get_viewport().set_input_as_handled()
 			start_race()
-
-
-func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("ui_cancel") and screen == "setup":
-		get_viewport().set_input_as_handled()
-		go_creator(0)
+		"back":
+			get_viewport().set_input_as_handled()
+			go_players()
 
 
 func _process(delta: float) -> void:
@@ -648,8 +560,6 @@ func _process(delta: float) -> void:
 	if left <= 0.0:
 		_start_demo()
 		return
-	if screen == "creator":
-		_animate_preview(delta)
 
 
 # ---------------------------------------------------------------- piezas de UI

@@ -422,11 +422,21 @@ func _update_splash(delta: float) -> void:
 func _using_pad() -> bool:
 	var pc := rider.controller as PlayerController
 	# Los bots (demo) muestran los íconos de mando.
-	return pc == null or pc.using_joypad
+	if pc == null:
+		return true
+	# Si se unió en el menú, se sabe con qué juega.
+	var assigned := InputSetup.assigned_device(rider.player_index)
+	if assigned == InputSetup.KEYBOARD:
+		return false
+	if assigned >= 0:
+		return true
+	return pc.using_joypad
 
 
 ## Tecla del botón principal (A) para quien juega con teclado.
 func _key_name() -> String:
+	if InputSetup.has_assignments():
+		return "ESPACIO"
 	if rider.player_index == 1 and GameSettings.player_count >= 2:
 		return "ENTER"
 	return "ESPACIO"
