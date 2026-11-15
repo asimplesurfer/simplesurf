@@ -80,7 +80,6 @@ func _ready() -> void:
 
 	_material = ShaderMaterial.new()
 	_material.shader = SHADER
-	Tuning.load_values()
 	waves.apply_to(_material)
 
 	_plane = _build_mesh()

@@ -384,8 +384,8 @@ func _test_look_back() -> void:
 	_set_action(&"p1_look_back", true)
 	await _wait(0.3)
 	f = _rider.forward()
-	var ahead := (cam.global_position - _rider.global_position).dot(f) > 2.0
-	_check(ahead and cam.looking_back, "con el gatillo izquierdo / Q la cámara mira hacia atrás")
+	var ahead_m := (cam.global_position - _rider.global_position).dot(f)
+	_check(ahead_m > 2.0 and cam.looking_back, "con el gatillo izquierdo / Q la cámara mira hacia atrás (%.1f m adelante)" % ahead_m)
 	_set_action(&"p1_look_back", false)
 	await _wait(0.3)
 	f = _rider.forward()

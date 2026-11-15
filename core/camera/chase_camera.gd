@@ -3,12 +3,11 @@ extends Camera3D
 ## Cámara que sigue al Rider desde atrás. Una por jugador (player_index).
 
 @export var target_path: NodePath
-## Distancia normal: la del panel de ajustes (Tuning.camera_distance).
-@export var distance: float = 6.0
+@export var distance: float = 3.0
 @export var height: float = 2.7
 @export var look_height: float = 1.0
 ## Cámara más cerca cuando está caído, para ver bien la animación.
-@export var fallen_distance: float = 4.5
+@export var fallen_distance: float = 3.0
 @export var fallen_height: float = 3.2
 @export var follow_sharpness: float = 5.0
 
@@ -35,6 +34,11 @@ const BOOST_FOV := 82.0
 ## velocidad). Tres distancias para probar: la tecla B pasa a la siguiente y
 ## hace un alejamiento de muestra.
 const BOOST_PULLBACKS: Array[float] = [0.7, 1.4, 2.3]
+## Con turbo, la distancia es esta + el alejamiento (la cámara antes iba a 6 m).
+const TURBO_BASE := 6.0
+## Mirando hacia atrás va más lejos que de frente: al ir rápido la cámara se
+## atrasa un poco, y desde cerca quedaría encima del personaje.
+const LOOK_BACK_DISTANCE := 6.0
 static var boost_option: int = 2
 ## Muestra del alejamiento (s que quedan), al apretar B.
 const PREVIEW_TIME := 1.6
@@ -54,7 +58,6 @@ func _ready() -> void:
 	if target:
 		target.wave_punched.connect(func() -> void: shake(0.6))
 	_water = GameSession.find_in_scene(self, "water") as Water
-	Tuning.load_values()
 	if target:
 		global_position = _desired_position()
 		look_at(_look_point(), Vector3.UP)
@@ -124,17 +127,16 @@ func shake(amount: float) -> void:
 
 func _desired_position() -> Vector3:
 	var fallen := target.is_fallen()
-	# Con turbo va a la misma distancia de siempre (la de antes + el alejamiento),
-	# aunque la normal se acerque con el panel de ajustes.
-	var normal := Tuning.camera_distance
-	var turbo := maxf(Tuning.CAMERA_DISTANCE_DEFAULT + boost_pullback(), normal)
-	var dist := fallen_distance if fallen else lerpf(normal, turbo, _boost * _boost * (3.0 - 2.0 * _boost))
+	# Con turbo se aleja hasta TURBO_BASE + el alejamiento elegido (8,3 m), sin
+	# importar cuán cerca vaya normalmente.
+	var turbo := maxf(TURBO_BASE + boost_pullback(), distance)
+	var dist := fallen_distance if fallen else lerpf(distance, turbo, _boost * _boost * (3.0 - 2.0 * _boost))
 	var h := fallen_height if fallen else height
 	var base := target.global_position
 	base.y *= _follow_y
 	if looking_back:
 		# Adelante del Rider, mirando hacia atrás (un poco más alta para ver a los de atrás).
-		return base + target.forward() * dist + Vector3.UP * (h + 0.4)
+		return base + target.forward() * maxf(dist, LOOK_BACK_DISTANCE) + Vector3.UP * (h + 0.4)
 	return base - target.forward() * dist + Vector3.UP * h
 
 
