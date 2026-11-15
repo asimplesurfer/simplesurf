@@ -7,7 +7,7 @@ extends Node3D
 @export var height: float = 2.4
 @export var rock_seed: int = 0
 
-const COLOR := Palette.ROCK
+const COLOR := Color(0.32, 0.33, 0.36)
 
 
 func _ready() -> void:
