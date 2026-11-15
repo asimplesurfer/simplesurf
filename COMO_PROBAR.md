@@ -46,6 +46,12 @@ Ojo: ese zip no funciona con doble clic en `index.html`, necesita un servidor we
 
 Con 1 jugador, J1 también puede usar las flechas.
 
+**2 jugadores en la misma compu:**
+
+- Sin mandos: J1 usa WASD y J2 las flechas (tabla de arriba).
+- Teclado + 1 mando: J1 juega con el teclado (todas las teclas, WASD o flechas) y J2 con el mando.
+- 2 mandos: uno para cada jugador (J1 puede usar también WASD y J2 las flechas).
+
 | Tecla | Qué hace |
 |---|---|
 | 1 / 2 | Cantidad de jugadores (reinicia la carrera). Con mando: Select |

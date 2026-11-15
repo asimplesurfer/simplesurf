@@ -108,6 +108,8 @@ const KEYBOARD_2P := {
 
 static var _layouts: Dictionary = {}
 static var _devices: Dictionary = {}
+## Cuántas personas juegan (lo fija apply_keyboard_layout).
+static var _player_count: int = 1
 
 
 static func prefix(player_index: int) -> String:
@@ -132,12 +134,26 @@ static func ensure_player_actions(player_index: int) -> void:
 ## Asigna los mandos conectados por orden de conexión, no suponiendo que el ID
 ## del dispositivo coincida con el número de jugador. En navegador/macOS los
 ## IDs pueden no ser 0, 1 aunque haya uno o dos mandos.
+##
+## Con 2 jugadores y un solo mando: J1 juega con el teclado (entero) y J2 con
+## el mando. Así se puede jugar de a dos en la misma compu con teclado + mando.
 static func refresh_player_devices() -> void:
 	var connected: Array = Input.get_connected_joypads()
 	connected.sort()
+	var keyboard_and_pad := keyboard_and_pad_mode(connected.size())
 	for player in [0, 1]:
 		var device := int(connected[player]) if player < connected.size() else -1
+		if keyboard_and_pad:
+			device = int(connected[0]) if player == 1 else -1
 		set_player_device(player, device)
+	_apply_keys(connected.size())
+
+
+## true si juegan dos y hay un solo mando: J1 teclado, J2 mando.
+static func keyboard_and_pad_mode(pad_count: int = -1) -> bool:
+	if pad_count < 0:
+		pad_count = Input.get_connected_joypads().size()
+	return _player_count >= 2 and pad_count == 1
 
 
 static func device_for_player(player_index: int) -> int:
@@ -175,9 +191,23 @@ static func set_player_device(player_index: int, device: int) -> void:
 	set_pad_layout(player_index, _layouts.get(player_index, PadLayout.STANDARD))
 
 
-## Reparte el teclado según la cantidad de jugadores (borra y vuelve a poner las teclas).
+## Reparte el teclado según la cantidad de jugadores (borra y vuelve a poner las
+## teclas) y reasigna los mandos (con teclado + un mando, el mando pasa a J2).
 static func apply_keyboard_layout(player_count: int) -> void:
-	var layout: Dictionary = KEYBOARD_2P if player_count >= 2 else KEYBOARD_1P
+	_player_count = player_count
+	if InputMap.has_action(prefix(0) + "a"):
+		# Refresca mandos y teclas juntos (llama a _apply_keys).
+		refresh_player_devices()
+	else:
+		_apply_keys(Input.get_connected_joypads().size())
+
+
+## Pone las teclas de cada jugador. Con 2 jugadores y un mando, todo el teclado
+## es de J1 (el mando es de J2); con 2 jugadores sin mando, se reparte.
+static func _apply_keys(pad_count: int) -> void:
+	var layout: Dictionary = KEYBOARD_1P
+	if _player_count >= 2 and not keyboard_and_pad_mode(pad_count):
+		layout = KEYBOARD_2P
 	for player in [0, 1]:
 		var p := prefix(player)
 		if not InputMap.has_action(p + "a"):
