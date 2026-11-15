@@ -29,6 +29,8 @@ func enter(_previous: StringName) -> void:
 	_pending_nitro = 0.0
 	_reached_thin_air = false
 	rider.trick_angle = 0.0
+	# Trucos nuevos al azar para este salto.
+	rider.trick_kinds.clear()
 
 
 func exit() -> void:

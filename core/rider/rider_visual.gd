@@ -31,6 +31,8 @@ const LEAN_ANGLE := 0.35
 ## Cuánto se pone de costado la tabla al derrapar (radianes).
 ## Duración del revolcón al caerse (s).
 const TUMBLE_TIME := 0.7
+## Acostado: cuánto más atrás en la tabla va el cuerpo (m).
+const PRONE_BACK := 0.5
 
 var rider: Rider
 ## Para los golpes de despegue y aterrizaje de la animación.
@@ -190,9 +192,10 @@ static func body_pose(stage: Rider.RecoveryStage) -> Transform3D:
 			var b := Basis(Vector3.FORWARD, 0.25) * Basis(Vector3.RIGHT, -0.35)
 			return Transform3D(b, Vector3(1.0, -BODY_HEIGHT * 0.54, 0.3))
 		Rider.RecoveryStage.PRONE:
-			# Acostado boca abajo sobre la tabla, con la cabeza hacia adelante.
-			var b := Basis(Vector3.RIGHT, -PI / 2.0)
-			return Transform3D(b, Vector3(0.0, BOARD_TOP + BODY_RADIUS, BODY_HEIGHT * 0.5))
+			# Acostado boca abajo sobre la tabla, con la cabeza hacia adelante,
+			# bien atrás en la tabla y con el pecho apenas levantado.
+			var b := Basis(Vector3.RIGHT, -PI / 2.0 + 0.1)
+			return Transform3D(b, Vector3(0.0, BOARD_TOP + BODY_RADIUS, BODY_HEIGHT * 0.5 + PRONE_BACK))
 		_:
 			return Transform3D(Basis.IDENTITY, Vector3(0.0, BOARD_TOP, 0.0))
 
@@ -293,11 +296,11 @@ func _process(delta: float) -> void:
 	# Cargando el salto: se agacha e inclina hacia adelante.
 	var charge := rider.jump_charge
 	xf.basis = xf.basis * Basis(Vector3.RIGHT, -0.35 * charge)
-	_body_pivot.transform = xf
-	# En el truco la tabla gira bajo el jugador.
-	_board_pivot.quaternion = (
-		_board_from.slerp(_board_to, t) * Quaternion(Vector3.UP, -rider.trick_angle)
-	)
+	# Truco en el aire: cada vuelta es uno distinto (todos duran lo mismo).
+	var board := Transform3D(Basis(_board_from.slerp(_board_to, t)), Vector3.ZERO)
+	var trick := _trick_transforms(rider.current_trick(), fposmod(rider.trick_angle, TAU))
+	_body_pivot.transform = trick[2] * Transform3D(Basis.IDENTITY, trick[1]) * xf
+	_board_pivot.transform = trick[2] * board * trick[0]
 	_update_particles(delta)
 	_update_avatar_anim(delta)
 
@@ -307,6 +310,43 @@ func _process(delta: float) -> void:
 	_body.scale = (
 		Vector3(1.0 + squash * 1.1, 1.0 - squash, 1.0 + squash * 1.1) * AVATAR_SCALE
 	)
+
+
+## Altura del centro del cuerpo (sobre el que gira la vuelta mortal).
+const FLIP_CENTER := 0.9
+
+
+## Cómo se mueven la tabla y el cuerpo en el truco `kind`, a `a` (0..TAU) de la
+## vuelta. Devuelve [giro de la tabla, subida del cuerpo, giro de todo].
+func _trick_transforms(kind: int, a: float) -> Array:
+	var spin := Transform3D.IDENTITY
+	var lift := Vector3.ZERO
+	var whole := Transform3D.IDENTITY
+	# En los flips la tabla gira bajo los pies: el cuerpo sube un poco para
+	# dejarle lugar, y la tabla también se separa del agua.
+	var hop := sin(a * 0.5)
+	match kind:
+		Rider.Trick.SPIN:
+			# La tabla gira bajo los pies (como siempre).
+			spin = Transform3D(Basis(Vector3.UP, -a), Vector3.ZERO)
+		Rider.Trick.KICKFLIP:
+			# La tabla da una vuelta sobre su largo.
+			spin = Transform3D(Basis(Vector3.BACK, a), Vector3(0.0, 0.25 * hop, 0.0))
+			lift = Vector3(0.0, 0.35 * hop, 0.0)
+		Rider.Trick.IMPOSSIBLE:
+			# La tabla da una vuelta de punta a cola.
+			spin = Transform3D(Basis(Vector3.RIGHT, -a), Vector3(0.0, 0.3 * hop, 0.0))
+			lift = Vector3(0.0, 0.5 * hop, 0.0)
+		Rider.Trick.TRE_FLIP:
+			# Gira y da la vuelta sobre su largo a la vez.
+			spin = Transform3D(Basis(Vector3.UP, -a) * Basis(Vector3.BACK, a), Vector3(0.0, 0.25 * hop, 0.0))
+			lift = Vector3(0.0, 0.35 * hop, 0.0)
+		Rider.Trick.BACKFLIP:
+			# Vuelta mortal hacia atrás, con la tabla pegada a los pies.
+			var c := Vector3(0.0, FLIP_CENTER, 0.0)
+			whole = Transform3D(Basis.IDENTITY, c) * Transform3D(Basis(Vector3.RIGHT, a), Vector3.ZERO) \
+				* Transform3D(Basis.IDENTITY, -c)
+	return [spin, lift, whole]
 
 
 ## Hacia dónde mirar: al rival más cercano (si está cerca y no atrás del

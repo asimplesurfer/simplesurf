@@ -51,6 +51,7 @@ var _shake: float = 0.0
 var _cheer: float = 0.0
 var _time: float = 0.0
 var _anim_time: float = 0.0
+var _paddle_phase: float = 0.0
 var _last_anim: StringName = &""
 var _features := AvatarFeatures.new()
 var _kit: SurferKit
@@ -118,6 +119,10 @@ func _process(delta: float) -> void:
 		_last_anim = anim
 		_anim_time = 0.0
 	_anim_time += delta
+	# Ritmo propio del remo: avanza según el esfuerzo (quieto, no rema) y sin
+	# saltos cuando cambia la velocidad.
+	if anim == &"paddle":
+		_paddle_phase += delta * effort * 5.5
 	_land = move_toward(_land, 0.0, delta / 0.35)
 	_pop = move_toward(_pop, 0.0, delta / 0.25)
 	_shake = move_toward(_shake, 0.0, delta / 1.0)
@@ -135,6 +140,7 @@ func _state() -> Dictionary:
 		"charge": charge,
 		"drift_side": drift_side,
 		"effort": effort,
+		"paddle_phase": _paddle_phase,
 		"speed": speed,
 		"vy": vertical_speed,
 		"land": _land,
