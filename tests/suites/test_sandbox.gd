@@ -148,13 +148,18 @@ func _test_sandbox() -> void:
 		var d := chase._desired_position() - r.global_position
 		return Vector2(d.x, d.z).length()
 	chase._boost = 0.0
-	_check(absf(flat_dist.call() - 3.0) < 0.01, "la cámara va a 3 m (%.2f m)" % flat_dist.call())
+	var speed_saved := r.speed
+	r.speed = 0.0
+	_check(absf(flat_dist.call() - 4.5) < 0.01, "quieto, la cámara va a 4,5 m (%.2f m)" % flat_dist.call())
+	r.speed = 8.0
+	_check(absf(flat_dist.call() - 3.0) < 0.01, "andando, la cámara va a 3 m (%.2f m)" % flat_dist.call())
 	chase._boost = 1.0
 	_check(
 		absf(flat_dist.call() - (ChaseCamera.TURBO_BASE + ChaseCamera.boost_pullback())) < 0.01,
 		"con turbo se aleja a la distancia de siempre (%.2f m)" % flat_dist.call()
 	)
 	chase._boost = 0.0
+	r.speed = speed_saved
 
 	# Reiniciar: la escena nueva entra antes de que se borre la vieja, y todo
 	# (surfista, olas, cámara) tiene que quedarse con el agua de la nueva.

@@ -3,7 +3,11 @@ extends Camera3D
 ## Cámara que sigue al Rider desde atrás. Una por jugador (player_index).
 
 @export var target_path: NodePath
+## Distancia andando. Quieto (o casi) va más lejos: STOPPED_DISTANCE.
 @export var distance: float = 3.0
+const STOPPED_DISTANCE := 4.5
+## Desde esta velocidad (m/s) ya va a la distancia de andar.
+const MOVING_SPEED := 5.0
 @export var height: float = 2.7
 @export var look_height: float = 1.0
 ## Cámara más cerca cuando está caído, para ver bien la animación.
@@ -130,7 +134,8 @@ func _desired_position() -> Vector3:
 	# Con turbo se aleja hasta TURBO_BASE + el alejamiento elegido (8,3 m), sin
 	# importar cuán cerca vaya normalmente.
 	var turbo := maxf(TURBO_BASE + boost_pullback(), distance)
-	var dist := fallen_distance if fallen else lerpf(distance, turbo, _boost * _boost * (3.0 - 2.0 * _boost))
+	var normal := lerpf(STOPPED_DISTANCE, distance, smoothstep(0.0, MOVING_SPEED, target.speed))
+	var dist := fallen_distance if fallen else lerpf(normal, turbo, _boost * _boost * (3.0 - 2.0 * _boost))
 	var h := fallen_height if fallen else height
 	var base := target.global_position
 	base.y *= _follow_y
