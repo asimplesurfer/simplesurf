@@ -72,14 +72,14 @@ enum Trick {
 	SPIN, KICKFLIP, TRE_FLIP, VARIAL,
 	HELICOPTER, BARREL_ROLL, SPIN_FLIP, OVERBOARD,
 	HEADSPIN, WINDMILL,
-	IMPOSSIBLE, BACKFLIP, SUPERMAN,
+	BACKFLIP, SUPERMAN,
 }
 ## Nombre de cada truco (para el visor de trucos, tecla G).
 const TRICK_NAMES: Array[String] = [
 	"Giro de tabla", "Kickflip", "360 flip", "Varial",
 	"Helicóptero", "Vuelta de costado", "Giro con flip", "Fuera de la tabla",
 	"Giro de cabeza", "Molino",
-	"Impossible", "Mortal hacia atrás", "Superman",
+	"Mortal hacia atrás", "Superman",
 ]
 ## Velocidad del juego mientras se mira un truco con el visor (cámara lenta).
 const TRICK_PREVIEW_TIME_SCALE := 0.35
@@ -87,7 +87,7 @@ const TRICK_PREVIEW_TIME_SCALE := 0.35
 var trick_preview: bool = false
 signal trick_preview_started(trick_name: String, index: int, total: int)
 ## Cuántos tiempos dura cada truco.
-const TRICK_UNITS: Array[int] = [1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 1, 2, 2]
+const TRICK_UNITS: Array[int] = [1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 2, 2]
 ## Trucos del salto actual, en orden (se eligen al empezar cada uno).
 var trick_kinds: Array[int] = []
 ## Tiempos de truco ya completos en este salto (lo lleva el estado del aire).
