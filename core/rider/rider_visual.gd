@@ -29,7 +29,6 @@ const BOARD_THICKNESS_SCALE := 0.18
 const BOARD_TOP := 0.06
 const LEAN_ANGLE := 0.35
 ## Cuánto se pone de costado la tabla al derrapar (radianes).
-const DRIFT_YAW := 1.15
 ## Duración del revolcón al caerse (s).
 const TUMBLE_TIME := 0.7
 
@@ -273,8 +272,8 @@ func _process(delta: float) -> void:
 		tilt_base = Quaternion(Vector3.UP, local_normal)
 	else:
 		tilt_base = Quaternion(Vector3.RIGHT, clampf(rider.vertical_speed * 0.04, -0.35, 0.35))
-	var drift_target := -rider.drift_side * DRIFT_YAW
-	_drift_yaw = lerpf(_drift_yaw, drift_target, 1.0 - exp(-12.0 * delta))
+	# El derrape ya no pone la tabla de costado: solo frena (ver state_drifting).
+	_drift_yaw = lerpf(_drift_yaw, 0.0, 1.0 - exp(-12.0 * delta))
 	var lean_target := rider.steer_amount * LEAN_ANGLE
 	_lean = lerpf(_lean, lean_target, 1.0 - exp(-6.0 * delta))
 	var tilt_target := (

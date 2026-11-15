@@ -16,10 +16,23 @@ func _ready() -> void:
 	add_child(mi)
 
 
-## true si el Rider está chocando la roca (cerca y no por encima).
-func is_hitting(rider: Rider) -> bool:
+## Parte de la altura que tiene que tapar el agua para que la roca no cuente
+## (lo poco que asoma no se llega a ver detrás de la ola).
+const HIDDEN_AT := 0.7
+
+
+## true si el Rider está chocando la roca (cerca y no por encima). Si una ola la
+## tapa, no cuenta: no se ve, y el que pasa va por encima del agua.
+func is_hitting(rider: Rider, water: Water = null) -> bool:
 	var d := Vector2(rider.position.x - position.x, rider.position.z - position.z).length()
-	return d < radius + 0.45 and rider.position.y < position.y + height * 0.85
+	if d >= radius + 0.45 or rider.position.y >= position.y + height * 0.85:
+		return false
+	return not is_covered(water)
+
+
+## true si el agua (con las olas) tapa casi toda la roca.
+func is_covered(water: Water) -> bool:
+	return water != null and water.height_at(position.x, position.z) > position.y + height * HIDDEN_AT
 
 
 ## Lugar fuera de la roca en la dirección del Rider.

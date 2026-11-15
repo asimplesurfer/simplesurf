@@ -421,12 +421,20 @@ func _test_drift() -> void:
 	await process_frame
 	await process_frame
 	_check(_state() == &"drifting", "SHIFT derrapa")
-	_check(_rider.drift_side == 1, "derrapa hacia el lado del giro")
+	# Sin tocar el stick, derrapar no gira solo ni pone la tabla de costado.
+	_set_action(&"p1_right", false)
+	var heading_before := _rider.heading
 	var speed_before := _rider.speed
 	victim.global_position = _rider.global_position - _rider.forward() * 3.0
 	victim.position.y = _water_height_here()
 	await _wait(0.3)
 	_check(_rider.speed < speed_before, "derrapar frena")
+	_check(
+		absf(wrapf(_rider.heading - heading_before, -PI, PI)) < 0.12,
+		"derrapar no gira solo (giró %.2f rad)" % wrapf(_rider.heading - heading_before, -PI, PI)
+	)
+	var vis := _rider.get_node("Visual") as RiderVisual
+	_check(absf(vis._drift_yaw) < 0.05, "derrapando la tabla sigue derecha (no de costado)")
 	var sheet := _rider.get_node("Visual/Spray/Sheet") as MeshInstance3D
 	_check(sheet != null and sheet.visible, "derrapar levanta la cortina de agua")
 	if sheet:
@@ -555,24 +563,10 @@ func _test_wave_jump() -> void:
 	_check(hop < 1.0, "el saltito es bajo (%.2f m)" % hop)
 	await _wait_until_state(&"riding", 2.0)
 	await _wait(0.5)
-	# Golpe de palanca hacia arriba (o W) = lo mismo que A.
+	# La palanca hacia arriba no salta (solo A).
 	await _press(&"p1_up")
-	_check(_state() == &"airborne", "golpe de palanca arriba hace el saltito igual que A")
-	await _wait_until_state(&"riding", 2.0)
-	await _wait(0.5)
-	# Inclinarla de a poco no cuenta.
-	var slow_flick := false
-	for i in 20:
-		var ev := InputEventAction.new()
-		ev.action = &"p1_up"
-		ev.pressed = true
-		ev.strength = float(i + 1) / 20.0
-		Input.parse_input_event(ev)
-		await process_frame
-		if _state() == &"airborne":
-			slow_flick = true
-	_set_action(&"p1_up", false)
-	_check(not slow_flick, "subir la palanca despacio no salta")
+	await process_frame
+	_check(_state() != &"airborne", "la palanca hacia arriba no salta (solo A)")
 	await _wait(0.3)
 
 	# Mantener A en el saltito no hace truco (así nadie se cae por no llegar).
@@ -592,12 +586,14 @@ func _test_wave_jump() -> void:
 	var plain := await _ride_into_swell(false, Vector3(800.0, 0.0, 900.0))
 	var popped := await _ride_into_swell(true, Vector3(1200.0, 0.0, 900.0))
 	_check(plain > 0.5, "la ola lanza al aire (%.1f m)" % plain)
-	_check(_pop_prompt_seen, "en la cresta aparece el botón del pop en pantalla")
+	var hud_node: Node = (_main.get_node("Views") as SplitScreen).huds[0]
+	_check(not "_pop_box" in hud_node, "no hay ícono del pop en pantalla (se descubre jugando)")
 	_check(
 		popped > plain * 1.3,
 		"A al subir la ola (pop) lanza mucho más alto (%.1f m contra %.1f m)" % [popped, plain]
 	)
 	_check(_last_did_pop, "apretar justo al salir de la ola hace el pop")
+	await _test_pop_rules()
 	# Turbo al subir la ola: sale mucho más alto que sin turbo.
 	var with_turbo := await _ride_into_swell(false, Vector3(2000.0, 0.0, 900.0), false, true)
 	_check(
@@ -743,6 +739,27 @@ func _test_course() -> void:
 	for r in _course.rocks:
 		if r.height > rock.height:
 			rock = r
+	# Tapada por una ola grande no cuenta: no se ve y se pasa por encima.
+	var cover := Swell.new()
+	cover.center = Vector2(rock.position.x, rock.position.z)
+	cover.direction = Vector2(1.0, 0.0)
+	cover.speed = 0.0
+	cover.max_amplitude = rock.height * 1.3
+	cover.width = 5.0
+	cover.half_length = 15.0
+	cover.lifetime = 100.0
+	cover.grow_time = 0.01
+	cover.update(0.05)
+	_water.add_swell(cover)
+	_check(rock.is_covered(_water), "una ola grande puede tapar la roca")
+	var probe := Vector3(rock.position.x + rock.radius * 0.5, rock.position.y + rock.height * 0.5, rock.position.z)
+	var fake := Rider.new()
+	fake.position = probe
+	_check(not rock.is_hitting(fake, _water), "tapada por una ola, la roca no te tira")
+	_check(rock.is_hitting(fake, null), "sin la ola, en ese lugar sí chocaría")
+	fake.free()
+	_water.clear_swells()
+	_check(not rock.is_covered(_water), "sin ola, la roca se ve y choca")
 	_teleport(rock.position)
 	await process_frame
 	await process_frame
@@ -828,13 +845,33 @@ func _test_turbo_and_wrong_way() -> void:
 	_check(not _rider.turbo_active, "mantener no sostiene el turbo")
 	_set_action(&"p1_b", false)
 	await _wait(0.1)
-	# Dos toques seguidos: se encadenan.
+	# Dos toques seguidos: el segundo no hace nada mientras dura la ráfaga.
 	_rider.reset_nitro()
 	_rider.add_nitro(1.0)
 	await _press(&"p1_b")
 	await _press(&"p1_b")
-	_check(_rider.turbo_time > _rider.stats.turbo_burst_time * 1.5, "dos toques encadenan dos ráfagas")
+	_check(
+		_rider.turbo_charges() == 2 and _rider.turbo_time <= _rider.stats.turbo_burst_time,
+		"no se puede volver a tirar turbo hasta que termina el actual (quedan %d cargas)" % _rider.turbo_charges()
+	)
+	await _wait(_rider.stats.turbo_burst_time + 0.2)
+	await _press(&"p1_b")
+	_check(_rider.turbo_active and _rider.turbo_charges() == 1, "terminada la ráfaga, otro toque dispara la siguiente")
 	await _wait(3.5)
+	# Primera barra casi llena: se completa sola (solo la primera, y ahí queda).
+	_rider.reset_nitro()
+	_rider.nitro = Rider.TURBO_CHARGE * 0.7
+	await _wait(3.5)
+	_check(
+		is_equal_approx(_rider.nitro, Rider.TURBO_CHARGE),
+		"pasado el 65 %% la primera barra se llena sola hasta completarse (%.2f)" % (_rider.nitro / Rider.TURBO_CHARGE)
+	)
+	_rider.nitro = Rider.TURBO_CHARGE * 0.6
+	await _wait(1.0)
+	_check(is_equal_approx(_rider.nitro, Rider.TURBO_CHARGE * 0.6), "por debajo del 65 % no se llena sola")
+	_rider.nitro = Rider.TURBO_CHARGE * 1.8
+	await _wait(1.0)
+	_check(is_equal_approx(_rider.nitro, Rider.TURBO_CHARGE * 1.8), "la segunda barra no se llena sola")
 	# Sin una carga completa no sale.
 	_rider.reset_nitro()
 	_rider.add_nitro(0.2)
@@ -984,6 +1021,18 @@ func _test_split_screen() -> void:
 	race._progress[bot] = race.progress_of(first) - 200.0 / race.course.track.radius
 	await process_frame
 	_check(not bot.is_human and bot.catchup == 0.0, "los bots no reciben handicap aunque vayan atrás")
+	# Se mide contra la persona que va primera (un bot adelante no cuenta).
+	race._progress[bot] = race.progress_of(first) + 300.0 / race.course.track.radius
+	await process_frame
+	_check(first.catchup < 0.05, "con un bot adelante, la persona que va primera sigue sin handicap")
+	# Una sola persona (contra bots): nadie tiene handicap.
+	last.is_human = false
+	await process_frame
+	_check(first.catchup == 0.0 and last.catchup == 0.0, "con una sola persona contra bots no hay handicap")
+	last.is_human = true
+	race._progress[bot] = race.progress_of(first) - 200.0 / race.course.track.radius
+	race._progress[last] = race.progress_of(first) - 200.0 / race.course.track.radius
+	await process_frame
 	# Una vuelta de atraso: handicap al máximo.
 	race._progress[last] = race.progress_of(first) - TAU
 	await process_frame
@@ -997,3 +1046,39 @@ func _test_split_screen() -> void:
 	GameSettings.player_count = 1
 	GameSettings.bot_count = 0
 	await process_frame
+
+
+## Pop: coyote time (vale un rato después de despegar, y sale igual que a
+## tiempo) y en los saltos enormes (con turbo) suma menos.
+func _test_pop_rules() -> void:
+	var r: Rider = load("res://core/rider/rider.tscn").instantiate()
+	var st := r.stats
+	var g := st.gravity
+	# Pop tardío dentro del coyote time: misma subida que a tiempo, menos lo que ya frenó.
+	r.grounded = false
+	r.did_pop = false
+	r.pop_locked = false
+	r.launch_speed = 10.0
+	r.wave_air_time = 0.2
+	r.vertical_speed = 10.0 - g * 0.2
+	r.try_pop_press()
+	_check(r.did_pop, "el pop vale un ratito después de salir de la ola (coyote time)")
+	_check(
+		absf(r.vertical_speed - (r.pop_speed(10.0) - g * 0.2)) < 0.001,
+		"el pop tardío sale igual de alto que a tiempo"
+	)
+	# Pasado el coyote time ya no.
+	r.did_pop = false
+	r.pop_locked = false
+	r.wave_air_time = st.pop_coyote + 0.05
+	r.try_pop_press()
+	_check(not r.did_pop, "pasado el coyote time ya no hay pop")
+	# Saltos normales: el pop suma lo de siempre; los enormes (con turbo), el 75 %.
+	var normal_gain := 9.0 * (st.pop_mult - 1.0) + st.pop_extra
+	_check(is_equal_approx(r.pop_speed(9.0), 9.0 + normal_gain), "en un salto normal el pop suma lo de siempre")
+	var big_gain := 30.0 * (st.pop_mult - 1.0) + st.pop_extra
+	_check(
+		is_equal_approx(r.pop_speed(30.0), 30.0 + big_gain * 0.75),
+		"en un salto enorme el pop suma el 75 %% (%.1f en vez de %.1f m/s)" % [r.pop_speed(30.0) - 30.0, big_gain]
+	)
+	r.free()

@@ -34,7 +34,6 @@ var _splash_seen: bool = false
 var _duck_seen: bool = false
 var _race: RaceManager
 var _course: Course
-var _pop_prompt_seen: bool = false
 var _watch_camera: bool = false
 var _camera_lost: bool = false
 
@@ -363,8 +362,6 @@ func _ride_into_swell(
 	for i in int(5.0 * FPS):
 		if _rider.grounded:
 			max_climb = maxf(max_climb, _rider.vertical_speed)
-		if hud._pop_box.visible:
-			_pop_prompt_seen = true
 		if hud.splash_overlay.visible:
 			_splash_seen = true
 		if visual.duck_time > 0.0:

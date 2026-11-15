@@ -47,7 +47,6 @@ catchup_trick_grace = 0.6
 drift_min_speed = 6.0
 drift_end_speed = 3.0
 drift_decel = 4.0
-drift_turn_factor = 1.6
 drift_range = 6.0
 drift_cone_half_angle = 30.0
 mash_fill_per_press = 0.167

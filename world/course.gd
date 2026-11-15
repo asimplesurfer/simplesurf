@@ -190,7 +190,7 @@ func _apply_to_rider(rider: Rider) -> void:
 		return
 
 	for rock in rocks:
-		if not rider.is_fallen() and rock.is_hitting(rider):
+		if not rider.is_fallen() and rock.is_hitting(rider, _water):
 			_crash(rider, _safe_position_beside(rock, rider))
 			return
 

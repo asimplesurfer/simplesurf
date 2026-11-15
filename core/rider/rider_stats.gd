@@ -35,6 +35,14 @@ extends Resource
 ## Modo olas: segundos que se recuerda el A apretado subiendo la ola (y
 ## después del lanzamiento en los que todavía vale el pop).
 @export var pop_window: float = 0.12
+## Modo olas: segundos después de que la ola lo lanzó en los que todavía vale el
+## pop (coyote time). Sale igual que si lo hubiera hecho justo al despegar.
+@export var pop_coyote: float = 0.25
+## En los saltos enormes (al salir de la ola con turbo) el pop suma menos: entre
+## estas velocidades de salida (m/s) pasa de sumar todo a sumar pop_big_scale.
+@export var pop_big_from: float = 13.0
+@export var pop_big_to: float = 22.0
+@export var pop_big_scale: float = 0.75
 ## Velocidad hacia arriba subiendo una ola para que A cuente como pop (m/s).
 @export var pop_min_climb: float = 1.5
 ## Velocidad vertical mínima para que una ola te lance al aire (m/s).
@@ -85,6 +93,11 @@ extends Resource
 ## Distancia al primero (m, medida por la pista sumando las vueltas) a la que el
 ## handicap llega al máximo. Una vuelta mide ~515 m: con una vuelta de atraso
 ## ya es el máximo.
+## Pasada esta parte de la primera barra de nitro (0.65 = 65 %), se termina de
+## llenar sola (solo la primera).
+@export var first_charge_autofill: float = 0.65
+## Cuánto de la barra se llena por segundo al completarse sola.
+@export var first_charge_fill_rate: float = 0.12
 @export var catchup_full_gap: float = 120.0
 ## Multiplicador máximo del nitro que se gana (círculos y trucos).
 @export var catchup_nitro_mult: float = 1.6
@@ -105,8 +118,6 @@ extends Resource
 @export var drift_end_speed: float = 3.0
 ## Cuánto frena derrapando (m/s²).
 @export var drift_decel: float = 4.0
-## Multiplicador de giro derrapando.
-@export var drift_turn_factor: float = 1.6
 ## Largo del cono de agua hacia atrás (m).
 @export var drift_range: float = 6.0
 ## Apertura del cono (grados a cada lado).
