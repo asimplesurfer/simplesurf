@@ -62,8 +62,13 @@ var water_normal: Vector3 = Vector3.UP
 var nitro: float = 0.0
 ## Carga del salto (0..1) mientras se mantiene ESPACIO en el agua.
 var jump_charge: float = 0.0
-## Giro acumulado de la tabla durante un truco (radianes).
+## Giro acumulado de la tabla durante un truco (radianes). Cada vuelta (TAU)
+## es un truco: todos duran lo mismo, y cuál es se elige al azar (trick_kind).
 var trick_angle: float = 0.0
+## Trucos en el aire. Todos duran lo mismo (una vuelta de trick_angle).
+enum Trick { SPIN, KICKFLIP, IMPOSSIBLE, TRE_FLIP, BACKFLIP }
+## Truco de cada vuelta del salto actual (se arma a medida que se necesita).
+var trick_kinds: Array[int] = []
 ## Lado del derrape: -1 izquierda, 1 derecha, 0 sin derrapar.
 var drift_side: int = 0
 ## Entrada del frame actual (la leen los estados al entrar).
@@ -175,6 +180,28 @@ func _physics_process(delta: float) -> void:
 	state_machine.update(delta, input)
 	rotation.y = heading
 	_check_wave_punch()
+
+
+## Truco de la vuelta `index` del salto: al azar, nunca el mismo que el anterior.
+func trick_kind(index: int) -> int:
+	while trick_kinds.size() <= index:
+		var count := Trick.size()
+		var k := randi() % count
+		if not trick_kinds.is_empty():
+			# Uno de los otros cuatro (salta el anterior).
+			var last: int = trick_kinds[-1]
+			k = randi() % (count - 1)
+			if k >= last:
+				k += 1
+		trick_kinds.append(k)
+	return trick_kinds[index]
+
+
+## Truco en curso (-1 si no está haciendo ninguno).
+func current_trick() -> int:
+	if trick_angle <= 0.0:
+		return -1
+	return trick_kind(live_spins)
 
 
 func forward() -> Vector3:

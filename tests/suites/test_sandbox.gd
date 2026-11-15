@@ -40,14 +40,18 @@ func _test_sandbox() -> void:
 	_rider = r
 	await _wait(0.3)
 	_check(r.state_machine.current_name == &"paddling" and r.speed < 0.2, "arranca quieto, acostado en la tabla")
+	var body := (r.get_node("Visual") as RiderVisual)._body
+	var phase_before: float = body._paddle_phase
 	await _wait(2.0)
 	_check(r.speed < 0.2, "sin aceleración automática: sin tocar nada no avanza")
+	_check(is_equal_approx(body._paddle_phase, phase_before), "quieto no rema (los brazos descansan)")
 	# Empuja el stick: rema, toma impulso y se para.
 	_set_action(&"p1_up", true)
 	await _wait(0.6)
 	_check(r.state_machine.current_name == &"paddling" and r.speed > 0.3, "empujando, rema acostado")
 	var anim := (r.get_node("Visual") as RiderVisual)._body.anim
 	_check(anim == &"paddle", "con la animación de remar con los brazos (%s)" % anim)
+	_check(body._paddle_phase > phase_before, "al avanzar rema")
 	await _wait_until_state(&"riding", 5.0)
 	_check(r.state_machine.current_name == &"riding", "con impulso se para en la tabla")
 	await _wait(2.0)

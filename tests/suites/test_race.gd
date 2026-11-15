@@ -594,6 +594,7 @@ func _test_wave_jump() -> void:
 	)
 	_check(_last_did_pop, "apretar justo al salir de la ola hace el pop")
 	await _test_pop_rules()
+	_test_trick_kinds()
 	# Turbo al subir la ola: sale mucho más alto que sin turbo.
 	var with_turbo := await _ride_into_swell(false, Vector3(2000.0, 0.0, 900.0), false, true)
 	_check(
@@ -1106,3 +1107,44 @@ func _test_pop_rules() -> void:
 		"en un salto enorme el pop suma el 75 %% (%.1f en vez de %.1f m/s)" % [r.pop_speed(30.0) - 30.0, big_gain]
 	)
 	r.free()
+
+
+## Trucos: 5 distintos, al azar, nunca el mismo dos veces seguidas en un salto,
+## y todos duran lo mismo (una vuelta de trick_angle).
+func _test_trick_kinds() -> void:
+	var r: Rider = load("res://core/rider/rider.tscn").instantiate()
+	var seen := {}
+	var repeated := false
+	for jump in 40:
+		r.trick_kinds.clear()
+		for i in 6:
+			var k := r.trick_kind(i)
+			seen[k] = true
+			if i > 0 and k == r.trick_kind(i - 1):
+				repeated = true
+	_check(seen.size() == Rider.Trick.size(), "hay %d trucos distintos y salen todos (%d)" % [Rider.Trick.size(), seen.size()])
+	_check(not repeated, "en un salto nunca sale el mismo truco dos veces seguidas")
+	r.trick_kinds.clear()
+	r.trick_angle = 0.5
+	r.live_spins = 0
+	var first := r.current_trick()
+	r.trick_angle = TAU + 0.5
+	r.live_spins = 1
+	_check(first >= 0 and r.current_trick() != first, "la segunda vuelta del salto es otro truco")
+	r.free()
+	# Cada truco mueve la tabla (o todo el cuerpo) distinto.
+	var vis := RiderVisual.new()
+	var poses := {}
+	for k in Rider.Trick.size():
+		var t: Array = vis._trick_transforms(k, PI * 0.5)
+		var key := str((t[0] as Transform3D).basis * (t[2] as Transform3D).basis)
+		poses[key] = true
+	_check(poses.size() == Rider.Trick.size(), "cada truco se ve distinto")
+	var done := true
+	for k in Rider.Trick.size():
+		var t: Array = vis._trick_transforms(k, TAU - 0.0001)
+		var b: Basis = (t[0] as Transform3D).basis * (t[2] as Transform3D).basis
+		if (b.x - Vector3.RIGHT).length() + (b.y - Vector3.UP).length() + (b.z - Vector3.BACK).length() > 0.01:
+			done = false
+	_check(done, "todos terminan derechos al completar la vuelta (misma duración)")
+	vis.free()

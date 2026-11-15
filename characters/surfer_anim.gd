@@ -259,21 +259,27 @@ static func _climb(p: Dictionary, s: Dictionary) -> void:
 
 ## Acostado sobre la tabla remando: crol, cada brazo hace un círculo grande
 ## (adelante por arriba, tira por el agua hacia atrás), el cuerpo rola con la
-## brazada, la cabeza mira hacia adelante y las piernas patean.
+## brazada, el pecho levantado mirando al frente y las piernas patean.
+## Quieto (sin esfuerzo) no rema: los brazos descansan a los costados.
 ## (Acostado boca abajo, en el espacio del personaje: +Y es hacia adelante y
 ## +Z hacia el agua.)
 static func _paddle(p: Dictionary, s: Dictionary) -> void:
-	var ph: float = s.time * (2.6 + s.effort * 7.0)
+	# Fase propia del remo (Avatar la avanza según el esfuerzo).
+	var ph: float = s.get("paddle_phase", s.time * 3.0)
+	var amp := smoothstep(0.0, 0.25, float(s.effort))
 	for i in 2:
 		var hand := "HandL" if i == 0 else "HandR"
 		var side := -1.0 if i == 0 else 1.0
 		var a := ph + PI * i
-		# Adelante (+Y) por arriba (-Z), atrás por el agua (+Z), bien grande.
-		var target := Vector3(side * 0.66, 1.7 + cos(a) * 0.95, -sin(a) * 0.6 + 0.2)
-		_reach(p, hand, target, 1.0)
-	_turn(p, "Torso", Vector3(0.0, sin(ph) * 0.3, 0.0))
-	_turn(p, "Head", Vector3(-0.6, sin(ph) * 0.12, 0.0))
-	_kick(p, s.time * (9.0 + s.effort * 6.0), 0.14)
+		# Adelante (+Y) por arriba (-Z), atrás por el agua (+Z).
+		var stroke := Vector3(side * 0.66, 1.65 + cos(a) * 0.85, -sin(a) * 0.55 + 0.2)
+		# Descansando: a los costados de la tabla, un poco adelante.
+		var rest := Vector3(side * 0.62, 1.35, 0.25)
+		_reach(p, hand, rest.lerp(stroke, amp), 1.0)
+	# Pecho arriba y la cabeza mirando al frente (no a la tabla).
+	_turn(p, "Torso", Vector3(-0.28, sin(ph) * 0.25 * amp, 0.0))
+	_turn(p, "Head", Vector3(-1.5, sin(ph) * 0.1 * amp, 0.0))
+	_kick(p, ph * 1.6, 0.04 + 0.1 * amp)
 
 
 ## Festeja: salta con los brazos arriba.
