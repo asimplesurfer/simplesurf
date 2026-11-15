@@ -157,7 +157,7 @@ func _build_title() -> void:
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 24)
 	box.add_child(row)
-	var less := _button("◀", 40)
+	var less := _button("<", 44)
 	less.custom_minimum_size = Vector2(90.0, 90.0)
 	less.focus_mode = Control.FOCUS_NONE
 	less.pressed.connect(func() -> void: change_player_count(-1))
@@ -165,7 +165,7 @@ func _build_title() -> void:
 	_count_label = _label(str(GameSettings.player_count), 64, YELLOW)
 	_count_label.custom_minimum_size = Vector2(90.0, 0.0)
 	row.add_child(_count_label)
-	var more := _button("▶", 40)
+	var more := _button(">", 44)
 	more.custom_minimum_size = Vector2(90.0, 90.0)
 	more.focus_mode = Control.FOCUS_NONE
 	more.pressed.connect(func() -> void: change_player_count(1))
@@ -175,7 +175,7 @@ func _build_title() -> void:
 	go.focus_mode = Control.FOCUS_NONE
 	go.pressed.connect(go_players)
 	box.add_child(go)
-	box.add_child(_label("◀ ▶ cuántos juegan · ESPACIO / A seguir · ESC / B volver", 18, Color.WHITE))
+	box.add_child(_label("Izquierda / derecha: cuántos juegan · ESPACIO / A seguir · ESC / B volver", 18, Color.WHITE))
 
 
 func _title_accept() -> void:
@@ -222,7 +222,7 @@ func _build_players() -> void:
 	var bar := HBoxContainer.new()
 	bar.add_theme_constant_override("separation", 16)
 	root.add_child(bar)
-	var back := _button("←  Volver", 22)
+	var back := _button("Volver", 22)
 	back.custom_minimum_size = Vector2(150.0, 46.0)
 	back.focus_mode = Control.FOCUS_NONE
 	back.pressed.connect(go_title)
@@ -317,7 +317,7 @@ func _build_setup() -> void:
 	var bar := HBoxContainer.new()
 	bar.add_theme_constant_override("separation", 16)
 	root.add_child(bar)
-	var back := _button("←  Personajes", 22)
+	var back := _button("Personajes", 22)
 	back.custom_minimum_size = Vector2(170.0, 48.0)
 	back.pressed.connect(go_players)
 	bar.add_child(back)
@@ -328,7 +328,7 @@ func _build_setup() -> void:
 	free.custom_minimum_size = Vector2(170.0, 48.0)
 	free.pressed.connect(start_sandbox)
 	bar.add_child(free)
-	var go := _button("¡A surfear!  →", 28)
+	var go := _button("¡A surfear!", 28)
 	go.custom_minimum_size = Vector2(220.0, 52.0)
 	go.pressed.connect(start_race)
 	bar.add_child(go)

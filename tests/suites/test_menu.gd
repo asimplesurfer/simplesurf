@@ -17,7 +17,36 @@ func run() -> void:
 		defaults.track_layout == GameSettings.TrackLayout.ARCHIPELAGO,
 		"por defecto el mapa es el archipiélago"
 	)
+	_test_glyphs()
 	await _test_menu()
+
+
+## Los textos del juego solo usan letras comunes (hasta Latin-1: tildes, ñ, ¡,
+## º, ×...). Símbolos como ◀ ▶ ▲ ▼ ← no están en la letra del navegador y se
+## ven como cajitas con el código.
+func _test_glyphs() -> void:
+	var bad: Array[String] = []
+	var dirs := ["res://ui", "res://core", "res://world", "res://characters", "res://effects"]
+	while not dirs.is_empty():
+		var dir: String = dirs.pop_back()
+		for sub in DirAccess.get_directories_at(dir):
+			dirs.append(dir.path_join(sub))
+		for f in DirAccess.get_files_at(dir):
+			if not f.ends_with(".gd"):
+				continue
+			var lines := FileAccess.get_file_as_string(dir.path_join(f)).split("\n")
+			for n in lines.size():
+				var line := lines[n].strip_edges()
+				if line.begins_with("#"):
+					continue
+				var in_str := false
+				for ch in line:
+					if ch == "\"":
+						in_str = not in_str
+					elif in_str and ch.unicode_at(0) > 0xFF:
+						bad.append("%s:%d %s" % [f, n + 1, ch])
+						break
+	_check(bad.is_empty(), "los textos no usan símbolos que el navegador no tiene %s" % str(bad))
 
 
 ## Botón del mando `button` del dispositivo `device`.

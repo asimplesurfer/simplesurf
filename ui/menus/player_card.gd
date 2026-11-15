@@ -332,16 +332,16 @@ func refresh() -> void:
 	var cat_name: String = ICONS[cat_index][0]
 	if not in_category:
 		_editor.add_child(_label(cat_name, 22, YELLOW))
-		_editor.add_child(_label("◀ ▶ elegir · %s entrar" % ("A" if pad else "ESPACIO"), 15, Color.WHITE))
+		_editor.add_child(_label("< > elegir · %s entrar" % ("A" if pad else "ESPACIO"), 15, Color.WHITE))
 		_status.text = "%s: listo · %s: al azar" % ["Start" if pad else "ENTER", "Y" if pad else "R"]
 		return
 	var rows := category_rows()
 	# Fila actual: su nombre y las opciones con su vista previa.
 	var r: Array = rows[row]
-	var head := _label("%s%s" % [r[0], "   ▲▼ %d/%d" % [row + 1, rows.size()] if rows.size() > 1 else ""], 16, YELLOW)
+	var head := _label("%s%s" % [r[0], "   (%d/%d)" % [row + 1, rows.size()] if rows.size() > 1 else ""], 16, YELLOW)
 	_editor.add_child(head)
 	_editor.add_child(_strip(r))
-	_status.text = "◀ ▶ cambiar · ▲ ▼ fila · %s volver" % ("B" if pad else "ESC")
+	_status.text = "< > cambiar · arriba / abajo: fila · %s volver" % ("B" if pad else "ESC")
 
 
 ## Tira de opciones de la fila: la elegida en el medio (marcada) y las de los
@@ -399,7 +399,7 @@ func _strip(r: Array) -> Control:
 		value_name = data().option_name(field)
 	elif current >= 0:
 		value_name = CharacterData.PRESET_NAMES[current]
-	box.add_child(_label("◀ %s ▶" % value_name, 15, Color.WHITE))
+	box.add_child(_label("<  %s  >" % value_name, 15, Color.WHITE))
 	return box
 
 
@@ -432,13 +432,31 @@ func _row_view(r: Array, current: bool) -> Control:
 		"slider":
 			var v := float(data().get(field))
 			var ends: Array = CharacterSelect.SLIDER_ENDS[field]
-			value = "%s %s %s" % [ends[0], "▮".repeat(roundi(v * 10.0)) + "▯".repeat(10 - roundi(v * 10.0)), ends[1]]
+			value = "%s  %d%%  %s" % [ends[0], roundi(v * 100.0), ends[1]]
 		_:
 			value = data().option_name(field)
 	if current:
-		value = "◀ %s ▶" % value
+		value = "<  %s  >" % value
 	var val := _label(value, 15, Color.WHITE)
 	line.add_child(val)
+	if kind == "slider":
+		# La barra dibujada (no con símbolos: el navegador puede no tenerlos).
+		var bar := ProgressBar.new()
+		bar.min_value = 0.0
+		bar.max_value = 1.0
+		bar.value = float(data().get(field))
+		bar.show_percentage = false
+		bar.custom_minimum_size = Vector2(110.0, 14.0)
+		bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		var bg := StyleBoxFlat.new()
+		bg.bg_color = Color(0, 0, 0, 0.4)
+		bg.set_corner_radius_all(6)
+		var fill := StyleBoxFlat.new()
+		fill.bg_color = YELLOW
+		fill.set_corner_radius_all(6)
+		bar.add_theme_stylebox_override("background", bg)
+		bar.add_theme_stylebox_override("fill", fill)
+		line.add_child(bar)
 	if kind == "color":
 		var sw := ColorRect.new()
 		sw.custom_minimum_size = Vector2(18.0, 18.0)
