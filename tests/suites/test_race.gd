@@ -1109,42 +1109,62 @@ func _test_pop_rules() -> void:
 	r.free()
 
 
-## Trucos: 5 distintos, al azar, nunca el mismo dos veces seguidas en un salto,
-## y todos duran lo mismo (una vuelta de trick_angle).
+## Trucos: 10 distintos, cortos (1 tiempo), medianos (2) y largos (3). Se
+## eligen al azar entre los que llegan a terminarse, nunca el mismo dos veces
+## seguidas, y suman por tiempo (los largos suman más).
 func _test_trick_kinds() -> void:
 	var r: Rider = load("res://core/rider/rider.tscn").instantiate()
 	var seen := {}
 	var repeated := false
-	for jump in 40:
+	for jump in 60:
 		r.trick_kinds.clear()
 		for i in 6:
-			var k := r.trick_kind(i)
+			r.choose_next_trick(3)
+			var k: int = r.trick_kinds[-1]
 			seen[k] = true
-			if i > 0 and k == r.trick_kind(i - 1):
+			if i > 0 and k == r.trick_kinds[-2]:
 				repeated = true
 	_check(seen.size() == Rider.Trick.size(), "hay %d trucos distintos y salen todos (%d)" % [Rider.Trick.size(), seen.size()])
 	_check(not repeated, "en un salto nunca sale el mismo truco dos veces seguidas")
+	var lengths := {}
+	for u in Rider.TRICK_UNITS:
+		lengths[u] = true
+	_check(lengths.size() == 3, "hay trucos cortos, medianos y largos")
+	# Con poco aire solo salen los cortos.
+	var short_only := true
+	for n in 40:
+		r.trick_kinds.clear()
+		r.choose_next_trick(1)
+		if Rider.TRICK_UNITS[r.trick_kinds[-1]] != 1:
+			short_only = false
+	_check(short_only, "con poco aire solo salen trucos cortos (los largos no llegan a terminarse)")
 	r.trick_kinds.clear()
-	r.trick_angle = 0.5
-	r.live_spins = 0
-	var first := r.current_trick()
-	r.trick_angle = TAU + 0.5
-	r.live_spins = 1
-	_check(first >= 0 and r.current_trick() != first, "la segunda vuelta del salto es otro truco")
+	_check(not r.choose_next_trick(0), "sin aire para ninguno, no empieza")
+	# Un truco largo ocupa 3 tiempos: el contador sube 3 y termina al final.
+	r.trick_kinds.assign([Rider.Trick.HEADSPIN, Rider.Trick.SPIN])
+	r.trick_units_done = 0
+	r.trick_angle = 1.5 * TAU
+	_check(r.current_trick() == Rider.Trick.HEADSPIN and is_equal_approx(r.current_trick_phase(), 0.5), "a mitad del truco largo")
+	_check(is_equal_approx(r.trick_end_angle(), 3.0 * TAU), "el truco largo termina a los 3 tiempos")
+	r.trick_angle = 3.5 * TAU
+	_check(r.current_trick() == Rider.Trick.SPIN, "después sigue el próximo truco")
 	r.free()
-	# Cada truco mueve la tabla (o todo el cuerpo) distinto.
+	# Cada truco mueve la tabla o el cuerpo distinto, y al terminar todo vuelve
+	# a su lugar.
 	var vis := RiderVisual.new()
 	var poses := {}
-	for k in Rider.Trick.size():
-		var t: Array = vis._trick_transforms(k, PI * 0.5)
-		var key := str((t[0] as Transform3D).basis * (t[2] as Transform3D).basis)
-		poses[key] = true
-	_check(poses.size() == Rider.Trick.size(), "cada truco se ve distinto")
 	var done := true
 	for k in Rider.Trick.size():
-		var t: Array = vis._trick_transforms(k, TAU - 0.0001)
-		var b: Basis = (t[0] as Transform3D).basis * (t[2] as Transform3D).basis
-		if (b.x - Vector3.RIGHT).length() + (b.y - Vector3.UP).length() + (b.z - Vector3.BACK).length() > 0.01:
-			done = false
-	_check(done, "todos terminan derechos al completar la vuelta (misma duración)")
+		var t: Array = vis._trick_transforms(k, 0.37)
+		var key := str((t[0] as Transform3D)) + str(t[1]) + str(t[2]) + str(t[3])
+		poses[key] = true
+		var end: Array = vis._trick_transforms(k, 0.99999)
+		for x in [end[0], end[2], end[3]]:
+			var tr := x as Transform3D
+			var b := tr.basis
+			if (b.x - Vector3.RIGHT).length() + (b.y - Vector3.UP).length() + (b.z - Vector3.BACK).length() > 0.01 \
+					or tr.origin.length() > 0.01:
+				done = false
+	_check(poses.size() == Rider.Trick.size(), "cada truco se ve distinto")
+	_check(done, "todos terminan derechos al completarse")
 	vis.free()

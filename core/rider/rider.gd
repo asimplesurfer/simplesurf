@@ -62,13 +62,22 @@ var water_normal: Vector3 = Vector3.UP
 var nitro: float = 0.0
 ## Carga del salto (0..1) mientras se mantiene ESPACIO en el agua.
 var jump_charge: float = 0.0
-## Giro acumulado de la tabla durante un truco (radianes). Cada vuelta (TAU)
-## es un truco: todos duran lo mismo, y cuál es se elige al azar (trick_kind).
+## Avance del truco en curso (radianes): cada TAU es un "tiempo" de truco
+## (TAU / trick_spin_speed segundos). El contador (x1, x2...) y el nitro van
+## por tiempo: los trucos largos suman más.
 var trick_angle: float = 0.0
-## Trucos en el aire. Todos duran lo mismo (una vuelta de trick_angle).
-enum Trick { SPIN, KICKFLIP, IMPOSSIBLE, TRE_FLIP, BACKFLIP }
-## Truco de cada vuelta del salto actual (se arma a medida que se necesita).
+## Trucos en el aire: cortos (1 tiempo), medianos (2) y largos (3).
+enum Trick {
+	SPIN, KICKFLIP, IMPOSSIBLE, TRE_FLIP,
+	BACKFLIP, HELICOPTER, BARREL_ROLL, SUPERMAN,
+	HEADSPIN, WINDMILL,
+}
+## Cuántos tiempos dura cada truco.
+const TRICK_UNITS: Array[int] = [1, 1, 1, 1, 2, 2, 2, 2, 3, 3]
+## Trucos del salto actual, en orden (se eligen al empezar cada uno).
 var trick_kinds: Array[int] = []
+## Tiempos de truco ya completos en este salto (lo lleva el estado del aire).
+var trick_units_done: int = 0
 ## Lado del derrape: -1 izquierda, 1 derecha, 0 sin derrapar.
 var drift_side: int = 0
 ## Entrada del frame actual (la leen los estados al entrar).
@@ -182,26 +191,61 @@ func _physics_process(delta: float) -> void:
 	_check_wave_punch()
 
 
-## Truco de la vuelta `index` del salto: al azar, nunca el mismo que el anterior.
-func trick_kind(index: int) -> int:
-	while trick_kinds.size() <= index:
-		var count := Trick.size()
-		var k := randi() % count
-		if not trick_kinds.is_empty():
-			# Uno de los otros cuatro (salta el anterior).
-			var last: int = trick_kinds[-1]
-			k = randi() % (count - 1)
-			if k >= last:
-				k += 1
-		trick_kinds.append(k)
-	return trick_kinds[index]
+## Elige el próximo truco del salto: al azar entre los que duran como mucho
+## `max_units` tiempos (los que llegan a terminarse antes de caer), nunca el
+## mismo que el anterior. Devuelve false si no entra ninguno.
+func choose_next_trick(max_units: int) -> bool:
+	var options: Array[int] = []
+	var last: int = trick_kinds[-1] if not trick_kinds.is_empty() else -1
+	for k in Trick.size():
+		if TRICK_UNITS[k] <= max_units and k != last:
+			options.append(k)
+	if options.is_empty():
+		return false
+	trick_kinds.append(options[randi() % options.size()])
+	return true
+
+
+## Tiempos de truco hechos en este salto, contando el que está en curso.
+func trick_units_now() -> float:
+	return trick_units_done + trick_angle / TAU
+
+
+## Truco que cubre el tiempo `u` del salto: [índice, tiempo de inicio, largo].
+## Índice -1 si todavía no se eligió ninguno para ese momento.
+func trick_at(u: float) -> Array:
+	var start := 0
+	for i in trick_kinds.size():
+		var units: int = TRICK_UNITS[trick_kinds[i]]
+		if u < start + units - 0.0001:
+			return [i, start, units]
+		start += units
+	return [-1, start, 0]
 
 
 ## Truco en curso (-1 si no está haciendo ninguno).
 func current_trick() -> int:
 	if trick_angle <= 0.0:
 		return -1
-	return trick_kind(live_spins)
+	var t := trick_at(trick_units_now())
+	return trick_kinds[t[0]] if t[0] >= 0 else -1
+
+
+## Cuánto va del truco en curso (0..1).
+func current_trick_phase() -> float:
+	var u := trick_units_now()
+	var t := trick_at(u)
+	if t[0] < 0:
+		return 0.0
+	return clampf((u - float(t[1])) / float(t[2]), 0.0, 1.0)
+
+
+## trick_angle en el que termina el truco en curso (el giro se completa hasta ahí).
+func trick_end_angle() -> float:
+	var t := trick_at(trick_units_now())
+	if t[0] < 0:
+		return ceilf(trick_angle / TAU - 0.001) * TAU
+	return float(t[1] + t[2] - trick_units_done) * TAU
 
 
 func forward() -> Vector3:
