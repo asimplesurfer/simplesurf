@@ -93,6 +93,13 @@ var _fire: ColorRect
 var _fire_mat: ShaderMaterial
 ## 0..1: cuánto se ve el turbo / la barra llena (para entrar y salir suave).
 var _turbo_look: float = 0.0
+## Lo recién ganado (truco, círculo) brilla en blanco un instante: tramo de la
+## barra (0..1) y cuánto brilla todavía.
+var _gain_glow: ColorRect
+var _gain_from: float = 0.0
+var _gain_to: float = 0.0
+var _gain_flash: float = 0.0
+var _last_nitro: float = 0.0
 var _full_look: float = 0.0
 var _nitro_box: VBoxContainer
 ## Amague de la barra al apretar turbo cuando no se puede (0..1).
@@ -124,8 +131,11 @@ func _ready() -> void:
 
 func _connect_rider() -> void:
 	rider.mash_pressed.connect(func() -> void: _flash = 1.0)
+	_last_nitro = rider.nitro
 	rider.nitro_changed.connect(func(value: float, max_value: float) -> void:
 		_nitro_bar.value = value / max_value
+		_on_nitro_gain(_last_nitro / max_value, value / max_value)
+		_last_nitro = value
 	)
 	rider.trick_landed.connect(_on_trick_landed)
 	rider.live_spins_changed.connect(_on_live_spins)
@@ -324,6 +334,8 @@ func _update_turbo_meter(delta: float) -> void:
 		_fire_mat.set_shader_parameter("cold", Color(0.85, 0.2, 0.02).lerp(Color(0.6, 0.0, 0.02), _full_look))
 		_fire_mat.set_shader_parameter("hot", Color(1.0, 0.85, 0.25).lerp(Color(1.0, 0.45, 0.35), _full_look))
 		_fire_mat.set_shader_parameter("flow", lerpf(3.0, 7.0, _full_look))
+	_update_gain_glow(delta)
+	_last_nitro = rider.nitro
 	_blocked = move_toward(_blocked, 0.0, delta * 4.0)
 	# Vibración: amague al apretar de más; temblor fino con la barra llena.
 	var shake := sin(_blocked * 18.0) * 4.0 * _blocked
@@ -332,6 +344,33 @@ func _update_turbo_meter(delta: float) -> void:
 	_nitro_box.position.x = 24.0 + shake
 	_nitro_box.offset_bottom = -20.0 + shake_y
 	_nitro_box.offset_top = -80.0 + shake_y
+
+
+## Ganó nitro de golpe (no el goteo de a poco): ese tramo brilla en blanco.
+const GAIN_MIN := 0.02
+const GAIN_FLASH_TIME := 0.9
+
+
+func _on_nitro_gain(before: float, after: float) -> void:
+	if after - before < GAIN_MIN:
+		return
+	# Si todavía brilla una ganancia anterior, se suman en un solo tramo.
+	_gain_from = minf(_gain_from, before) if _gain_flash > 0.0 else before
+	_gain_to = after
+	_gain_flash = 1.0
+
+
+func _update_gain_glow(delta: float) -> void:
+	_gain_flash = maxf(_gain_flash - delta / GAIN_FLASH_TIME, 0.0)
+	_gain_glow.visible = _gain_flash > 0.0
+	if not _gain_glow.visible:
+		return
+	# Sigue a la barra: si se gastó nitro, el tramo se corre con ella.
+	var to := minf(_gain_to, _nitro_bar.value)
+	var from := minf(_gain_from, to)
+	_gain_glow.anchor_left = from
+	_gain_glow.anchor_right = to
+	_gain_glow.color = Color(1.0, 1.0, 1.0, 0.9 * _gain_flash * _gain_flash)
 
 
 func _update_mash(delta: float) -> void:
@@ -511,6 +550,14 @@ func _build() -> void:
 	_fire.material = _fire_mat
 	_fire.visible = false
 	_nitro_bar.add_child(_fire)
+	_gain_glow = ColorRect.new()
+	_gain_glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_gain_glow.anchor_top = 0.0
+	_gain_glow.anchor_bottom = 1.0
+	_gain_glow.offset_top = 3.0
+	_gain_glow.offset_bottom = -3.0
+	_gain_glow.visible = false
+	_nitro_bar.add_child(_gain_glow)
 	_nitro_box = nitro_box
 	# Atrás, la carga del turbo que se está usando; adelante, el nitro.
 	_burn_bar = _make_bar(BURN_COLOR, 18.0)
