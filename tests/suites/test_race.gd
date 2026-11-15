@@ -262,7 +262,7 @@ func _test_jump_and_tricks() -> void:
 	# Truco bien hecho: salto cargado, en el aire mantener un poco y soltar a tiempo.
 	var tricks_before := _tricks_landed
 	var nitro_before := _rider.nitro
-	await _charged_jump(0.6)
+	await _charged_jump(1.0)
 	_set_action(&"p1_a", true)
 	await _wait(0.3)
 	_check(_rider.trick_angle > 0.0, "mantener ESPACIO en el aire gira la tabla")
@@ -274,7 +274,7 @@ func _test_jump_and_tricks() -> void:
 	await _wait(0.3)
 
 	# Truco fallido: mantener hasta tocar el agua.
-	await _charged_jump(0.6)
+	await _charged_jump(1.0)
 	_set_action(&"p1_a", true)
 	await _wait(1.5)
 	_set_action(&"p1_a", false)

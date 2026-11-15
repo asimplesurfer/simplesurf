@@ -317,14 +317,27 @@ const FLIP_CENTER := 0.9
 ## En el giro de cabeza, cuánto más abajo va el eje (con los brazos estirados
 ## el cuerpo se encoge un poco y si no, la cabeza quedaría flotando).
 const HEADSPIN_DROP := 0.06
-## Trucos en los que el cuerpo va con los brazos estirados (no agarra la tabla).
-const ARMS_OUT_TRICKS: Array[int] = [
-	Rider.Trick.HELICOPTER, Rider.Trick.OVERBOARD, Rider.Trick.HEADSPIN, Rider.Trick.WINDMILL,
-	Rider.Trick.SUPERMAN,
-]
-## Impossible: dónde está el eje de la vuelta (delante del pie de adelante, hacia
-## la punta: la tabla sube por delante del cuerpo, del lado opuesto a la cámara).
-const IMPOSSIBLE_PIVOT := -0.7
+## Pose del cuerpo en cada truco que no es la de siempre (agarrar la tabla).
+## "air" con vertical_speed alto = brazos estirados hacia arriba.
+const TRICK_ANIMS := {
+	Rider.Trick.HELICOPTER: &"air",
+	Rider.Trick.OVERBOARD: &"air",
+	Rider.Trick.HEADSPIN: &"hands_down",
+	Rider.Trick.WINDMILL: &"pommel",
+	Rider.Trick.SUPERMAN: &"superman",
+}
+## Altura del pecho (m): sobre él gira el cuerpo en el molino y el superman.
+const CHEST_HEIGHT := 0.78
+## Molino: cuánto se acuesta de costado (rad) y cuánto sube el cuerpo (m).
+const WINDMILL_ROLL := -PI * 0.5
+const WINDMILL_RAISE := 0.0
+## Superman: cuánto sube y se corre hacia atrás el cuerpo, cuánto gira sobre
+## su largo para quedar boca abajo, y dónde queda la tabla agarrada (m).
+const SUPERMAN_UP := 0.5
+const SUPERMAN_BACK := 0.45
+const SUPERMAN_TWIST := PI * 0.5
+const SUPERMAN_BOARD_UP := 0.8
+const SUPERMAN_BOARD_FWD := -1.35
 
 
 ## Giro alrededor de un eje horizontal a la altura `center` (por defecto, el
@@ -390,8 +403,9 @@ func _trick_transforms(kind: int, p: float) -> Array:
 			lift = Vector3(0.0, 0.85 * e, 0.0)
 			spin = Transform3D(Basis(Vector3.BACK, 2.0 * a), Vector3(0.0, -0.15 * e, 0.0))
 		Rider.Trick.HEADSPIN:
-			# Da la vuelta hacia un costado, gira de cabeza apoyado en la tabla y
-			# vuelve a quedar de pie (completa la vuelta).
+			# Da la vuelta hacia un costado, apoya la cabeza y las manos en la
+			# tabla y gira de cabeza con la tabla (agarrada), y vuelve a quedar
+			# de pie (completa la vuelta).
 			var flip := 0.0
 			if p < 0.25:
 				flip = PI * smoothstep(0.0, 0.25, p)
@@ -402,38 +416,30 @@ func _trick_transforms(kind: int, p: float) -> Array:
 			var twirl := 0.0
 			if p > 0.2 and p < 0.8:
 				twirl = 2.0 * TAU * smoothstep(0.2, 0.8, p)
-			# Da vuelta alrededor de la mitad de su altura (menos lo que se encoge
-			# con los brazos estirados): queda con la coronilla sobre la tabla.
+			# Da vuelta alrededor de la mitad de su altura (menos lo que se encoge):
+			# queda con la coronilla sobre la tabla.
 			var mid := (BODY_HEIGHT + BOARD_TOP) * 0.5 - HEADSPIN_DROP
 			body = Transform3D(Basis(Vector3.UP, twirl), Vector3.ZERO) * _about_center(Basis(Vector3.FORWARD, flip), mid)
-		Rider.Trick.IMPOSSIBLE:
-			# La tabla se enrolla alrededor del pie de adelante: la cola baja,
-			# pasa por debajo y sube por delante del cuerpo (no lo atraviesa ni
-			# tapa la cámara).
-			var foot := Vector3(0.0, 0.0, IMPOSSIBLE_PIVOT)
-			spin = Transform3D(Basis.IDENTITY, foot) * Transform3D(Basis(Vector3.RIGHT, -a), Vector3.ZERO) \
-				* Transform3D(Basis.IDENTITY, -foot)
-			lift = Vector3(0.0, 0.35 * hop, 0.0)
-		Rider.Trick.BACKFLIP:
-			# Vuelta mortal hacia atrás, de perfil a la cámara: se pone de costado
-			# al empezar (si no, la tabla pasa por delante de la cámara y lo tapa)
-			# y vuelve a mirar al frente al terminar.
-			var side := smoothstep(0.0, 0.2, p) * (1.0 - smoothstep(0.8, 1.0, p))
-			whole = Transform3D(Basis(Vector3.UP, -PI * 0.5 * side), Vector3(0.0, 0.3 * hop, 0.0)) \
-				* _about_center(Basis(Vector3.RIGHT, a))
-		Rider.Trick.SUPERMAN:
-			# Se estira en el aire hacia un costado, como volando, con los brazos
-			# adelante, y vuelve a la tabla.
-			var e := _hold_curve(p)
-			body = _about_center(Basis(Vector3.FORWARD, 1.25 * e) * Basis(Vector3.RIGHT, -0.45 * e))
-			lift = Vector3(0.0, 0.55 * e, 0.0)
-			spin = Transform3D(Basis(Vector3.FORWARD, -0.35 * e), Vector3.ZERO)
+			spin = Transform3D(Basis(Vector3.UP, twirl), Vector3.ZERO)
 		Rider.Trick.WINDMILL:
-			# Horizontal sobre la tabla, girando como un molino, y vuelve.
+			# Molino: apoya las manos en el medio de la tabla con el cuerpo
+			# acostado de costado, y las piernas dan vueltas alrededor.
 			var e := _hold_curve(p)
-			body = Transform3D(Basis(Vector3.UP, 2.0 * TAU * smoothstep(0.1, 0.9, p)), Vector3.ZERO) \
-				* _about_center(Basis(Vector3.RIGHT, -1.45 * e))
-			lift = Vector3(0.0, 0.45 * e, 0.0)
+			var around := 2.0 * TAU * smoothstep(0.15, 0.85, p)
+			body = Transform3D(Basis(Vector3.UP, around), Vector3(0.0, WINDMILL_RAISE * e, 0.0)) \
+				* _about_center(Basis(Vector3.FORWARD, WINDMILL_ROLL * e), CHEST_HEIGHT)
+		Rider.Trick.BACKFLIP:
+			# Vuelta mortal hacia atrás, con la tabla pegada a los pies.
+			whole = Transform3D(Basis.IDENTITY, Vector3(0.0, 0.3 * hop, 0.0)) * _about_center(Basis(Vector3.RIGHT, a))
+		Rider.Trick.SUPERMAN:
+			# Superman: agarra la tabla adelante con las dos manos y estira el
+			# cuerpo detrás, horizontal, boca abajo. Se pone de perfil a la cámara
+			# para que se vea, y vuelve.
+			var e := _hold_curve(p)
+			whole = Transform3D(Basis(Vector3.UP, -PI * 0.5 * e), Vector3(0.0, 0.3 * e, 0.0))
+			body = Transform3D(Basis.IDENTITY, Vector3(0.0, SUPERMAN_UP * e, SUPERMAN_BACK * e)) \
+				* _about_center(Basis(Vector3.RIGHT, -PI * 0.5 * e) * Basis(Vector3.UP, SUPERMAN_TWIST * e), CHEST_HEIGHT)
+			spin = Transform3D(Basis.IDENTITY, Vector3(0.0, SUPERMAN_BOARD_UP * e, SUPERMAN_BOARD_FWD * e))
 	return [spin, lift, whole, body]
 
 
@@ -484,9 +490,10 @@ func _update_avatar_anim(delta: float) -> void:
 				a = &"duck"
 			elif not rider.grounded:
 				a = &"trick" if rider.trick_angle > 0.0 else &"air"
-				if rider.current_trick() in ARMS_OUT_TRICKS:
-					# Brazos estirados (pose de "subiendo" del salto).
-					a = &"air"
+				var trick_anim: StringName = TRICK_ANIMS.get(rider.current_trick(), &"")
+				if trick_anim != &"":
+					a = trick_anim
+					# "air" con velocidad hacia arriba = brazos estirados.
 					_body.vertical_speed = 12.0
 			elif rider.drift_side != 0:
 				a = &"drift"

@@ -77,6 +77,11 @@ func _test_rare_transitions() -> void:
 	# 6. Truco: dos vueltas completas cuentan una sola vez al aterrizar.
 	var landed_spins: Array[int] = []
 	r.trick_landed.connect(func(spins: int) -> void: landed_spins.append(spins))
+	# Sin el freno del aire fino, para que entren dos trucos seguro.
+	var saved_stats := r.stats
+	r.stats = r.stats.duplicate()
+	r.stats.air_soft_height = 50.0
+	r.stats.air_max_height = 60.0
 	r.position.y += 1.0
 	r.vertical_speed = 20.0
 	r.grounded = false
@@ -92,6 +97,7 @@ func _test_rare_transitions() -> void:
 	_set_action(&"p1_a", false)
 	await _wait_until_state(&"riding", 4.0)
 	await _wait(0.2)
+	r.stats = saved_stats
 	_check(
 		landed_spins.size() == 1 and landed_spins[0] >= 2,
 		"un truco de %d vueltas cuenta una sola vez al aterrizar (%s)" % [max_live, str(landed_spins)]

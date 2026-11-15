@@ -36,7 +36,10 @@ const FACE_DIR := Vector3(-0.773, 0.022, 0.552)
 const WAIST := Vector3(0.0, 1.0, 0.0)
 
 ## Animaciones de pie sobre la tabla (cuerpo de costado).
-const STANCE := [&"idle", &"ride", &"air", &"trick", &"drift", &"duck", &"pop_up"]
+const STANCE := [
+	&"idle", &"ride", &"air", &"trick", &"drift", &"duck", &"pop_up",
+	&"hands_down", &"pommel", &"superman",
+]
 
 
 static func is_stance(anim: StringName) -> bool:
@@ -71,6 +74,12 @@ static func pose(s: Dictionary) -> Dictionary:
 			_paddle(p, s)
 		&"celebrate":
 			_celebrate(p, s)
+		&"hands_down":
+			_hands_down(p, s)
+		&"pommel":
+			_pommel(p, s)
+		&"superman":
+			_superman(p, s)
 		_:
 			_idle(p, s)
 	# Mira al rival que tiene cerca (o hacia donde gira).
@@ -280,6 +289,38 @@ static func _paddle(p: Dictionary, s: Dictionary) -> void:
 	_turn(p, "Torso", Vector3(-0.28, sin(ph) * 0.25 * amp, 0.0))
 	_turn(p, "Head", Vector3(-1.5, sin(ph) * 0.1 * amp, 0.0))
 	_kick(p, ph * 1.6, 0.04 + 0.1 * amp)
+
+
+## Truco "giro de cabeza": los brazos por encima de la cabeza y abiertos a lo
+## largo de la tabla (dado vuelta, quedan apoyados en la tabla a los costados
+## de la cabeza). Piernas juntas y estiradas hacia arriba.
+static func _hands_down(p: Dictionary, s: Dictionary) -> void:
+	var w := sin(float(s.time) * 6.0) * 0.04
+	_reach(p, "HandL", Vector3(-0.95, 2.6 + w, 0.2), 1.0)
+	_reach(p, "HandR", Vector3(0.85, 2.6 - w, 0.2), 1.0)
+	_move(p, "FootL", Vector3(0.3, 0.0, 0.0))
+	_move(p, "FootR", Vector3(-0.3, 0.0, 0.0))
+
+
+## Truco "molino": las manos adelante del pecho, apoyadas en la tabla, y el
+## cuerpo estirado (las piernas giran alrededor).
+static func _pommel(p: Dictionary, s: Dictionary) -> void:
+	_reach(p, "HandL", Vector3(-0.32, 1.1, 1.05), 1.0)
+	_reach(p, "HandR", Vector3(0.32, 1.1, 1.05), 1.0)
+	_turn(p, "Head", Vector3(0.35, 0.0, 0.0))
+	var kick := sin(float(s.time) * 8.0) * 0.08
+	_move(p, "FootL", Vector3(0.0, 0.0, kick))
+	_move(p, "FootR", Vector3(0.0, 0.0, -kick))
+
+
+## Truco "superman": los dos brazos estirados por encima de la cabeza (agarran
+## la tabla) y el cuerpo derecho, piernas juntas.
+static func _superman(p: Dictionary, s: Dictionary) -> void:
+	_reach(p, "HandL", Vector3(-0.3, 2.75, 0.25), 1.0)
+	_reach(p, "HandR", Vector3(0.3, 2.75, 0.25), 1.0)
+	_move(p, "FootL", Vector3(0.25, 0.0, 0.0))
+	_move(p, "FootR", Vector3(-0.25, 0.0, 0.0))
+	_turn(p, "Head", Vector3(-0.3, 0.0, 0.0))
 
 
 ## Festeja: salta con los brazos arriba.
