@@ -10,7 +10,6 @@ extends RiderState
 ## va frenando de a poco, así el salto hace una curva en vez de chocar con un techo.
 
 var _hold_time: float = 0.0
-var _spins: int = 0
 ## Ya usó el empujón hacia arriba del turbo en este salto.
 var _kick_used: bool = false
 ## Ráfaga de turbo en curso (para notar cuándo empieza una nueva).
@@ -23,7 +22,6 @@ var _reached_thin_air: bool = false
 
 func enter(_previous: StringName) -> void:
 	_hold_time = 0.0
-	_spins = 0
 	_kick_used = false
 	_prev_turbo_time = rider.turbo_time
 	_pending_nitro = 0.0
@@ -31,11 +29,14 @@ func enter(_previous: StringName) -> void:
 	rider.trick_angle = 0.0
 	# Trucos nuevos al azar para este salto.
 	rider.trick_kinds.clear()
+	rider.trick_units_done = 0
 
 
 func exit() -> void:
 	rider.trick_angle = 0.0
 	rider.live_spins = 0
+	rider.trick_units_done = 0
+	rider.trick_kinds.clear()
 
 
 func update(delta: float, input: RiderInput) -> void:
@@ -50,32 +51,42 @@ func update(delta: float, input: RiderInput) -> void:
 	rider.apply_steer(input.steer, delta, stats.air_turn_factor)
 	rider.move_forward(delta)
 
-	# El truco solo arranca si da el tiempo de completar una vuelta antes de
-	# tocar el agua (si no, ni empieza: así no te caés por algo imposible).
-	# En el saltito tampoco se puede.
-	if rider.trick_angle <= 0.0 and rider.time_to_land() < TAU / stats.trick_spin_speed + 0.08:
+	# Cada truco solo arranca si da el tiempo de terminarlo antes de tocar el
+	# agua (si no, ni empieza: así no te caés por algo imposible). Los largos
+	# salen en los saltos grandes. En el saltito no se puede.
+	var unit_time := TAU / stats.trick_spin_speed
+	var fit_units := int(floor((rider.time_to_land() - 0.08) / unit_time))
+	if rider.trick_angle <= 0.0 and fit_units < 1:
 		_hold_time = 0.0
 	elif input.trick and rider.can_trick:
 		_hold_time += delta
 	else:
 		_hold_time = 0.0
 
-	if input.trick and rider.can_trick and _hold_time >= stats.trick_hold_delay and (
-		rider.trick_angle > 0.0 or rider.time_to_land() >= TAU / stats.trick_spin_speed + 0.08
-	):
-		# Girando: la tabla rota y se carga nitro.
+	var holding := input.trick and rider.can_trick and _hold_time >= stats.trick_hold_delay
+	# Empieza un truco nuevo: se elige uno que llegue a terminarse.
+	if holding and rider.trick_at(rider.trick_units_now() + 0.0001)[0] < 0:
+		holding = rider.choose_next_trick(fit_units)
+	if holding:
+		# Haciendo el truco: avanza y se carga nitro (por tiempo).
 		rider.trick_angle += stats.trick_spin_speed * delta
 		_pending_nitro += stats.trick_nitro_rate * delta
+		# Si sigue apretando al terminar uno, encadena otro: uno que llegue a
+		# terminarse si hay, y si no, uno corto igual (el riesgo es del jugador:
+		# si toca el agua a mitad de un truco, se cae).
+		if rider.trick_at(rider.trick_units_now())[0] < 0:
+			if not rider.choose_next_trick(fit_units):
+				rider.choose_next_trick(1)
 	elif rider.trick_angle > 0.0:
-		# Soltó el botón: termina el giro hasta la próxima vuelta completa.
-		var target := ceilf(rider.trick_angle / TAU - 0.001) * TAU
+		# Soltó el botón: termina el truco en curso.
+		var target := rider.trick_end_angle()
 		rider.trick_angle = minf(rider.trick_angle + stats.trick_spin_speed * delta, target)
 		if rider.trick_angle >= target - 0.0001:
-			_spins += roundi(target / TAU)
+			rider.trick_units_done += roundi(target / TAU)
 			rider.trick_angle = 0.0
 
-	# Contador del HUD: vueltas ya completas del truco en curso.
-	rider.live_spins = _spins + int(floor(rider.trick_angle / TAU + 0.0001))
+	# Contador del HUD: tiempos de truco ya completos (los largos suman más).
+	rider.live_spins = int(floor(rider.trick_units_now() + 0.0001))
 
 	var thin := _thin_air()
 	if thin > 0.0:
@@ -102,11 +113,11 @@ func update(delta: float, input: RiderInput) -> void:
 		rider.vertical_speed = maxf(rider.vertical_speed - brake * thin * delta, 0.0)
 
 	if rider.update_air(delta):
-		# Handicap: si al giro le falta poco, cuenta como terminado.
+		# Handicap: si al truco le falta poco, cuenta como terminado.
 		if rider.trick_angle > 0.0:
-			var target := ceilf(rider.trick_angle / TAU - 0.001) * TAU
+			var target := rider.trick_end_angle()
 			if target - rider.trick_angle <= rider.trick_grace():
-				_spins += roundi(target / TAU)
+				rider.trick_units_done += roundi(target / TAU)
 				rider.trick_angle = 0.0
 		if rider.trick_angle > 0.0:
 			rider.reset_nitro()
@@ -116,8 +127,8 @@ func update(delta: float, input: RiderInput) -> void:
 			if _pending_nitro > 0.0:
 				rider.add_nitro(_pending_nitro)
 				_pending_nitro = 0.0
-			if _spins > 0:
-				rider.trick_landed.emit(_spins)
+			if rider.trick_units_done > 0:
+				rider.trick_landed.emit(rider.trick_units_done)
 			state_machine.transition_to(&"riding")
 
 

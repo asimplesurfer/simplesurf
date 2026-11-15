@@ -425,8 +425,8 @@ func _air(_delta: float, input: RiderInput) -> void:
 		# ¿Le da el tiempo para empezar y completar una vuelta?
 		input.trick = t_land > stats.trick_hold_delay + full_turn + difficulty.trick_margin
 	else:
-		var remaining := (ceilf(a / TAU - 0.001) * TAU - a) / spin
-		# Seguir si alcanza para terminar esta vuelta y hacer otra completa.
+		var remaining := (rider.trick_end_angle() - a) / spin
+		# Seguir si alcanza para terminar este truco y hacer otro (al menos uno corto).
 		input.trick = t_land > remaining + full_turn + difficulty.trick_margin * 0.85
 
 
