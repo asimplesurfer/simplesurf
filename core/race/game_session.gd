@@ -172,6 +172,20 @@ static func is_any_press(event: InputEvent) -> bool:
 	return false
 
 
+## Truco que muestra la próxima vez el visor (tecla G).
+static var _preview_index: int = 0
+
+
+## Visor de trucos: la primera persona salta y hace el siguiente truco de la
+## lista, en cámara lenta (para mirar las animaciones con calma).
+func preview_next_trick() -> void:
+	var people := humans()
+	if people.is_empty():
+		return
+	people[0].preview_trick(_preview_index % Rider.Trick.size())
+	_preview_index += 1
+
+
 ## Teclas generales. Devuelve true si la usó.
 func _handle_common_key(key: InputEventKey) -> bool:
 	match key.physical_keycode:
@@ -181,6 +195,9 @@ func _handle_common_key(key: InputEventKey) -> bool:
 			set_player_count(2)
 		KEY_C, KEY_ESCAPE:
 			back_to_menu()
+		KEY_G:
+			# Visor de trucos: salta y hace el siguiente truco en cámara lenta.
+			preview_next_trick()
 		KEY_F7:
 			# Cámara lenta (para mirar animaciones y efectos).
 			Engine.time_scale = 1.0 if Engine.time_scale < 1.0 else 0.08

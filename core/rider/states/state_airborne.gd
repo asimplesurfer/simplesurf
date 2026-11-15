@@ -33,6 +33,7 @@ func enter(_previous: StringName) -> void:
 
 
 func exit() -> void:
+	rider.end_trick_preview()
 	rider.trick_angle = 0.0
 	rider.live_spins = 0
 	rider.trick_units_done = 0
@@ -63,6 +64,11 @@ func update(delta: float, input: RiderInput) -> void:
 	else:
 		_hold_time = 0.0
 
+	if rider.trick_preview:
+		# Visor de trucos: mantiene el truco solo hasta terminarlo (uno solo).
+		var done := rider.trick_units_now() >= Rider.TRICK_UNITS[rider.trick_kinds[0]] - 0.001
+		input.trick = not done and rider.trick_angle >= 0.0
+		_hold_time = maxf(_hold_time, stats.trick_hold_delay) if input.trick else 0.0
 	var holding := input.trick and rider.can_trick and _hold_time >= stats.trick_hold_delay
 	# Empieza un truco nuevo: se elige uno que llegue a terminarse.
 	if holding and rider.trick_at(rider.trick_units_now() + 0.0001)[0] < 0:
@@ -75,7 +81,11 @@ func update(delta: float, input: RiderInput) -> void:
 		# terminarse si hay, y si no, uno corto igual (el riesgo es del jugador:
 		# si toca el agua a mitad de un truco, se cae).
 		if rider.trick_at(rider.trick_units_now())[0] < 0:
-			if not rider.choose_next_trick(fit_units):
+			if rider.trick_preview:
+				# Visor: un solo truco; se queda justo al final.
+				var end_units := float(Rider.TRICK_UNITS[rider.trick_kinds[0]])
+				rider.trick_angle = (end_units - rider.trick_units_done) * TAU
+			elif not rider.choose_next_trick(fit_units):
 				rider.choose_next_trick(1)
 	elif rider.trick_angle > 0.0:
 		# Soltó el botón: termina el truco en curso.
@@ -88,7 +98,7 @@ func update(delta: float, input: RiderInput) -> void:
 	# Contador del HUD: tiempos de truco ya completos (los largos suman más).
 	rider.live_spins = int(floor(rider.trick_units_now() + 0.0001))
 
-	var thin := _thin_air()
+	var thin := 0.0 if rider.trick_preview else _thin_air()
 	if thin > 0.0:
 		_reached_thin_air = true
 

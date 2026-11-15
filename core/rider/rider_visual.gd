@@ -320,7 +320,11 @@ const HEADSPIN_DROP := 0.06
 ## Trucos en los que el cuerpo va con los brazos estirados (no agarra la tabla).
 const ARMS_OUT_TRICKS: Array[int] = [
 	Rider.Trick.HELICOPTER, Rider.Trick.OVERBOARD, Rider.Trick.HEADSPIN, Rider.Trick.WINDMILL,
+	Rider.Trick.SUPERMAN,
 ]
+## Impossible: dónde está el eje de la vuelta (delante del pie de adelante, hacia
+## la punta: la tabla sube por delante del cuerpo, del lado opuesto a la cámara).
+const IMPOSSIBLE_PIVOT := -0.7
 
 
 ## Giro alrededor de un eje horizontal a la altura `center` (por defecto, el
@@ -402,6 +406,28 @@ func _trick_transforms(kind: int, p: float) -> Array:
 			# con los brazos estirados): queda con la coronilla sobre la tabla.
 			var mid := (BODY_HEIGHT + BOARD_TOP) * 0.5 - HEADSPIN_DROP
 			body = Transform3D(Basis(Vector3.UP, twirl), Vector3.ZERO) * _about_center(Basis(Vector3.FORWARD, flip), mid)
+		Rider.Trick.IMPOSSIBLE:
+			# La tabla se enrolla alrededor del pie de adelante: la cola baja,
+			# pasa por debajo y sube por delante del cuerpo (no lo atraviesa ni
+			# tapa la cámara).
+			var foot := Vector3(0.0, 0.0, IMPOSSIBLE_PIVOT)
+			spin = Transform3D(Basis.IDENTITY, foot) * Transform3D(Basis(Vector3.RIGHT, -a), Vector3.ZERO) \
+				* Transform3D(Basis.IDENTITY, -foot)
+			lift = Vector3(0.0, 0.35 * hop, 0.0)
+		Rider.Trick.BACKFLIP:
+			# Vuelta mortal hacia atrás, de perfil a la cámara: se pone de costado
+			# al empezar (si no, la tabla pasa por delante de la cámara y lo tapa)
+			# y vuelve a mirar al frente al terminar.
+			var side := smoothstep(0.0, 0.2, p) * (1.0 - smoothstep(0.8, 1.0, p))
+			whole = Transform3D(Basis(Vector3.UP, -PI * 0.5 * side), Vector3(0.0, 0.3 * hop, 0.0)) \
+				* _about_center(Basis(Vector3.RIGHT, a))
+		Rider.Trick.SUPERMAN:
+			# Se estira en el aire hacia un costado, como volando, con los brazos
+			# adelante, y vuelve a la tabla.
+			var e := _hold_curve(p)
+			body = _about_center(Basis(Vector3.FORWARD, 1.25 * e) * Basis(Vector3.RIGHT, -0.45 * e))
+			lift = Vector3(0.0, 0.55 * e, 0.0)
+			spin = Transform3D(Basis(Vector3.FORWARD, -0.35 * e), Vector3.ZERO)
 		Rider.Trick.WINDMILL:
 			# Horizontal sobre la tabla, girando como un molino, y vuelve.
 			var e := _hold_curve(p)
