@@ -116,16 +116,54 @@ static func prefix(player_index: int) -> String:
 ## Crea las acciones del jugador si todavía no existen. Se puede llamar varias veces.
 static func ensure_player_actions(player_index: int) -> void:
 	var p := prefix(player_index)
-	if InputMap.has_action(p + "a"):
+	# No salir temprano: el menú puede haber creado las acciones antes de que
+	# conectaran el mando. Aseguramos cada acción y refrescamos el dispositivo.
+	for action in ["left", "right", "up", "down"]:
+		if not InputMap.has_action(p + action):
+			InputMap.add_action(p + action, STICK_DEADZONE)
+	for action in BUTTON_ROLES:
+		if not InputMap.has_action(p + action):
+			InputMap.add_action(p + action, BUTTON_DEADZONE)
+
+	if player_index == 0:
+		apply_keyboard_layout(1)
+	refresh_player_devices()
+
+
+## Asigna los mandos conectados por orden de conexión, no suponiendo que el ID
+## del dispositivo coincida con el número de jugador. En navegador/macOS los
+## IDs pueden no ser 0, 1 aunque haya uno o dos mandos.
+static func refresh_player_devices() -> void:
+	var connected: Array = Input.get_connected_joypads()
+	connected.sort()
+	for player in [0, 1]:
+		var device := int(connected[player]) if player < connected.size() else -1
+		set_player_device(player, device)
+
+
+static func device_for_player(player_index: int) -> int:
+	return int(_devices.get(player_index, -1))
+
+
+## Cambia el dispositivo real asociado al jugador y reconstruye sus eventos.
+static func set_player_device(player_index: int, device: int) -> void:
+	_devices[player_index] = device
+	var p := prefix(player_index)
+	var actions: Array = ["left", "right", "up", "down", "look_back"]
+	actions.append_array(BUTTON_ROLES.keys())
+
+	# Quitar eventos anteriores de joystick, conservando las teclas.
+	for action in actions:
+		var action_name := p + action
+		if not InputMap.has_action(action_name):
+			continue
+		for ev in InputMap.action_get_events(action_name):
+			if ev is InputEventJoypadButton or ev is InputEventJoypadMotion:
+				InputMap.action_erase_event(action_name, ev)
+
+	if device < 0:
 		return
 
-	for action in ["left", "right", "up", "down"]:
-		InputMap.add_action(p + action, STICK_DEADZONE)
-	for action in BUTTON_ROLES:
-		InputMap.add_action(p + action, BUTTON_DEADZONE)
-
-	# Mando: el mando N se asigna al jugador N.
-	var device := player_index
 	_joy_axis(p + "left", device, JOY_AXIS_LEFT_X, -1.0)
 	_joy_axis(p + "right", device, JOY_AXIS_LEFT_X, 1.0)
 	_joy_axis(p + "up", device, JOY_AXIS_LEFT_Y, -1.0)
@@ -134,12 +172,8 @@ static func ensure_player_actions(player_index: int) -> void:
 	_joy_button(p + "right", device, JOY_BUTTON_DPAD_RIGHT)
 	_joy_button(p + "up", device, JOY_BUTTON_DPAD_UP)
 	_joy_button(p + "down", device, JOY_BUTTON_DPAD_DOWN)
-	# Mirar atrás: gatillo izquierdo (eje en los mandos estándar).
 	_joy_axis(p + "look_back", device, JOY_AXIS_TRIGGER_LEFT, 1.0)
-	set_pad_layout(player_index, PadLayout.STANDARD)
-
-	if player_index == 0:
-		apply_keyboard_layout(1)
+	set_pad_layout(player_index, _layouts.get(player_index, PadLayout.STANDARD))
 
 
 ## Reparte el teclado según la cantidad de jugadores (borra y vuelve a poner las teclas).
@@ -168,11 +202,14 @@ static func get_pad_layout(player_index: int) -> PadLayout:
 ## Cambia la distribución de botones del mando del jugador.
 static func set_pad_layout(player_index: int, layout: PadLayout) -> void:
 	_layouts[player_index] = layout
+	var device := device_for_player(player_index)
+	if device < 0:
+		return
 	var p := prefix(player_index)
-	var device := player_index
 	for action in BUTTON_ROLES:
 		var action_name: String = p + action
-		# Quitar los botones de mando (no las flechas de la cruceta, que no están acá).
+		if not InputMap.has_action(action_name):
+			continue
 		for ev in InputMap.action_get_events(action_name):
 			if ev is InputEventJoypadButton:
 				InputMap.action_erase_event(action_name, ev)

@@ -41,10 +41,12 @@ func _ready() -> void:
 	_prefix = InputSetup.prefix(player_index)
 
 	_manual_layout = _load_manual_layout()
-	if _manual_layout >= 0:
-		InputSetup.set_pad_layout(player_index, _manual_layout as InputSetup.PadLayout)
-	elif player_index in Input.get_connected_joypads():
-		InputSetup.set_pad_layout(player_index, InputSetup.detect_pad_layout(player_index))
+	var device := InputSetup.device_for_player(player_index)
+	if device >= 0:
+		if _manual_layout >= 0:
+			InputSetup.set_pad_layout(player_index, _manual_layout as InputSetup.PadLayout)
+		else:
+			InputSetup.set_pad_layout(player_index, InputSetup.detect_pad_layout(device))
 	Input.joy_connection_changed.connect(_on_joy_connection_changed)
 
 
@@ -67,8 +69,12 @@ func toggle_pad_layout() -> void:
 	pad_layout_changed.emit(layout_name())
 
 
-func _on_joy_connection_changed(device: int, connected: bool) -> void:
-	if connected and device == player_index and _manual_layout < 0:
+func _on_joy_connection_changed(_device: int, _connected: bool) -> void:
+	# El ID real puede ser distinto de player_index. Reasignar todos los slots
+	# según la lista actual también contempla desconexiones y reconexiones.
+	InputSetup.refresh_player_devices()
+	var device := InputSetup.device_for_player(player_index)
+	if device >= 0 and _manual_layout < 0:
 		InputSetup.set_pad_layout(player_index, InputSetup.detect_pad_layout(device))
 		pad_layout_changed.emit(layout_name())
 
