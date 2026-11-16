@@ -8,7 +8,9 @@ extends Resource
 ## RACE: carrera normal. DEMO: carrera de bots que arranca sola desde el menú
 ## (cualquier tecla vuelve). SANDBOX: modo libre (mar abierto). TIME_TRIAL:
 ## contrarreloj (solo J1 contra su fantasma, con las mismas olas siempre).
-enum Mode { RACE, DEMO, SANDBOX, TIME_TRIAL }
+## EXPLORE: modo libre dentro del mapa elegido (sin bots, sin carrera; ver
+## ExploreMode).
+enum Mode { RACE, DEMO, SANDBOX, TIME_TRIAL, EXPLORE }
 
 @export var mode: Mode = Mode.RACE
 @export var layout: GameSettings.TrackLayout = GameSettings.TrackLayout.ARCHIPELAGO
@@ -124,6 +126,19 @@ static func time_trial() -> RaceConfig:
 	config.mode = Mode.TIME_TRIAL
 	config.weather = GameSettings.Weather.SUNNY
 	return config
+
+
+## Modo libre dentro del mapa elegido: las personas solas, sin carrera (no
+## termina nunca), con el clima del menú.
+static func explore() -> RaceConfig:
+	var config := create(GameSettings.player_count, 0, 0)
+	config.mode = Mode.EXPLORE
+	config.laps = 999
+	return config
+
+
+func is_explore() -> bool:
+	return mode == Mode.EXPLORE
 
 
 func is_time_trial() -> bool:
