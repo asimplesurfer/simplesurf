@@ -7,7 +7,7 @@ shader_type sky;
 uniform vec3 zenith_color : source_color = vec3(0.36, 0.62, 0.92);
 uniform vec3 sky_color : source_color = vec3(0.58, 0.82, 0.98);
 // Igual al color de la niebla del Environment, para que no se note el borde.
-uniform vec3 horizon_color : source_color = vec3(0.93, 0.9, 0.96);
+#include "res://world/sky/horizon.gdshaderinc"
 uniform vec3 glow_color : source_color = vec3(1.0, 0.8, 0.74);
 uniform vec3 sun_color : source_color = vec3(1.0, 0.97, 0.88);
 uniform vec3 cloud_color : source_color = vec3(1.0, 1.0, 1.0);
@@ -138,32 +138,14 @@ void sky() {
 		col = mix(col, bolt_color, core * bolt_strength);
 	}
 
-	// Islas volcánicas en el horizonte: unas cerca y oscuras, otras lejos y con bruma.
-	float ripple = (noise(vec2(az * 22.0, 0.0)) - 0.5) * 0.004;
-	float near_v = max(max(
-		volcano(az, 0.9, 0.42, 0.075),
-		volcano(az, 1.25, 0.25, 0.045)),
-		volcano(az, -2.3, 0.5, 0.06));
-	float far_v = max(max(max(
-		volcano(az, 2.4, 0.6, 0.05),
-		volcano(az, -0.7, 0.35, 0.035)),
-		volcano(az, -1.6, 0.3, 0.028)),
-		volcano(az, 0.35, 0.22, 0.022));
-	// El relieve chico solo sobre los volcanes (si no, aparecen tiras sueltas).
-	float near_h = near_v + ripple * smoothstep(0.0, 0.01, near_v);
-	float far_h = far_v + ripple * 0.5 * smoothstep(0.0, 0.01, far_v);
-	if (far_v > 0.0 && y > -0.02 && y < far_h) {
-		col = mix(col, island_far_color, 0.85);
-	}
-	if (near_v > 0.0 && y > -0.02 && y < near_h) {
-		// Más claro arriba (sol) y con bruma abajo.
-		vec3 ic = mix(island_color, island_color * 1.35, smoothstep(0.0, near_h, y));
-		col = mix(horizon_color, ic, 0.55 + 0.45 * smoothstep(0.0, 0.03, y));
-	}
+	// Las islas lejanas ya no se pintan acá: las hace el anillo de siluetas
+	// (world/sky/horizon.gd), que queda apoyado sobre el agua desde cualquier
+	// altura.
 
-	// Debajo del horizonte: mar que se funde con la bruma.
-	if (y < -0.02) {
-		col = mix(horizon_color, ocean_color, smoothstep(-0.02, -0.25, y));
+	// Debajo del horizonte (solo se ve si algo no tapa el agua): el mismo
+	// color del horizonte que la bruma del agua, así no hay costura.
+	if (y < 0.0) {
+		col = horizon_at(d.xz);
 	}
 
 	COLOR = col;

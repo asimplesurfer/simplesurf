@@ -42,14 +42,12 @@ const BIG_WAVE_MIN := 1.0
 ## Mientras hay tormenta, el agua tiene sus propios colores (los pone y los
 ## devuelve la tormenta).
 var storm_colors: bool = false
-var _world_env: WorldEnvironment
-var _env_checked: bool = false
 ## Resolución de la máscara de la pista con curvas (texeles del lado largo).
 const TRACK_MASK_SIZE := 256
 ## Distancias (m) de los anillos planos de afuera del agua (hasta el horizonte).
-## Llegan más allá de lo que ve la cámara (320 m), donde el agua ya se
-## confunde con el horizonte (ver `haze` en el shader).
-const FAR_RINGS: Array[float] = [180.0, 250.0, 340.0]
+## Llegan más allá de lo que ve la cámara (Horizon.VIEW_FAR), donde el agua ya
+## es del color del horizonte (ver `haze` en el shader y horizon.gdshaderinc).
+const FAR_RINGS: Array[float] = [180.0, 260.0, 380.0, 560.0]
 
 var _plane: ArrayMesh
 var _material: ShaderMaterial
@@ -195,16 +193,7 @@ func _push_time() -> void:
 
 
 func _process(_delta: float) -> void:
-	# Bruma del horizonte: el mismo color que la niebla (cambia con la tormenta).
-	if not _env_checked:
-		_env_checked = true
-		if get_parent():
-			for n in get_parent().get_children():
-				if n is WorldEnvironment:
-					_world_env = n
-	var env := _world_env.environment if is_instance_valid(_world_env) else null
-	if env and env.fog_enabled:
-		_material.set_shader_parameter("haze_color", env.fog_light_color)
+	# El color de la bruma del horizonte lo pone Horizon (el mismo que el cielo).
 	for f in _followers:
 		if is_instance_valid(f.node):
 			_snap(f.mesh, f.node)

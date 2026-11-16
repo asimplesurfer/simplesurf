@@ -60,7 +60,7 @@ func _ready() -> void:
 
 		var cam := ChaseCamera.new()
 		cam.target = rider
-		cam.far = 320.0
+		cam.far = Horizon.VIEW_FAR
 		cam.cull_mask = Water.camera_cull_mask(i)
 		vp.add_child(cam)
 		cam.current = true
