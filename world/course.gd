@@ -45,6 +45,11 @@ var storm: Storm = null
 var markers: CourseMarkers
 var _water: Water
 var _time: float = 0.0
+## Corcheras: cuánto hacia adentro sale después de tocarlas (0 = paralelo), cuánta
+## velocidad pierde al pegarles de frente y qué tan fuerte rebota.
+const EDGE_INWARD := 0.12
+const EDGE_SPEED_LOSS := 0.2
+const EDGE_BOUNCE := 0.35
 
 
 func _ready() -> void:
@@ -197,6 +202,8 @@ func _apply_to_rider(rider: Rider) -> void:
 			rider.position.x = p.x
 			rider.position.z = p.z
 			_slide_along_edge(rider, loc, signf(loc.y))
+		elif absf(loc.y) < limit - 1.5:
+			_leave_edge(rider)
 
 	if not hazards_enabled:
 		return
@@ -211,9 +218,11 @@ func _apply_to_rider(rider: Rider) -> void:
 			ring.try_collect(rider, _time)
 
 
-## Contra la corchera: se desliza a lo largo de ella. Se le saca solo la parte
-## del rumbo que va hacia afuera (sigue avanzando) y pierde un poco de velocidad
-## una sola vez al tocarla, no en cada frame.
+## Contra la corchera: nunca se traba. Lo endereza hacia donde avanza la
+## carrera (un poquito hacia adentro), le da un rebote hacia el centro y lo deja
+## resbalar pegado al borde. Frena solo un poco y una sola vez, al primer toque
+## (seguir apretando contra la corchera no lo frena más). La cámara sigue sola
+## el rumbo nuevo.
 func _slide_along_edge(rider: Rider, loc: Vector2, side: float) -> void:
 	var edge := track.position_at(loc.x, side * half_width)
 	var center := track.position_at(loc.x, 0.0)
@@ -221,17 +230,27 @@ func _slide_along_edge(rider: Rider, loc: Vector2, side: float) -> void:
 	var f := rider.forward()
 	var fwd := Vector2(f.x, f.z)
 	var into := fwd.dot(out)
+	var first_touch := not rider.has_meta("on_edge")
+	rider.set_meta("on_edge", true)
 	if into <= 0.0:
 		return
-	var slide := fwd - out * into
-	if slide.length() < 0.05:
-		# De frente contra la corchera: seguir en el sentido de la carrera.
-		var t := track.tangent_at(loc.x)
-		slide = Vector2(t.x, t.z)
-	slide = slide.normalized()
-	rider.heading = atan2(-slide.x, -slide.y)
-	# Pierde velocidad según qué tan de frente pegó (de refilón casi nada).
-	rider.speed *= 1.0 - 0.35 * into
+	# Hacia donde avanza la carrera, apenas hacia adentro (así se despega).
+	var t := track.tangent_at(loc.x)
+	var race_dir := Vector2(t.x, t.z).normalized()
+	var dir := (race_dir - out * EDGE_INWARD).normalized()
+	rider.heading = atan2(-dir.x, -dir.y)
+	if first_touch:
+		# Pierde algo de velocidad según qué tan de frente pegó (de refilón, casi nada).
+		rider.speed *= 1.0 - EDGE_SPEED_LOSS * into
+		# Rebote hacia el centro de la pista.
+		var push := -out * rider.speed * into * EDGE_BOUNCE
+		rider.shove += Vector3(push.x, 0.0, push.y)
+
+
+## Al alejarse del borde se vuelve a poder "tocar" (el próximo toque frena).
+func _leave_edge(rider: Rider) -> void:
+	if rider.has_meta("on_edge"):
+		rider.remove_meta("on_edge")
 
 
 ## Choque: se cae, queda fuera del obstáculo y mirando en el sentido de la

@@ -139,7 +139,7 @@ func _test_menu() -> void:
 	await _key(KEY_ESCAPE)
 	var before := d1.to_dict()
 	await _key(KEY_R)
-	_check(d1.to_dict() != before, "R arma uno al azar")
+	_check(d1.to_dict() == before, "ya no hay botón de personaje al azar (R no cambia nada)")
 
 	# Listos: cuando todos están listos, sigue.
 	await _key(KEY_ENTER)

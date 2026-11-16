@@ -24,6 +24,8 @@ signal drift_hit(victim: Rider)
 signal bumped(direction: Vector3, strength: float)
 ## Chocó a otro surfista.
 signal bumped_other(victim: Rider)
+## Cayó al agua desde un salto alto (strength 0..1): sacudón y salpicón.
+signal hard_landed(strength: float)
 signal motivation_started
 ## Atravesó una ola que estaba rompiendo (para la animación, el chapuzón y la cámara).
 signal wave_punched
@@ -117,6 +119,8 @@ const BUMP_RADIUS := 1.1
 ## Del empujón: cuánto se lleva el chocado y cuánto el que choca (casi nada).
 const BUMP_VICTIM := 1.15
 const BUMP_HITTER := 0.12
+## Desde esta velocidad de caída (m/s) el aterrizaje es "fuerte".
+const HARD_LAND_SPEED := 11.0
 ## El empujón se apaga a este ritmo (m/s²).
 const SHOVE_DECEL := 7.0
 ## Cuánto gira (rad) el chocado hacia donde lo empujan, con un choque fuerte.
@@ -680,7 +684,10 @@ func update_air(delta: float) -> bool:
 		grounded = true
 		wave_air_time = -1.0
 		pop_locked = false
+		var impact := -vertical_speed
 		landed.emit()
+		if impact > HARD_LAND_SPEED:
+			hard_landed.emit(clampf((impact - HARD_LAND_SPEED) / 12.0, 0.15, 1.0))
 		return true
 	return false
 

@@ -312,8 +312,6 @@ func _players_action(device: int, action: String) -> void:
 			card.accept()
 		"start":
 			card.toggle_ready()
-		"random":
-			card.randomize_character()
 		"export":
 			card.export_character()
 		"back":
@@ -478,7 +476,7 @@ func _launch(scene_path: String, config: RaceConfig, done: Signal) -> void:
 # ---------------------------------------------------------------- entrada
 
 ## Traduce un evento a (dispositivo, acción): acción = left/right/up/down,
-## accept, back, start, random o export. Devuelve [] si no es nada de eso.
+## accept, back, start o export. Devuelve [] si no es nada de eso.
 func _read(event: InputEvent) -> Array:
 	var key := event as InputEventKey
 	if key and key.pressed:
@@ -503,8 +501,6 @@ func _read(event: InputEvent) -> Array:
 				return [InputSetup.KEYBOARD, "start"]
 			KEY_ESCAPE, KEY_BACKSPACE:
 				return [InputSetup.KEYBOARD, "back"]
-			KEY_R:
-				return [InputSetup.KEYBOARD, "random"]
 			KEY_C:
 				return [InputSetup.KEYBOARD, "export"]
 		return []
@@ -531,8 +527,6 @@ func _read(event: InputEvent) -> Array:
 						return [jb.device, "back"]
 					"start":
 						return [jb.device, "start"]
-					"top":
-						return [jb.device, "random"]
 		return []
 	var jm := event as InputEventJoypadMotion
 	if jm and (jm.axis == JOY_AXIS_LEFT_X or jm.axis == JOY_AXIS_LEFT_Y):

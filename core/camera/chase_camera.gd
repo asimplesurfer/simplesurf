@@ -57,6 +57,9 @@ func _ready() -> void:
 		target.wave_punched.connect(func() -> void: shake(0.6))
 		# Lo chocaron: un sacudón según la fuerza del golpe.
 		target.bumped.connect(func(_dir: Vector3, strength: float) -> void: shake(0.2 + 0.4 * strength))
+		# Chocó a otro: un sacudón chico. Cayó de un salto alto: según la altura.
+		target.bumped_other.connect(func(_victim: Rider) -> void: shake(0.25))
+		target.hard_landed.connect(func(strength: float) -> void: shake(0.15 + 0.35 * strength))
 	_water = GameSession.find_in_scene(self, "water") as Water
 	if target:
 		global_position = _desired_position()

@@ -10,7 +10,6 @@ extends PanelContainer
 ##     la opción y arriba / abajo pasa a la otra fila (por ejemplo, el color);
 ##   - B / ESC: volver a los íconos;
 ##   - Start / ENTER: listo (otra vez: no listo);
-##   - Y / R: personaje al azar;
 ##   - Select / C (o el botón): copia el personaje al portapapeles (para
 ##     pasarlo y guardarlo como estilo armado).
 
@@ -252,18 +251,6 @@ func toggle_ready() -> void:
 	ready_changed.emit()
 
 
-func randomize_character() -> void:
-	if is_ready:
-		return
-	var r := CharacterData.random(_rng)
-	for prop in CharacterData.SLIDERS.values():
-		data().set(prop, r.get(prop))
-	for f in CharacterData.FIELDS:
-		data().set(CharacterData.FIELDS[f][0], r.get_option(f))
-	preset = -1
-	_changed()
-
-
 ## Copia los datos del personaje al portapapeles.
 func export_character() -> void:
 	if not joined():
@@ -374,8 +361,7 @@ func refresh() -> void:
 		_editor.add_child(_label(cat_name, 22, YELLOW))
 		_editor.add_child(_label("< > elegir · %s entrar" % ("A" if pad else "ESPACIO"), 15, Color.WHITE))
 		if _copied_time <= 0.0:
-			_status.text = "%s: listo · %s: al azar · %s: exportar" % [
-				"Start" if pad else "ENTER", "Y" if pad else "R", "Select" if pad else "C"]
+			_status.text = "%s: listo · %s: exportar" % ["Start" if pad else "ENTER", "Select" if pad else "C"]
 		return
 	var rows := category_rows()
 	# Fila actual: su nombre y las opciones con su vista previa.

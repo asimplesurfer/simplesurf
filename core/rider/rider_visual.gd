@@ -75,6 +75,7 @@ var _carve: CarveSpray
 const CARVE_ANGLE := 55.0
 ## Chapuzón al atravesar una ola que rompe.
 var _splash: CPUParticles3D
+var _ring_splash: CPUParticles3D
 ## Tiempo que queda de la animación de atravesar la ola (agachado, brazos sobre la cabeza).
 var duck_time: float = 0.0
 const DUCK_DURATION := 0.45
@@ -91,6 +92,10 @@ func setup(p_rider: Rider) -> void:
 	rider.recovery_stage_changed.connect(_on_recovery_stage_changed)
 	rider.mash_pressed.connect(_on_mash_pressed)
 	rider.wave_punched.connect(_on_wave_punched)
+	# Salpicón alrededor (solo se ve): al chocar con otro y al caer de alto.
+	rider.bumped.connect(func(_d: Vector3, strength: float) -> void: _ring_burst(0.5 + strength))
+	rider.bumped_other.connect(func(_v: Rider) -> void: _ring_burst(0.6))
+	rider.hard_landed.connect(func(strength: float) -> void: _ring_burst(0.6 + strength))
 	# Festeja cuando clava un truco o tira a un rival.
 	rider.trick_landed.connect(func(_spins: int) -> void: _body.cheer())
 	rider.drift_hit.connect(func(_victim: Rider) -> void: _body.cheer())
@@ -168,6 +173,23 @@ func _build() -> void:
 	_splash.position = Vector3(0.0, 1.0, 0.0)
 	add_child(_splash)
 
+	# Salpicón en anillo alrededor de la tabla (choques y caídas de alto).
+	_ring_splash = WaterFx.soft_particles(60, 0.8, 0.4)
+	_ring_splash.name = "RingSplash"
+	_ring_splash.one_shot = true
+	_ring_splash.explosiveness = 0.95
+	_ring_splash.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
+	_ring_splash.emission_ring_axis = Vector3.UP
+	_ring_splash.emission_ring_radius = 0.9
+	_ring_splash.emission_ring_inner_radius = 0.6
+	_ring_splash.emission_ring_height = 0.1
+	_ring_splash.direction = Vector3(0.0, 1.0, 0.0)
+	_ring_splash.spread = 55.0
+	_ring_splash.initial_velocity_min = 3.0
+	_ring_splash.initial_velocity_max = 6.5
+	_ring_splash.position = Vector3(0.0, 0.15, 0.0)
+	add_child(_ring_splash)
+
 
 ## Atravesó una ola que rompía: chapuzón y animación.
 ## Dónde está la cara del personaje (para saber si atravesó una ola).
@@ -175,6 +197,19 @@ func face_position() -> Vector3:
 	if _body:
 		return _body.face_position()
 	return global_position + Vector3.UP * BODY_HEIGHT * 0.9
+
+
+## Salpicón en anillo (fuerza ~0.5..1.6: más gotas y más alto).
+func _ring_burst(strength: float) -> void:
+	_ring_splash.amount = clampi(int(40 * strength), 20, 80)
+	_ring_splash.initial_velocity_max = 4.0 + 3.0 * strength
+	_ring_splash.restart()
+	WaterFx.emit(_ring_splash, true)
+
+
+## La cortina de agua del derrape (para saber a quién tira).
+func drift_spray() -> DriftSpray:
+	return _spray
 
 
 func _on_wave_punched() -> void:

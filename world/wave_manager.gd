@@ -247,7 +247,9 @@ func has_wave_ahead(r: Rider) -> bool:
 	return false
 
 
-## Las olas que ya quedaron atrás de todos se desvanecen (dejan lugar a nuevas).
+## Las olas que ya no le sirven a nadie se desvanecen (dejan lugar a nuevas).
+## Una ola sirve si algún corredor la tiene adelante y cerca, o si alguna
+## persona la puede estar viendo (así nunca se ve desaparecer una ola).
 func _retire_passed() -> void:
 	var targets := _targets()
 	if targets.is_empty():
@@ -258,6 +260,8 @@ func _retire_passed() -> void:
 		points.append(Vector2(t.global_position.x, t.global_position.z))
 		dirs.append(_track_dir(t))
 	for s in _water.swells:
+		if _seen_by_people(s):
+			continue
 		var useful := false
 		for i in points.size():
 			var rel := s.center - points[i]
@@ -268,20 +272,50 @@ func _retire_passed() -> void:
 			s.retire()
 
 
-## Si no entra otra ola, saca la menos útil (la que ya se está yendo, o la más vieja).
+## Distancia hasta la que una persona puede ver una ola (m): la cámara ve hasta
+## ~320 m, con bruma desde ~170.
+const SEEN_DISTANCE := 260.0
+
+
+## true si alguna persona (o la cámara de la demo) puede estar viendo la ola:
+## la tiene adelante y no muy lejos (las de atrás no se ven).
+func _seen_by_people(s: Swell) -> bool:
+	for node in get_tree().get_nodes_in_group("riders"):
+		var r := node as Rider
+		if r == null or not r.has_view:
+			continue
+		var p := Vector2(r.global_position.x, r.global_position.z)
+		var rel := s.center - p
+		# Adelante (donde mira la cámara) y dentro de lo que llega a verse.
+		if rel.length() - s.half_length < SEEN_DISTANCE and rel.dot(_track_dir(r)) > -s.width * 3.0 - 8.0:
+			return true
+	return false
+
+
+## Si no entra otra ola, saca la menos útil que nadie esté viendo (la que ya
+## se está yendo, o la más vieja). Si todas se ven, no saca ninguna de golpe:
+## la menos útil empieza a desvanecerse y la nueva espera.
 func _free_slot() -> void:
 	if _water.can_add_swell() or _water.swells.is_empty():
 		return
 	var worst: Swell = null
 	var worst_score := -INF
+	var worst_seen: Swell = null
+	var worst_seen_score := -INF
 	for s in _water.swells:
 		var leaving := s.lifetime - s.age < s.fade_time + 0.1
 		var score := s.age + (1000.0 if leaving else 0.0) - s.amplitude
-		if score > worst_score:
+		if _seen_by_people(s):
+			if score > worst_seen_score:
+				worst_seen_score = score
+				worst_seen = s
+		elif score > worst_score:
 			worst_score = score
 			worst = s
 	if worst:
 		_water.swells.erase(worst)
+	elif worst_seen:
+		worst_seen.retire()
 
 
 ## Ola de frente, probando a varias distancias (puede caer cerca de una isla).
