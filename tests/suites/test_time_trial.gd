@@ -36,6 +36,32 @@ func run() -> void:
 	_check(run2[4], "el HUD muestra el tiempo y el récord")
 	var top := TimeTrial.top_times(config.layout)
 	_check(top.size() == 2 and float(top[0].time) <= float(top[1].time), "los mejores tiempos quedan ordenados")
+	# R (o Select) reinicia en cualquier momento: otro intento enseguida.
+	var m: Node = load("res://main.tscn").instantiate()
+	for child in m.get_children():
+		if child is GameSession:
+			(child as GameSession).config = RaceConfig.time_trial()
+	root.add_child(m)
+	await process_frame
+	await process_frame
+	var race := m.get_node("RaceManager") as RaceManager
+	race.skip_countdown()
+	await _wait(0.5)
+	var count_before := root.get_child_count()
+	var ev := InputEventKey.new()
+	ev.physical_keycode = KEY_R
+	ev.pressed = true
+	race._unhandled_input(ev)
+	await process_frame
+	await process_frame
+	var fresh: Node = root.get_child(root.get_child_count() - 1)
+	_check(fresh != m and fresh.get_node_or_null("RaceManager") != null and not is_instance_valid(m) or (fresh != m and m.is_queued_for_deletion()),
+		"R reinicia la contrarreloj en plena carrera")
+	if is_instance_valid(fresh) and fresh != m:
+		fresh.queue_free()
+	if is_instance_valid(m):
+		m.queue_free()
+	await process_frame
 	# El menú tiene el modo.
 	var menu: CharacterSelect = load("res://ui/menus/character_select.tscn").instantiate()
 	menu.auto_start = false
