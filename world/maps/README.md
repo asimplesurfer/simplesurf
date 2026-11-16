@@ -76,6 +76,7 @@ pieza se puede repetir todas las veces que haga falta.
 | `geyser` | Géiser que explota cada tanto y lanza al que pasa | `x`, `z`; `phase`, `calm`, `warn`, `erupt` (s), `launch_speed` |
 | `rock_arch` | Arco de roca de paisaje, se pasa por debajo | `x`, `z`; `angle` (grados), `span`, `height`, `shape_seed`, `stone_color`, `moss_color` |
 | `shipwreck` | Barco hundido de paisaje | `x`, `z`; `angle` (grados), `size` |
+| `waterfall` | Cascada que se atraviesa: moja la pantalla y frena un poco | `x`, `z`; `angle` (grados), `width`, `height`, `color`, `drag` |
 | `rock_formation` | Roca o cueva dibujada como figura (ver abajo) | `shape`; `height`, `ceiling`, `opening`, `opening_width`, `skylights`, `stone_low`, `stone_high`, `grass_color`, `moss_color`, `glow_color`, `darkness`, `adapt_time`, `shape_seed` |
 
 Los colores se escriben como en la web: `"#8a6d5a"`.
