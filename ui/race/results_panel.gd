@@ -6,11 +6,19 @@ extends CanvasLayer
 
 var _panel: PanelContainer
 var _list: Label
+var _record_button: Button
+var _record_note: Label
+var _race: RaceManager
 
 
 func _ready() -> void:
 	layer = 10
 	var race_manager := get_node(race_manager_path) as RaceManager
+	_race = race_manager
+	race_manager.record_downloaded.connect(func(where: String) -> void:
+		_record_note.text = "Registro descargado: %s\nAdjuntáselo a Claude para analizarlo." % where.get_file()
+		_record_note.visible = true
+	)
 	race_manager.race_finished.connect(func(ranking: Array[Rider]) -> void:
 		_show(race_manager, ranking)
 	)
@@ -26,6 +34,7 @@ func _show(race_manager: RaceManager, ranking: Array[Rider]) -> void:
 			time_text = _format_time(race_manager.finish_times[r])
 		lines.append("%dº   %s   %s" % [i + 1, r.display_name, time_text])
 	_list.text = "\n".join(lines)
+	_record_button.visible = race_manager.recorder != null
 	_panel.visible = true
 
 
@@ -39,8 +48,8 @@ func _build() -> void:
 	_panel.set_anchors_preset(Control.PRESET_CENTER)
 	_panel.offset_left = -260.0
 	_panel.offset_right = 260.0
-	_panel.offset_top = -170.0
-	_panel.offset_bottom = 170.0
+	_panel.offset_top = -220.0
+	_panel.offset_bottom = 220.0
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.02, 0.1, 0.2, 0.85)
 	style.set_corner_radius_all(18)
@@ -57,6 +66,18 @@ func _build() -> void:
 	box.add_child(_label("Resultados", 44, Color(1.0, 0.86, 0.2)))
 	_list = _label("", 30, Color.WHITE)
 	box.add_child(_list)
+	_record_button = Button.new()
+	_record_button.text = "Descargar registro (L)"
+	_record_button.focus_mode = Control.FOCUS_NONE
+	_record_button.add_theme_font_size_override("font_size", 20)
+	_record_button.pressed.connect(func() -> void:
+		if _race:
+			_race.download_record()
+	)
+	box.add_child(_record_button)
+	_record_note = _label("", 16, Color(0.8, 1.0, 0.8))
+	_record_note.visible = false
+	box.add_child(_record_note)
 	box.add_child(_label("R o Start: otra carrera\nC o Esc: cambiar personaje", 18, Color(0.8, 0.9, 1.0)))
 
 

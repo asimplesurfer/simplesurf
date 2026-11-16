@@ -490,6 +490,17 @@ func _test_bumps() -> void:
 	_rider.heading = my_heading
 	other.queue_free()
 	await _wait(0.5)
+	# Registro de la carrera: va guardando cómo juega cada uno y las olas.
+	var rec := _race.recorder
+	_check(rec != null and rec._samples.size() > 10, "la carrera se va registrando (%d muestras)" % (rec._samples.size() if rec else 0))
+	if rec:
+		var d := rec.to_dict()
+		var parsed: Variant = JSON.parse_string(JSON.stringify(d))
+		_check(
+			parsed is Dictionary and (parsed.samples as Array).size() == rec._samples.size()
+			and (parsed.fields.rider as Array).size() == ((parsed.samples as Array)[0][1][0] as Array).size(),
+			"el registro se exporta entero como JSON"
+		)
 
 
 func _test_swells() -> void:
