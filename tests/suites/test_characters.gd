@@ -189,6 +189,18 @@ func _test_customization() -> void:
 	var shaggy := CharacterData.from_dict({"hair": 15, "glasses": 13, "neck": 9, "shorts_tie": 1})
 	_check(shaggy.option_name("hair") == "Despeinado" and shaggy.option_name("glasses") == "Envolventes"
 		and shaggy.option_name("shorts_tie") == "Cordón blanco", "despeinado: pelo, anteojos y cordón")
+	var red := CharacterData.new()
+	red.apply_preset(CharacterData.PRESET_NAMES.find("Pelirroja"))
+	_check(red.option_name("hair") == "Melena ondulada" and red.option_name("bottom") == "Bikini"
+		and red.option_name("hat") == "Sombrero de paja", "estilo Pelirroja: melena, bikini y sombrero")
+	# Bikini abajo: no se arman las piernas del short.
+	var av_red := Avatar.new()
+	av_red.data = red
+	root.add_child(av_red)
+	var sleeve := av_red.find_child("SleeveL", true, false)
+	_check(sleeve != null and sleeve.find_children("*", "MeshInstance3D", true, false).is_empty(),
+		"bikini: sin piernas de short")
+	av_red.free()
 	var mar := CharacterData.new()
 	mar.apply_preset(CharacterData.PRESET_NAMES.find("Mar"))
 	_check(mar.option_name("hair") == "Colita alta" and mar.option_name("top") == "Lycra de surf"

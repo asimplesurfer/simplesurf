@@ -38,6 +38,9 @@ const SHORTS_PATTERNS := [
 	"Liso", "Flores", "Lunares", "Rayas", "Hawaiano", "Tie-dye", "Tres franjas", "Cuadros", "Olas",
 	"Rayas verticales", "Estrellas", "Llamas", "Camuflaje", "Zigzag", "Flores grandes", "Franjas al costado",
 ]
+## Abajo: short (con piernas) o bikini (solo la cadera, con ribete).
+const BOTTOMS := ["Short", "Bikini"]
+const BIKINI := 1
 ## Cordón del short (atado con moño adelante).
 const SHORTS_TIES := ["Sin cordón", "Cordón blanco", "Cordón negro", "Cordón del estampado"]
 const BOARD_COLORS := [
@@ -90,7 +93,7 @@ const HEAD_SCALES := [
 const HAIR_STYLES := [
 	"Pelado", "Rapado", "Melena surfer", "Rulos", "Cresta", "Pinchos", "Moño", "Peluquín",
 	"Pelo largo", "Colita", "Dos colitas", "Carré", "Afro", "Rodetes", "Rastas", "Despeinado",
-	"Colita alta",
+	"Colita alta", "Melena ondulada",
 ]
 const HAIR_COLORS := [
 	Color("#f0c13a"),
@@ -107,6 +110,7 @@ const HAIR_COLOR_NAMES := ["Rubio", "Castaño", "Negro", "Colorado", "Canoso", "
 const EYES := [
 	"Puntitos", "Saltones", "Bizcos", "Dormidos", "Desparejos",
 	"Con pestañas", "Brillosos", "Felices", "Guiño", "Enojados", "Grandes con cejas",
+	"Claros y tiernos",
 ]
 const GLASSES := [
 	"Ninguno", "De sol", "Antiparras", "Redondos", "Monóculo",
@@ -125,7 +129,7 @@ const FACE_EXTRAS := [
 const EARS := ["Sin orejas", "Normales", "Grandes", "Dumbo", "Con aritos"]
 const NECKLACES := [
 	"Nada", "Perlas", "Collar de flores", "Cadena de oro", "Dientes de tiburón", "Silbato", "Caracol",
-	"Cuentas rasta", "Paz y amor", "Cuellito blanco",
+	"Cuentas rasta", "Paz y amor", "Cuellito blanco", "Dije",
 ]
 ## Sombreros y gorros (de playa y de mar).
 const HATS := [
@@ -141,11 +145,16 @@ const LYCRA := 3
 const TOPS := ["Nada", "Bikini", "Musculosa", "Lycra de surf"]
 
 ## Estilos armados (el primero es el surfista original del modelo 3D).
-const PRESET_NAMES := ["Surfista rubio", "Mar", "Rasta"]
+const PRESET_NAMES := ["Surfista rubio", "Pelirroja", "Mar", "Rasta"]
 const PRESETS := [
 	{"weight": 0.0, "skin": 2, "head": 0, "hair": 2, "hair_color": 0,
 		"eyes": 0, "glasses": 1, "nose": 0, "mouth": 2, "extra": 0, "ears": 0, "neck": 1, "shorts": 0,
 		"shorts_pattern": 1, "board": 0, "board_design": 1},
+	# Pelirroja de la playa: sombrero de paja, pecas, melena ondulada y bikini a lunares.
+	{"weight": 0.3, "skin": 0, "head": 0, "hair": 17, "hair_color": 3, "eyes": 11, "glasses": 0, "nose": 0,
+		"mouth": 1, "extra": 9, "ears": 0, "neck": 10, "hat": 1, "top": 1, "bottom": 1, "shorts": 8,
+		"shorts_pattern": 2, "shorts_pattern_color": 10, "trim_color": 0, "shorts_tie": 0, "board": 2,
+		"board_design": 1, "board_design_color": 0, "board_design_color2": 9},
 	# Mar, la surfista: la otra cara del rubio.
 	{"weight": 0.4, "skin": 2, "head": 1, "hair": 16, "hair_color": 1, "eyes": 10, "glasses": 0, "nose": 0,
 		"mouth": 10, "extra": 9, "ears": 4, "neck": 0, "hat": 0, "top": 3, "top_color": 4, "top_color2": 2,
@@ -186,6 +195,8 @@ const PRESETS := [
 @export var board_design_color_index: int = 0
 @export var board_design_color2_index: int = 4
 @export var shorts_tie_index: int = 0
+@export var bottom_index: int = 0
+@export var trim_color_index: int = 0
 @export var top_color_index: int = 4
 @export var top_color2_index: int = 2
 
@@ -214,6 +225,8 @@ const FIELDS := {
 	"shorts_pattern_color": ["shorts_pattern_color_index", ACCENT_NAMES],
 	"shorts_pattern_color2": ["shorts_pattern_color2_index", ACCENT_NAMES],
 	"shorts_tie": ["shorts_tie_index", SHORTS_TIES],
+	"bottom": ["bottom_index", BOTTOMS],
+	"trim_color": ["trim_color_index", ACCENT_NAMES],
 	"board": ["board_index", BOARD_NAMES],
 	"board_design": ["board_design_index", BOARD_DESIGNS],
 	"board_design_color": ["board_design_color_index", ACCENT_NAMES],
@@ -250,6 +263,8 @@ func field_applies(field: String) -> bool:
 			return get_option("hat") in HAT_COLORABLE
 		"top_color", "top_color2":
 			return get_option("top") == LYCRA
+		"trim_color":
+			return get_option("top") == 1 or get_option("bottom") == BIKINI
 		"shorts_pattern_color":
 			return get_option("shorts_pattern") != 0
 		"shorts_pattern_color2":
