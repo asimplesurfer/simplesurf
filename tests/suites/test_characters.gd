@@ -198,7 +198,7 @@ func _test_customization() -> void:
 	feats.build_head(groups.head, groups.hair, shaggy, shaggy.skin_color())
 	feats.build_chest(groups.chest, shaggy, SurferKit.CHEST_RADII)
 	feats.build_hips(groups.hips, shaggy, SurferKit.HIPS_RADII)
-	_check(int(groups.hair.get_meta("pieces", 0)) > 20, "despeinado: muchos mechones")
+	_check(int(groups.hair.get_meta("pieces", 0)) >= 10, "despeinado: cáscara, mechones y flequillo")
 	_check(int(groups.hips.get_meta("pieces", 0)) >= 5, "el cordón del short se arma (moño y puntas)")
 	var plain := CharacterData.new()
 	var plain_hips := Node3D.new()
