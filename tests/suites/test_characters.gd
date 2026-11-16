@@ -189,11 +189,27 @@ func _test_customization() -> void:
 	var shaggy := CharacterData.from_dict({"hair": 15, "glasses": 13, "neck": 9, "shorts_tie": 1})
 	_check(shaggy.option_name("hair") == "Despeinado" and shaggy.option_name("glasses") == "Envolventes"
 		and shaggy.option_name("shorts_tie") == "Cordón blanco", "despeinado: pelo, anteojos y cordón")
-	var coco := CharacterData.new()
-	coco.apply_preset(CharacterData.PRESET_NAMES.find("Coco"))
-	_check(coco.option_name("hair") == "Afro" and coco.option_name("mouth") == "Sonrisota"
-		and coco.option_name("hat") == "Vincha deportiva" and coco.option_name("nose") == "Con protector solar",
-		"estilo Coco: afro, sonrisota, vincha y protector solar")
+	var mar := CharacterData.new()
+	mar.apply_preset(CharacterData.PRESET_NAMES.find("Mar"))
+	_check(mar.option_name("hair") == "Colita alta" and mar.option_name("top") == "Lycra de surf"
+		and mar.option_name("mouth") == "Sonrisa abierta" and mar.option_name("ears") == "Con aritos",
+		"estilo Mar: colita alta, lycra, sonrisa abierta y aritos")
+	_check(mar.field_applies("top_color") and not CharacterData.new().field_applies("top_color"),
+		"el color de la lycra solo aparece con la lycra puesta")
+	# Con la lycra, el torso es de tela (otro material que la piel).
+	var av := Avatar.new()
+	av.data = mar
+	root.add_child(av)
+	var torso := av.find_child("Torso", true, false)
+	var has_top := false
+	for mi in torso.find_children("*", "MeshInstance3D", true, false):
+		var mesh := (mi as MeshInstance3D).mesh
+		for si in mesh.get_surface_count():
+			var m := mesh.surface_get_material(si) as BaseMaterial3D
+			if m and m.albedo_color.is_equal_approx(mar.accent("top_color")):
+				has_top = true
+	_check(has_top, "lycra: el torso se pinta del color de la lycra")
+	av.free()
 	var groups := {}
 	for g in ["head", "hair", "chest", "hips"]:
 		groups[g] = Node3D.new()

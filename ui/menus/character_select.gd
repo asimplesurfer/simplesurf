@@ -53,6 +53,8 @@ const CATEGORIES := {
 	],
 	"Ropa": [
 		["Arriba", "option", "top", ThumbRenderer.Frame.CHEST],
+		["Color de arriba", "color", "top_color", 0],
+		["Color de la franja", "color", "top_color2", 0],
 		["Color del short", "color", "shorts", 0],
 		["Estampado", "option", "shorts_pattern", ThumbRenderer.Frame.HIPS],
 		["Color del estampado", "color", "shorts_pattern_color", 0],

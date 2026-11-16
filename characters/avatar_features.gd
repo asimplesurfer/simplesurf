@@ -47,8 +47,13 @@ var _group: Node3D
 var _extra_xf := Transform3D.IDENTITY
 ## Pelos voluminosos: el sombrero va más grande y más arriba (si no, lo tapan).
 const BIG_HAIR := [2, 3, 4, 5, 12, 13, 14, 15]
+## Colita alta (peinado 16).
+const HIGH_PONYTAIL := 16
 ## Rastas (peinado 14).
 const DREADS := 14
+## Franja de la lycra: altura (en el grupo del pecho) y tamaño (en radios del pecho).
+const LYCRA_BAND_Y := -0.2
+const LYCRA_BAND_R := Vector2(1.0, 1.04)
 ## Ancho y fondo del pecho (para el collar).
 var _neck_scale := Vector2.ONE
 
@@ -134,8 +139,8 @@ func build_head(group: Node3D, hair_group: Node3D, data: CharacterData, skin: Co
 ## atrás. `neck_scale` = ancho y fondo del pecho (x, z), que cambian con el cuerpo.
 func build_chest(group: Node3D, data: CharacterData, radii: Vector3, neck_scale := Vector2.ONE) -> void:
 	_begin(group)
-	_top(data.get_option("top"), data.shorts_color(), radii)
 	_neck_scale = neck_scale
+	_top(data.get_option("top"), data.shorts_color(), radii, data.accent("top_color2"))
 	var front := _neck_at(0.0)
 	# Hacia adelante y un poco para arriba (como el pecho).
 	var face := Basis(Vector3.RIGHT, -0.3)
@@ -311,6 +316,19 @@ func _eyes(style: int, glasses: int = 0) -> void:
 				else:
 					_piece(_sphere, p + Vector3(0, -0.01, 0.01), Vector3(0.07, 0.014, 0.02), BLACK, false,
 						Basis(Vector3.BACK, 0.25))
+			10:
+				# Grandes con brillo y cejas finas arqueadas.
+				_piece(_sphere, p, Vector3(0.075, 0.1, 0.04) * maxf(k, 0.8), BLACK, false)
+				_piece(_sphere, p + Vector3(-0.025, 0.035, 0.035), Vector3.ONE * 0.028, WHITE, false)
+				var brow := PackedVector2Array()
+				var ex := p.x
+				for j in 7:
+					var u := j / 6.0
+					brow.append(Vector2(ex + (u - 0.5) * 0.17, 0.215 + 0.035 * sin(u * PI)))
+				for j in 7:
+					var u := 1.0 - j / 6.0
+					brow.append(Vector2(ex + (u - 0.5) * 0.15, 0.215 + 0.015 * sin(u * PI) - 0.008))
+				_extruded(brow, 0.004, 0.006, func(_q: Vector2) -> Color: return Color("#3a2414"), false)
 			9:
 				# Enojados: punto y ceja en diagonal hacia el centro.
 				_piece(_sphere, p, Vector3.ONE * 0.06, BLACK, false)
@@ -543,6 +561,25 @@ func _mouth(style: int) -> void:
 			_piece(_sphere, m, Vector3(0.11, 0.012, 0.02), BLACK, false)
 			for side in [-1.0, 1.0]:
 				_piece(_box, m + Vector3(side * 0.031, -0.045, 0.0), Vector3(0.028, 0.042, 0.012), WHITE)
+		10:
+			# Sonrisa abierta en D: arriba recta, abajo redonda, con los dientes
+			# de arriba y la lengua.
+			var mouth := PackedVector2Array()
+			var teeth := PackedVector2Array()
+			for j in 13:
+				var u := j / 12.0
+				var x := lerpf(-0.13, 0.13, u)
+				mouth.append(Vector2(x, -0.2 - 0.11 * sin(u * PI)))
+				teeth.append(Vector2(lerpf(-0.105, 0.105, u), -0.212 - 0.025 * sin(u * PI)))
+			mouth.reverse()
+			mouth.append(Vector2(-0.135, -0.19))
+			mouth.append(Vector2(0.135, -0.19))
+			teeth.reverse()
+			teeth.append(Vector2(-0.11, -0.205))
+			teeth.append(Vector2(0.11, -0.205))
+			_extruded(mouth, 0.0, 0.012, func(_q: Vector2) -> Color: return Color("#5a1620"), true)
+			_extruded(teeth, 0.014, 0.004, func(_q: Vector2) -> Color: return WHITE, false)
+			_piece(_sphere, _face(0.0, -0.28, 0.008), Vector3(0.06, 0.025, 0.01), Color("#ff7b8a"), false)
 		9:
 			# Sonrisota: boca grande en media luna con los dientes de arriba.
 			var c := _face(0.0, -0.235, 0.01)
@@ -597,6 +634,13 @@ func _extra(style: int, hair: Color) -> void:
 			for side in [-1.0, 1.0]:
 				_piece(_sphere, _face(side * 0.07, -0.135, 0.012), Vector3(0.085, 0.024, 0.035), hair, true,
 					Basis(Vector3.BACK, side * 0.22))
+		9:
+			# Pecas: tres en cada cachete.
+			for side in [-1.0, 1.0]:
+				for j in 3:
+					var q := Vector2(side * (0.24 + 0.05 * (j % 2) + 0.02 * j), -0.06 - 0.04 * j)
+					_disc(_face(q.x, q.y, 0.006), (_face(q.x, q.y, 1.0) - _face(q.x, q.y)).normalized(), 0.017,
+						Color("#a85a2f"), false)
 		8:
 			# Bigotón: grueso y redondo, con las puntas para abajo (no tapa la sonrisa).
 			for side in [-1.0, 1.0]:
@@ -615,6 +659,13 @@ func _extra(style: int, hair: Color) -> void:
 
 func _ears(style: int, skin: Color) -> void:
 	if style == 0:
+		return
+	if style == 4:
+		# Orejas normales con aritos dorados colgando.
+		for side in [-1.0, 1.0]:
+			_piece(_sphere, Vector3(side * 0.509, 0.05, -0.02), Vector3(0.065, 0.12, 0.09), skin, true)
+			_piece(_ring_thick, Vector3(side * 0.53, -0.1, 0.0), Vector3(0.055, 0.055, 0.055), Color("#ffc21f"),
+				true, Basis(Vector3.BACK, PI / 2.0) * Basis(Vector3.RIGHT, PI / 2.0))
 		return
 	var sizes := [Vector3.ZERO, Vector3(0.065, 0.12, 0.09), Vector3(0.065, 0.19, 0.15), Vector3(0.05, 0.3, 0.28)]
 	for side in [-1.0, 1.0]:
@@ -702,6 +753,8 @@ func _hair(style: int, hair: Color) -> void:
 			_dread_strands(hair)
 		15:
 			_shaggy(hair)
+		16:
+			_high_ponytail(hair)
 
 
 ## Anteojos oscuros: detrás no se ven los ojos.
@@ -817,7 +870,7 @@ func _hat(style: int, tint: Color = Color("#ff9b1f")) -> void:
 
 
 ## Ropa de arriba (del color del short).
-func _top(style: int, color: Color, radii: Vector3) -> void:
+func _top(style: int, color: Color, radii: Vector3, band: Color = WHITE) -> void:
 	match style:
 		1:
 			# Bikini: dos copas grandes (acordes al torso), banda debajo y tiras al cuello.
@@ -837,6 +890,12 @@ func _top(style: int, color: Color, radii: Vector3) -> void:
 		2:
 			# Musculosa: cubre el pecho.
 			_piece(_sphere, Vector3(0.0, -0.03, 0.0), radii * Vector3(1.04, 0.95, 1.06), color)
+		CharacterData.LYCRA:
+			# Lycra de surf: el torso ya es de tela (SurferKit); acá va la franja
+			# de otro color alrededor de la panza, sobre la tela.
+			_piece(_cyl, Vector3(0.0, LYCRA_BAND_Y, 0.0),
+				Vector3(radii.x * _neck_scale.x * LYCRA_BAND_R.x, 0.055, radii.z * _neck_scale.y * LYCRA_BAND_R.y),
+				band, true)
 
 
 ## Rastas: dónde nace y hasta dónde cae cada tira (ángulo desde la nuca hacia
@@ -945,6 +1004,148 @@ func _shaggy(hair: Color) -> void:
 			flick = Vector3(-1.0, 0.0, 0.0)
 		_lock_piece(root, Vector3(lean, -1.0, 0.45), 0.36 + 0.04 * cos(k * 1.3), 0.21, flick,
 			hair.darkened(0.25) if k % 2 == 1 else hair, _wavy)
+
+
+## Colita alta: pelo pegado a la cabeza hasta las orejas y la nuca, flequillo
+## de costado que cruza la frente y una colita gruesa atada arriba atrás que
+## sube un poco y cae en curva hasta los hombros (se balancea con el pelo).
+func _high_ponytail(hair: Color) -> void:
+	if _ponytail_meshes.is_empty():
+		_ponytail_meshes = [
+			_make_hair_shell(PONY_CENTER, PONY_RADII, 1.0, 1.9, 2.15, false),
+			_make_hair_shell(PONY_CENTER, PONY_RADII, 1.0, 1.9, 2.15, true),
+			_make_tube(PONY_PATH, PONY_WIDTH),
+		]
+		for x0 in [-0.32, -0.12, 0.12, 0.32]:
+			var path := []
+			var widths := []
+			for k in 6:
+				var u := k / 5.0
+				# Del borde de adelante hacia donde se ata la colita.
+				var d := Vector3(x0 * (1.0 - u) * 1.4, 0.55 + 0.4 * sin(u * PI * 0.5), 0.75 * (1.0 - u) - 0.55 * u)
+				path.append(PONY_CENTER + _on_ellipsoid(PONY_RADII, d.normalized(), 0.008))
+				widths.append(0.011 * sin(maxf(u, 0.08) * PI))
+			_ponytail_meshes.append(_make_tube(path, widths))
+	_piece(_ponytail_meshes[0], Vector3.ZERO, Vector3.ONE, hair)
+	_piece(_ponytail_meshes[1], Vector3.ZERO, Vector3.ONE, hair.darkened(0.35), false)
+	_piece(_ponytail_meshes[2], Vector3.ZERO, Vector3.ONE, hair)
+	# Rayas de peinado: de la frente hacia la colita (así no parece un casco).
+	for line in _ponytail_meshes.slice(3):
+		_piece(line, Vector3.ZERO, Vector3.ONE, hair.darkened(0.3), false)
+	# Gomita.
+	var tie: Vector3 = PONY_PATH[0].lerp(PONY_PATH[1], 0.5)
+	_piece(_ring_thick, tie, Vector3(0.13, 0.16, 0.13), Color("#ff6f61"), true,
+		_align_y(PONY_PATH[1] - PONY_PATH[0]))
+	# Flequillo de costado: una sola pieza que cruza la frente, más baja del
+	# lado izquierdo (de quien mira) y con la punta en la sien.
+	_extruded(PackedVector2Array(PONY_FRINGE), 0.0, 0.05, func(_p: Vector2) -> Color: return hair, true)
+	_extruded(PackedVector2Array(PONY_FRINGE_LINE), 0.052, 0.006,
+		func(_p: Vector2) -> Color: return hair.darkened(0.3), false)
+
+
+const PONY_CENTER := Vector3(0.0, 0.14, -0.05)
+const PONY_RADII := Vector3(0.56, 0.6, 0.53)
+## Camino de la colita (desde donde se ata) y su grosor en cada punto.
+const PONY_PATH := [
+	Vector3(0.0, 0.62, -0.36), Vector3(0.02, 0.74, -0.52), Vector3(0.1, 0.72, -0.72),
+	Vector3(0.2, 0.55, -0.84), Vector3(0.28, 0.3, -0.86), Vector3(0.3, 0.06, -0.8),
+	Vector3(0.27, -0.14, -0.72), Vector3(0.2, -0.28, -0.66),
+]
+const PONY_WIDTH := [0.11, 0.13, 0.17, 0.19, 0.18, 0.15, 0.09, 0.0]
+## Flequillo de costado (x, y sobre la cara).
+const PONY_FRINGE := [
+	Vector2(-0.42, 0.42), Vector2(-0.34, 0.5), Vector2(-0.1, 0.53), Vector2(0.22, 0.5), Vector2(0.4, 0.42),
+	Vector2(0.42, 0.34), Vector2(0.3, 0.39), Vector2(0.1, 0.4), Vector2(-0.12, 0.35), Vector2(-0.3, 0.29),
+	Vector2(-0.43, 0.27),
+]
+## Raya que marca el mechón del flequillo.
+const PONY_FRINGE_LINE := [
+	Vector2(0.18, 0.52), Vector2(0.2, 0.505), Vector2(-0.14, 0.38), Vector2(-0.3, 0.3), Vector2(-0.31, 0.315),
+	Vector2(-0.15, 0.4),
+]
+
+var _ponytail_meshes: Array = []
+
+
+## Cáscara de pelo lisa sobre la cabeza: baja hasta `hem_front` en la frente,
+## `hem_side` a los costados y `hem_back` atrás (ángulos desde la coronilla).
+## `inner`: la cara de adentro (más oscura, se ve por debajo del borde).
+static func _make_hair_shell(center: Vector3, radii: Vector3, hem_front: float, hem_side: float,
+		hem_back: float, inner: bool) -> ArrayMesh:
+	var cols := 64
+	var rows := 10
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for c in cols:
+		var th := c * TAU / cols
+		var f := cos(th)
+		var hem := lerpf(hem_side, hem_front, pow(maxf(f, 0.0), 1.3)) if f >= 0.0 \
+			else lerpf(hem_side, hem_back, pow(-f, 1.3))
+		for r in rows + 1:
+			var t := r / float(rows)
+			var ph := hem * t
+			var d := Vector3(sin(th) * sin(ph), cos(ph), cos(th) * sin(ph))
+			# El borde se mete un poquito hacia la cabeza (no queda como casco).
+			var tuck := 1.0 - 0.04 * pow(t, 6.0)
+			st.add_vertex(center + d * radii * (tuck - (0.04 if inner else 0.0)))
+	for c in cols:
+		var c2 := (c + 1) % cols
+		for r in rows:
+			var a := c * (rows + 1) + r
+			var b := c2 * (rows + 1) + r
+			if inner:
+				st.add_index(a); st.add_index(a + 1); st.add_index(b)
+				st.add_index(b); st.add_index(a + 1); st.add_index(b + 1)
+			else:
+				st.add_index(a); st.add_index(b); st.add_index(a + 1)
+				st.add_index(b); st.add_index(b + 1); st.add_index(a + 1)
+	st.generate_normals()
+	return st.commit()
+
+
+## Tubo suave que sigue `path` con el grosor `widths` en cada punto (curva
+## Catmull-Rom, así no se ven quiebres). Cerrado en las puntas.
+static func _make_tube(path: Array, widths: Array) -> ArrayMesh:
+	var samples: Array[Vector3] = []
+	var ws: Array[float] = []
+	var steps := 5
+	for i in path.size() - 1:
+		var p0: Vector3 = path[maxi(i - 1, 0)]
+		var p1: Vector3 = path[i]
+		var p2: Vector3 = path[i + 1]
+		var p3: Vector3 = path[mini(i + 2, path.size() - 1)]
+		for k in steps:
+			var t := k / float(steps)
+			samples.append(0.5 * ((2.0 * p1) + (-p0 + p2) * t + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t * t
+				+ (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t * t * t))
+			ws.append(lerpf(widths[i], widths[i + 1], t))
+	samples.append(path[path.size() - 1])
+	ws.append(widths[widths.size() - 1])
+	var sides := 10
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var normal := Vector3.RIGHT
+	for i in samples.size():
+		var fwd := (samples[mini(i + 1, samples.size() - 1)] - samples[maxi(i - 1, 0)]).normalized()
+		var side := fwd.cross(normal).normalized()
+		normal = side.cross(fwd).normalized()
+		for j in sides:
+			var a := j * TAU / sides
+			# Un poco chata (de costado es más finita).
+			st.add_vertex(samples[i] + (normal * cos(a) * 0.8 + side * sin(a)) * ws[i])
+	for i in samples.size() - 1:
+		for j in sides:
+			var a := i * sides + j
+			var b := i * sides + (j + 1) % sides
+			st.add_index(a); st.add_index(a + sides); st.add_index(b)
+			st.add_index(b); st.add_index(a + sides); st.add_index(b + sides)
+	# Tapa de la base (la punta ya termina en grosor 0).
+	var cap := samples.size() * sides
+	st.add_vertex(samples[0])
+	for j in sides:
+		st.add_index(cap); st.add_index(j); st.add_index((j + 1) % sides)
+	st.generate_normals()
+	return st.commit()
 
 
 ## Volumen del despeinado (centro y radios), en unidades de cabeza.

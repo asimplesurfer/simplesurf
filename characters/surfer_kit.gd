@@ -77,6 +77,8 @@ var _yaw: float = STANCE_YAW
 var _materials: Dictionary = {}
 ## Con rastas el pelo se sacude menos (ver _secondary).
 var _dreads: bool = false
+## Con la lycra puesta, el pecho, la cintura y los hombros son de tela.
+var _lycra: bool = false
 
 
 ## Arma el personaje dentro de `parent` según `data`.
@@ -87,6 +89,7 @@ func build(parent: Node3D, data: CharacterData, features: AvatarFeatures) -> voi
 	root.free()
 	parent.add_child(character)
 	character.basis = Basis(Vector3.UP, _yaw)
+	_lycra = data.get_option("top") == CharacterData.LYCRA
 	_fist_left_hand()
 	_choose_accessories(data)
 	_apply_sliders(data)
@@ -460,6 +463,9 @@ func _make_materials(data: CharacterData) -> void:
 	shorts.set_shader_parameter("color2", data.accent("shorts_pattern_color2"))
 	shorts.set_shader_parameter("pattern", data.get_option("shorts_pattern"))
 	_materials["shorts"] = shorts
+	var top := (_materials["skin"] as BaseMaterial3D).duplicate() as BaseMaterial3D
+	top.albedo_color = data.accent("top_color")
+	_materials["top"] = top
 
 
 ## Junta todas las piezas debajo de `part` en una malla (una superficie por color),
@@ -474,6 +480,13 @@ func _bake(part: Node3D) -> void:
 			continue
 		var mat := inst.mesh.surface_get_material(0) as BaseMaterial3D
 		var key := mat.resource_name if mat else "skin"
+		if _lycra and part.name == "Torso":
+			# La lycra tapa el torso: la piel se vuelve tela y las líneas de
+			# los músculos no se ven.
+			if key == "skin_line":
+				continue
+			if key == "skin":
+				key = "top"
 		# El contorno del modelo no se usa tal cual (se agrandaría con la pieza):
 		# se vuelve a armar abajo a partir de la pieza, con el grosor de siempre.
 		if key == "outline":
