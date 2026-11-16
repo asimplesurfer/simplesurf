@@ -33,7 +33,10 @@ const SHORTS_COLORS := [
 	Color("#f0f0f0"),
 ]
 const SHORTS_NAMES := ["Azul", "Rojo", "Amarillo", "Turquesa", "Violeta", "Negro", "Rosa", "Verde", "Blanco"]
-const SHORTS_PATTERNS := ["Liso", "Flores", "Lunares", "Rayas", "Hawaiano"]
+const SHORTS_PATTERNS := [
+	"Liso", "Flores", "Lunares", "Rayas", "Hawaiano", "Tie-dye", "Tres franjas", "Cuadros", "Olas",
+	"Rayas verticales", "Estrellas", "Llamas", "Camuflaje", "Zigzag",
+]
 const BOARD_COLORS := [
 	Color("#fff1c9"),
 	Color(1.0, 0.86, 0.3),
@@ -43,9 +46,35 @@ const BOARD_COLORS := [
 	Color(0.55, 0.9, 0.4),
 	Color(0.9, 0.5, 1.0),
 	Color("#2b2b2b"),
+	Color("#e23a32"),
 ]
-const BOARD_NAMES := ["Crema", "Amarilla", "Blanca", "Celeste", "Naranja", "Verde", "Lila", "Negra"]
-const BOARD_DESIGNS := ["Lisa", "Dos rayas", "Raya al medio", "Punta pintada", "Lunares"]
+const BOARD_NAMES := ["Crema", "Amarilla", "Blanca", "Celeste", "Naranja", "Verde", "Lila", "Negra", "Roja"]
+const BOARD_DESIGNS := [
+	"Lisa", "Dos rayas", "Raya al medio", "Punta pintada", "Lunares", "Llamas", "Tres franjas", "Cuadros",
+	"Olas", "Rayo", "Tie-dye", "Estrellas", "Mitad y mitad", "Flor hawaiana", "Zigzag",
+]
+## Colores para estampados, diseños de tabla y gorros.
+const ACCENT_COLORS := [
+	Color("#e8302a"),
+	Color("#ff9b1f"),
+	Color("#ffd23f"),
+	Color("#2fa84f"),
+	Color("#2fc4b2"),
+	Color("#6cc6ff"),
+	Color("#2f5fd6"),
+	Color("#8a4fd1"),
+	Color("#ff6fb5"),
+	Color("#f6f6f2"),
+	Color("#1b1b22"),
+	Color("#7a4a24"),
+]
+const ACCENT_NAMES := [
+	"Rojo", "Naranja", "Amarillo", "Verde", "Turquesa", "Celeste", "Azul", "Violeta", "Rosa", "Blanco",
+	"Negro", "Marrón",
+]
+## Estampados / diseños que usan el segundo color.
+const SHORTS_TWO_COLORS := [1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+const BOARD_TWO_COLORS := [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
 
 const HEAD_SHAPES := ["Normal", "Ancha", "Alargada", "Chata"]
 ## Escala de la cabeza (x, y, z) para cada forma (el tamaño va aparte, en la barra).
@@ -76,68 +105,39 @@ const EYES := [
 ]
 const GLASSES := [
 	"Ninguno", "De sol", "Antiparras", "Redondos", "Monóculo",
-	"Aviador", "Corazones", "Estrellas", "Visera", "Parche pirata", "Snorkel",
+	"Aviador", "Corazones", "Estrellas", "Visera", "Parche pirata", "Snorkel", "Redondos de sol",
+	"Lentes de color",
 ]
 const NOSES := ["Ninguna", "Botón", "Narigón", "De payaso", "Larga"]
 const MOUTHS := [
 	"Ninguna", "Sonrisa", "De costado", "Abierta", "Dientes de conejo", "Mueca",
 	"Labios pintados", "Lengua afuera", "Silbando",
 ]
-const FACE_EXTRAS := ["Nada", "Bigote", "Barba", "Uniceja", "Cejas gruesas"]
+const FACE_EXTRAS := [
+	"Nada", "Bigote", "Barba", "Uniceja", "Cejas gruesas", "Chivita", "Bigote y chivita", "Barba tupida",
+]
 const EARS := ["Sin orejas", "Normales", "Grandes", "Dumbo"]
 const NECKLACES := [
 	"Nada", "Perlas", "Collar de flores", "Cadena de oro", "Dientes de tiburón", "Silbato", "Caracol",
+	"Cuentas rasta", "Paz y amor",
 ]
 ## Sombreros y gorros (de playa y de mar).
 const HATS := [
 	"Nada", "Sombrero de paja", "Sombrero pirata", "Gorra de capitán", "Gorro de tiburón",
-	"Pañuelo", "Gorra", "Gorro de lana", "Corona de flores",
+	"Pañuelo", "Gorra", "Gorro de lana", "Corona de flores", "Gorro rasta", "Bandana rasta",
+	"Vincha hippie",
 ]
+## Sombreros a los que se les puede cambiar el color (el de paja, no).
+const HAT_COLORABLE := [5, 6, 7, 11]
 ## Ropa de arriba (del color del short).
 const TOPS := ["Nada", "Bikini", "Musculosa"]
 
 ## Estilos armados (el primero es el surfista original del modelo 3D).
-const PRESET_NAMES := [
-	"Surfista rubio", "Abuelo playero", "Payaso", "Nerd", "Alien", "Insolado",
-	"Surfera", "Pirata", "Capitana", "Tiburoncito", "Isleña", "Navegante de paja",
-]
+const PRESET_NAMES := ["Surfista rubio"]
 const PRESETS := [
-	{"weight": 0.0, "muscle": 1.0, "head_size": 0.5, "skin": 2, "head": 0, "hair": 2, "hair_color": 0,
+	{"weight": 0.0, "skin": 2, "head": 0, "hair": 2, "hair_color": 0,
 		"eyes": 0, "glasses": 1, "nose": 0, "mouth": 2, "extra": 0, "ears": 0, "neck": 1, "shorts": 0,
 		"shorts_pattern": 1, "board": 0, "board_design": 1},
-	{"weight": 0.9, "muscle": 0.1, "head_size": 0.45, "skin": 0, "head": 0, "hair": 7, "hair_color": 4,
-		"eyes": 3, "glasses": 3, "nose": 2, "mouth": 1, "extra": 1, "ears": 2, "neck": 0, "shorts": 1,
-		"shorts_pattern": 4, "board": 2, "board_design": 0},
-	{"weight": 0.6, "muscle": 0.3, "head_size": 0.85, "skin": 0, "head": 1, "hair": 3, "hair_color": 3,
-		"eyes": 1, "glasses": 0, "nose": 3, "mouth": 3, "extra": 0, "ears": 3, "neck": 2, "shorts": 2,
-		"shorts_pattern": 2, "board": 6, "board_design": 4},
-	{"weight": 0.35, "muscle": 0.0, "head_size": 0.7, "skin": 1, "head": 2, "hair": 1, "hair_color": 2,
-		"eyes": 2, "glasses": 3, "nose": 1, "mouth": 4, "extra": 3, "ears": 2, "neck": 0, "shorts": 3,
-		"shorts_pattern": 3, "board": 3, "board_design": 2},
-	{"weight": 0.2, "muscle": 0.4, "head_size": 0.95, "skin": 7, "head": 2, "hair": 0, "hair_color": 6,
-		"eyes": 1, "glasses": 0, "nose": 0, "mouth": 3, "extra": 0, "ears": 0, "neck": 0, "shorts": 4,
-		"shorts_pattern": 2, "board": 5, "board_design": 3},
-	{"weight": 0.75, "muscle": 0.6, "head_size": 0.6, "skin": 5, "head": 1, "hair": 6, "hair_color": 3,
-		"eyes": 2, "glasses": 4, "nose": 2, "mouth": 5, "extra": 4, "ears": 3, "neck": 3, "shorts": 6,
-		"shorts_pattern": 1, "board": 4, "board_design": 1},
-	{"weight": 0.4, "skin": 1, "head": 0, "hair": 8, "hair_color": 2, "eyes": 5, "glasses": 0, "nose": 1,
-		"mouth": 6, "extra": 0, "ears": 1, "neck": 0, "shorts": 3, "shorts_pattern": 0, "board": 3,
-		"board_design": 1, "hat": 0, "top": 1},
-	{"weight": 0.65, "skin": 0, "head": 1, "hair": 3, "hair_color": 2, "eyes": 9, "glasses": 9, "nose": 2,
-		"mouth": 1, "extra": 2, "ears": 1, "neck": 3, "shorts": 5, "shorts_pattern": 3, "board": 7,
-		"board_design": 3, "hat": 2, "top": 0},
-	{"weight": 0.45, "skin": 3, "head": 0, "hair": 11, "hair_color": 4, "eyes": 6, "glasses": 0, "nose": 1,
-		"mouth": 6, "extra": 0, "ears": 1, "neck": 5, "shorts": 1, "shorts_pattern": 3, "board": 2,
-		"board_design": 2, "hat": 3, "top": 2},
-	{"weight": 0.3, "skin": 8, "head": 3, "hair": 0, "hair_color": 0, "eyes": 6, "glasses": 0, "nose": 0,
-		"mouth": 7, "extra": 0, "ears": 0, "neck": 4, "shorts": 0, "shorts_pattern": 2, "board": 3,
-		"board_design": 4, "hat": 4, "top": 0},
-	{"weight": 0.5, "skin": 2, "head": 0, "hair": 12, "hair_color": 2, "eyes": 7, "glasses": 6, "nose": 1,
-		"mouth": 1, "extra": 0, "ears": 1, "neck": 6, "shorts": 6, "shorts_pattern": 4, "board": 6,
-		"board_design": 1, "hat": 8, "top": 1},
-	{"weight": 0.15, "skin": 1, "head": 0, "hair": 1, "hair_color": 2, "eyes": 0, "glasses": 0, "nose": 1,
-		"mouth": 1, "extra": 0, "ears": 1, "neck": 0, "shorts": 0, "shorts_pattern": 0, "board": 1,
-		"board_design": 2, "hat": 1, "top": 0},
 ]
 
 ## Barra de cuerpo (0..1): 0 = musculoso ... 0.5 = normal ... 1 = panzón.
@@ -163,6 +163,11 @@ const PRESETS := [
 @export var board_design_index: int = 0
 @export var hat_index: int = 0
 @export var top_index: int = 0
+@export var hat_color_index: int = 1
+@export var shorts_pattern_color_index: int = 9
+@export var shorts_pattern_color2_index: int = 2
+@export var board_design_color_index: int = 0
+@export var board_design_color2_index: int = 4
 
 ## Nombre del campo -> [propiedad, lista de opciones] (para el menú y el guardado).
 ## Barras: nombre -> propiedad.
@@ -180,11 +185,16 @@ const FIELDS := {
 	"ears": ["ears_index", EARS],
 	"neck": ["neck_index", NECKLACES],
 	"hat": ["hat_index", HATS],
+	"hat_color": ["hat_color_index", ACCENT_NAMES],
 	"top": ["top_index", TOPS],
 	"shorts": ["shorts_index", SHORTS_NAMES],
 	"shorts_pattern": ["shorts_pattern_index", SHORTS_PATTERNS],
+	"shorts_pattern_color": ["shorts_pattern_color_index", ACCENT_NAMES],
+	"shorts_pattern_color2": ["shorts_pattern_color2_index", ACCENT_NAMES],
 	"board": ["board_index", BOARD_NAMES],
 	"board_design": ["board_design_index", BOARD_DESIGNS],
+	"board_design_color": ["board_design_color_index", ACCENT_NAMES],
+	"board_design_color2": ["board_design_color2_index", ACCENT_NAMES],
 }
 
 
@@ -202,6 +212,28 @@ func board_color() -> Color:
 
 func hair_color() -> Color:
 	return HAIR_COLORS[posmod(hair_color_index, HAIR_COLORS.size())]
+
+
+## Color de la lista de acentos elegido en el campo (gorro, estampado, tabla).
+func accent(field: String) -> Color:
+	return ACCENT_COLORS[get_option(field)]
+
+
+## Si la fila del campo tiene sentido con lo elegido (por ejemplo, el color del
+## gorro de paja no se cambia; sin estampado no hay color de estampado).
+func field_applies(field: String) -> bool:
+	match field:
+		"hat_color":
+			return get_option("hat") in HAT_COLORABLE
+		"shorts_pattern_color":
+			return get_option("shorts_pattern") != 0
+		"shorts_pattern_color2":
+			return get_option("shorts_pattern") in SHORTS_TWO_COLORS
+		"board_design_color":
+			return get_option("board_design") != 0
+		"board_design_color2":
+			return get_option("board_design") in BOARD_TWO_COLORS
+	return true
 
 
 func head_scale() -> Vector3:
@@ -228,8 +260,9 @@ func apply_preset(index: int) -> void:
 	var p: Dictionary = PRESETS[posmod(index, PRESETS.size())]
 	for slider in SLIDERS:
 		set(SLIDERS[slider], float(p.get(slider, get(SLIDERS[slider]))))
+	var defaults := CharacterData.new()
 	for field in FIELDS:
-		set(FIELDS[field][0], int(p.get(field, 0)))
+		set(FIELDS[field][0], int(p.get(field, defaults.get(FIELDS[field][0]))))
 
 
 func to_dict() -> Dictionary:
@@ -265,8 +298,19 @@ static func random(rng: RandomNumberGenerator) -> CharacterData:
 	return c
 
 
-## Personaje por defecto para cada jugador (un estilo distinto cada uno).
+## Personaje por defecto para cada jugador: el surfista rubio, con un short
+## de otro color para cada uno.
 static func default_for_player(player_index: int) -> CharacterData:
 	var c := CharacterData.new()
-	c.apply_preset([0, 2, 3, 4][player_index % 4])
+	c.apply_preset(0)
+	c.shorts_index = [0, 1, 3, 4][player_index % 4]
 	return c
+
+
+## Texto para copiar y pegar: todos los campos del personaje (para guardarlo
+## como estilo armado).
+func export_text() -> String:
+	var d := to_dict()
+	d.erase("muscle")
+	d.erase("head_size")
+	return JSON.stringify(d)

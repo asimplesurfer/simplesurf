@@ -88,12 +88,11 @@ func _frame_job(data: CharacterData, frame: Frame) -> void:
 		var mesh := CapsuleMesh.new()
 		mesh.radius = 0.5
 		mesh.height = 3.6
-		mesh.material = ToonMaterial.make(data.board_color(), 0.04)
+		mesh.material = BoardDesign.material(data, 3.6, 1.0)
 		var body := MeshInstance3D.new()
 		body.mesh = mesh
 		body.basis = Basis(Vector3.RIGHT, PI / 2.0) * Basis.from_scale(Vector3(1.0, 1.0, 0.18))
 		_board.add_child(body)
-		BoardDesign.add_to(_board, data, 3.6, 1.0, 0.09)
 		_board.rotation = Vector3(0.0, 0.6, 0.0)
 		_look(Vector3(2.6, 3.4, 2.6), Vector3.ZERO)
 		return

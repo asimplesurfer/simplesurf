@@ -5,6 +5,7 @@ extends "res://tests/test_base.gd"
 func run() -> void:
 	_test_avatar()
 	_test_outline_width()
+	_test_customization()
 
 
 func _test_avatar() -> void:
@@ -100,3 +101,93 @@ func _test_outline_width() -> void:
 				outlines += 1
 	_check(outlines > 5, "el personaje tiene sus contornos (%d)" % outlines)
 	a.queue_free()
+
+
+## Rastas, collares, estampados, colores y exportar.
+func _test_customization() -> void:
+	print("Personalización:")
+	# Rastas: ninguna pieza dentro de la cabeza, con cualquier forma de cabeza
+	# y con el pelo sacudido al máximo (para atrás y de costado).
+	var worst := 99.0
+	for shape in CharacterData.HEAD_SHAPES.size():
+		var d := CharacterData.new()
+		d.hair_index = AvatarFeatures.DREADS
+		d.head_index = shape
+		var av := Avatar.new()
+		av.data = d
+		root.add_child(av)
+		for group_name in ["HairFeatures"]:
+			var g := av.find_child(group_name, true, false) as Node3D
+			for mi in g.find_children("*", "MeshInstance3D", false, false):
+				var mesh := (mi as MeshInstance3D).mesh
+				var verts: PackedVector3Array = mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+				var swings := [Vector3.ZERO, Vector3(0.5, 0, 0.07), Vector3(0.5, 0, -0.07), Vector3(-0.02, 0, 0.07), Vector3(-0.02, 0, -0.07)]
+				for sw in swings:
+					var rot := Basis.from_euler(sw)
+					for v in verts:
+						# Del grupo del pelo a la cabeza: gira en el pivote.
+						var hv: Vector3 = v
+						if group_name == "HairFeatures":
+							hv = SurferKit.HAIR_PIVOT + rot * (v - SurferKit.HAIR_PIVOT)
+						# Solo la parte de la cabeza (de la frente a la pera).
+						if hv.y < -0.5 or hv.y > 0.5:
+							continue
+						var k := Vector3(hv.x / 0.48, hv.y / 0.5, hv.z / 0.44).length()
+						worst = minf(worst, k)
+		av.free()
+	_check(worst > 0.98, "las rastas no atraviesan ninguna cabeza (lo más cerca: %.2f)" % worst)
+	# Collares: dan toda la vuelta (también se ven por detrás).
+	var all_around := true
+	for neck in range(2, CharacterData.NECKLACES.size()):
+		var d := CharacterData.new()
+		d.neck_index = neck
+		var av := Avatar.new()
+		av.data = d
+		root.add_child(av)
+		var g := av.find_child("ChestFeatures", true, false) as Node3D
+		var behind := 0
+		for mi in g.find_children("*", "MeshInstance3D", false, false):
+			for v in ((mi as MeshInstance3D).mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX] as PackedVector3Array):
+				if v.z < -0.2:
+					behind += 1
+		if behind < 20:
+			all_around = false
+		av.free()
+	_check(all_around, "todos los collares rodean el cuello (se ven por detrás)")
+	# Estampado del short: pintado (sin piezas con relieve).
+	var flat := true
+	for pattern in CharacterData.SHORTS_PATTERNS.size():
+		var d := CharacterData.new()
+		d.shorts_pattern_index = pattern
+		var av := Avatar.new()
+		av.data = d
+		root.add_child(av)
+		var hips := av.find_child("HipsFeatures", true, false)
+		if hips and int(hips.get_meta("pieces", 0)) > 0:
+			flat = false
+		if av.find_child("Flower*", true, false) != null:
+			flat = false
+		av.free()
+	_check(flat, "los estampados del short son planos (sin piezas encima)")
+	# Colores: el gorro de lana cambia, el de paja no; sin estampado no hay color.
+	var c := CharacterData.new()
+	c.hat_index = 7
+	_check(c.field_applies("hat_color"), "el gorro de lana cambia de color")
+	c.hat_index = 1
+	_check(not c.field_applies("hat_color"), "el sombrero de paja no cambia de color")
+	c.shorts_pattern_index = 0
+	_check(not c.field_applies("shorts_pattern_color"), "short liso: sin color de estampado")
+	c.shorts_pattern_index = 4
+	_check(c.field_applies("shorts_pattern_color2"), "hawaiano: con dos colores")
+	_check(CharacterData.PRESET_NAMES == ["Surfista rubio"], "queda un solo estilo armado: el surfista rubio")
+	# Exportar: el texto vuelve a dar el mismo personaje.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 11
+	var r := CharacterData.random(rng)
+	var parsed: Variant = JSON.parse_string(r.export_text())
+	var back := CharacterData.from_dict(parsed)
+	var same := true
+	for f in CharacterData.FIELDS:
+		if back.get_option(f) != r.get_option(f):
+			same = false
+	_check(same and absf(back.weight - r.weight) < 0.001, "exportar: el texto copiado arma el mismo personaje")
