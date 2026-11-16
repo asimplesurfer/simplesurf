@@ -111,7 +111,7 @@ func _build() -> void:
 	var board_mesh := CapsuleMesh.new()
 	board_mesh.radius = BOARD_WIDTH * 0.5
 	board_mesh.height = BOARD_LENGTH
-	board_mesh.material = ToonMaterial.make(character.board_color(), 0.04)
+	board_mesh.material = BoardDesign.material(character, BOARD_LENGTH, BOARD_WIDTH)
 	var board := MeshInstance3D.new()
 	board.name = "Board"
 	board.mesh = board_mesh
@@ -120,8 +120,6 @@ func _build() -> void:
 		Vector3(1.0, 1.0, BOARD_THICKNESS_SCALE)
 	)
 	_board_pivot.add_child(board)
-
-	BoardDesign.add_to(_board_pivot, character, BOARD_LENGTH, BOARD_WIDTH, BOARD_TOP)
 
 	# Personaje: la pastilla, con el origen del pivot en los pies.
 	_body_pivot = Node3D.new()

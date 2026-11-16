@@ -41,7 +41,11 @@ var _group: Node3D
 ## Transformación extra para las piezas (agrandar el sombrero sobre pelos grandes).
 var _extra_xf := Transform3D.IDENTITY
 ## Pelos voluminosos: el sombrero va más grande y más arriba (si no, lo tapan).
-const BIG_HAIR := [2, 3, 4, 5, 12, 13]
+const BIG_HAIR := [2, 3, 4, 5, 12, 13, 14]
+## Rastas (peinado 14).
+const DREADS := 14
+## Ancho y fondo del pecho (para el collar).
+var _neck_scale := Vector2.ONE
 
 
 func _init() -> void:
@@ -98,6 +102,10 @@ func build_head(group: Node3D, hair_group: Node3D, data: CharacterData, skin: Co
 	_hair(data.get_option("hair"), hair)
 	_commit()
 	_begin(group)
+	if data.get_option("hair") == DREADS:
+		# La raíz y el volumen de las rastas van con la cabeza (no se sacuden),
+		# así nunca dejan ver ni atraviesan la cabeza.
+		_dread_roots(hair)
 	_ears(data.get_option("ears"), skin)
 	_eyes(data.get_option("eyes"), data.get_option("glasses"))
 	_extra(data.get_option("extra"), hair)
@@ -109,80 +117,74 @@ func build_head(group: Node3D, hair_group: Node3D, data: CharacterData, skin: Co
 		var pivot := Vector3(0.0, 0.3, 0.0)
 		_extra_xf = Transform3D(Basis.from_scale(Vector3.ONE * 1.15), pivot + Vector3(0.0, 0.07, 0.0)) \
 			* Transform3D(Basis.IDENTITY, -pivot)
-	_hat(data.get_option("hat"))
+	_hat(data.get_option("hat"), data.accent("hat_color"))
 	_extra_xf = Transform3D.IDENTITY
 	_commit()
 
 
-## Pecho: collar (las perlas son del modelo).
-func build_chest(group: Node3D, data: CharacterData, radii: Vector3) -> void:
+## Pecho: ropa de arriba y collar (las perlas son del modelo). Los collares dan
+## toda la vuelta al cuello (como las perlas): más abajo adelante y más arriba
+## atrás. `neck_scale` = ancho y fondo del pecho (x, z), que cambian con el cuerpo.
+func build_chest(group: Node3D, data: CharacterData, radii: Vector3, neck_scale := Vector2.ONE) -> void:
 	_begin(group)
 	_top(data.get_option("top"), data.shorts_color(), radii)
+	_neck_scale = neck_scale
+	var front := _neck_at(0.0)
+	# Hacia adelante y un poco para arriba (como el pecho).
+	var face := Basis(Vector3.RIGHT, -0.3)
 	match data.get_option("neck"):
 		2:
-			_necklace(radii, 12, 0.085, [Color("#ff6fb5"), Color("#ffd23f"), Color("#ff5a4e"), WHITE])
+			_necklace(20, 0.075, [Color("#ff6fb5"), Color("#ffd23f"), Color("#ff5a4e"), WHITE])
 		3:
-			_necklace(radii, 15, 0.035, [Color("#f2c230")])
-			var d := Vector3(0.0, 0.3, 1.0).normalized()
-			_disc(_on_ellipsoid(radii, d, 0.05), _normal(radii, d), 0.1, Color("#f2c230"))
+			_necklace(34, 0.03, [Color("#f2c230")])
+			_disc(front + Vector3(0.0, -0.07, 0.03), Vector3(0.0, 0.3, 1.0).normalized(), 0.08, Color("#f2c230"))
 		4:
 			# Dientes de tiburón en un cordón.
-			_necklace(radii, 15, 0.025, [Color("#5a3a22")])
+			_necklace(34, 0.022, [Color("#5a3a22")])
 			for i in 5:
-				var a := lerpf(-0.6, 0.6, i / 4.0)
-				var dd := Vector3(sin(a) * 0.95, 0.62 - 0.62 * cos(a), cos(a) * 0.7).normalized()
-				var pos := _on_ellipsoid(radii, dd, 0.05) + Vector3(0, -0.05, 0)
-				_piece(_cone, pos, Vector3(0.035, 0.05, 0.02), WHITE, true, Basis(Vector3.RIGHT, PI))
+				var a := lerpf(-0.55, 0.55, i / 4.0)
+				var pos := _neck_at(a) + Vector3(0.0, -0.05, 0.01)
+				_piece(_cone, pos, Vector3(0.035, 0.05, 0.02), WHITE, true,
+					Basis(Vector3.UP, a) * Basis(Vector3.RIGHT, PI))
 		5:
 			# Silbato de guardavidas.
-			_necklace(radii, 15, 0.022, [Color("#e8302a")])
-			var dd := Vector3(0.0, 0.25, 1.0).normalized()
-			var pos := _on_ellipsoid(radii, dd, 0.07)
-			_piece(_box, pos, Vector3(0.07, 0.04, 0.035), Color("#ff9b1f"))
+			_necklace(34, 0.02, [Color("#e8302a")])
+			var pos := front + Vector3(0.0, -0.07, 0.03)
+			_piece(_box, pos, Vector3(0.07, 0.04, 0.035), Color("#ff9b1f"), true, face)
 			_piece(_cyl, pos + Vector3(0.08, 0.0, 0.0), Vector3(0.025, 0.035, 0.025), Color("#ff9b1f"), true,
 				Basis(Vector3.BACK, PI / 2.0))
 		6:
 			# Caracol de mar.
-			_necklace(radii, 15, 0.022, [Color("#5a3a22")])
-			var dd := Vector3(0.0, 0.25, 1.0).normalized()
-			var pos := _on_ellipsoid(radii, dd, 0.06)
-			_piece(_sphere, pos, Vector3(0.09, 0.08, 0.04), Color("#ffb7a8"))
+			_necklace(34, 0.02, [Color("#5a3a22")])
+			var pos := front + Vector3(0.0, -0.08, 0.03)
+			_piece(_sphere, pos, Vector3(0.09, 0.08, 0.04), Color("#ffb7a8"), true, face)
 			for k in 3:
 				_piece(_sphere, pos + Vector3((k - 1) * 0.03, 0.0, 0.035), Vector3(0.008, 0.06, 0.008),
 					Color("#d9776a"), false, Basis(Vector3.BACK, (k - 1) * 0.35))
+		7:
+			# Cuentas rasta: rojo, amarillo y verde.
+			_necklace(24, 0.045, [Color("#e8302a"), Color("#ffd23f"), Color("#2fa84f")])
+		8:
+			# Paz y amor: cordón de cuero y el símbolo de la paz.
+			_necklace(34, 0.02, [Color("#7a4a24")])
+			var c := front + Vector3(0.0, -0.11, 0.03)
+			var silver := Color("#e6e6ea")
+			_piece(_ring_thick, c, Vector3.ONE * 0.085, silver, true, face * Basis(Vector3.RIGHT, PI / 2.0))
+			var up := face * Vector3.UP
+			var right := face * Vector3.RIGHT
+			_piece(_box, c, Vector3(0.011, 0.07, 0.011), silver, false, face)
+			for side in [-1.0, 1.0]:
+				var d: Vector3 = (-up + right * side).normalized()
+				_piece(_box, c + d * 0.035, Vector3(0.011, 0.04, 0.011), silver, false,
+					face * Basis(Vector3.BACK, side * 0.785))
 	_commit()
 
 
-## Cadera: estampado del short (las flores son del modelo).
-func build_hips(group: Node3D, data: CharacterData, radii: Vector3) -> void:
+## Cadera: el estampado del short ya no se arma con piezas (se pinta en la
+## tela, ver shorts_pattern.gdshader); queda el grupo por si se agrega algo.
+func build_hips(group: Node3D, _data: CharacterData, _radii: Vector3) -> void:
 	_begin(group)
-	_hips_pattern(data.get_option("shorts_pattern"), radii)
 	_commit()
-
-
-func _hips_pattern(pattern: int, radii: Vector3) -> void:
-	if pattern == 3:
-		for y in [-0.09, 0.07]:
-			_piece(_sphere, Vector3(0.0, y, 0.0), Vector3(radii.x * 1.02, 0.035, radii.z * 1.02), WHITE)
-		return
-	if pattern != 2 and pattern != 4:
-		return
-	var spots: Array = []
-	for i in 14:
-		# Puntos repartidos alrededor de la cadera (adelante, costados, atrás).
-		var a := i * 2.399
-		var y := -0.45 + fmod(i * 0.37, 0.8)
-		spots.append(Vector3(sin(a), y, cos(a)).normalized())
-	var n: int = 14 if pattern == 2 else 9
-	var palette := [Color("#ff5a4e"), Color("#ffd23f"), WHITE, Color("#ff8fd0")]
-	for i in n:
-		var d: Vector3 = spots[i]
-		var nrm := _normal(radii, d)
-		if pattern == 2:
-			_disc(_on_ellipsoid(radii, d, 0.004), nrm, 0.04, WHITE)
-		else:
-			_disc(_on_ellipsoid(radii, d, 0.004), nrm, 0.11, palette[i % palette.size()])
-			_disc(_on_ellipsoid(radii, d, 0.018), nrm, 0.035, Color("#ffd23f"), false)
 
 
 # ---------------------------------------------------------------- cabeza
@@ -332,6 +334,20 @@ func _glasses(style: int) -> void:
 			_piece(_sphere, c, Vector3(0.12, 0.1, 0.035), BLACK)
 			_piece(_sphere, Vector3(0.0, 0.22, 0.05), Vector3(0.52, 0.018, 0.47), BLACK, false,
 				Basis(Vector3.BACK, -0.35))
+		11, 12:
+			# Redondos de sol (negros) o de color (estilo hippie), con marco fino.
+			var lens := Color("#1d2a24") if style == 11 else Color("#ff8a3d")
+			var frame := BLACK if style == 11 else Color("#d9a520")
+			for side in [-1.0, 1.0]:
+				var c := _eye_pos(side) + Vector3(0, -0.01, 0.05)
+				_piece(_sphere, c, Vector3(0.12, 0.11, 0.03), lens, true)
+				_piece(_ring, c + Vector3(0, 0, 0.012), Vector3(0.125, 0.12, 0.125), frame, false, facing)
+				_piece(_sphere, c + Vector3(-0.035, 0.035, 0.03), Vector3(0.03, 0.012, 0.01),
+					Color(1, 1, 1, 1) if style == 11 else Color("#ffd9a8"), false, Basis(Vector3.BACK, 0.6))
+			_piece(_sphere, _face(0.0, 0.12, 0.06), Vector3(0.06, 0.012, 0.012), frame, false)
+			for side in [-1.0, 1.0]:
+				_piece(_sphere, Vector3(side * 0.44, 0.12, 0.12), Vector3(0.012, 0.012, 0.18), frame, false,
+					Basis(Vector3.UP, side * 0.35))
 		10:
 			# Snorkel: antiparras de buceo y el tubo al costado.
 			_piece(_sphere, _face(0.0, 0.1, 0.06), Vector3(0.38, 0.17, 0.05), Color("#2fbfb0"))
@@ -421,6 +437,22 @@ func _extra(style: int, hair: Color) -> void:
 			for side in [-1.0, 1.0]:
 				_piece(_sphere, _face(side * 0.2, 0.25, 0.01), Vector3(0.15, 0.045, 0.05), hair, true,
 					Basis(Vector3.BACK, side * 0.28))
+		5:
+			# Chivita: barbita en la punta del mentón.
+			_piece(_sphere, _face(0.0, -0.37, 0.02), Vector3(0.085, 0.1, 0.06), hair)
+		6:
+			# Bigote fino y chivita.
+			_piece(_sphere, _face(0.0, -0.39, 0.02), Vector3(0.08, 0.1, 0.06), hair)
+			for side in [-1.0, 1.0]:
+				_piece(_sphere, _face(side * 0.07, -0.135, 0.012), Vector3(0.085, 0.024, 0.035), hair, true,
+					Basis(Vector3.BACK, side * 0.22))
+		7:
+			# Barba tupida: de patilla a patilla, con bigote (la boca queda a la vista).
+			_piece(_sphere, Vector3(0.0, -0.38, 0.1), Vector3(0.42, 0.26, 0.34), hair)
+			for side in [-1.0, 1.0]:
+				_piece(_sphere, Vector3(side * 0.4, -0.12, 0.02), Vector3(0.11, 0.26, 0.2), hair)
+				_piece(_sphere, _face(side * 0.08, -0.14, 0.015), Vector3(0.1, 0.035, 0.045), hair, true,
+					Basis(Vector3.BACK, side * 0.3))
 
 
 func _ears(style: int, skin: Color) -> void:
@@ -500,21 +532,19 @@ func _hair(style: int, hair: Color) -> void:
 			for side in [-1.0, 1.0]:
 				_piece(_sphere, Vector3(side * 0.3, 0.6, -0.08), Vector3.ONE * 0.17, hair)
 		14:
-			# Rastas: muchas tiras que cuelgan por detrás y a los costados.
-			_cap(hair)
-			for j in 11:
-				var a := deg_to_rad(lerpf(-120.0, 120.0, j / 10.0)) + PI
-				var top := Vector3(sin(a) * 0.46, 0.18, cos(a) * 0.4)
-				_piece(_sphere, top + Vector3(sin(a) * 0.05, -0.32, cos(a) * 0.04), Vector3(0.06, 0.34, 0.06),
-					hair, true, Basis(Vector3(cos(a), 0.0, -sin(a)), 0.15))
+			# Rastas: tiras gruesas con nudos que cuelgan alrededor de la cabeza
+			# (la raíz y el volumen van en _dread_roots, fijos a la cabeza).
+			_dread_strands(hair)
 
 
 ## Anteojos oscuros: detrás no se ven los ojos.
-const OPAQUE_GLASSES := [1, 5, 6, 7, 8, 10]
+const OPAQUE_GLASSES := [1, 5, 6, 7, 8, 10, 11, 12]
+## Rojo, amarillo y verde (de arriba a abajo).
+const RASTA := [Color("#e8302a"), Color("#ffd23f"), Color("#2fa84f")]
 
 
 ## Sombreros y gorros (de playa y de mar).
-func _hat(style: int) -> void:
+func _hat(style: int, tint: Color = Color("#ff9b1f")) -> void:
 	match style:
 		1:
 			# Sombrero de paja con cinta roja.
@@ -555,7 +585,7 @@ func _hat(style: int) -> void:
 				_piece(_sphere, Vector3(side * 0.36, 0.5, 0.3), Vector3.ONE * 0.04, BLACK, false)
 		5:
 			# Pañuelo atado atrás.
-			var red := Color("#d8262c")
+			var red := tint
 			_piece(_sphere, Vector3(0.0, 0.22, -0.06), Vector3(0.545, 0.38, 0.5), red)
 			for side in [-1.0, 1.0]:
 				_piece(_sphere, Vector3(side * 0.08, 0.05, -0.56), Vector3(0.06, 0.16, 0.04), red, true,
@@ -564,15 +594,15 @@ func _hat(style: int) -> void:
 				_piece(_sphere, Vector3(-0.3 + j * 0.15, 0.42, 0.25), Vector3.ONE * 0.025, WHITE, false)
 		6:
 			# Gorra con visera.
-			var cap := Color("#2f7fd6")
+			var cap := tint
 			_piece(_sphere, Vector3(0.0, 0.3, -0.06), Vector3(0.545, 0.36, 0.5), cap)
 			_piece(_sphere, Vector3(0.0, 0.36, 0.45), Vector3(0.36, 0.035, 0.26), cap)
 			_piece(_sphere, Vector3(0.0, 0.66, -0.06), Vector3.ONE * 0.05, WHITE)
 		7:
 			# Gorro de lana con pompón.
-			var wool := Color("#ff9b1f")
+			var wool := tint
 			_piece(_sphere, Vector3(0.0, 0.32, -0.06), Vector3(0.55, 0.42, 0.51), wool)
-			_piece(_cyl, Vector3(0.0, 0.3, -0.05), Vector3(0.56, 0.06, 0.52), Color("#ffd23f"))
+			_piece(_cyl, Vector3(0.0, 0.3, -0.05), Vector3(0.56, 0.06, 0.52), tint.lightened(0.3))
 			_piece(_sphere, Vector3(0.0, 0.8, -0.08), Vector3.ONE * 0.13, WHITE)
 		8:
 			# Corona de flores.
@@ -581,6 +611,36 @@ func _hat(style: int) -> void:
 				var a := j * TAU / 12.0
 				var p := Vector3(sin(a) * 0.5, 0.36 + 0.05 * cos(a), cos(a) * 0.45 - 0.04)
 				_piece(_sphere, p, Vector3.ONE * 0.075, colors[j % colors.size()])
+		9:
+			# Gorro rasta: una bolsa tejida grande caída hacia atrás, en franjas
+			# verde, amarilla y roja.
+			var tilt := Basis(Vector3.RIGHT, -0.32)
+			_piece(_cyl, Vector3(0.0, 0.34, -0.06), Vector3(0.56, 0.09, 0.52), RASTA[2])
+			_piece(_sphere, Vector3(0.0, 0.5, -0.18), Vector3(0.63, 0.28, 0.64), RASTA[1], true, tilt)
+			_piece(_sphere, Vector3(0.0, 0.68, -0.3), Vector3(0.55, 0.25, 0.58), RASTA[0], true, tilt)
+		10:
+			# Bandana rasta: tres franjas en la frente y el nudo al costado.
+			for k in 3:
+				var y := 0.37 - k * 0.075
+				_piece(_cyl, Vector3(0.0, y, -0.05), Vector3(0.53, 0.04, 0.5), RASTA[k], k == 1,
+					Basis(Vector3.RIGHT, -0.12))
+			var knot := Vector3(-0.48, 0.3, -0.2)
+			_piece(_sphere, knot, Vector3(0.06, 0.08, 0.08), RASTA[1])
+			for k in 3:
+				var tail_rot := Basis(Vector3.UP, -0.5 - k * 0.25) * Basis(Vector3.BACK, 0.9 + k * 0.35)
+				_piece(_sphere, knot + tail_rot * Vector3(0.0, 0.14, 0.0) + Vector3(-0.02, 0.0, 0.0),
+					Vector3(0.05, 0.16, 0.025), RASTA[k], true, tail_rot)
+		11:
+			# Vincha hippie (del color elegido) con una flor al costado.
+			_piece(_cyl, Vector3(0.0, 0.33, -0.05), Vector3(0.52, 0.035, 0.49), tint, true,
+				Basis(Vector3.RIGHT, -0.12))
+			var f := Vector3(0.42, 0.36, 0.22)
+			for j in 5:
+				var a := j * TAU / 5.0
+				_piece(_sphere, f + Basis(Vector3.UP, 0.9) * Vector3(sin(a) * 0.055, cos(a) * 0.055, 0.0),
+					Vector3(0.045, 0.045, 0.02), Color("#ff8fd0"), true, Basis(Vector3.UP, 0.9))
+			_piece(_sphere, f + Basis(Vector3.UP, 0.9) * Vector3(0.0, 0.0, 0.015), Vector3.ONE * 0.03,
+				Color("#ffd23f"), false)
 
 
 ## Ropa de arriba (del color del short).
@@ -604,6 +664,61 @@ func _top(style: int, color: Color, radii: Vector3) -> void:
 		2:
 			# Musculosa: cubre el pecho.
 			_piece(_sphere, Vector3(0.0, -0.03, 0.0), radii * Vector3(1.04, 0.95, 1.06), color)
+
+
+## Rastas: dónde nace y hasta dónde cae cada tira (ángulo desde la nuca hacia
+## los costados, en grados; largo hacia abajo en unidades de cabeza).
+const DREAD_RING := Vector2(0.62, 0.6)
+
+
+func _dread_dirs() -> Array:
+	var out := []
+	var n := 21
+	for j in n:
+		var deg := lerpf(-110.0, 110.0, j / float(n - 1))
+		var a := deg_to_rad(deg)
+		# Atrás, largas; hacia la cara, más cortas (hasta los hombros).
+		var side := absf(deg) / 110.0
+		var bottom := lerpf(-0.88, -0.5, side * side) + 0.05 * sin(j * 2.3)
+		out.append([a, bottom])
+	return out
+
+
+## Raíz y volumen de las rastas (en el grupo de la cabeza): un gorro de pelo
+## y una masa detrás de la nuca, así no queda ningún hueco por donde se vea la
+## cabeza (con cualquier forma de cabeza, que escala todo junto).
+func _dread_roots(hair: Color) -> void:
+	_piece(_sphere, Vector3(0.0, 0.21, -0.08), Vector3(0.57, 0.41, 0.53), hair)
+	_piece(_sphere, Vector3(0.0, -0.16, -0.27), Vector3(0.52, 0.6, 0.3), hair)
+	# Raíz de cada tira, sobre el borde del gorro.
+	for d in _dread_dirs():
+		var a: float = d[0]
+		var root := Vector3(sin(a) * DREAD_RING.x, 0.16, -cos(a) * DREAD_RING.y)
+		_piece(_sphere, root, Vector3(0.085, 0.13, 0.085), hair)
+
+
+## Tiras de las rastas (en el grupo del pelo, que se sacude): nudos gruesos
+## uno debajo del otro y la punta más clara.
+func _dread_strands(hair: Color) -> void:
+	var tip := hair.lightened(0.28)
+	var i := 0
+	for d in _dread_dirs():
+		var a: float = d[0]
+		var bottom: float = d[1]
+		var out := Vector3(sin(a), 0.0, -cos(a))
+		var top := Vector3(out.x * DREAD_RING.x, 0.12, out.z * DREAD_RING.y)
+		# Se abren un poco hacia afuera al caer.
+		var end := top + out * (0.15 + 0.05 * sin(i * 1.7)) + Vector3(0.0, bottom - 0.12, 0.0)
+		var segs := 3
+		for k in segs:
+			var t := (k + 0.5) / segs
+			var p := top.lerp(end, t) + Vector3(0.01 * sin(i * 3.1 + k * 2.0), 0.0, 0.01 * cos(i * 2.3 + k))
+			var len := top.distance_to(end) / segs * 0.62
+			var r := 0.064 - k * 0.004
+			_piece(_sphere, p, Vector3(r, len, r), hair, true, _align_y(end - top))
+		_piece(_sphere, end + (end - top).normalized() * 0.02, Vector3(0.052, 0.065, 0.052), tip, true,
+			_align_y(end - top))
+		i += 1
 
 
 ## Pelo corto pegado a la cabeza (deja la cara a la vista).
@@ -638,11 +753,16 @@ func _align_y(d: Vector3) -> Basis:
 
 # ---------------------------------------------------------------- cuerpo
 
-func _necklace(radii: Vector3, count: int, size: float, colors: Array) -> void:
+## Collar de cuentas que da toda la vuelta al cuello.
+func _necklace(count: int, size: float, colors: Array) -> void:
 	for i in count:
-		var a := lerpf(-1.3, 1.3, i / float(count - 1))
-		var d := Vector3(sin(a) * 0.95, 0.62 - 0.62 * cos(a), cos(a) * 0.7).normalized()
-		_piece(_sphere, _on_ellipsoid(radii, d, size * 0.6), Vector3.ONE * size, colors[i % colors.size()])
+		_piece(_sphere, _neck_at(i * TAU / count), Vector3.ONE * size, colors[i % colors.size()])
+
+
+## Punto del collar alrededor del cuello (a = 0 adelante, PI atrás), en el
+## grupo del pecho: el mismo aro que el collar de perlas del modelo.
+func _neck_at(a: float) -> Vector3:
+	return Vector3(sin(a) * 0.32 * _neck_scale.x, 0.14 - 0.065 * cos(a), cos(a) * 0.285 * _neck_scale.y)
 
 
 ## Punto sobre la superficie de un elipsoide (radios `radii`) en la dirección d,

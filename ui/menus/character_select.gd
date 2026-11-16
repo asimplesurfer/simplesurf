@@ -46,6 +46,7 @@ const CATEGORIES := {
 	],
 	"Accesorios": [
 		["Sombrero", "option", "hat", ThumbRenderer.Frame.HEAD],
+		["Color del sombrero", "color", "hat_color", 0],
 		["Anteojos", "option", "glasses", ThumbRenderer.Frame.HEAD],
 		["Collar", "option", "neck", ThumbRenderer.Frame.CHEST],
 	],
@@ -53,10 +54,14 @@ const CATEGORIES := {
 		["Arriba", "option", "top", ThumbRenderer.Frame.CHEST],
 		["Color del short", "color", "shorts", 0],
 		["Estampado", "option", "shorts_pattern", ThumbRenderer.Frame.HIPS],
+		["Color del estampado", "color", "shorts_pattern_color", 0],
+		["Segundo color", "color", "shorts_pattern_color2", 0],
 	],
 	"Tabla": [
 		["Color de la tabla", "color", "board", 0],
 		["Diseño", "option", "board_design", ThumbRenderer.Frame.BOARD],
+		["Color del diseño", "color", "board_design_color", 0],
+		["Segundo color", "color", "board_design_color2", 0],
 	],
 }
 ## Con estas categorías la cámara se acerca a la cara.
@@ -67,6 +72,11 @@ const COLOR_LISTS := {
 	"hair_color": CharacterData.HAIR_COLORS,
 	"shorts": CharacterData.SHORTS_COLORS,
 	"board": CharacterData.BOARD_COLORS,
+	"hat_color": CharacterData.ACCENT_COLORS,
+	"shorts_pattern_color": CharacterData.ACCENT_COLORS,
+	"shorts_pattern_color2": CharacterData.ACCENT_COLORS,
+	"board_design_color": CharacterData.ACCENT_COLORS,
+	"board_design_color2": CharacterData.ACCENT_COLORS,
 }
 const SLIDER_ENDS := {
 	"weight": ["Musculoso", "Panzón"],
@@ -285,6 +295,8 @@ func _players_action(device: int, action: String) -> void:
 			card.toggle_ready()
 		"random":
 			card.randomize_character()
+		"export":
+			card.export_character()
 		"back":
 			if not card.back():
 				_joined.erase(card.index)
@@ -436,7 +448,7 @@ func _launch(scene_path: String, config: RaceConfig, done: Signal) -> void:
 # ---------------------------------------------------------------- entrada
 
 ## Traduce un evento a (dispositivo, acción): acción = left/right/up/down,
-## accept, back, start o random. Devuelve [] si no es nada de eso.
+## accept, back, start, random o export. Devuelve [] si no es nada de eso.
 func _read(event: InputEvent) -> Array:
 	var key := event as InputEventKey
 	if key and key.pressed:
@@ -463,6 +475,8 @@ func _read(event: InputEvent) -> Array:
 				return [InputSetup.KEYBOARD, "back"]
 			KEY_R:
 				return [InputSetup.KEYBOARD, "random"]
+			KEY_C:
+				return [InputSetup.KEYBOARD, "export"]
 		return []
 	var jb := event as InputEventJoypadButton
 	if jb and jb.pressed:
@@ -475,6 +489,8 @@ func _read(event: InputEvent) -> Array:
 				return [jb.device, "up"]
 			JOY_BUTTON_DPAD_DOWN:
 				return [jb.device, "down"]
+			JOY_BUTTON_BACK:
+				return [jb.device, "export"]
 		var buttons: Dictionary = InputSetup.PAD_BUTTONS[InputSetup.detect_pad_layout(jb.device)]
 		for role in buttons:
 			if buttons[role] == jb.button_index:

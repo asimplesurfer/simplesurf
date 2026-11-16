@@ -15,6 +15,7 @@ extends RefCounted
 ## (postura de surf) mirando hacia adelante; caído, nadando o festejando, de frente.
 
 const SCENE := preload("res://assets/characters/surfista.glb")
+const SHORTS_SHADER := preload("res://characters/shorts_pattern.gdshader")
 ## Pieza del Avatar (las que mueven las animaciones) -> partes del modelo.
 const PART_MAP := {
 	"head": ["Head"],
@@ -74,6 +75,8 @@ var _has_prev: bool = false
 var _legs: Dictionary = {}
 var _yaw: float = STANCE_YAW
 var _materials: Dictionary = {}
+## Con rastas el pelo se sacude menos (ver _secondary).
+var _dreads: bool = false
 
 
 ## Arma el personaje dentro de `parent` según `data`.
@@ -117,7 +120,11 @@ func build(parent: Node3D, data: CharacterData, features: AvatarFeatures) -> voi
 	features.build_head(head_group, hair_group, data, data.skin_color())
 	var chest_group := _group(necklace_rig, "ChestFeatures")
 	chest_group.position = Vector3(0.0, 0.24, 0.0) - NECK_PIVOT
-	features.build_chest(chest_group, data, CHEST_RADII)
+	var chest_node := character.find_child("Torso", false, false).find_child("Chest", false, false) as Node3D
+	var neck := Vector2(chest_node.scale.x, chest_node.scale.z) if chest_node else Vector2.ONE
+	features.build_chest(chest_group, data, CHEST_RADII, neck)
+	# Rastas: las tiras se mueven poco y nunca hacia la cabeza (solo para atrás).
+	_dreads = data.get_option("hair") == AvatarFeatures.DREADS
 	_setup_legs()
 	var hips := character.find_child("ShortsHips", false, false) as Node3D
 	features.build_hips(_group(hips, "HipsFeatures"), data, HIPS_RADII)
@@ -267,8 +274,16 @@ func _secondary(state: Dictionary, dt: float, snap: bool) -> void:
 		0.0,
 		clampf(-v_local.x * 0.035 + a_local.x * 0.004, -0.5, 0.5)
 	)
+	if _dreads:
+		# Solo hacia atrás (hacia adelante entrarían en la cabeza) y casi nada
+		# de costado.
+		target.x = clampf(target.x, 0.0, 0.45)
+		target.z = clampf(target.z, -0.06, 0.06)
 	_hair_vel += ((target - _hair_rot) * 120.0 - _hair_vel * 9.0) * dt
 	_hair_rot += _hair_vel * dt
+	if _dreads:
+		_hair_rot.x = clampf(_hair_rot.x, -0.02, 0.5)
+		_hair_rot.z = clampf(_hair_rot.z, -0.07, 0.07)
 	hair_rig.basis = Basis.from_euler(_hair_rot)
 	var tb: Basis = (necklace_rig.get_parent() as Node3D).global_transform.basis.orthonormalized().inverse()
 	var cv_local := tb * cv
@@ -310,7 +325,6 @@ func _choose_accessories(data: CharacterData) -> void:
 	# parejo no se dibuja: la arma AvatarFeatures (boca 2).
 	var keep_smirk := false
 	var keep_pearls := data.get_option("neck") == 1
-	var keep_flowers := data.get_option("shorts_pattern") == 1
 	var to_remove: Array[Node] = []
 	for n in character.find_children("*", "Node3D", true, false):
 		var node_name := String(n.name)
@@ -324,7 +338,8 @@ func _choose_accessories(data: CharacterData) -> void:
 		elif node_name == "PearlNecklace":
 			remove = not keep_pearls
 		elif node_name.begins_with("Flower"):
-			remove = not keep_flowers
+			# Las flores del short ahora se pintan (ver shorts_pattern.gdshader).
+			remove = true
 		if remove:
 			to_remove.append(n)
 	# Se borran al final (borrar un padre ya borra sus hijos de la lista).
@@ -437,6 +452,14 @@ func _make_materials(data: CharacterData) -> void:
 		if colors.has(m.resource_name):
 			copy.albedo_color = colors[m.resource_name]
 		_materials[m.resource_name] = copy
+	# Short: el estampado se pinta sobre la tela (plano, sin relieve).
+	var shorts := ShaderMaterial.new()
+	shorts.shader = SHORTS_SHADER
+	shorts.set_shader_parameter("base_color", data.shorts_color())
+	shorts.set_shader_parameter("color1", data.accent("shorts_pattern_color"))
+	shorts.set_shader_parameter("color2", data.accent("shorts_pattern_color2"))
+	shorts.set_shader_parameter("pattern", data.get_option("shorts_pattern"))
+	_materials["shorts"] = shorts
 
 
 ## Junta todas las piezas debajo de `part` en una malla (una superficie por color),
@@ -505,7 +528,15 @@ func _bake(part: Node3D) -> void:
 		arrays[Mesh.ARRAY_NORMAL] = b[1]
 		arrays[Mesh.ARRAY_INDEX] = b[2]
 		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-		mesh.surface_set_material(mesh.get_surface_count() - 1, _materials.get(key))
+		var mat: Material = _materials.get(key)
+		if key == "shorts" and mat:
+			# Cada pieza del short con su vuelta (celdas alrededor) y su altura.
+			mat = mat.duplicate()
+			var to_char_xf := _relative(part, character)
+			mat.set_shader_parameter("ring", 16.0 if String(part.name) == "ShortsHips" else 8.0)
+			mat.set_shader_parameter("y_offset", to_char_xf.origin.y)
+			mat.set_shader_parameter("y_scale", to_char_xf.basis.get_scale().y)
+		mesh.surface_set_material(mesh.get_surface_count() - 1, mat)
 	var out := MeshInstance3D.new()
 	out.name = "Mesh"
 	out.mesh = mesh

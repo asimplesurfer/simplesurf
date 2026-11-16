@@ -10,7 +10,9 @@ extends PanelContainer
 ##     la opción y arriba / abajo pasa a la otra fila (por ejemplo, el color);
 ##   - B / ESC: volver a los íconos;
 ##   - Start / ENTER: listo (otra vez: no listo);
-##   - Y / R: personaje al azar.
+##   - Y / R: personaje al azar;
+##   - Select / C (o el botón): copia el personaje al portapapeles (para
+##     pasarlo y guardarlo como estilo armado).
 
 signal ready_changed
 ## Se tocó "unirse" con el mouse (el menú lo une con el teclado).
@@ -61,6 +63,9 @@ var _icons: Array[Button] = []
 var _icon_marks: Array[CategoryIcon] = []
 var _style: StyleBoxFlat
 var _rng := RandomNumberGenerator.new()
+var _export_button: Button
+## Tiempo que queda del aviso "copiado".
+var _copied_time: float = 0.0
 
 
 func _ready() -> void:
@@ -158,6 +163,14 @@ func _build() -> void:
 		grid.add_child(b)
 		_icons.append(b)
 
+	# Exportar: copia los datos del personaje (para guardarlo como estilo).
+	_export_button = Button.new()
+	_export_button.text = "Exportar personaje"
+	_export_button.focus_mode = Control.FOCUS_NONE
+	_export_button.add_theme_font_size_override("font_size", 14)
+	_export_button.pressed.connect(export_character)
+	box.add_child(_export_button)
+
 	_status = _label("", 16, Color.WHITE)
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(_status)
@@ -251,10 +264,26 @@ func randomize_character() -> void:
 	_changed()
 
 
+## Copia los datos del personaje al portapapeles.
+func export_character() -> void:
+	if not joined():
+		return
+	var text := data().export_text()
+	DisplayServer.clipboard_set(text)
+	print("Personaje J%d: %s" % [index + 1, text])
+	_copied_time = 2.5
+	refresh()
+
+
 ## Filas de la categoría elegida: [título, tipo, campo, encuadre de la foto].
+## Las que no tienen sentido con lo elegido (el color del gorro de paja, el del
+## estampado si el short es liso) no se muestran.
 func category_rows() -> Array:
 	var out := []
 	for section in CharacterSelect.CATEGORIES[ICONS[cat_index][0]]:
+		var field: String = section[2]
+		if field != "" and CharacterData.FIELDS.has(field) and not data().field_applies(field):
+			continue
 		out.append([section[0], section[1], section[2], section[3]])
 	return out
 
@@ -273,6 +302,10 @@ func change(r: Array, step: int) -> void:
 		_:
 			data().step_option(field, step)
 			preset = -1
+	# Puede aparecer o desaparecer una fila (el color del gorro, del estampado).
+	var count := category_rows().size()
+	var at := category_rows().find(r)
+	row = at if at >= 0 else clampi(row, 0, count - 1)
 	_changed()
 
 
@@ -310,6 +343,7 @@ func refresh() -> void:
 	_style.border_color = YELLOW if is_ready else (Color.WHITE if joined() else Palette.UI_INK)
 	_style.set_border_width_all(6 if is_ready else 4)
 	_view.modulate = Color(1, 1, 1, 1.0 if joined() else 0.35)
+	_export_button.visible = joined() and not is_ready
 	for i in _icons.size():
 		var focused := i == cat_index and joined()
 		_style_icon(_icons[i], focused, focused and in_category)
@@ -330,10 +364,18 @@ func refresh() -> void:
 	_status.remove_theme_color_override("font_color")
 	_status.add_theme_color_override("font_color", Color.WHITE)
 	var cat_name: String = ICONS[cat_index][0]
+	if _copied_time > 0.0:
+		_status.text = "¡Personaje copiado! Pegalo donde quieras"
+		_status.add_theme_color_override("font_color", YELLOW)
+		if not in_category:
+			_editor.add_child(_label(cat_name, 22, YELLOW))
+			return
 	if not in_category:
 		_editor.add_child(_label(cat_name, 22, YELLOW))
 		_editor.add_child(_label("< > elegir · %s entrar" % ("A" if pad else "ESPACIO"), 15, Color.WHITE))
-		_status.text = "%s: listo · %s: al azar" % ["Start" if pad else "ENTER", "Y" if pad else "R"]
+		if _copied_time <= 0.0:
+			_status.text = "%s: listo · %s: al azar · %s: exportar" % [
+				"Start" if pad else "ENTER", "Y" if pad else "R", "Select" if pad else "C"]
 		return
 	var rows := category_rows()
 	# Fila actual: su nombre y las opciones con su vista previa.
@@ -341,7 +383,8 @@ func refresh() -> void:
 	var head := _label("%s%s" % [r[0], "   (%d/%d)" % [row + 1, rows.size()] if rows.size() > 1 else ""], 16, YELLOW)
 	_editor.add_child(head)
 	_editor.add_child(_strip(r))
-	_status.text = "< > cambiar · arriba / abajo: fila · %s volver" % ("B" if pad else "ESC")
+	if _copied_time <= 0.0:
+		_status.text = "< > cambiar · arriba / abajo: fila · %s volver" % ("B" if pad else "ESC")
 
 
 ## Tira de opciones de la fila: la elegida en el medio (marcada) y las de los
@@ -489,18 +532,21 @@ func _rebuild_board() -> void:
 	var mesh := CapsuleMesh.new()
 	mesh.radius = 0.5
 	mesh.height = 3.6
-	mesh.material = ToonMaterial.make(data().board_color(), 0.04)
+	mesh.material = BoardDesign.material(data(), 3.6, 1.0)
 	var body := MeshInstance3D.new()
 	body.mesh = mesh
 	body.basis = Basis(Vector3.RIGHT, PI / 2.0) * Basis.from_scale(Vector3(1.0, 1.0, 0.18))
 	body.position.y = -0.06
 	_board.add_child(body)
-	BoardDesign.add_to(_board, data(), 3.6, 1.0, 0.03)
 
 
 func _process(delta: float) -> void:
 	if _cam == null:
 		return
+	if _copied_time > 0.0:
+		_copied_time -= delta
+		if _copied_time <= 0.0:
+			refresh()
 	var face: bool = in_category and ICONS[cat_index][0] in CharacterSelect.FACE_CATEGORIES
 	_zoom = move_toward(_zoom, 1.0 if face else 0.0, delta * 3.0)
 	var z := smoothstep(0.0, 1.0, _zoom)
