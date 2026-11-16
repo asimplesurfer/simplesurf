@@ -6,8 +6,11 @@ extends TrackSpace
 ## - "ángulo": cuánto avanzó por el recorrido, de -PI a PI (la meta en 0).
 ## - lateral: distancia a la línea central (+ a la izquierda del que corre).
 ##
-## El recorrido se arma con una curva suave (Catmull-Rom) que pasa por los
-## puntos de control, se suaviza y se re-muestrea en tramos iguales.
+## El recorrido se arma con una curva que pasa por los puntos de control, se
+## suaviza y se re-muestrea en tramos iguales. Entre dos puntos la curva es una
+## Bézier: cada punto puede tener manijas (como en un programa de dibujo). Si
+## un punto no tiene manija, es automática: la curva pasa suave por los vecinos
+## (Catmull-Rom).
 
 ## Distancia entre muestras del recorrido (m).
 const STEP := 2.0
@@ -21,14 +24,20 @@ var _total: float = 1.0
 var _grid: Dictionary = {}
 
 
-func _init(control: PackedVector2Array = PackedVector2Array(), p_half_width: float = 20.0) -> void:
+## `handles_in` / `handles_out`: manija de entrada y de salida de cada punto
+## (relativas al punto; null o vacío = automática). `smoothing`: pasadas de
+## suavizado (redondean las curvas más cerradas).
+func _init(
+	control: PackedVector2Array = PackedVector2Array(), p_half_width: float = 20.0,
+	handles_in: Array = [], handles_out: Array = [], smoothing: int = 60
+) -> void:
 	half_width = p_half_width
 	if control.size() >= 3:
-		_build(control)
+		_build(control, handles_in, handles_out, smoothing)
 
 
-func _build(control: PackedVector2Array) -> void:
-	# Curva suave por los puntos de control.
+func _build(control: PackedVector2Array, handles_in: Array, handles_out: Array, smoothing: int) -> void:
+	# Curva por los puntos de control.
 	var raw := PackedVector2Array()
 	var n := control.size()
 	for i in n:
@@ -36,11 +45,20 @@ func _build(control: PackedVector2Array) -> void:
 		var p1 := control[i]
 		var p2 := control[(i + 1) % n]
 		var p3 := control[(i + 2) % n]
-		for j in 24:
-			raw.append(_catmull_rom(p0, p1, p2, p3, j / 24.0))
+		var h_out: Variant = handles_out[i] if i < handles_out.size() else null
+		var h_in: Variant = handles_in[(i + 1) % n] if (i + 1) % n < handles_in.size() else null
+		if h_out == null and h_in == null:
+			for j in 24:
+				raw.append(_catmull_rom(p0, p1, p2, p3, j / 24.0))
+		else:
+			# Manija automática = la misma curva que Catmull-Rom.
+			var c1: Vector2 = p1 + (h_out if h_out != null else (p2 - p0) / 6.0)
+			var c2: Vector2 = p2 + (h_in if h_in != null else (p1 - p3) / 6.0)
+			for j in 24:
+				raw.append(_bezier(p1, c1, c2, p2, j / 24.0))
 	# Suavizado (agranda las curvas más cerradas).
 	var m := raw.size()
-	for it in 60:
+	for it in smoothing:
 		var smooth := PackedVector2Array()
 		smooth.resize(m)
 		for i in m:
@@ -71,6 +89,11 @@ func _build(control: PackedVector2Array) -> void:
 		c += p
 	center = c / count
 	_build_grid()
+
+
+static func _bezier(p0: Vector2, c1: Vector2, c2: Vector2, p1: Vector2, t: float) -> Vector2:
+	var u := 1.0 - t
+	return u * u * u * p0 + 3.0 * u * u * t * c1 + 3.0 * u * t * t * c2 + t * t * t * p1
 
 
 static func _catmull_rom(p0: Vector2, p1: Vector2, p2: Vector2, p3: Vector2, t: float) -> Vector2:

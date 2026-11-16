@@ -5,18 +5,26 @@ extends Node3D
 ## volando (Course lo lanza con Rider.geyser_launch).
 ##
 ## Ciclo: tranquilo -> aviso (burbujea fuerte, la espuma crece) -> explota.
+## Los tiempos y la fuerza se pueden cambiar por géiser (los pone el mapa); las
+## constantes son los valores por defecto.
 
 const RADIUS := 4.0
-## Duraciones (s).
+## Duraciones por defecto (s).
 const CALM := 3.6
 const WARN := 1.4
 const ERUPT := 1.3
 const CYCLE := CALM + WARN + ERUPT
-## Velocidad hacia arriba con la que lanza (m/s).
+## Velocidad hacia arriba con la que lanza, por defecto (m/s).
 const LAUNCH_SPEED := 17.0
 
 ## Desfase del ciclo (para que no exploten todos juntos).
 @export var phase: float = 0.0
+## Cuánto está tranquilo, cuánto avisa y cuánto dura el chorro (s).
+@export var calm: float = CALM
+@export var warn: float = WARN
+@export var erupt: float = ERUPT
+## Con qué velocidad tira para arriba al que pasa (m/s).
+@export var launch_speed: float = LAUNCH_SPEED
 
 var _t: float = 0.0
 var _foam: MeshInstance3D
@@ -28,7 +36,7 @@ var _spray: CPUParticles3D
 
 func _ready() -> void:
 	add_to_group("geyser")
-	_t = fmod(phase, CYCLE)
+	_t = fmod(phase, cycle())
 	var water_mat := StandardMaterial3D.new()
 	water_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	water_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -96,11 +104,16 @@ func _particles(amount: int, lifetime: float, size: float, gravity: Vector3, sz:
 
 ## 0 tranquilo, 1 avisando, 2 explotando.
 func stage() -> int:
-	if _t < CALM:
+	if _t < calm:
 		return 0
-	if _t < CALM + WARN:
+	if _t < calm + warn:
 		return 1
 	return 2
+
+
+## Duración de un ciclo entero (s).
+func cycle() -> float:
+	return calm + warn + erupt
 
 
 func erupting() -> bool:
@@ -114,18 +127,18 @@ func covers(x: float, z: float) -> bool:
 
 ## En pasos fijos: el momento en que explota no depende de los FPS.
 func _physics_process(delta: float) -> void:
-	_t = fmod(_t + delta, CYCLE)
+	_t = fmod(_t + delta, cycle())
 	var st := stage()
-	var warn := clampf((_t - CALM) / WARN, 0.0, 1.0) if st >= 1 else 0.0
+	var warning := clampf((_t - calm) / warn, 0.0, 1.0) if st >= 1 else 0.0
 	WaterFx.emit(_bubbles, st >= 1)
 	WaterFx.emit(_spray, st == 2)
-	var pulse := 1.0 + sin(Time.get_ticks_msec() * 0.02) * 0.06 * warn
-	_foam.scale = Vector3.ONE * (0.45 + 0.55 * warn) * pulse
-	_foam_mat.albedo_color.a = 0.25 + 0.6 * warn if st < 2 else 0.9
+	var pulse := 1.0 + sin(Time.get_ticks_msec() * 0.02) * 0.06 * warning
+	_foam.scale = Vector3.ONE * (0.45 + 0.55 * warning) * pulse
+	_foam_mat.albedo_color.a = 0.25 + 0.6 * warning if st < 2 else 0.9
 	_column.visible = st == 2
 	if st == 2:
 		# Sube rápido y baja al final.
-		var k := (_t - CALM - WARN) / ERUPT
+		var k := (_t - calm - warn) / erupt
 		var h := 18.0 * sin(clampf(k, 0.0, 1.0) * PI) + 1.0
 		_column.scale = Vector3(1.0, h, 1.0)
 		_column.position.y = h * 0.5

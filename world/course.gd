@@ -1,13 +1,14 @@
 class_name Course
 extends Node3D
 ## El circuito. Lee el mapa de la partida (un TrackMap en world/maps/: el
-## recorrido, las islas, cuántos obstáculos) y lo arma: la pista, las islas, el
-## agua alrededor, y delega lo demás:
+## recorrido, las islas, cuántos obstáculos, sus piezas) y lo arma: la pista,
+## las islas, el agua alrededor, y delega lo demás:
 ## - CourseMarkers: corcheras, boyas y meta (flotan con el agua).
 ## - CourseObstacles: círculos de nitro y rocas.
-## - el script `extras` del mapa (en El Atolón: géiseres, arco y barco).
+## - las piezas del mapa (world/pieces/: volcán, géiseres, arco, cueva...). Cada
+##   una se arma sola y hace lo suyo con los surfistas; acá no se sabe qué son.
 ## Lo que sí hace acá, en pasos fijos: aplicar a cada surfista los choques
-## (islas, rocas), los géiseres, los círculos y los límites de la pista.
+## (islas, rocas), las piezas, los círculos y los límites de la pista.
 
 ## -1: el mapa elegido en el menú (GameSettings.track_layout).
 @export var layout: int = -1
@@ -34,8 +35,8 @@ var island: Island
 var islands: Array[Island] = []
 var rings: Array[NitroRing] = []
 var rocks: Array[Rock] = []
-## Géiseres de la laguna (Atolón).
-var geysers: Array[Geyser] = []
+## Las piezas del mapa (armadas para esta carrera).
+var pieces: Array[MapPiece] = []
 ## -1: el clima elegido en el menú (GameSettings.weather).
 @export var weather: int = -1
 ## La tormenta, si hay.
@@ -57,14 +58,18 @@ func _ready() -> void:
 	half_width = map.half_width
 	if map.is_ring():
 		track_radius = map.ring_radius
-		island_radius = map.islands[0].z
+		island_radius = map.islands[0].radius
 		track = TrackSpace.new(track_radius, half_width)
-		_add_island(track.center, island_radius, 0)
 	else:
-		track = PathTrack.new(map.path, half_width)
-		for i in map.islands.size():
-			var d := map.islands[i]
-			_add_island(Vector2(d.x, d.y), d.z, i, i == map.volcano_index)
+		track = PathTrack.new(map.path, half_width, map.handles_in, map.handles_out, map.smoothing)
+	# Las piezas van antes que las islas del mapa: una pieza que es una isla
+	# (el volcán) queda primera, y el agua alrededor de las primeras islas se
+	# dibuja con más detalle.
+	pieces = map.make_pieces()
+	for piece in pieces:
+		piece.build(self)
+	for i in map.islands.size():
+		_add_map_island(map.islands[i], i)
 	island = islands[0]
 
 	if _water:
@@ -82,8 +87,8 @@ func _ready() -> void:
 	add_child(markers)
 	markers.build(track, half_width, _water)
 	CourseObstacles.place(self, map.ring_count, map.rock_count)
-	if map.extras:
-		map.extras.call("build", self)
+	for piece in pieces:
+		piece.finish(self)
 	if weather < 0:
 		weather = _session_config().weather
 	if weather == GameSettings.Weather.STORM:
@@ -99,30 +104,34 @@ func _session_config() -> RaceConfig:
 	return session.config if session else RaceConfig.from_settings()
 
 
-func is_archipelago() -> bool:
-	return layout == GameSettings.TrackLayout.ARCHIPELAGO
-
-
-func is_atoll() -> bool:
-	return layout == GameSettings.TrackLayout.ATOLL
-
-
 ## Mapas con recorrido libre (no el anillo alrededor de la isla).
 func uses_path() -> bool:
 	return map != null and not map.is_ring()
 
 
-func _add_island(center: Vector2, radius: float, index: int, volcano: bool = false) -> void:
+## Una isla común del mapa ({x, z, radius, lighthouse, seed}).
+func _add_map_island(d: Dictionary, index: int) -> void:
 	var isl := Island.new()
 	isl.name = "Island%d" % index
-	isl.radius = radius
-	isl.island_seed = 11 + index * 7
-	isl.volcano = volcano
-	# Faro solo en las islas grandes (y en la del medio del mapa Isla).
-	isl.lighthouse = not volcano and (radius >= 26.0 or not uses_path())
-	isl.position = Vector3(center.x, 0.0, center.y)
-	add_child(isl)
+	isl.radius = d.radius
+	var pos := Vector2(d.x, d.z)
+	isl.island_seed = d.seed if d.seed >= 0 else seed_for(pos)
+	isl.lighthouse = d.lighthouse
+	isl.position = Vector3(pos.x, 0.0, pos.y)
+	add_island(isl)
+
+
+## Suma una isla al mapa (se choca con la orilla y el agua la rodea). La usan
+## también las piezas que son islas (el volcán).
+func add_island(isl: Island) -> void:
+	add_child(isl, true)
 	islands.append(isl)
+
+
+## Semilla de palmeras para una isla sin semilla propia: sale de dónde está,
+## así no cambia si se agregan o sacan otras islas.
+static func seed_for(pos: Vector2) -> int:
+	return absi(int(round(pos.x)) * 73856093 ^ int(round(pos.y)) * 19349663) % 100000 + 1
 
 
 
@@ -149,6 +158,8 @@ func _physics_process(delta: float) -> void:
 	_time += delta
 	for ring in rings:
 		ring.position.y = _water_height(ring.position.x, ring.position.z) + ring.radius * 0.8
+	for piece in pieces:
+		piece.update(self, delta)
 	for node in get_tree().get_nodes_in_group("riders"):
 		var rider := node as Rider
 		if rider:
@@ -170,12 +181,10 @@ func _apply_to_rider(rider: Rider) -> void:
 				_crash(rider, Vector3(safe.x, rider.position.y, safe.y))
 				return
 
-	# Géiser explotando abajo: sale volando.
-	if hazards_enabled and rider.grounded and not rider.is_fallen():
-		for g in geysers:
-			if g.erupting() and g.covers(rider.position.x, rider.position.z):
-				rider.geyser_launch(Geyser.LAUNCH_SPEED)
-				break
+	# Lo que hacen las piezas del mapa (un géiser que lanza, una cueva...).
+	for piece in pieces:
+		if piece.affect_rider(self, rider):
+			return
 
 	# Las corcheras no dejan salir de la pista (por ningún lado).
 	if bounds_enabled:
