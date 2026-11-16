@@ -1,15 +1,14 @@
 extends Node
 ## Música de fondo y volumen dinámico (autoload "AudioManager").
 ##
-## - La música suena durante la carrera (y la demo), en bucle, y sigue sonando
-##   entre carreras sin cortarse.
+## - La música suena durante la carrera (y la demo) y sigue sonando entre
+##   carreras sin cortarse. Se elige en el menú (GameSettings.music_choice): una
+##   canción en bucle, o "Aleatoria": cuando termina una, arranca otra distinta.
 ## - Volumen épico: si una persona pasa mucho tiempo en el aire, la música sube;
 ##   al volver al agua, baja de nuevo. Con pantalla dividida manda el que más
 ##   tiempo lleva en el aire. Los bots no cuentan.
 ## Los Riders no conocen el audio: esto solo mira su estado.
 
-## Se carga al arrancar (no con preload, para no depender del orden de importación).
-const MUSIC_PATH := "res://assets/audio/simple_surf.ogg"
 const NORMAL_DB := -8.0
 const EPIC_DB := -1.0
 const MENU_DB := -16.0
@@ -23,6 +22,11 @@ var target_db: float = NORMAL_DB
 var epic: bool = false
 
 var _airtime: Dictionary = {}
+## Las canciones (en el orden de GameSettings.SONG_NAMES).
+var _songs: Array = []
+## Canción que está sonando (índice) y modo elegido.
+var song_index: int = -1
+var music_choice: int = -1
 var _in_race: bool = false
 
 ## Efectos de sonido (assets/audio/sfx/<nombre>.wav, generados con tools/make_sfx.py).
@@ -47,13 +51,14 @@ var recent_sfx: Array[String] = []
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	player = AudioStreamPlayer.new()
-	var music := load(MUSIC_PATH) as AudioStreamOggVorbis
-	if music:
-		var stream: AudioStreamOggVorbis = music.duplicate()
-		stream.loop = true
-		player.stream = stream
 	player.volume_db = -40.0
 	add_child(player)
+	player.finished.connect(_on_song_finished)
+	for path in GameSettings.SONG_PATHS:
+		var music := load(path) as AudioStreamOggVorbis
+		_songs.append(music.duplicate() if music else null)
+	GameSettings.load_settings()
+	set_music(GameSettings.music_choice, false)
 
 	for sfx_name in SFX_NAMES:
 		var stream := load("res://assets/audio/sfx/%s.wav" % sfx_name) as AudioStream
@@ -136,6 +141,49 @@ func connect_race(race: Node) -> void:
 			if r.is_human:
 				play("finish", -1.0)
 		)
+
+
+## Cambia la música: una canción en bucle o aleatoria (otra distinta cuando
+## termina). Si ya suena lo mismo, no la corta. `play_now`: arranca enseguida.
+func set_music(choice: int, play_now: bool = true) -> void:
+	choice = clampi(choice, 0, GameSettings.MUSIC_SHUFFLE)
+	var was_playing := player.playing
+	music_choice = choice
+	if choice == GameSettings.MUSIC_SHUFFLE:
+		# Sigue la que suena (ahora sin bucle); al terminar, otra.
+		if song_index >= 0 and player.stream:
+			(player.stream as AudioStreamOggVorbis).loop = false
+			return
+		_play_song(randi() % _songs.size(), false, play_now or was_playing)
+		return
+	if song_index == choice and player.stream:
+		(player.stream as AudioStreamOggVorbis).loop = true
+		if play_now and not player.playing:
+			player.play()
+		return
+	_play_song(choice, true, play_now or was_playing)
+
+
+func _play_song(index: int, loop: bool, start: bool) -> void:
+	var stream := _songs[index] as AudioStreamOggVorbis
+	if stream == null:
+		return
+	song_index = index
+	stream.loop = loop
+	player.stream = stream
+	if start:
+		player.play()
+
+
+## Terminó la canción (solo pasa en aleatoria): otra distinta.
+func _on_song_finished() -> void:
+	if music_choice != GameSettings.MUSIC_SHUFFLE or _songs.size() == 0:
+		return
+	var next := song_index
+	if _songs.size() > 1:
+		while next == song_index:
+			next = randi() % _songs.size()
+	_play_song(next, false, true)
 
 
 ## Llamado por RaceManager al cargar una carrera.

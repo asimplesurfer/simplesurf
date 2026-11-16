@@ -39,6 +39,12 @@ static var split_vertical: bool = true
 ## Bots en la carrera (0 a 3) y su dificultad (0 Fácil, 1 Normal, 2 Difícil).
 static var bot_count: int = 1
 static var bot_level: int = 1
+## Canciones del juego (assets/audio). La música elegida: una canción en bucle
+## (su índice) o MUSIC_SHUFFLE = todas, una distinta cuando termina la anterior.
+const SONG_NAMES := ["Simple Surf", "King of the Tide"]
+const SONG_PATHS := ["res://assets/audio/simple_surf.ogg", "res://assets/audio/king_of_the_tide.ogg"]
+const MUSIC_SHUFFLE := 2
+static var music_choice: int = MUSIC_SHUFFLE
 ## Modo libre: nivel de las olas (0 = sin olas grandes .. SANDBOX_WAVE_LEVELS =
 ## como en una carrera). Se recuerda mientras el juego está abierto.
 const SANDBOX_WAVE_LEVELS := 5
@@ -71,6 +77,7 @@ static func load_settings() -> void:
 		wave_mode = clampi(int(cfg.get_value("gameplay", "wave_mode", WaveMode.SURGES)), 0, 1) as WaveMode
 		bot_count = clampi(int(cfg.get_value("gameplay", "bot_count", 1)), 0, 3)
 		bot_level = clampi(int(cfg.get_value("gameplay", "bot_level", 1)), 0, AIDifficulty.NAMES.size() - 1)
+		music_choice = clampi(int(cfg.get_value("audio", "music", MUSIC_SHUFFLE)), 0, MUSIC_SHUFFLE)
 		for i in InputSetup.MAX_PLAYERS:
 			var key := "player_%d" % i
 			if not cfg.has_section_key("characters", key):
@@ -92,9 +99,17 @@ static func save_settings() -> void:
 	cfg.set_value("gameplay", "weather", weather)
 	cfg.set_value("gameplay", "bot_count", bot_count)
 	cfg.set_value("gameplay", "bot_level", bot_level)
+	cfg.set_value("audio", "music", music_choice)
 	for i in characters:
 		cfg.set_value("characters", "player_%d" % i, (characters[i] as CharacterData).to_dict())
 	cfg.save(PATH)
+
+
+## Nombres para el menú: cada canción y "Aleatoria".
+static func music_names() -> Array:
+	var names: Array = SONG_NAMES.duplicate()
+	names.append("Aleatoria")
+	return names
 
 
 static func toggle_jump_mode() -> void:

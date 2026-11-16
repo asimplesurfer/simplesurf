@@ -1031,7 +1031,16 @@ func _test_music() -> void:
 	var audio := root.get_node("AudioManager")
 	var player: AudioStreamPlayer = audio.player
 	_check(player.stream != null and player.playing, "suena la música durante la carrera")
-	_check((player.stream as AudioStreamOggVorbis).loop, "la música está en bucle")
+	_check(audio._songs.size() == GameSettings.SONG_NAMES.size() and not audio._songs.has(null), "están todas las canciones (%d)" % audio._songs.size())
+	# Una canción elegida: en bucle. Aleatoria: sin bucle y al terminar, otra distinta.
+	audio.set_music(1)
+	_check(audio.song_index == 1 and (player.stream as AudioStreamOggVorbis).loop and player.playing, "una canción elegida suena en bucle")
+	audio.set_music(GameSettings.MUSIC_SHUFFLE)
+	var first: int = audio.song_index
+	_check(not (player.stream as AudioStreamOggVorbis).loop, "aleatoria: la canción no se repite")
+	audio._on_song_finished()
+	_check(audio.song_index != first and player.playing, "aleatoria: al terminar arranca otra distinta")
+	audio.set_music(GameSettings.music_choice)
 	# Efectos de sonido.
 	_check(audio._sfx.size() == audio.SFX_NAMES.size(), "están todos los efectos de sonido (%d)" % audio._sfx.size())
 	_check(audio.ocean.stream != null and audio.ocean.playing, "suena el mar de fondo")
