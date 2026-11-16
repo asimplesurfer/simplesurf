@@ -96,6 +96,7 @@ func build(parent: Node3D, data: CharacterData, features: AvatarFeatures) -> voi
 	_fist_left_hand()
 	_choose_accessories(data)
 	_apply_sliders(data)
+	_reshape_skull(data)
 	_make_materials(data)
 	# Pelo y collar del modelo en sus propios nodos (colgando de la coronilla y
 	# del cuello), para que se muevan solos.
@@ -457,6 +458,38 @@ func _apply_sliders(data: CharacterData) -> void:
 	var h := character.find_child("Head", false, false) as Node3D
 	h.basis = h.basis * Basis.from_scale(shape * s)
 	h.position.y += (s * shape.y - 1.0) * 0.42
+
+
+## Formas de cabeza con otro perfil (Redonda, Ovalada, Suave): se deforma el
+## cráneo del modelo para que cachetes y mentón sigan ese perfil. Los detalles
+## de la cara usan el mismo perfil (AvatarFeatures._face), así quedan apoyados.
+func _reshape_skull(data: CharacterData) -> void:
+	var shape := data.get_option("head")
+	if not AvatarFeatures.HEAD_PROFILES.has(shape):
+		return
+	var target: Array = AvatarFeatures.profile_for(shape)
+	var head_node := character.find_child("Head", false, false) as Node3D
+	var skull := head_node.find_child("Skull", false, false) as Node3D
+	if skull == null:
+		return
+	for mi in skull.find_children("*", "MeshInstance3D", true, false):
+		var inst := mi as MeshInstance3D
+		var arrays := inst.mesh.surface_get_arrays(0)
+		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		for i in verts.size():
+			var v := verts[i]
+			var old := AvatarFeatures.profile_at(AvatarFeatures.SKULL_PROFILE, v.y)
+			var new := AvatarFeatures.profile_at(target, v.y)
+			v.x *= new.x / maxf(old.x, 0.01)
+			if v.z > 0.0:
+				v.z *= new.y / maxf(old.y, 0.01)
+			verts[i] = v
+		arrays[Mesh.ARRAY_VERTEX] = verts
+		var mat := inst.mesh.surface_get_material(0)
+		var mesh := ArrayMesh.new()
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+		mesh.surface_set_material(0, mat)
+		inst.mesh = mesh
 
 
 func _make_materials(data: CharacterData) -> void:

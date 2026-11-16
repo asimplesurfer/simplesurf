@@ -82,7 +82,7 @@ const ACCENT_NAMES := [
 const SHORTS_TWO_COLORS := [1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
 const BOARD_TWO_COLORS := [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
 
-const HEAD_SHAPES := ["Normal", "Ancha", "Alargada", "Chata"]
+const HEAD_SHAPES := ["Normal", "Ancha", "Alargada", "Chata", "Redonda", "Ovalada", "Suave"]
 ## Silueta: normal (la de la barra) o flaca (todo más finito, sin músculos).
 const BUILDS := ["Normal", "Flaca"]
 const SLIM := 1
@@ -92,6 +92,11 @@ const HEAD_SCALES := [
 	Vector3(1.3, 0.92, 1.1),
 	Vector3(0.85, 1.28, 0.92),
 	Vector3(1.15, 0.78, 1.15),
+	# Redonda, Ovalada y Suave: la forma la da el perfil de la cara (ver
+	# AvatarFeatures.HEAD_PROFILES), no la escala.
+	Vector3(1.0, 1.0, 1.0),
+	Vector3(0.96, 1.04, 0.98),
+	Vector3(1.0, 1.0, 1.0),
 ]
 const HAIR_STYLES := [
 	"Pelado", "Rapado", "Melena surfer", "Rulos", "Cresta", "Pinchos", "Moño", "Peluquín",
