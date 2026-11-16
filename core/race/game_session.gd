@@ -142,11 +142,13 @@ func _setup_input() -> void:
 ## La misma partida otra vez, con la misma configuración (reemplaza su propia
 ## escena, sea o no la escena actual del juego).
 func restart() -> void:
+	get_tree().paused = false
 	var own_scene := owner if owner else get_parent()
 	launch(get_tree(), own_scene.scene_file_path, config, own_scene)
 
 
 func back_to_menu() -> void:
+	get_tree().paused = false
 	get_tree().change_scene_to_file(MENU_SCENE)
 
 
@@ -178,6 +180,24 @@ static func is_any_press(event: InputEvent) -> bool:
 	return false
 
 
+## Menú de pausa (se arma la primera vez que se abre).
+var pause_menu: PauseMenu
+
+
+## Abre o cierra el menú de pausa (ESC / Start).
+func toggle_pause() -> void:
+	if pause_menu == null:
+		pause_menu = PauseMenu.new()
+		pause_menu.name = "PauseMenu"
+		pause_menu.session = self
+		var parent := get_parent() if get_parent() else self
+		parent.add_child(pause_menu)
+	if pause_menu.is_open():
+		pause_menu.close()
+	else:
+		pause_menu.open()
+
+
 ## Truco que muestra la próxima vez el visor (tecla G).
 static var _preview_index: int = 0
 
@@ -199,7 +219,9 @@ func _handle_common_key(key: InputEventKey) -> bool:
 			set_player_count(1)
 		KEY_2:
 			set_player_count(2)
-		KEY_C, KEY_ESCAPE:
+		KEY_ESCAPE:
+			toggle_pause()
+		KEY_C:
 			back_to_menu()
 		KEY_G:
 			# Visor de trucos: salta y hace el siguiente truco en cámara lenta.
@@ -228,6 +250,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	for slot in config.slots:
 		var p := InputSetup.prefix(slot.player_index)
+		if InputMap.has_action(p + "start") and event.is_action_pressed(p + "start"):
+			toggle_pause()
+			return
 		if InputMap.has_action(p + "select") and event.is_action_pressed(p + "select"):
 			set_player_count(2 if GameSettings.player_count == 1 else 1)
 			return
