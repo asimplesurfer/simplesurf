@@ -153,6 +153,12 @@ static func toggle_track_layout() -> void:
 	save_settings()
 
 
+## Elige el mapa número `layout` (su lugar en la lista de mapas).
+static func set_track_layout(layout: int) -> void:
+	track_layout = clampi(layout, 0, TrackMap.count() - 1) as TrackLayout
+	save_settings()
+
+
 static func track_layout_name() -> String:
 	return TrackMap.for_layout(track_layout).name
 
