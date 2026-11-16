@@ -451,9 +451,9 @@ func _glasses(style: int) -> void:
 func _wrap_shades() -> void:
 	# Contorno de la mitad derecha (x >= 0), en unidades de cabeza; se espeja.
 	var half := [
-		Vector2(0.0, 0.175), Vector2(0.4, 0.185), Vector2(0.415, 0.165), Vector2(0.37, 0.07),
-		Vector2(0.33, 0.045), Vector2(0.15, 0.045), Vector2(0.1, 0.06),
-		Vector2(0.05, 0.11), Vector2(0.0, 0.12),
+		Vector2(0.0, 0.215), Vector2(0.44, 0.23), Vector2(0.46, 0.205), Vector2(0.41, 0.05),
+		Vector2(0.36, 0.012), Vector2(0.15, 0.012), Vector2(0.1, 0.035),
+		Vector2(0.05, 0.1), Vector2(0.0, 0.115),
 	]
 	var poly := PackedVector2Array()
 	for i in range(half.size() - 1, -1, -1):
@@ -465,20 +465,20 @@ func _wrap_shades() -> void:
 	var top := Color("#13215c")
 	var bottom := Color("#2f6be0")
 	_extruded(poly, 0.07, 0.035, func(p: Vector2) -> Color:
-		return top.lerp(bottom, clampf((0.185 - p.y) / 0.14, 0.0, 1.0)), true)
+		return top.lerp(bottom, clampf((0.23 - p.y) / 0.2, 0.0, 1.0)), true)
 	# Brillos: dos tiras finas en diagonal en cada vidrio.
 	var shine := Color("#cfe9ff")
 	for side in [-1.0, 1.0]:
 		for j in 2:
-			var cx: float = side * (0.2 + j * 0.08)
+			var cx: float = side * (0.21 + j * 0.09)
 			var strip := PackedVector2Array([
-				Vector2(cx - 0.025, 0.065), Vector2(cx - 0.008 - j * 0.004, 0.065),
-				Vector2(cx + 0.025 - j * 0.008, 0.16), Vector2(cx + 0.008, 0.16),
+				Vector2(cx - 0.035, 0.04), Vector2(cx - 0.01 - j * 0.005, 0.04),
+				Vector2(cx + 0.035 - j * 0.01, 0.2), Vector2(cx + 0.01, 0.2),
 			])
 			_extruded(strip, 0.108, 0.004, func(_p: Vector2) -> Color: return shine, false)
 	# Patillas negras hacia las orejas.
 	for side in [-1.0, 1.0]:
-		_piece(_box, Vector3(side * 0.47, 0.18, 0.08), Vector3(0.012, 0.016, 0.17), BLACK, false,
+		_piece(_box, Vector3(side * 0.48, 0.2, 0.08), Vector3(0.012, 0.018, 0.17), BLACK, false,
 			Basis(Vector3.UP, side * 0.25))
 
 
@@ -552,10 +552,6 @@ func _nose(style: int, skin: Color) -> void:
 			_piece(_sphere, p + Vector3(0, -0.01, 0.02), Vector3(0.075, 0.07, 0.07), skin.darkened(0.08))
 			# Franja de protector de lado a lado, sobre la nariz.
 			_piece(_sphere, _face(0.0, 0.0, 0.03), Vector3(0.16, 0.028, 0.05), WHITE, false)
-			for side in [-1.0, 1.0]:
-				# Rayitas en los cachetes.
-				_piece(_sphere, _face(side * 0.24, -0.06, 0.012), Vector3(0.05, 0.014, 0.01), WHITE, false,
-					Basis(Vector3.BACK, side * 0.15))
 
 
 ## Bocas armadas (la de costado es la del modelo).
@@ -589,6 +585,17 @@ func _mouth(style: int) -> void:
 			_piece(_sphere, m, Vector3(0.11, 0.012, 0.02), BLACK, false)
 			for side in [-1.0, 1.0]:
 				_piece(_box, m + Vector3(side * 0.031, -0.045, 0.0), Vector3(0.028, 0.042, 0.012), WHITE)
+		11:
+			# Canchera: una línea que sube hacia la derecha, larga y segura.
+			_stroke(_face(0.03, -0.215, 0.012), -0.1, 0.14, 0.03, 0.8)
+		12:
+			# Sonrisa ancha: una sola línea finita de lado a lado, poco curva.
+			_stroke(m + Vector3(0.0, 0.0, 0.007), -0.16, 0.16, 0.035, 0.0)
+		13:
+			# Pícara: sube hacia la izquierda y tiene un hoyuelo en la punta.
+			_stroke(_face(-0.03, -0.215, 0.012), -0.13, 0.08, 0.03, -0.8)
+			_piece(_sphere, _face(-0.18, -0.165, 0.006), Vector3(0.012, 0.022, 0.01), BLACK, false,
+				Basis(Vector3.BACK, -0.5))
 		10:
 			# Sonrisa abierta en D: arriba recta, abajo redonda, con los dientes
 			# de arriba y la lengua.
@@ -623,6 +630,20 @@ func _mouth(style: int) -> void:
 				var x := -0.11 + i * 0.073
 				_piece(_sphere, m + Vector3(x, 0, 0), Vector3(0.046, 0.011, 0.02), BLACK, false,
 					Basis(Vector3.FORWARD, 0.5 if i % 2 == 0 else -0.5))
+
+
+## Trazo de boca de una línea, como de pincel: un tubo finito que sigue la
+## misma curva que `_curve` (de `from` a `to`) y se afina en las puntas.
+func _stroke(center: Vector3, from: float, to: float, bend: float, tilt: float) -> void:
+	var path := []
+	var widths := []
+	var n := 10
+	for i in n + 1:
+		var x := lerpf(from, to, i / float(n))
+		var y := bend * pow(x / 0.11, 2.0) + tilt * x * 0.3
+		path.append(center + Vector3(x, y, 0.0))
+		widths.append(0.016 * sin(lerpf(0.25, 0.75, i / float(n)) * PI))
+	_piece(_make_tube(path, widths), Vector3.ZERO, Vector3.ONE, BLACK, false)
 
 
 ## Línea curva de la boca: segmentos negros en arco (`bend` = cuánto se curva,

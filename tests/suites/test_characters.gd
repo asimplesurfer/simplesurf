@@ -185,6 +185,12 @@ func _test_customization() -> void:
 	rasta.apply_preset(CharacterData.PRESET_NAMES.find("Rasta"))
 	_check(rasta.get_option("hair") == AvatarFeatures.DREADS and rasta.get_option("hat") == 9,
 		"estilo Rasta: rastas y gorro rasta")
+	var shaggy_style := CharacterData.new()
+	shaggy_style.apply_preset(CharacterData.PRESET_NAMES.find("Despeinado"))
+	_check(shaggy_style.option_name("hair") == "Despeinado" and shaggy_style.option_name("glasses") == "Envolventes"
+		and shaggy_style.option_name("nose") == "Con protector solar", "estilo Despeinado: pelo, anteojos y protector")
+	_check(CharacterData.MOUTHS.has("Canchera") and CharacterData.MOUTHS.has("Sonrisa ancha")
+		and CharacterData.MOUTHS.has("Pícara"), "sonrisas confiadas de una línea")
 	# Piezas del despeinado (pelo, anteojos, cuellito y cordón del short).
 	var shaggy := CharacterData.from_dict({"hair": 15, "glasses": 13, "neck": 9, "shorts_tie": 1})
 	_check(shaggy.option_name("hair") == "Despeinado" and shaggy.option_name("glasses") == "Envolventes"
