@@ -158,15 +158,6 @@ func add_follower(node: Node3D, layer_index: int = -1) -> MeshInstance3D:
 	return mi
 
 
-## El plano que seguía a `old` pasa a seguir a `node` (la cámara de la intro,
-## que se va lejos del surfista).
-func retarget_follower(old: Node3D, node: Node3D) -> void:
-	for f in _followers:
-		if f.node == old:
-			f.node = node
-			_snap(f.mesh, node)
-
-
 ## Máscara de render para la cámara del jugador `layer_index`: todo menos el
 ## agua de los demás jugadores.
 static func camera_cull_mask(layer_index: int, max_players: int = 4) -> int:

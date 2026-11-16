@@ -18,6 +18,7 @@ const SUITES := [
 	"res://tests/suites/test_memory.gd",
 	"res://tests/suites/test_maps.gd",
 	"res://tests/suites/test_sandbox.gd",
+	"res://tests/suites/test_time_trial.gd",
 	"res://tests/suites/test_feel.gd",
 	"res://tests/suites/test_rider_states.gd",
 ]

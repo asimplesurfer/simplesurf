@@ -21,6 +21,14 @@ var _float_offsets: Array[float] = []
 ## Posición (x, z) de cada flotador de cada MultiMesh de _ropes.
 var _float_points: Array[PackedVector2Array] = []
 var _water: Water
+## Grilla de flotadores (celda -> índices k * ROPE_STRIDE + i), para buscar
+## solo los cercanos a cada corredor sin recorrer todos.
+var _cells: Dictionary = {}
+var _cells_built: bool = false
+var _frame: int = 0
+## Tamaño de celda de la grilla (m).
+const CELL := 30.0
+const ROPE_STRIDE := 1000000
 
 
 func build(p_track: TrackSpace, p_half_width: float, water: Water) -> void:
@@ -42,15 +50,29 @@ func _process(_delta: float) -> void:
 	for b in _buoys:
 		if _is_near(near, b.position.x, b.position.z):
 			b.position.y = _water_height(b.position.x, b.position.z)
-	for k in _ropes.size():
-		var mm := _ropes[k].multimesh
-		var y_offset := _float_offsets[k]
-		var pts := _float_points[k]
-		for i in pts.size():
-			var q := pts[i]
-			if _is_near(near, q.x, q.y):
-				var y := _water_height(q.x, q.y) + y_offset
-				mm.set_instance_transform(i, Transform3D(Basis.IDENTITY, Vector3(q.x, y, q.y)))
+	# Corcheras: cada 2 cuadros (a 30 por segundo el vaivén se ve igual) y solo
+	# las celdas cerca de algún corredor.
+	_frame += 1
+	if _frame % 2 != 0:
+		return
+	if not _cells_built:
+		_build_cells()
+	var reach := int(ceil(FLOAT_UPDATE_DISTANCE / CELL))
+	var seen := {}
+	for p in near:
+		var c := Vector2i(floori(p.x / CELL), floori(p.y / CELL))
+		for dz in range(-reach, reach + 1):
+			for dx in range(-reach, reach + 1):
+				var key := Vector2i(c.x + dx, c.y + dz)
+				if seen.has(key) or not _cells.has(key):
+					continue
+				seen[key] = true
+				for code in (_cells[key] as PackedInt32Array):
+					var k := code / ROPE_STRIDE
+					var i := code % ROPE_STRIDE
+					var q := _float_points[k][i]
+					var y := _water_height(q.x, q.y) + _float_offsets[k]
+					_ropes[k].multimesh.set_instance_transform(i, Transform3D(Basis.IDENTITY, Vector3(q.x, y, q.y)))
 
 
 ## Bordes de la pista: una corchera continua a cada lado (flotadores cada
@@ -196,6 +218,19 @@ func _build_finish_line() -> void:
 		buoy.position = track.position_at(0.0, -half_width + i * 4.0)
 		add_child(buoy)
 		_buoys.append(buoy)
+
+
+func _build_cells() -> void:
+	_cells_built = true
+	_cells.clear()
+	for k in _float_points.size():
+		var pts := _float_points[k]
+		for i in pts.size():
+			var key := Vector2i(floori(pts[i].x / CELL), floori(pts[i].y / CELL))
+			# (Los Packed se copian: se saca, se agrega y se vuelve a guardar.)
+			var list: PackedInt32Array = _cells.get(key, PackedInt32Array())
+			list.append(k * ROPE_STRIDE + i)
+			_cells[key] = list
 
 
 func _is_near(points: Array[Vector2], x: float, z: float) -> bool:

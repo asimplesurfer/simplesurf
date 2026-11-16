@@ -59,7 +59,6 @@ var _place_label: Label
 var _lap_label: Label
 var _name_label: Label
 var _center_label: Label
-var _loading_label: Label
 var _help: Label
 ## Contador de FPS (tecla P). Se recuerda entre carreras.
 static var show_fps: bool = false
@@ -240,11 +239,6 @@ func _process(delta: float) -> void:
 		]
 	if rider == null:
 		return
-	var intro := _race() != null and _race().intro_left() > 0.0
-	_loading_label.visible = intro
-	if intro:
-		var dots := ".".repeat(1 + int(Time.get_ticks_msec() / 350) % 3)
-		_loading_label.text = "Preparando las olas" + dots
 	_update_splash(delta)
 	_update_mash(delta)
 
@@ -272,6 +266,12 @@ func _process(delta: float) -> void:
 		var race := _race()
 		_lap_label.text = "VUELTA %d/%d" % [race.lap_of(rider), race.config.laps]
 		_place_label.text = "%dº" % race.place_of(rider)
+		if race.time_trial:
+			# Contrarreloj: el tiempo en vez del puesto, y el récord a batir.
+			var t: float = race.finish_times.get(rider, race.race_time)
+			_place_label.text = ResultsPanel.format_time(t)
+			var best := race.time_trial.best_time
+			_lap_label.text += "\nRécord %s" % (ResultsPanel.format_time(best) if best > 0.0 else "--")
 		if race.is_wrong_way(rider) and _center_time <= 0.0:
 			_center_label.text = "¡Al revés!"
 			_center_label.add_theme_color_override("font_color", BAD_COLOR)
@@ -668,16 +668,6 @@ func _build() -> void:
 	_fps_label.offset_right = 200.0
 	_fps_label.visible = false
 	root.add_child(_fps_label)
-
-	# Intro de la carrera (mientras carga): un cartel discreto abajo.
-	_loading_label = _make_label(22, Color.WHITE)
-	_loading_label.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	_loading_label.offset_top = -80.0
-	_loading_label.offset_bottom = -44.0
-	_loading_label.offset_left = -300.0
-	_loading_label.offset_right = 300.0
-	_loading_label.visible = false
-	root.add_child(_loading_label)
 
 
 func _make_label(font_size: int, color: Color) -> Label:

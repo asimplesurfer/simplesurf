@@ -348,6 +348,10 @@ func _build_setup() -> void:
 	free.custom_minimum_size = Vector2(170.0, 48.0)
 	free.pressed.connect(start_sandbox)
 	bar.add_child(free)
+	var trial := _button("Contrarreloj", 22)
+	trial.custom_minimum_size = Vector2(170.0, 48.0)
+	trial.pressed.connect(start_time_trial)
+	bar.add_child(trial)
 	var go := _button("¡A surfear!", 28)
 	go.custom_minimum_size = Vector2(220.0, 52.0)
 	go.pressed.connect(start_race)
@@ -441,6 +445,12 @@ func start_sandbox() -> void:
 	_launch(SANDBOX_SCENE, RaceConfig.sandbox(), sandbox_requested)
 
 
+## Contrarreloj: J1 solo contra su mejor tiempo (el fantasma), mismas olas.
+func start_time_trial() -> void:
+	GameSettings.save_settings()
+	_launch(RACE_SCENE, RaceConfig.time_trial(), start_requested)
+
+
 func _start_demo() -> void:
 	_idle_time = -1e9
 	_launch(RACE_SCENE, RaceConfig.demo(), start_requested)
@@ -452,7 +462,7 @@ func _launch(scene_path: String, config: RaceConfig, done: Signal) -> void:
 	started_config = config
 	done.emit()
 	if auto_start:
-		# Desde el menú, con la intro (mientras carga, la cámara recorre la pista).
+		# Desde el menú, preparando los shaders durante la cuenta regresiva.
 		GameSession.launch(get_tree(), scene_path, config, null, true)
 
 
