@@ -87,6 +87,9 @@ const MUSIC_BUS := "Music"
 const SFX_BUS := "SFX"
 
 
+## Los buses están en default_bus_layout.tres (en la web, un bus creado por
+## código no se registra en el audio del navegador y lo que va por ahí no suena).
+## Esto solo los crea si faltara el archivo.
 func _make_buses() -> void:
 	for bus_name in [MUSIC_BUS, SFX_BUS]:
 		if AudioServer.get_bus_index(bus_name) < 0:
