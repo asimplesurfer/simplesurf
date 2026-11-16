@@ -54,7 +54,9 @@ func _ready() -> void:
 		layout = _session_config().layout
 	_water = GameSession.find_in_scene(self, "water") as Water
 
-	map = TrackMap.for_layout(layout)
+	# Un mapa ya puesto antes de entrar (tests, probar un mapa nuevo) se usa tal cual.
+	if map == null:
+		map = TrackMap.for_layout(layout)
 	half_width = map.half_width
 	if map.is_ring():
 		track_radius = map.ring_radius

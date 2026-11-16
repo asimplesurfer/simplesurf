@@ -66,12 +66,47 @@ pieza se puede repetir todas las veces que haga falta.
 | `geyser` | Géiser que explota cada tanto y lanza al que pasa | `x`, `z`; `phase`, `calm`, `warn`, `erupt` (s), `launch_speed` |
 | `rock_arch` | Arco de roca de paisaje, se pasa por debajo | `x`, `z`; `angle` (grados), `span`, `height`, `shape_seed`, `stone_color`, `moss_color` |
 | `shipwreck` | Barco hundido de paisaje | `x`, `z`; `angle` (grados), `size` |
+| `rock_formation` | Roca o cueva dibujada como figura (ver abajo) | `shape`; `height`, `ceiling`, `opening`, `opening_width`, `skylights`, `stone_low`, `stone_high`, `grass_color`, `moss_color`, `glow_color`, `darkness`, `adapt_time`, `shape_seed` |
 
 Los colores se escriben como en la web: `"#8a6d5a"`.
 
 Si un mapa pide una pieza que no existe, le falta un parámetro obligatorio o
 tiene uno mal escrito, el juego lo avisa al cargar. Los tests (`test_maps`)
 revisan que todos los mapas de la carpeta estén bien escritos.
+
+### Rocas y cuevas (`rock_formation`)
+
+Se dibujan como una figura cerrada, con los mismos puntos y manijas que el
+recorrido (`shape`). Lo que hacen depende de dónde se dibujan:
+
+- **Si tapan la pista**, esa parte es una cueva:
+  - Un túnel del ancho de la pista, con techo a `ceiling` metros.
+  - Agua turquesa que brilla y paredes oscuras teñidas de turquesa abajo.
+  - Haces de sol por los agujeros del techo (`skylights`: puntos [x, z]).
+  - Los ojos se acostumbran: al entrar se ve casi negro y de a poco aparece
+    todo; al salir hay un fogonazo de luz. Es por jugador.
+  - Con el techo bajo no se puede saltar hasta el techo: se sube más despacio y
+    se frena antes de tocarlo.
+- **Si no tocan la pista**, es una roca grande de paisaje. Con `opening: true`
+  tiene un arco abajo por donde se ve el mar.
+- **Si la tocan un poco**, las dos cosas a la vez.
+
+El túnel siempre es del ancho de la pista: el borde de la figura no la angosta
+(por ahora).
+
+**Estilo buscado.** Las referencias son fotos de acantilados, arcos naturales y
+cuevas marinas, llevadas al estilo low-poly del juego:
+
+- **Afuera**: piedra en capas, rojiza y ocre abajo, clara (beige o gris) arriba,
+  con un poco de pasto arriba y musgo o algas en la base. Formas de peñasco
+  alto, o arcos con el mar del otro lado.
+- **Boca**: un arco irregular, bien oscuro adentro.
+- **Adentro**: el agua es la luz. Turquesa brillante que tiñe las paredes de
+  abajo; arriba la piedra queda cálida. Si hay agujeros en el techo, haces de sol.
+- **Luz**: el contraste al entrar y al salir es parte de la experiencia (los ojos
+  que se acostumban), en todas las cuevas de todos los mapas.
+
+Para cambiar el clima de una cueva (de hielo, volcánica...) se usan sus colores.
 
 ### Hacer una pieza nueva
 
