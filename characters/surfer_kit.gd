@@ -364,10 +364,10 @@ const SHORTS_FOLLOW := 1.4
 ## Tamaño de la cabeza (ya no se elige).
 const HEAD_SCALE := 1.085
 ## Silueta flaca: cuánto se afinan el pecho, la cintura, la cadera y las piernas.
-const SLIM_CHEST := Vector3(0.84, 1.0, 0.86)
-const SLIM_WAIST := Vector3(0.66, 1.0, 0.68)
-const SLIM_HIPS := Vector3(0.86, 1.0, 0.88)
-const SLIM_LEGS := Vector3(0.72, 1.0, 0.72)
+const SLIM_CHEST := Vector3(0.92, 1.0, 0.93)
+const SLIM_WAIST := Vector3(0.84, 1.0, 0.84)
+const SLIM_HIPS := Vector3(0.94, 1.0, 0.94)
+const SLIM_LEGS := Vector3(0.87, 1.0, 0.87)
 ## Músculos desde los que aparecen los hombros (0..1).
 const SHOULDERS_FROM := 0.45
 
@@ -444,7 +444,7 @@ func _apply_sliders(data: CharacterData) -> void:
 			(character.find_child(part, false, false) as Node3D).scale *= SLIM_LEGS
 		for part in ["HandL", "HandR"]:
 			var hand := character.find_child(part, false, false) as Node3D
-			hand.position.x *= 0.88
+			hand.position.x *= 0.95
 	# Las manos se abren un poco con la panza.
 	for part in ["HandL", "HandR"]:
 		var hand := character.find_child(part, false, false) as Node3D
