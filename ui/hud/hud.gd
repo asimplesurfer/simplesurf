@@ -440,6 +440,19 @@ func _set_prompt(prompt: ButtonPrompt) -> void:
 
 
 func _update_help() -> void:
+	if free_ride and session is RaceManager:
+		# Modo libre dentro de un mapa (sin bots): ver ExploreMode.
+		_help.text = (
+			"MODO LIBRE · %s\n" % (session as RaceManager).course.map.name.to_upper()
+			+ "Avanzar: W / stick adelante (soltá y te frenás; lento, remás acostado)\n"
+			+ "Girar: A / D o stick   ·   Pop / truco: ESPACIO / botón de abajo\n"
+			+ "Frenar: S / stick atrás   ·   Turbo: E o botón derecho   ·   Mirar atrás: Q o gatillo izquierdo\n"
+			+ "Olas: X sube · Z baja (mando: RB / LB)   ·   Tormenta: T (mando: Select)\n"
+			+ "Boyas: F (se atraviesan o no, para ver más allá de la pista)\n"
+			+ "G: ver los trucos uno por uno (cámara lenta)\n"
+			+ "Esc / Start: pausa (volumen)   ·   C: menú   ·   H: ocultar ayuda"
+		)
+		return
 	if free_ride:
 		_help.text = (
 			"MODO LIBRE · mar abierto\n"

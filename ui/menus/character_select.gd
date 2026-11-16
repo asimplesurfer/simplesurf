@@ -455,10 +455,14 @@ func start_race() -> void:
 	_launch(RACE_SCENE, RaceConfig.from_settings(), start_requested)
 
 
-## Modo libre: mar abierto para practicar (sin carrera ni bots).
+## Modo libre. Con 0 bots: dentro del mapa elegido (para recorrerlo con
+## calma, ver ExploreMode). Con bots: mar abierto para practicar.
 func start_sandbox() -> void:
 	GameSettings.save_settings()
-	_launch(SANDBOX_SCENE, RaceConfig.sandbox(), sandbox_requested)
+	if GameSettings.bot_count == 0:
+		_launch(RACE_SCENE, RaceConfig.explore(), sandbox_requested)
+	else:
+		_launch(SANDBOX_SCENE, RaceConfig.sandbox(), sandbox_requested)
 
 
 ## Contrarreloj: J1 solo contra su mejor tiempo (el fantasma), mismas olas.

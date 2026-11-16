@@ -64,7 +64,14 @@ func _ready() -> void:
 		if waves:
 			waves.set_mode(GameSettings.WaveMode.SURGES)
 			waves.fixed_waves = true
-	if not is_demo():
+	if config.is_explore():
+		# Modo libre dentro del mapa: sin cuenta regresiva ni final, con los
+		# controles de olas, tormenta y boyas (ver ExploreMode).
+		var explore := ExploreMode.new()
+		explore.name = "Explore"
+		add_child(explore)
+		skip_countdown.call_deferred()
+	elif not is_demo():
 		recorder = RaceRecorder.new()
 		recorder.name = "Recorder"
 		recorder.race = self
@@ -97,7 +104,21 @@ func is_demo() -> bool:
 
 
 func config_for_players() -> RaceConfig:
+	if config.is_explore():
+		return RaceConfig.explore()
 	return RaceConfig.demo() if is_demo() else RaceConfig.from_settings()
+
+
+## Modo libre dentro del mapa: sin vueltas, posiciones ni llegada.
+func free_ride() -> bool:
+	return config.is_explore()
+
+
+## En el modo libre dentro del mapa se maneja como en el modo libre (sin
+## aceleración automática; lento, se rema acostado).
+func _before_add(rider: Rider) -> void:
+	if config.is_explore():
+		rider.free_ride = true
 
 
 func _spawn_racers() -> void:
