@@ -4,9 +4,19 @@ Cada mapa es un archivo `.json` en esta carpeta. **Agregar un mapa = agregar un
 archivo**: el juego lee la carpeta y lo muestra en el menú. No hay que tocar
 código, salvo que el mapa necesite una pieza que todavía no existe.
 
-El editor de mapas (artefacto en Claude) lee y escribe este mismo formato: se
-exporta desde ahí, se copia acá y listo. También se puede abrir un mapa de acá
-en el editor para cambiarlo.
+El editor de mapas lee y escribe este mismo formato. Es un artefacto en Claude:
+https://claude.ai/artifact/AWpL9C2N5dKRnid5Fdxyo7. Su código está en
+`tools/map_editor/`. Cuando una pieza nueva entra al juego, se suma también ahí
+y se vuelve a publicar.
+
+Para pasar un mapa del editor al juego:
+
+1. En el editor, tocar **Guardar para el juego**.
+2. Claude lo lee de la base del editor (colección `maps`, campo `json`), lo
+   revisa, lo guarda como `world/maps/<id>.json` y corre los tests.
+
+También se puede usar **Ver JSON** y pegar el archivo a mano. Un mapa de acá se
+puede abrir en el editor para cambiarlo.
 
 ## El archivo
 
