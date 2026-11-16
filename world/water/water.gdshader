@@ -16,10 +16,21 @@ uniform sampler2D track_mask : filter_linear, repeat_disable;
 uniform vec4 track_mask_rect = vec4(0.0);
 // Cuánto se oscurece el agua fuera de la pista.
 uniform float outside_strength = 0.8;
-// Bruma: lejos, el agua se vuelve del color del horizonte (llega a ese color
-// donde termina lo que ve la cámara, así no se nota el borde).
-uniform vec3 haze_color : source_color = vec3(0.93, 0.9, 0.96);
-uniform vec2 haze_range = vec2(170.0, 310.0);
+// Bruma: lejos, el agua se vuelve del color del horizonte en esa dirección
+// (el mismo que el cielo, ver horizon.gdshaderinc): llega a ese color antes de
+// que termine el agua, así no se ve el borde ni desde un salto alto.
+#include "res://world/sky/horizon.gdshaderinc"
+uniform vec2 haze_range = vec2(300.0, 470.0);
+// Antes, el mar lejano: el agua se va a este celeste con bruma (el del cielo)
+// entre estas distancias, y recién después se funde con el horizonte.
+uniform vec3 far_sea_color : source_color = vec3(0.4, 0.72, 0.84);
+uniform vec2 far_sea_range = vec2(150.0, 320.0);
+// La niebla del agua la calcula este shader y la escribe en FOG (se aplica
+// igual que la del Environment, después de la luz): de cerca es la misma de
+// siempre; lejos se va al mar con bruma y al horizonte, no a una franja blanca.
+// Densidad y color de la niebla del Environment (los pone Horizon).
+uniform float fog_density = 0.0045;
+uniform vec3 fog_tint : source_color = vec3(0.93, 0.9, 0.96);
 
 uniform vec3 deep_color : source_color = vec3(0.03, 0.2, 0.34);
 uniform vec3 shallow_color : source_color = vec3(0.08, 0.35, 0.48);
@@ -165,8 +176,21 @@ void fragment() {
 		col = mix(col, outside_color, outside * outside_strength);
 	}
 
-	float haze = smoothstep(haze_range.x, haze_range.y, distance(v_world, CAMERA_POSITION_WORLD));
-	col = mix(col, haze_color, haze);
+	vec3 to_far = v_world - CAMERA_POSITION_WORLD;
+	float far_d = length(to_far.xz);
+	vec3 h_col = horizon_at(to_far.xz);
+	// Tres capas, una sobre otra: niebla de siempre, mar lejano y horizonte.
+	float a1 = 1.0 - exp(-fog_density * length(to_far));
+	float a2 = smoothstep(far_sea_range.x, far_sea_range.y, far_d) * 0.85;
+	float haze = smoothstep(haze_range.x, haze_range.y, far_d);
+	vec3 c2 = mix(far_sea_color, h_col, 0.45);
+	float keep = (1.0 - a1) * (1.0 - a2) * (1.0 - haze);
+	// El motor pasa el color de su niebla en lineal; acá llega como se ve
+	// (sRGB): se convierte para que de cerca quede igual que antes.
+	vec3 near_fog = pow(fog_tint, vec3(2.2));
+	vec3 fog_rgb = near_fog * a1 * (1.0 - a2) * (1.0 - haze) + c2 * a2 * (1.0 - haze) + h_col * haze;
+	float fog_a = 1.0 - keep;
+	FOG = vec4(fog_a > 0.0001 ? fog_rgb / fog_a : near_fog, fog_a);
 	ALBEDO = col;
 	EMISSION = vec3(sparkle * 0.7 * (1.0 - haze));
 	ROUGHNESS = mix(0.26, 0.7, clamp(foam, 0.0, 1.0));
