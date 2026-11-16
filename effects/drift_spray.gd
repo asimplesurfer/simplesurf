@@ -56,6 +56,22 @@ func update_spray(side: int, strength: float, delta: float) -> void:
 	_mist.direction = Vector3(0.0, 0.7, 1.0).normalized()
 
 
+## true si el punto (los pies de un rival) queda adentro de la cortina tal como
+## se ve ahora: entre la tabla y la punta, y dentro del ancho del abanico a esa
+## distancia (más `radius`, el medio ancho del cuerpo). Se mide visto desde
+## arriba (la altura no importa: la cortina sale del agua).
+func covers(world_pos: Vector3, radius: float) -> bool:
+	if not _sheet.visible or _amount < 0.15 or not _sheet.is_inside_tree():
+		return false
+	var xf := _sheet.global_transform
+	var local := xf.affine_inverse() * world_pos
+	if local.z < 0.0 or local.z > length:
+		return false
+	var sx := xf.basis.x.length()
+	var half := 0.5 + local.z * tan(deg_to_rad(half_angle))
+	return absf(local.x) <= half + radius / maxf(sx, 0.01)
+
+
 ## Abanico recto hacia atrás (+Z): s = distancia desde la tabla (0..1),
 ## t = de un lado al otro (-1..1). El ancho crece como el cono que tumba.
 func _build_sheet_mesh() -> ArrayMesh:

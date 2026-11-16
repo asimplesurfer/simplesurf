@@ -40,22 +40,36 @@ func update(delta: float, input: RiderInput) -> void:
 		state_machine.transition_to(&"airborne")
 
 
-## Comprueba rivales dentro del cono de agua (por posición relativa, sin física).
+## Tira a los rivales que quedan adentro de la cortina de agua TAL COMO SE VE
+## (su forma y su tamaño de ese momento: al empezar el derrape todavía es chica).
+## Al costado de la tabla, fuera de la cortina, no pega.
 func _hit_riders_in_cone() -> void:
-	var stats := rider.stats
-	var back := -rider.forward()
-	var side := rider.right()
-	var tan_half := tan(deg_to_rad(stats.drift_cone_half_angle))
+	var spray: DriftSpray = rider.visual.drift_spray() if rider.visual else null
 	for node in rider.get_tree().get_nodes_in_group("riders"):
 		var other := node as Rider
 		if other == null or other == rider or other.is_fallen() or not other.grounded:
 			continue
-		var rel := other.global_position - rider.global_position
-		rel.y = 0.0
-		var dist_back := rel.dot(back)
-		if dist_back <= 0.0 or dist_back > stats.drift_range:
-			continue
-		if absf(rel.dot(side)) <= 0.8 + dist_back * tan_half:
+		var hit := false
+		if spray:
+			hit = spray.covers(other.global_position, VICTIM_RADIUS)
+		else:
+			hit = _in_cone(other)
+		if hit:
 			other.fall()
 			rider.drift_hit.emit(other)
 			rider.trigger_motivation()
+
+
+## Medio ancho del cuerpo del rival (m): lo toca si la cortina le llega al cuerpo.
+const VICTIM_RADIUS := 0.3
+
+
+## Sin parte visual (no debería pasar): el cono de las estadísticas.
+func _in_cone(other: Rider) -> bool:
+	var stats := rider.stats
+	var rel := other.global_position - rider.global_position
+	rel.y = 0.0
+	var dist_back := rel.dot(-rider.forward())
+	if dist_back <= 0.0 or dist_back > stats.drift_range:
+		return false
+	return absf(rel.dot(rider.right())) <= 0.5 + dist_back * tan(deg_to_rad(stats.drift_cone_half_angle))

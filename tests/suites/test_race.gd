@@ -418,6 +418,12 @@ func _test_drift() -> void:
 	_main.add_child(victim)
 	await process_frame
 	victim.state_machine.transition_to(&"riding")
+	# Otro que va a quedar al costado de la tabla (fuera de la cortina de agua): no lo tira.
+	var beside: Rider = load("res://core/rider/rider.tscn").instantiate()
+	beside.player_index = 1
+	_main.add_child(beside)
+	await process_frame
+	beside.state_machine.transition_to(&"riding")
 
 	_set_action(&"p1_right", true)
 	await _wait(0.2)
@@ -431,7 +437,13 @@ func _test_drift() -> void:
 	var speed_before := _rider.speed
 	victim.global_position = _rider.global_position - _rider.forward() * 3.0
 	victim.position.y = _water_height_here()
-	await _wait(0.3)
+	for i in int(0.3 * FPS):
+		# Pegado al costado: 1,2 m detrás del centro y 1,3 m al lado (la regla
+		# vieja, más ancha que la cortina, lo tiraba).
+		beside.global_position = _rider.global_position - _rider.forward() * 1.2 + _rider.right() * 1.3
+		beside.position.y = _water_height_here()
+		beside.speed = 0.0
+		await process_frame
 	_check(_rider.speed < speed_before, "derrapar frena")
 	_check(
 		absf(wrapf(_rider.heading - heading_before, -PI, PI)) < 0.12,
@@ -449,12 +461,14 @@ func _test_drift() -> void:
 			"la cortina sale recta hacia atrás (centro x %.2f, largo %.1f m)" % [center_x, box.end.z]
 		)
 	_check(victim.is_fallen(), "el agua del derrape tira al rival que está detrás")
+	_check(not beside.is_fallen(), "al que está al costado de la tabla (fuera de la cortina) no lo tira")
 
 	_set_action(&"p1_drift", false)
 	_set_action(&"p1_right", false)
 	await _wait(0.1)
 	_check(_state() == &"riding", "soltar S termina el derrape")
 	victim.queue_free()
+	beside.queue_free()
 	await _wait(1.0)
 
 
@@ -865,6 +879,29 @@ func _test_course() -> void:
 	_check(min_speed > 8.0, "contra la corchera no pierde casi velocidad (mín %.1f m/s)" % min_speed)
 	_check(moved > 0.1, "y sigue avanzando a lo largo de ella (%.2f rad)" % moved)
 	_check(lat <= _course.half_width, "sin salirse de la pista (%.1f m)" % lat)
+	await _wait_until_state(&"riding", 3.0)
+	# Peor caso: derecho contra la corchera (de frente y un poco para atrás),
+	# girando hacia afuera todo el tiempo. Nunca se traba: rebota hacia
+	# donde avanza la carrera y resbala.
+	_set_action(&"p1_down", false)
+	var a1 := 2.6
+	_teleport(_course.track.position_at(a1, _course.half_width - 2.0))
+	var out_heading := _course.track.heading_at(a1) + PI * 0.5 + 0.35
+	_rider.heading = out_heading
+	_rider.speed = 13.0
+	var side := signf(_course.track.lateral_of(_rider.position))
+	# Girar hacia la corchera (afuera).
+	var steer_out := &"p1_left" if side > 0.0 else &"p1_right"
+	_set_action(steer_out, true)
+	var min_speed2 := 99.0
+	for i in int(2.0 * FPS):
+		min_speed2 = minf(min_speed2, _rider.speed)
+		await process_frame
+	_set_action(steer_out, false)
+	var moved2 := wrapf(_course.track.angle_of(_rider.position) - a1, -PI, PI)
+	_check(moved2 > 0.15, "de frente contra la corchera rebota hacia adelante y resbala (%.2f rad)" % moved2)
+	_check(min_speed2 > 6.0, "sin quedar trabado (mín %.1f m/s)" % min_speed2)
+	_set_action(&"p1_down", true)
 	await _wait_until_state(&"riding", 3.0)
 
 
