@@ -1284,12 +1284,14 @@ static func _make_tube(path: Array, widths: Array) -> ArrayMesh:
 ## enmarca la cara y mechones gruesos que caen ondulando y se abren en la punta.
 func _wavy_bob(hair: Color) -> void:
 	_bob_build_meshes()
-	# Lo que se balancea: la cortina larga, sus rayas y los mechones de las puntas.
-	_piece(_bob_meshes[2], Vector3.ZERO, Vector3.ONE, hair)
-	_piece(_bob_meshes[3], Vector3.ZERO, Vector3.ONE, hair.darkened(0.35), false)
-	for i in range(4, _bob_meshes.size()):
-		var tone := hair.darkened(0.32) if i < 4 + BOB_LINES else hair
-		_piece(_bob_meshes[i], Vector3.ZERO, Vector3.ONE, tone, i >= 4 + BOB_LINES)
+	# Lo que se balancea: la parte de abajo, hecha solo de mechones (por fuera
+	# del color del pelo, con contorno; por dentro más oscuros).
+	for i in range(2, _bob_meshes.size(), 3):
+		_piece(_bob_meshes[i], Vector3.ZERO, Vector3.ONE, hair, false)
+		_piece(_bob_meshes[i + 1], Vector3.ZERO, Vector3.ONE, hair)
+		_piece(_bob_meshes[i + 2], Vector3.ZERO, Vector3.ONE, hair.darkened(0.35), false)
+	for edge in _bob_edges:
+		_piece(edge, Vector3.ZERO, Vector3.ONE, BLACK, false)
 
 
 ## Parte de arriba de la melena (fija a la cabeza): la cáscara y el flequillo
@@ -1299,8 +1301,7 @@ func _wavy_bob_top(hair: Color) -> void:
 	_piece(_bob_meshes[0], Vector3.ZERO, Vector3.ONE, hair)
 	_piece(_bob_meshes[1], Vector3.ZERO, Vector3.ONE, hair.darkened(0.35), false)
 	_piece(_bob_top_meshes[0], Vector3.ZERO, Vector3.ONE, hair)
-	for i in range(1, _bob_top_meshes.size()):
-		_piece(_bob_top_meshes[i], Vector3.ZERO, Vector3.ONE, hair.darkened(0.32), false)
+	# (Sin rayas arriba: cerca del sombrero no lleva líneas.)
 	# Más afuera cuanto más arriba: así sale de abajo del borde del pelo y cae
 	# sobre la frente (si no, queda tapado por la cáscara).
 	var fringe := PackedVector2Array(BOB_FRINGE)
@@ -1321,11 +1322,17 @@ func _wavy_bob_top(hair: Color) -> void:
 
 
 const BOB_LINES := 9
+## Desde qué parte del largo (0..1) el mechón va suelto y lleva contorno.
+const BOB_LOOSE := 0.5
+## Mechones de la parte de abajo de la melena.
+const BOB_LOCKS := 15
 
 
 ## Parte de arriba de la cortina (de la coronilla a las orejas) y sus rayas:
 ## van con la cabeza, no se balancean.
 var _bob_top_meshes: Array = []
+## Contorno de los bordes de cada mechón de abajo.
+var _bob_edges: Array = []
 
 
 func _bob_build_meshes() -> void:
@@ -1345,41 +1352,34 @@ func _bob_build_meshes() -> void:
 	_bob_meshes = [
 		_make_hair_shell(BOB_CENTER, BOB_RADII, 0.85, 1.75, 1.95, false),
 		_make_hair_shell(BOB_CENTER, BOB_RADII, 0.85, 1.75, 1.95, true),
-		_make_bob_curtain(false, 0.0, 1.0),
-		_make_bob_curtain(true, 0.0, 1.0),
 	]
-	# Rayas de mechones sobre la melena (con color plano, sin esto no se
-	# ven las ondas).
-	for i in BOB_LINES:
-		var u := lerpf(0.12, 0.88, i / float(BOB_LINES - 1)) + 0.02 * sin(i * 3.1)
-		var path := []
-		var widths := []
-		for k in 7:
-			var t := lerpf(0.0, 0.85, k / 6.0)
-			path.append(_bob_point(u, t, 0.012))
-			widths.append(0.012 * sin(maxf(k / 6.0, 0.1) * PI))
-		_bob_meshes.append(_make_tube(path, widths))
-	# Puntas: mechones gruesos que salen de abajo de la cortina, se abren
-	# hacia los costados y se curvan para arriba (el pelo largo con onda).
-	var n := 11
-	for i in n:
-		var u := lerpf(0.04, 0.96, i / float(n - 1))
-		var root := _bob_point(u, 0.82, -0.01)
-		var tip := _bob_point(u, 1.0, 0.0)
-		var out := (tip - BOB_CENTER * Vector3(1.0, 0.0, 1.0)) * Vector3(1.0, 0.0, 1.0)
-		out = out.normalized()
-		var flick := 1.0 if (i % 2 == 0) else -1.0
-		var side := out.cross(Vector3.UP).normalized() * flick
-		var path := []
-		var widths := []
-		for k in 6:
-			var t := k / 5.0
-			# Cae hacia abajo y al final se abre un poco y se curva hacia arriba.
-			var p := root + Vector3(0.0, -0.26 * t + 0.07 * t * t * t, 0.0) + out * (0.03 * t + 0.09 * t * t)
-			p += side * 0.05 * sin(t * PI)
-			path.append(p)
-			widths.append(lerpf(0.075, 0.0, pow(t, 1.3)))
-		_bob_meshes.append(_make_tube(path, widths))
+	# Parte de abajo: mechones anchos arriba (se superponen y forman una sola
+	# masa) que se afinan hasta una punta, cada uno con su largo y su onda.
+	for i in BOB_LOCKS:
+		var h := fposmod(sin(i * 12.9898) * 43758.5453, 1.0)
+		var uc := (i + 0.5) / float(BOB_LOCKS)
+		var du := 1.15 / float(BOB_LOCKS)
+		var tend := 0.88 + 0.22 * h
+		var out := 0.014 if i % 2 == 1 else 0.0
+		# Arriba (se junta con el resto del pelo, sin contorno), abajo (suelto,
+		# con contorno) y la cara de adentro.
+		_bob_meshes.append(_make_bob_lock(uc, du, tend, out, false, 0.0, BOB_LOOSE + 0.04))
+		_bob_meshes.append(_make_bob_lock(uc, du, tend, out, false, BOB_LOOSE, 1.0))
+		_bob_meshes.append(_make_bob_lock(uc, du, tend, out, true))
+		# Contorno de los dos bordes del mechón en la parte suelta (las puntas).
+		for side in [-1.0, 1.0]:
+			var path := []
+			var widths := []
+			for k in 11:
+				var f := k / 10.0
+				var w := du * (1.0 - 0.94 * pow(f, 2.6))
+				var wave := 0.018 * f * sin(f * PI * 2.2 + uc * 23.0)
+				var u := clampf(uc + side * w * 0.97 + wave, 0.0, 1.0)
+				path.append(_bob_point(u, tend * f, out + 0.008))
+				# Solo donde el mechón ya va suelto (abajo): arriba se junta con
+				# el resto del pelo y ahí no lleva línea.
+				widths.append(0.011 * (1.0 - 0.6 * f) * smoothstep(BOB_LOOSE, BOB_LOOSE + 0.15, f))
+			_bob_edges.append(_make_tube(path, widths))
 
 
 const BOB_CENTER := Vector3(0.0, 0.14, -0.05)
@@ -1430,14 +1430,53 @@ static func _bob_point(u: float, t: float, out: float) -> Vector3:
 	var y := lerpf(0.32, bottom, t)
 	# Radio: el de la cabeza arriba, y se abre al bajar.
 	var rad := 0.6 + 0.14 * t * t + 0.045 * sin(t * PI * 2.0 + u * 9.0)
-	# Mechones: surcos a lo largo (más marcados abajo).
-	rad += 0.035 * (0.3 + t) * sin(u * PI * 16.0)
+	# Mechones: surcos a lo largo (más marcados abajo) que ondulan al caer.
+	rad += 0.035 * (0.3 + t) * sin(u * PI * 16.0 + t * 3.0)
 	# Las puntas se abren para afuera.
 	rad += 0.1 * pow(t, 4.0)
 	# Los costados de la cara se meten un poco.
 	rad -= 0.08 * pow(front, 2.0) * (1.0 - t)
 	rad += out
+	# Ondas de costado al bajar (el pelo no cae recto como una tela dura).
+	th += 0.07 * t * sin(t * PI * 2.0 + u * 11.0)
 	return BOB_CENTER * Vector3(1.0, 0.0, 1.0) + Vector3(sin(th) * rad * 0.97, y, cos(th) * rad * 0.92)
+
+
+## Un mechón de la melena: una hoja que sigue la cortina (`_bob_point`)
+## alrededor de `uc`, de ancho `du` arriba, que se afina hasta una punta en
+## `tend` y ondula al caer. Un poco abombado en el medio (así el contorno marca
+## la separación entre mechones). `inner`: la cara de adentro (más oscura).
+static func _make_bob_lock(
+	uc: float, du: float, tend: float, out: float, inner: bool, f0: float = 0.0, f1: float = 1.0
+) -> ArrayMesh:
+	var cols := 6
+	var rows := 14
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var center := BOB_CENTER * Vector3(1.0, 0.0, 1.0)
+	for c in cols + 1:
+		var v := lerpf(-1.0, 1.0, c / float(cols))
+		for r in rows + 1:
+			var f := lerpf(f0, f1, r / float(rows))
+			var t := tend * f
+			var w := du * (1.0 - 0.94 * pow(f, 2.6))
+			var wave := 0.018 * f * sin(f * PI * 2.2 + uc * 23.0)
+			var p := _bob_point(clampf(uc + v * w + wave, 0.0, 1.0), t, out + 0.022 * (1.0 - v * v) * (1.0 - f * 0.5))
+			if inner:
+				p = center + (p - center) * Vector3(0.95, 1.0, 0.95)
+			st.add_vertex(p)
+	for c in cols:
+		for r in rows:
+			var a := c * (rows + 1) + r
+			var b := (c + 1) * (rows + 1) + r
+			if not inner:
+				st.add_index(a); st.add_index(b); st.add_index(a + 1)
+				st.add_index(b); st.add_index(b + 1); st.add_index(a + 1)
+			else:
+				st.add_index(a); st.add_index(a + 1); st.add_index(b)
+				st.add_index(b); st.add_index(a + 1); st.add_index(b + 1)
+	st.generate_normals()
+	return st.commit()
 
 
 ## Cuánto sube la cortina por encima de las orejas (en `t` negativo).
@@ -1455,7 +1494,10 @@ static func _make_bob_curtain(inner: bool, t0: float = -BOB_TOP, t1: float = 1.0
 	for c in cols + 1:
 		var u := c / float(cols)
 		for r in rows + 1:
-			var t := lerpf(t0, t1, r / float(rows))
+			# Con t1 < 1 (la parte de arriba), el borde de abajo va en ondas: así
+			# el corte con los mechones parece una capa de pelo, no una línea.
+			var t_end := t1 + (0.07 * absf(sin(u * PI * 13.0)) if t1 < 0.5 else 0.0)
+			var t := lerpf(t0, t_end, r / float(rows))
 			var p := _bob_point(u, t, 0.0)
 			if inner:
 				p = BOB_CENTER * Vector3(1.0, 0.0, 1.0) + (p - BOB_CENTER * Vector3(1.0, 0.0, 1.0)) * Vector3(0.93, 1.0, 0.93)
