@@ -189,6 +189,10 @@ func _test_customization() -> void:
 	shaggy_style.apply_preset(CharacterData.PRESET_NAMES.find("Despeinado"))
 	_check(shaggy_style.option_name("hair") == "Despeinado" and shaggy_style.option_name("glasses") == "Envolventes"
 		and shaggy_style.option_name("nose") == "Con protector solar", "estilo Despeinado: pelo, anteojos y protector")
+	var red_style := CharacterData.new()
+	red_style.apply_preset(CharacterData.PRESET_NAMES.find("Pelirroja"))
+	_check(red_style.option_name("hair") == "Melena ondulada" and red_style.option_name("hat") == "Sombrero de paja"
+		and red_style.option_name("head") == "Suave", "estilo Pelirroja: melena, sombrero de paja y cabeza suave")
 	_check(CharacterData.MOUTHS.has("Canchera") and CharacterData.MOUTHS.has("Sonrisa ancha")
 		and CharacterData.MOUTHS.has("Pícara"), "sonrisas confiadas de una línea")
 	# Piezas del despeinado (pelo, anteojos, cuellito y cordón del short).
