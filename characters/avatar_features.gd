@@ -124,7 +124,7 @@ func build_head(group: Node3D, hair_group: Node3D, data: CharacterData, skin: Co
 		# así nunca dejan ver ni atraviesan la cabeza.
 		_dread_roots(hair)
 	_ears(data.get_option("ears"), skin)
-	_eyes(data.get_option("eyes"), data.get_option("glasses"))
+	_eyes(data.get_option("eyes"), data.get_option("glasses"), hair)
 	_extra(data.get_option("extra"), hair)
 	_nose(data.get_option("nose"), skin)
 	_mouth(data.get_option("mouth"))
@@ -279,7 +279,7 @@ func _eye_pos(side: float) -> Vector3:
 
 ## Ojos. Con anteojos de sol no se ven (no se dibujan); con lentes, antiparras
 ## o monóculo se achican para quedar detrás del vidrio (que no lo atraviesen).
-func _eyes(style: int, glasses: int = 0) -> void:
+func _eyes(style: int, glasses: int = 0, hair: Color = BLACK) -> void:
 	# Detrás de los anteojos oscuros no se ven.
 	if glasses in OPAQUE_GLASSES:
 		return
@@ -333,17 +333,7 @@ func _eyes(style: int, glasses: int = 0) -> void:
 					_piece(_sphere, p + Vector3(0, -0.01, 0.01), Vector3(0.07, 0.014, 0.02), BLACK, false,
 						Basis(Vector3.BACK, 0.25))
 			11:
-				# Claros y tiernos: óvalo chico de color (sin blanco alrededor,
-				# así no miran fijo), más claro abajo, pupila, brillo grande y
-				# dos pestañitas hacia afuera.
-				_piece(_sphere, p, Vector3(0.062, 0.08, 0.03), Color("#1f5f6e"), false)
-				_piece(_sphere, p + Vector3(0.0, -0.022, 0.012), Vector3(0.048, 0.05, 0.02), Color("#58b9c9"), false)
-				_piece(_sphere, p + Vector3(0.0, 0.005, 0.022), Vector3(0.026, 0.032, 0.012), Color("#0e2a30"), false)
-				_piece(_sphere, p + Vector3(-0.02, 0.028, 0.03), Vector3(0.02, 0.022, 0.01), WHITE, false)
-				_piece(_sphere, p + Vector3(0.018, -0.032, 0.03), Vector3.ONE * 0.008, WHITE, false)
-				for j in 2:
-					_piece(_sphere, p + Vector3(side * (0.055 + j * 0.016), 0.06 - j * 0.02, 0.01),
-						Vector3(0.009, 0.024, 0.008), BLACK, false, Basis(Vector3.BACK, -side * (0.8 + j * 0.35)))
+				_cute_eye(p, side)
 			10:
 				# Grandes con brillo y cejas finas arqueadas.
 				_piece(_sphere, p, Vector3(0.075, 0.1, 0.04) * maxf(k, 0.8), BLACK, false)
@@ -630,6 +620,31 @@ func _mouth(style: int) -> void:
 				var x := -0.11 + i * 0.073
 				_piece(_sphere, m + Vector3(x, 0, 0), Vector3(0.046, 0.011, 0.02), BLACK, false,
 					Basis(Vector3.FORWARD, 0.5 if i % 2 == 0 else -0.5))
+
+
+## Ojo claro y tierno (estilo dibujo animado): blanco sin contorno, iris
+## grande azul, un brillo y párpado de arriba grueso con una colita hacia afuera.
+func _cute_eye(p: Vector3, side: float) -> void:
+	var k := 1.2
+	var e := p + Vector3(side * 0.015, -0.015, 0.0)
+	_piece(_sphere, e + Vector3(0.0, 0.0, 0.012), Vector3(0.074, 0.088, 0.024) * k, WHITE, false)
+	# Simple, como el resto del juego: iris de un color y un brillo (sin pupila).
+	_piece(_sphere, e + Vector3(-side * 0.007, -0.006, 0.024), Vector3(0.06, 0.077, 0.02) * k, Color("#2f86e0"), false)
+	_piece(_sphere, e + Vector3(-0.024, 0.028, 0.046), Vector3(0.022, 0.026, 0.008) * k, WHITE, false)
+	# Párpado de arriba: arco grueso que termina en una colita hacia afuera.
+	var lid := []
+	var widths := []
+	var n := 10
+	for i in n + 1:
+		var u := i / float(n)
+		var x := lerpf(-0.08, 0.11, u)
+		var y := 0.083 + 0.026 * sin(u * PI * 0.85)
+		if u > 0.72:
+			y += (u - 0.72) * 0.2
+		var q := Vector2(e.x + side * x, e.y + y)
+		lid.append(_face(q.x, q.y, 0.032))
+		widths.append(0.021 * sin(lerpf(0.12, 0.88, u) * PI) + 0.002)
+	_piece(_make_tube(lid, widths), Vector3.ZERO, Vector3.ONE, BLACK, false)
 
 
 ## Trazo de boca de una línea, como de pincel: un tubo finito que sigue la
