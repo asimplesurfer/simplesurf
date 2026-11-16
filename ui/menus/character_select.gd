@@ -342,6 +342,10 @@ func _build_setup() -> void:
 	free.custom_minimum_size = Vector2(170.0, 48.0)
 	free.pressed.connect(start_sandbox)
 	bar.add_child(free)
+	var trial := _button("Contrarreloj", 22)
+	trial.custom_minimum_size = Vector2(170.0, 48.0)
+	trial.pressed.connect(start_time_trial)
+	bar.add_child(trial)
 	var go := _button("¡A surfear!", 28)
 	go.custom_minimum_size = Vector2(220.0, 52.0)
 	go.pressed.connect(start_race)
@@ -433,6 +437,12 @@ func start_race() -> void:
 func start_sandbox() -> void:
 	GameSettings.save_settings()
 	_launch(SANDBOX_SCENE, RaceConfig.sandbox(), sandbox_requested)
+
+
+## Contrarreloj: J1 solo contra su mejor tiempo (el fantasma), mismas olas.
+func start_time_trial() -> void:
+	GameSettings.save_settings()
+	_launch(RACE_SCENE, RaceConfig.time_trial(), start_requested)
 
 
 func _start_demo() -> void:
