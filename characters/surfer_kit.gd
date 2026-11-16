@@ -576,6 +576,9 @@ func _bake(part: Node3D) -> void:
 			mat.set_shader_parameter("y_offset", to_char_xf.origin.y)
 			mat.set_shader_parameter("y_scale", to_char_xf.basis.get_scale().y)
 		mesh.surface_set_material(mesh.get_surface_count() - 1, mat)
+	if mesh.get_surface_count() == 0:
+		# Parte sin nada que dibujar (por ejemplo, las piernas del short con bikini).
+		return
 	var out := MeshInstance3D.new()
 	out.name = "Mesh"
 	out.mesh = mesh
