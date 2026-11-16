@@ -28,7 +28,7 @@ static func build(palm_seed: int, height: float, lean: float, detail: float = 1.
 	var p0 := Vector3.ZERO
 	var p1 := Vector3(reach * 0.62, rise * 0.42, 0.0)
 	var p2 := Vector3(reach, rise, 0.0)
-	var top := p2
+	var top := p2 if trunk else Vector3(0.0, 0.1, 0.0)
 	var top_dir := (p2 - p1).normalized()
 
 	var mesh := ArrayMesh.new()
@@ -46,15 +46,22 @@ static func build(palm_seed: int, height: float, lean: float, detail: float = 1.
 
 	var leaves := SurfaceTool.new()
 	leaves.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var count := 12 if detail >= 1.0 else (8 if detail >= 0.5 else 7)
-	var steps := 8 if detail >= 1.0 else (6 if detail >= 0.5 else 4)
+	var count := 12 if detail >= 1.0 else (8 if detail >= 0.5 else 6)
+	var steps := 8 if detail >= 1.0 else (6 if detail >= 0.5 else 3)
 	var turn := rng.randf() * TAU
 	for k in count:
 		var yaw := turn + TAU * k / count + rng.randf_range(-0.18, 0.18)
-		# Las de arriba más paradas, las de abajo más caídas.
-		var up := rng.randf_range(0.15, 0.85)
-		var length := height * rng.randf_range(0.42, 0.55) + 1.5
-		_frond(leaves, top, yaw, up, length, false, rng, steps)
+		if trunk:
+			# Las de arriba más paradas, las de abajo más caídas.
+			var up := rng.randf_range(0.15, 0.85)
+			var length := height * rng.randf_range(0.42, 0.55) + 1.5
+			_frond(leaves, top, yaw, up, length, false, rng, steps)
+		else:
+			# Helecho: las mismas hojas pero saliendo del suelo hacia arriba,
+			# abiertas en abanico, y que caen poco.
+			var up := rng.randf_range(0.8, 1.25)
+			var length := height * rng.randf_range(0.85, 1.1)
+			_frond(leaves, top, yaw, up, length, false, rng, steps, rng.randf_range(0.3, 0.45))
 	# Hojas secas colgando abajo de la corona.
 	if trunk:
 		for k in 2:
@@ -126,9 +133,10 @@ static func _nuts(st: SurfaceTool, top: Vector3, dir: Vector3, rng: RandomNumber
 ## nervadura, que sale de la corona subiendo y cae en arco. El borde va en
 ## zigzag (unas pocas puntas grandes, como los foliolos de la palmera). Más
 ## oscura en la base y más clara en las puntas.
-static func _frond(st: SurfaceTool, top: Vector3, yaw: float, up: float, length: float, dry: bool, rng: RandomNumberGenerator, steps: int) -> void:
+static func _frond(st: SurfaceTool, top: Vector3, yaw: float, up: float, length: float, dry: bool, rng: RandomNumberGenerator, steps: int, droop: float = -1.0) -> void:
 	var fwd := Vector3(cos(yaw), 0.0, sin(yaw))
-	var droop := rng.randf_range(0.55, 0.75)
+	if droop < 0.0:
+		droop = rng.randf_range(0.55, 0.75)
 	var pts: Array[Vector3] = []
 	for i in steps + 1:
 		var s := float(i) / steps

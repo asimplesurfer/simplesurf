@@ -231,13 +231,22 @@ func _test_cave_map() -> void:
 	GameSettings.track_layout = GameSettings.TrackLayout.CLASSIC
 
 
+## Isla larga e irregular, al este del archipiélago, con la panza hacia la pista.
+const ISLAND_SHAPE := [[200, -110], [232, -128], [256, -95], [246, -45], [264, 5], [252, 60], [216, 90], [194, 55], [212, 5], [194, -52]]
+
+
 ## Una isla tropical dibujada: arena, selva y palmeras (todo en pocas
 ## MultiMesh) y se choca como una isla.
 func _test_tropical_island() -> void:
 	print("Isla tropical dibujada:")
 	GameSettings.track_layout = GameSettings.TrackLayout.ARCHIPELAGO
 	var d: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://world/maps/archipelago.json"))
-	d.pieces = [{"type": "tropical_island", "shape": [[205, -60], [260, -95], [330, -80], [365, -20], [345, 40], [290, 55], [240, 25], [215, -10]]}]
+	d.pieces = [{"type": "tropical_island", "shape": ISLAND_SHAPE}]
+	var keep: Array = []
+	for i in d.islands:
+		if Vector2(i.x, i.z).distance_to(Vector2(230, -10)) > 110:
+			keep.append(i)
+	d.islands = keep
 	var m: Node = load("res://main.tscn").instantiate()
 	var course := m.get_node("Course") as Course
 	course.map = TrackMap.from_dict(d)
@@ -252,15 +261,15 @@ func _test_tropical_island() -> void:
 	for c in isl.get_children():
 		if c is MultiMeshInstance3D or c is MeshInstance3D:
 			draws += 1
-	_check(palms > 150 and draws <= 16, "muchas palmeras en pocas mallas (%d palmeras, %d mallas)" % [palms, draws])
+	_check(palms > 50 and draws <= 20, "palmeras en pocas mallas (%d palmeras, %d mallas)" % [palms, draws])
 	_check(
-		(isl.get_node("Bushes") as MultiMeshInstance3D).cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,
-		"los arbustos no hacen sombra"
+		(isl.get_node("Ferns0") as MultiMeshInstance3D).cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,
+		"los helechos no hacen sombra"
 	)
 	race.skip_countdown()
 	await process_frame
 	var r: Rider = race.racers[0]
-	r.position = Vector3(285, r.position.y, -15)
+	r.position = Vector3(225, r.position.y, 10)
 	await process_frame
 	await process_frame
 	var piece: TropicalIslandPiece = course.pieces[0]

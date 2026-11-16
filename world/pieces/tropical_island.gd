@@ -2,14 +2,14 @@ class_name TropicalIslandPiece
 extends MapPiece
 ## Isla tropical dibujada como figura (puntos y manijas Bézier, como la pista):
 ## toda la figura es arena con playa que entra al agua; más adentro, selva:
-## pasto, arbustos de varios verdes y muchas palmeras. Las de la orilla se
-## inclinan hacia el mar; las de adentro forman un techo de hojas.
+## pasto, helechos, arbustos y palmeras de varios tamaños. Las de la orilla
+## se inclinan hacia el mar.
 ## Se choca como una isla: subirse a la arena tira al surfista.
 ##
 ## Para que no pese: hay unas pocas palmeras modelo (world/pieces/lib/
 ## palm_mesh.gd) que se repiten con MultiMesh (una llamada de dibujo por
-## modelo); las de adentro de la selva son más simples, y los helechos y
-## arbustos no hacen sombra y no se dibujan de lejos.
+## modelo); las de adentro son más simples, los helechos y arbustos no hacen
+## sombra, y del lado que no da a la pista la vegetación es más rala.
 
 const REQUIRED := ["shape"]
 
@@ -18,7 +18,7 @@ var shape: Array = []
 ## Ancho de la franja de arena antes de la selva (m).
 var beach_width: float = 12.0
 ## Palmeras cada 100 m² (más = más tupida).
-var palm_density: float = 1.8
+var palm_density: float = 1.0
 ## Piedras sobre la arena.
 var rocks: int = 3
 var sand_color: Color = Color("f2d8a0")
@@ -61,7 +61,7 @@ func build(course: Course) -> void:
 	root.add_child(_sand_mesh())
 	if not _grass.is_empty():
 		root.add_child(_grass_mesh())
-	_add_vegetation(root)
+	_add_vegetation(root, course.track)
 
 
 ## true si (x, z) está sobre la isla (con la playa que entra al agua).
@@ -208,38 +208,41 @@ func _on_grass(p: Vector2) -> bool:
 	return false
 
 
-## Palmeras, helechos, arbustos y piedras: todo en MultiMesh. Hay unas pocas
-## palmeras modelo (PalmMesh) que se repiten giradas y de distinto tamaño:
-## una MultiMesh por modelo.
-const EDGE_MODELS := 6
-const INNER_MODELS := 3
+## Vegetación: palmeras de varios tamaños, arbustos redondos y helechos, todo
+## en MultiMesh. Hay unas pocas palmeras modelo (PalmMesh) que se repiten
+## giradas y de distinto tamaño: una MultiMesh por modelo.
+##
+## El lado que da a la pista va tupido; hacia atrás (lo que casi no se ve) se
+## va raleando, así la isla pesa mucho menos.
+const TALL_MODELS := 5
+const MID_MODELS := 3
+const YOUNG_MODELS := 3
 const FERN_MODELS := 3
 
 
-func _add_vegetation(root: Node3D) -> void:
-	var edge_models: Array[Mesh] = []
-	for i in EDGE_MODELS:
-		edge_models.append(PalmMesh.build(shape_seed * 31 + i, _rng.randf_range(8.5, 12.0), lerpf(0.3, 0.95, float(i) / (EDGE_MODELS - 1))))
-	var inner_models: Array[Mesh] = []
-	for i in INNER_MODELS:
-		inner_models.append(PalmMesh.build(shape_seed * 37 + i, _rng.randf_range(10.0, 13.5), _rng.randf_range(0.0, 0.25), 0.5))
+func _add_vegetation(root: Node3D, track: TrackSpace) -> void:
+	_sample_track(track)
+	var tall_models: Array[Mesh] = []
+	for i in TALL_MODELS:
+		tall_models.append(PalmMesh.build(shape_seed * 31 + i, _rng.randf_range(8.5, 12.5), lerpf(0.3, 0.95, float(i) / (TALL_MODELS - 1))))
+	var mid_models: Array[Mesh] = []
+	for i in MID_MODELS:
+		mid_models.append(PalmMesh.build(shape_seed * 37 + i, _rng.randf_range(7.0, 10.0), _rng.randf_range(0.0, 0.3), 0.5))
+	var young_models: Array[Mesh] = []
+	for i in YOUNG_MODELS:
+		young_models.append(PalmMesh.build(shape_seed * 43 + i, _rng.randf_range(3.5, 5.5), _rng.randf_range(0.1, 0.5), 0.5))
 	var fern_models: Array[Mesh] = []
 	for i in FERN_MODELS:
-		fern_models.append(PalmMesh.build(shape_seed * 41 + i, _rng.randf_range(1.6, 2.6), 0.0, 0.3, false))
-	var edge: Array = []
-	var inner: Array = []
-	var ferns: Array = []
-	for i in EDGE_MODELS:
-		edge.append([] as Array[Transform3D])
-	for i in INNER_MODELS:
-		inner.append([] as Array[Transform3D])
-	for i in FERN_MODELS:
-		ferns.append([] as Array[Transform3D])
+		fern_models.append(PalmMesh.build(shape_seed * 41 + i, _rng.randf_range(2.0, 3.0), 0.0, 0.3, false))
+	var tall := _lists(TALL_MODELS)
+	var mid := _lists(MID_MODELS)
+	var young := _lists(YOUNG_MODELS)
+	var ferns := _lists(FERN_MODELS)
 	var bushes: Array[Transform3D] = []
 	var bush_colors: Array[Color] = []
 	var stones: Array[Transform3D] = []
 
-	# Palmeras: grilla movida (más pareja que al azar), más tupida en la orilla.
+	# Palmeras: grilla movida (más pareja que al azar).
 	var spacing := sqrt(100.0 / maxf(palm_density, 0.05))
 	var x := _lo.x + spacing * 0.5
 	while x < _hi.x:
@@ -252,54 +255,58 @@ func _add_vegetation(root: Node3D) -> void:
 			var depth := BezierShape.distance_to_edge(_outline, p)
 			if depth < beach_width * 0.4:
 				continue
+			var facing := _facing(p)
+			if _rng.randf() > 0.2 + 0.8 * facing:
+				continue
 			var q := _closest_edge_point(p)
 			var out := (q - p).normalized() if q.distance_to(p) > 0.01 else Vector2.RIGHT
 			var ground := GRASS_Y if _on_grass(p) else SAND_Y
+			var size := _rng.randf_range(0.75, 1.25)
+			var roll := _rng.randf()
 			if depth < beach_width + 6.0:
-				# Orilla: inclinadas hacia el mar (y a veces otra al lado).
-				edge[_rng.randi() % EDGE_MODELS].append(_placed(p, ground, out.rotated(_rng.randf_range(-0.6, 0.6)), _rng.randf_range(0.85, 1.15)))
-				_palms += 1
-				_fern_at(ferns, p, ground, 1.3, 1.8)
-				if _rng.randf() < 0.35:
-					var p2 := p + out.rotated(PI * 0.5 * signf(_rng.randf() - 0.5)) * _rng.randf_range(2.0, 3.5)
-					edge[_rng.randi() % EDGE_MODELS].append(_placed(p2, ground, out.rotated(_rng.randf_range(-0.9, 0.9)), _rng.randf_range(0.75, 1.0)))
-					_palms += 1
-					_fern_at(ferns, p2, ground, 1.2, 1.6)
+				# Orilla: altas inclinadas hacia el mar, y algunas chicas.
+				if roll < 0.7:
+					tall[_rng.randi() % TALL_MODELS].append(_placed(p, ground, out.rotated(_rng.randf_range(-0.6, 0.6)), size))
+				else:
+					young[_rng.randi() % YOUNG_MODELS].append(_placed(p, ground, out.rotated(_rng.randf_range(-1.0, 1.0)), size))
 			else:
-				inner[_rng.randi() % INNER_MODELS].append(_placed(p, ground, Vector2.RIGHT.rotated(_rng.randf() * TAU), _rng.randf_range(0.85, 1.15)))
-				_palms += 1
-				_fern_at(ferns, p, ground, 1.3, 1.8)
+				# Adentro: medianas casi derechas, chicas y alguna alta.
+				var dir := Vector2.RIGHT.rotated(_rng.randf() * TAU)
+				if roll < 0.55:
+					mid[_rng.randi() % MID_MODELS].append(_placed(p, ground, dir, size))
+				elif roll < 0.85:
+					young[_rng.randi() % YOUNG_MODELS].append(_placed(p, ground, dir, size))
+				else:
+					tall[_rng.randi() % TALL_MODELS].append(_placed(p, ground, dir, size))
+			_palms += 1
+			# Que no se vea de dónde sale el tronco (atrás alcanza con menos).
+			_base_cover(ferns, bushes, bush_colors, p, ground, 3 if facing > 0.3 else 1)
 		x += spacing
 
-	# Borde del pasto: una franja de helechos sobre la transición a la arena.
+	# Borde del pasto: helechos y matas sobre la transición a la arena.
 	for g in _grass:
 		var gn := _normals(g)
 		var along := 0.0
 		for i in g.size():
 			along += g[i].distance_to(g[(i + 1) % g.size()])
-			if along < 2.6:
+			if along < 2.4:
 				continue
 			along = 0.0
-			var p := g[i] + gn[i] * _rng.randf_range(-1.5, FADE * 0.8)
-			_fern_at(ferns, p, lerpf(GRASS_Y, SAND_Y, 0.5), 0.9, 1.5)
+			if _rng.randf() > 0.15 + 0.85 * _facing(g[i]):
+				continue
+			_cover_at(ferns, bushes, bush_colors, g[i] + gn[i] * _rng.randf_range(-2.0, 1.0), GRASS_Y, 1.0)
+			_cover_at(ferns, bushes, bush_colors, g[i] + gn[i] * _rng.randf_range(1.5, FADE * 0.8), lerpf(GRASS_Y, SAND_Y, 0.6), 0.7)
 
-	# Suelo de la selva: helechos y matas oscuras que tapan el pasto.
-	var bs := 4.0
+	# Suelo de la selva: helechos y arbustos de varios tamaños.
+	var bs := 6.5
 	x = _lo.x + bs * 0.5
 	while x < _hi.x:
 		var z := _lo.y + bs * 0.5
 		while z < _hi.y:
-			var p := Vector2(x + _rng.randf_range(-1.5, 1.5), z + _rng.randf_range(-1.5, 1.5))
+			var p := Vector2(x + _rng.randf_range(-2.0, 2.0), z + _rng.randf_range(-2.0, 2.0))
 			z += bs
-			if not _on_grass(p):
-				continue
-			if _rng.randf() < 0.4:
-				ferns[_rng.randi() % FERN_MODELS].append(_placed(p, GRASS_Y - 0.2, Vector2.RIGHT.rotated(_rng.randf() * TAU), _rng.randf_range(0.8, 1.4)))
-			else:
-				var r := _rng.randf_range(2.2, 4.0)
-				var basis := Basis(Vector3.UP, _rng.randf() * TAU).scaled(Vector3(r, r * _rng.randf_range(0.7, 1.1), r))
-				bushes.append(Transform3D(basis, Vector3(p.x, GRASS_Y + r * 0.3, p.y)))
-				bush_colors.append(Color("1d4f1f").lerp(Color("36802a"), _rng.randf()))
+			if _on_grass(p) and _rng.randf() < 0.25 + 0.75 * _facing(p):
+				_cover_at(ferns, bushes, bush_colors, p, GRASS_Y, 1.3)
 		x += bs
 
 	# Unas piedras en la arena.
@@ -312,24 +319,74 @@ func _add_vegetation(root: Node3D) -> void:
 		var basis := Basis.from_euler(Vector3(_rng.randf(), _rng.randf() * TAU, _rng.randf())).scaled(Vector3(r, r * 0.7, r))
 		stones.append(Transform3D(basis, Vector3(p.x, SAND_Y + r * 0.2, p.y)))
 
-	for i in EDGE_MODELS:
-		root.add_child(_multi("Palms%d" % i, edge_models[i], edge[i], [], true))
-	for i in INNER_MODELS:
-		root.add_child(_multi("JunglePalms%d" % i, inner_models[i], inner[i], [], true))
+	for i in TALL_MODELS:
+		root.add_child(_multi("Palms%d" % i, tall_models[i], tall[i], [], true))
+	for i in MID_MODELS:
+		root.add_child(_multi("MidPalms%d" % i, mid_models[i], mid[i], [], true))
+	for i in YOUNG_MODELS:
+		root.add_child(_multi("YoungPalms%d" % i, young_models[i], young[i], [], false))
 	for i in FERN_MODELS:
 		var f := _multi("Ferns%d" % i, fern_models[i], ferns[i], [], false)
 		f.visibility_range_end = 360.0
 		root.add_child(f)
 	var b := _multi("Bushes", _bush_mesh(), bushes, bush_colors, false)
-	b.visibility_range_end = 520.0
+	b.visibility_range_end = 420.0
 	root.add_child(b)
 	root.add_child(_multi("Stones", _stone_mesh(), stones, [], true))
 
 
-## Un helecho en `p` (un poco movido), de un tamaño entre `lo` y `hi`.
-func _fern_at(ferns: Array, p: Vector2, ground: float, lo: float, hi: float) -> void:
+func _lists(count: int) -> Array:
+	var out := []
+	for i in count:
+		out.append([] as Array[Transform3D])
+	return out
+
+
+## Puntos de la pista (cada ~8 m), para saber qué lado de la isla se ve.
+var _track_pts := PackedVector2Array()
+
+
+func _sample_track(track: TrackSpace) -> void:
+	_track_pts.clear()
+	if track == null:
+		return
+	var n := maxi(int(track.length() / 8.0), 16)
+	for i in n:
+		var q := track.position_at(-PI + TAU * i / n)
+		_track_pts.append(Vector2(q.x, q.z))
+
+
+## 1 = cerca de la pista (se ve de cerca), 0 = lejos (atrás de la isla).
+func _facing(p: Vector2) -> float:
+	if _track_pts.is_empty():
+		return 1.0
+	var best := INF
+	for q in _track_pts:
+		best = minf(best, p.distance_squared_to(q))
+	return clampf(1.0 - (sqrt(best) - 70.0) / 110.0, 0.0, 1.0)
+
+
+## Al pie de una palmera: helechos y matas alrededor del tronco.
+func _base_cover(ferns: Array, bushes: Array[Transform3D], colors: Array[Color], p: Vector2, ground: float, count: int) -> void:
+	var turn := _rng.randf() * TAU
+	for k in count:
+		var a := turn + TAU * k / count
+		_cover_at(ferns, bushes, colors, p + Vector2(cos(a), sin(a)) * _rng.randf_range(0.6, 1.5), ground, 1.2)
+
+
+## Un helecho o un arbusto redondo, de tamaño variado (`size` lo agranda).
+func _cover_at(ferns: Array, bushes: Array[Transform3D], colors: Array[Color], p: Vector2, ground: float, size: float) -> void:
 	var q := p + Vector2(_rng.randf_range(-0.6, 0.6), _rng.randf_range(-0.6, 0.6))
-	ferns[_rng.randi() % FERN_MODELS].append(_placed(q, ground + 0.05, Vector2.RIGHT.rotated(_rng.randf() * TAU), _rng.randf_range(lo, hi)))
+	if _rng.randf() < 0.55:
+		var s := _rng.randf_range(0.6, 1.6) * size
+		ferns[_rng.randi() % FERN_MODELS].append(_placed(q, ground + 0.05, Vector2.RIGHT.rotated(_rng.randf() * TAU), s))
+	else:
+		# Arbustos: de bajitos y anchos a altos y redondos.
+		var r := _rng.randf_range(0.9, 2.4) * size
+		var tall := _rng.randf_range(0.6, 1.5)
+		var basis := Basis(Vector3.UP, _rng.randf() * TAU).scaled(Vector3(r, r * tall, r))
+		bushes.append(Transform3D(basis, Vector3(q.x, ground + r * tall * 0.35, q.y)))
+		colors.append(Color("1f5a22").lerp(Color("4f9a34"), _rng.randf()))
 
 
 ## Dónde va una palmera modelo: en `p`, inclinada hacia `dir` (los modelos se
@@ -342,6 +399,18 @@ func _placed(p: Vector2, ground: float, dir: Vector2, size: float) -> Transform3
 ## Cuántas palmeras tiene la isla.
 func palm_count() -> int:
 	return _palms
+
+
+func _bush_mesh() -> Mesh:
+	var m := SphereMesh.new()
+	m.radius = 1.0
+	m.height = 2.0
+	m.radial_segments = 7
+	m.rings = 4
+	var mat := ToonMaterial.make(Color.WHITE, 0.0)
+	mat.vertex_color_use_as_albedo = true
+	m.material = mat
+	return m
 
 
 func _multi(node_name: String, mesh: Mesh, items: Array[Transform3D], colors: Array[Color], shadows: bool) -> MultiMeshInstance3D:
@@ -359,18 +428,6 @@ func _multi(node_name: String, mesh: Mesh, items: Array[Transform3D], colors: Ar
 	mmi.multimesh = mm
 	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadows else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return mmi
-
-
-func _bush_mesh() -> Mesh:
-	var m := SphereMesh.new()
-	m.radius = 1.0
-	m.height = 2.0
-	m.radial_segments = 6
-	m.rings = 3
-	var mat := ToonMaterial.make(Color.WHITE, 0.0)
-	mat.vertex_color_use_as_albedo = true
-	m.material = mat
-	return m
 
 
 func _stone_mesh() -> Mesh:
