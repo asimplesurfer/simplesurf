@@ -133,11 +133,15 @@ const HAT_COLORABLE := [5, 6, 7, 11]
 const TOPS := ["Nada", "Bikini", "Musculosa"]
 
 ## Estilos armados (el primero es el surfista original del modelo 3D).
-const PRESET_NAMES := ["Surfista rubio"]
+const PRESET_NAMES := ["Surfista rubio", "Rasta"]
 const PRESETS := [
 	{"weight": 0.0, "skin": 2, "head": 0, "hair": 2, "hair_color": 0,
 		"eyes": 0, "glasses": 1, "nose": 0, "mouth": 2, "extra": 0, "ears": 0, "neck": 1, "shorts": 0,
 		"shorts_pattern": 1, "board": 0, "board_design": 1},
+	{"board": 7, "board_design": 10, "board_design_color": 3, "board_design_color2": 0, "ears": 0, "extra": 0,
+		"eyes": 3, "glasses": 0, "hair": 14, "hair_color": 2, "hat": 9, "hat_color": 1, "head": 1, "mouth": 5,
+		"neck": 4, "nose": 0, "shorts": 3, "shorts_pattern": 8, "shorts_pattern_color": 0,
+		"shorts_pattern_color2": 3, "skin": 3, "top": 0, "weight": 0.2},
 ]
 
 ## Barra de cuerpo (0..1): 0 = musculoso ... 0.5 = normal ... 1 = panzón.

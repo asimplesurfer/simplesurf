@@ -179,7 +179,12 @@ func _test_customization() -> void:
 	_check(not c.field_applies("shorts_pattern_color"), "short liso: sin color de estampado")
 	c.shorts_pattern_index = 4
 	_check(c.field_applies("shorts_pattern_color2"), "hawaiano: con dos colores")
-	_check(CharacterData.PRESET_NAMES == ["Surfista rubio"], "queda un solo estilo armado: el surfista rubio")
+	_check(CharacterData.PRESET_NAMES[0] == "Surfista rubio", "el primer estilo armado es el surfista rubio")
+	_check(CharacterData.PRESETS.size() == CharacterData.PRESET_NAMES.size(), "cada estilo armado tiene nombre")
+	var rasta := CharacterData.new()
+	rasta.apply_preset(CharacterData.PRESET_NAMES.find("Rasta"))
+	_check(rasta.get_option("hair") == AvatarFeatures.DREADS and rasta.get_option("hat") == 9,
+		"estilo Rasta: rastas y gorro rasta")
 	# Exportar: el texto vuelve a dar el mismo personaje.
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 11
