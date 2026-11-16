@@ -462,7 +462,7 @@ func _update_help() -> void:
 		+ "Levantarse: spamear ESPACIO o botón de abajo\n"
 		+ "Pantalla dividida: V   ·   Esc: menú   ·   H: ocultar ayuda   ·   P: FPS\n"
 		+ "G: ver los trucos uno por uno (cámara lenta)\n"
-		+ "Si no responde, haz clic en el juego"
+		+ "Si no responde, haz clic en el juego   ·   %s" % BuildInfo.label()
 	)
 
 

@@ -149,6 +149,15 @@ func _build() -> void:
 			_build_setup()
 	_demo_label = _label("", 16, Palette.UI_SOFT_TEXT)
 	_demo_label.position = Vector2(20.0, 4.0)
+	# Número de build, arriba a la derecha (para saber si ya está lo último).
+	var build := _label(BuildInfo.label(), 16, Palette.UI_SOFT_TEXT)
+	build.name = "BuildLabel"
+	build.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	build.offset_left = -160.0
+	build.offset_right = -12.0
+	build.offset_top = 4.0
+	build.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	add_child(build)
 	add_child(_demo_label)
 
 
