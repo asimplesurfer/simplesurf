@@ -17,8 +17,6 @@ var drift: bool = false
 var turbo: bool = false
 ## Cuántas veces se pulsó A desde el frame anterior (para levantarse spameando).
 var mash_presses: int = 0
-## Tecla de prueba para tirarse de la tabla.
-var debug_fall: bool = false
 
 ## Mirar hacia atrás (gatillo izquierdo / Q): solo cambia la cámara.
 var look_back: bool = false

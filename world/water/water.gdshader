@@ -10,6 +10,16 @@ render_mode specular_schlick_ggx, cull_disabled;
 // Pista (centro x, centro z, radio de adentro, radio de afuera). 0 = sin pista.
 uniform vec4 track_band = vec4(0.0);
 uniform vec3 outside_color : source_color = vec3(0.03, 0.15, 0.27);
+// Pista con curvas: máscara vista desde arriba (1 = pista) sobre el rectángulo
+// track_mask_rect (x, z de la esquina; ancho, largo). Ancho 0 = sin máscara.
+uniform sampler2D track_mask : filter_linear, repeat_disable;
+uniform vec4 track_mask_rect = vec4(0.0);
+// Cuánto se oscurece el agua fuera de la pista.
+uniform float outside_strength = 0.8;
+// Bruma: lejos, el agua se vuelve del color del horizonte (llega a ese color
+// donde termina lo que ve la cámara, así no se nota el borde).
+uniform vec3 haze_color : source_color = vec3(0.93, 0.9, 0.96);
+uniform vec2 haze_range = vec2(170.0, 310.0);
 
 uniform vec3 deep_color : source_color = vec3(0.03, 0.2, 0.34);
 uniform vec3 shallow_color : source_color = vec3(0.08, 0.35, 0.48);
@@ -67,6 +77,16 @@ void vertex() {
 	float lip;
 	float grow;
 	water_surface(world.xz, h, g, disp, ambient_h, body, lip, grow);
+	// Lejos del centro del plano el agua se aplana (después vienen los anillos
+	// enormes hasta el horizonte, que no pueden seguir las olas).
+	float calm = 1.0 - smoothstep(95.0, 125.0, distance(world.xz, NODE_POSITION_WORLD.xz));
+	h *= calm;
+	g *= calm;
+	disp *= calm;
+	body *= calm;
+	lip *= calm;
+	grow *= calm;
+	ambient_h *= calm;
 	VERTEX.y += h;
 	VERTEX.xz += disp;
 	NORMAL = normalize(vec3(-g.x, 1.0, -g.y));
@@ -134,11 +154,21 @@ void fragment() {
 		float out_inner = 1.0 - smoothstep(track_band.z - 3.0, track_band.z - 0.5, d);
 		float out_outer = smoothstep(track_band.w + 0.5, track_band.w + 3.0, d);
 		float outside = max(out_inner, out_outer);
-		col = mix(col, outside_color, outside * 0.55);
+		col = mix(col, outside_color, outside * outside_strength);
+	} else if (track_mask_rect.z > 0.0) {
+		vec2 uv = (v_world.xz - track_mask_rect.xy) / track_mask_rect.zw;
+		float inside = 0.0;
+		if (uv.x > 0.0 && uv.y > 0.0 && uv.x < 1.0 && uv.y < 1.0) {
+			inside = texture(track_mask, uv).r;
+		}
+		float outside = 1.0 - smoothstep(0.25, 0.75, inside);
+		col = mix(col, outside_color, outside * outside_strength);
 	}
 
+	float haze = smoothstep(haze_range.x, haze_range.y, distance(v_world, CAMERA_POSITION_WORLD));
+	col = mix(col, haze_color, haze);
 	ALBEDO = col;
-	EMISSION = vec3(sparkle * 0.7);
+	EMISSION = vec3(sparkle * 0.7 * (1.0 - haze));
 	ROUGHNESS = mix(0.26, 0.7, clamp(foam, 0.0, 1.0));
 	SPECULAR = 0.38;
 }

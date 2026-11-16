@@ -128,24 +128,10 @@ func _test_sandbox() -> void:
 		as_node is GameSession and not as_node is RaceManager,
 		"el modo libre no es una carrera (base común: GameSession)"
 	)
-	# Panel de ajustes de prueba: el color del agua (escondido de entrada).
+	# El agua tiene su color original (sin panel de ajustes).
 	await process_frame
-	var panel := m.get_node_or_null("Views/TuningPanel") as TuningPanel
-	_check(panel != null and not panel.visible, "el panel de ajustes está, escondido de entrada (F9)")
-	var day: Variant = water.shader_material().get_shader_parameter("deep_color")
-	_check(
-		Tuning.water_dark == Tuning.WATER_DARK_DEFAULT and day is Color
-		and (day as Color).is_equal_approx(Water.DAY_COLORS["deep_color"].lerp(Water.NAVY_COLORS["deep_color"], Tuning.WATER_DARK_DEFAULT)),
-		"el agua arranca en el color elegido"
-	)
-	Tuning.water_dark = 1.0
-	await process_frame
-	var deep: Variant = water.shader_material().get_shader_parameter("deep_color")
-	_check(deep is Color and (deep as Color).is_equal_approx(Water.NAVY_COLORS["deep_color"]), "el slider del agua la lleva a azul marino")
-	Tuning.water_dark = 0.0
-	await process_frame
-	_check(water.shader_material().get_shader_parameter("deep_color") == null, "en 0 vuelve al color original")
-	Tuning.water_dark = Tuning.WATER_DARK_DEFAULT
+	_check(m.get_node_or_null("Views/TuningPanel") == null, "no hay panel de ajustes del agua (F9)")
+	_check(water.shader_material().get_shader_parameter("deep_color") == null, "el agua tiene su color original")
 	# Cámara: a 3 m; con turbo, a la misma distancia de siempre (8,3 m).
 	var chase := (m.get_node("Views") as SplitScreen).cameras[0]
 	var flat_dist := func() -> float:

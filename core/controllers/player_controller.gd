@@ -6,7 +6,6 @@ extends BaseController
 
 signal pad_layout_changed(layout_name: String)
 signal jump_mode_changed(mode_name: String)
-signal jump_style_changed(style_name: String)
 
 const SETTINGS_PATH := "user://settings.cfg"
 @export var player_index: int = 0
@@ -16,7 +15,6 @@ var using_joypad: bool = false
 
 var _prefix: String = ""
 var _pending_mash: int = 0
-var _pending_debug_fall: bool = false
 var _pending_turbo: bool = false
 ## Distribución elegida a mano (-1 = automática).
 var _manual_layout: int = -1
@@ -73,19 +71,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	# Las pulsaciones se cuentan por evento para no perder ninguna al spamear rápido.
 	if event.is_action_pressed(_prefix + "a"):
 		_pending_mash += 1
-	if event.is_action_pressed(_prefix + "debug_fall"):
-		_pending_debug_fall = true
 	if event.is_action_pressed(_prefix + "b"):
 		_pending_turbo = true
 
 	if event is InputEventKey:
 		using_joypad = false
-		var key := event as InputEventKey
-		if key.pressed and not key.echo and key.physical_keycode == KEY_M:
-			toggle_pad_layout()
-		elif player_index == 0 and key.pressed and not key.echo and key.physical_keycode == KEY_O:
-			GameSettings.toggle_jump_style()
-			jump_style_changed.emit(GameSettings.jump_style_name())
 	elif event is InputEventJoypadButton:
 		using_joypad = true
 	elif event is InputEventJoypadMotion and absf(event.axis_value) > 0.5:
@@ -105,16 +95,17 @@ func get_input(delta: float) -> RiderInput:
 		if input.throttle > 0.0:
 			input.throttle = Input.get_action_strength(_prefix + "up")
 	input.trick = Input.is_action_pressed(_prefix + "a")
-	input.drift = Input.is_action_pressed(_prefix + "drift") and not free
+	# Tirar el stick hacia atrás (o S) es derrapar: frena igual y además tira a
+	# los de atrás. Más lento que el derrape, frena (ver StateRiding).
+	var back := Input.get_action_strength(_prefix + "down") > 0.5
+	input.drift = (Input.is_action_pressed(_prefix + "drift") or back) and not free
 	input.turbo = Input.is_action_pressed(_prefix + "b")
 	input.look_back = Input.is_action_pressed(_prefix + "look_back")
 	input.jump_pressed = _pending_mash > 0
 	input.mash_presses = _pending_mash
-	input.debug_fall = _pending_debug_fall
 	input.turbo_pressed = _pending_turbo
 	_pending_turbo = false
 	_pending_mash = 0
-	_pending_debug_fall = false
 	return input
 
 
