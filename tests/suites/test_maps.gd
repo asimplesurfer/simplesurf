@@ -247,12 +247,12 @@ func _test_tropical_island() -> void:
 	await process_frame
 	var isl := course.get_node_or_null("TropicalIsland")
 	_check(isl != null and isl.get_node_or_null("Sand") != null and isl.get_node_or_null("Grass") != null, "tiene arena y pasto")
-	var palms := (isl.get_node("Fronds") as MultiMeshInstance3D).multimesh.instance_count
+	var palms := (course.pieces[0] as TropicalIslandPiece).palm_count()
 	var draws := 0
 	for c in isl.get_children():
 		if c is MultiMeshInstance3D or c is MeshInstance3D:
 			draws += 1
-	_check(palms > 600 and draws <= 8, "muchas palmeras en pocas mallas (%d hojas, %d mallas)" % [palms, draws])
+	_check(palms > 150 and draws <= 16, "muchas palmeras en pocas mallas (%d palmeras, %d mallas)" % [palms, draws])
 	_check(
 		(isl.get_node("Bushes") as MultiMeshInstance3D).cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,
 		"los arbustos no hacen sombra"
