@@ -446,7 +446,7 @@ func _launch(scene_path: String, config: RaceConfig, done: Signal) -> void:
 	started_config = config
 	done.emit()
 	if auto_start:
-		# Desde el menú, con la intro (mientras carga, la cámara recorre la pista).
+		# Desde el menú, preparando los shaders durante la cuenta regresiva.
 		GameSession.launch(get_tree(), scene_path, config, null, true)
 
 

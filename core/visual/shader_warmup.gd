@@ -1,7 +1,7 @@
 class_name ShaderWarmup
 extends Node
-## Prepara los shaders de la partida durante la intro, para que no haya tirones
-## en la carrera. En el navegador cada material se compila la primera vez que
+## Prepara los shaders de la partida durante la cuenta regresiva (sin tirones
+## en la carrera). En el navegador cada material se compila la primera vez que
 ## se dibuja: los efectos que todavía no se ven (espuma del derrape, turbo,
 ## salpicones, partículas) trababan el juego la primera vez que aparecían.
 ##

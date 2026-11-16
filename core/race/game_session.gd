@@ -17,9 +17,9 @@ const MENU_SCENE := "res://ui/menus/character_select.tscn"
 @export var riders_path: NodePath
 
 var racers: Array[Rider] = []
-## Arranca con la intro (la cámara recorre la pista mientras se prepara todo).
-## La pide el menú al abrir la partida (ver `launch`).
-var with_intro: bool = false
+## Prepara los shaders al empezar (ver ShaderWarmup). Lo pide el menú al
+## abrir la partida (ver `launch`).
+var with_warmup: bool = false
 
 
 func _enter_tree() -> void:
@@ -66,7 +66,7 @@ static func find_in_scene(node: Node, group: StringName) -> Node:
 ## Abre `scene_path` con esta configuración en lugar de `old` (por defecto, la
 ## escena actual).
 static func launch(
-	tree: SceneTree, scene_path: String, session_config: RaceConfig, old: Node = null, intro: bool = false
+	tree: SceneTree, scene_path: String, session_config: RaceConfig, old: Node = null, warmup: bool = false
 ) -> void:
 	if old == null:
 		old = tree.current_scene
@@ -74,7 +74,7 @@ static func launch(
 	for child in scene.get_children():
 		if child is GameSession:
 			(child as GameSession).config = session_config
-			(child as GameSession).with_intro = intro
+			(child as GameSession).with_warmup = warmup
 	tree.root.add_child(scene)
 	if old == tree.current_scene or tree.current_scene == null:
 		tree.current_scene = scene

@@ -25,12 +25,6 @@ var _water: Water
 ## cada ola) y todo en el aire (para no perderlo cuando sube mucho).
 var _follow_y: float = 0.6
 
-## Intro de la carrera (ver _intro_camera).
-const INTRO_SPAN := 2.2
-var _race: RaceManager
-var _race_checked: bool = false
-var _in_intro: bool = false
-
 ## Sacudón (al atravesar una ola): se va apagando solo.
 var _shake: float = 0.0
 
@@ -72,8 +66,6 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if target == null:
 		return
-	if _intro_camera():
-		return
 	var follow_target := 0.6 if target.grounded else 1.0
 	_follow_y = lerpf(_follow_y, follow_target, 1.0 - exp(-3.0 * delta))
 	var w := 1.0 - exp(-follow_sharpness * minf(delta, 0.1))
@@ -105,39 +97,6 @@ func _process(delta: float) -> void:
 		global_position += Vector3(randf_range(-1, 1), randf_range(-1, 1), 0.0) * 0.25 * s
 	# Más ángulo de visión con turbo / motivación: sensación de velocidad.
 	fov = lerpf(fov, BOOST_FOV if boosting_now else BASE_FOV, 1.0 - exp(-4.0 * delta))
-
-
-## Intro de la carrera: baja volando por la pista hacia la largada y termina
-## justo en su lugar detrás del surfista. Devuelve true mientras dura.
-func _intro_camera() -> bool:
-	if not _race_checked:
-		_race_checked = true
-		_race = GameSession.find_in_scene(self, "race_manager") as RaceManager
-	if _race == null or _race.intro_left() <= 0.0 or _race.course == null:
-		if _in_intro:
-			_in_intro = false
-			if _water:
-				_water.retarget_follower(self, target)
-		return false
-	if not _in_intro:
-		_in_intro = true
-		if _water:
-			_water.retarget_follower(target, self)
-	var u := _race.intro_progress()
-	var track := _race.course.track
-	var start := RaceManager.START_ANGLE
-	var ease := 1.0 - pow(1.0 - u, 2.2)
-	var a := lerpf(start - INTRO_SPAN, start, ease)
-	var along := track.position_at(a)
-	var ahead := track.position_at(a + 0.12)
-	var dir := (ahead - along).normalized()
-	var fly := along - dir * 18.0 + Vector3.UP * lerpf(48.0, 9.0, smoothstep(0.0, 1.0, u))
-	# Al final se junta con su lugar de siempre (sin salto al terminar).
-	var k := smoothstep(0.72, 1.0, u)
-	global_position = fly.lerp(_desired_position(), k)
-	look_at(ahead.lerp(_look_point(), k), Vector3.UP)
-	fov = BASE_FOV
-	return true
 
 
 ## true con turbo o motivación.
