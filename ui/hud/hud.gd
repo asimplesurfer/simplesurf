@@ -450,7 +450,7 @@ func _update_help() -> void:
 			+ "Tormenta: T (mando: Select)\n"
 			+ "Circuitos a lo lejos: slalom (rojo), círculos (celeste), géiseres (naranja)\n"
 			+ "G: ver los trucos uno por uno (cámara lenta)\n"
-			+ "Esc: menú   ·   H: ocultar ayuda"
+			+ "Esc / Start: pausa (volumen)   ·   C: menú   ·   H: ocultar ayuda"
 		)
 		return
 	_help.text = (
@@ -460,7 +460,7 @@ func _update_help() -> void:
 		+ "Derrapar (frena y tira a los de atrás): S / stick atrás / botón izquierdo / RB\n"
 		+ "Turbo (tocar, gasta 1 carga): E o botón derecho   ·   Mirar atrás: Q o gatillo izquierdo\n"
 		+ "Levantarse: spamear ESPACIO o botón de abajo\n"
-		+ "Pantalla dividida: V   ·   Esc: menú   ·   H: ocultar ayuda   ·   P: FPS\n"
+		+ "Pantalla dividida: V   ·   Esc / Start: pausa (volumen)   ·   C: menú   ·   H: ocultar ayuda   ·   P: FPS\n"
 		+ "G: ver los trucos uno por uno (cámara lenta)\n"
 		+ "Si no responde, haz clic en el juego   ·   %s" % BuildInfo.label()
 	)

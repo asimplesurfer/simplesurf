@@ -1035,6 +1035,10 @@ func _test_music() -> void:
 	# Una canción elegida: en bucle. Aleatoria: sin bucle y al terminar, otra distinta.
 	audio.set_music(1)
 	_check(audio.song_index == 1 and (player.stream as AudioStreamOggVorbis).loop and player.playing, "una canción elegida suena en bucle")
+	# Aunque termine (el bucle se activó a mitad de la canción), vuelve a sonar.
+	player.stop()
+	audio._on_song_finished()
+	_check(audio.song_index == 1 and player.playing, "si la canción elegida termina, vuelve a empezar")
 	audio.set_music(GameSettings.MUSIC_SHUFFLE)
 	var first: int = audio.song_index
 	_check(not (player.stream as AudioStreamOggVorbis).loop, "aleatoria: la canción no se repite")

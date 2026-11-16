@@ -128,6 +128,30 @@ func _test_sandbox() -> void:
 		as_node is GameSession and not as_node is RaceManager,
 		"el modo libre no es una carrera (base común: GameSession)"
 	)
+	# Pausa (ESC / Start): frena el juego y deja bajar la música y los efectos.
+	sb.toggle_pause()
+	await process_frame
+	var pause := sb.pause_menu
+	_check(pause != null and pause.is_open() and root.get_tree().paused if pause else false, "ESC / Start abre la pausa y frena el juego")
+	var saved_music := GameSettings.music_volume
+	var saved_sfx := GameSettings.sfx_volume
+	pause.music_slider.value = 50.0
+	pause.sfx_slider.value = 0.0
+	var mbus := AudioServer.get_bus_index("Music")
+	var sbus := AudioServer.get_bus_index("SFX")
+	_check(
+		is_equal_approx(GameSettings.music_volume, 0.5) and absf(AudioServer.get_bus_volume_db(mbus) - linear_to_db(0.5)) < 0.1,
+		"la música se baja sola (%.1f dB)" % AudioServer.get_bus_volume_db(mbus)
+	)
+	_check(AudioServer.is_bus_mute(sbus) and not AudioServer.is_bus_mute(mbus), "los efectos se apagan aparte de la música")
+	var audio := root.get_node("AudioManager")
+	_check(audio.player.bus == "Music" and audio.ocean.bus == "SFX", "la música y los efectos van cada uno a su volumen")
+	pause.close()
+	await process_frame
+	_check(not root.get_tree().paused, "al seguir, el juego sigue")
+	GameSettings.music_volume = saved_music
+	GameSettings.sfx_volume = saved_sfx
+	audio.apply_volumes()
 	# El agua tiene su color original (sin panel de ajustes).
 	await process_frame
 	_check(m.get_node_or_null("Views/TuningPanel") == null, "no hay panel de ajustes del agua (F9)")

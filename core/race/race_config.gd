@@ -38,22 +38,63 @@ static func create(player_count: int, bot_count: int, bot_level: int) -> RaceCon
 		config.slots.append(slot)
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
-	# Cuerpos bien distintos: cada bot de una etapa de peso diferente.
-	var weights := [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
-	weights.shuffle()
-	var skins := range(CharacterData.SKIN_COLORS.size())
-	skins.shuffle()
+	var styles := bot_styles(config.slots, bot_count, rng)
 	for i in bot_count:
 		var slot := RacerSlot.new()
 		slot.kind = RacerSlot.Kind.BOT
 		slot.player_index = -1
 		slot.display_name = "Bot %d" % (i + 1)
-		slot.character = CharacterData.random(rng)
-		slot.character.weight = clampf(weights[i % weights.size()] + rng.randf_range(-0.05, 0.05), 0.0, 1.0)
-		slot.character.skin_index = skins[i % skins.size()]
+		if i < styles.size():
+			slot.character = CharacterData.new()
+			slot.character.apply_preset(styles[i])
+		else:
+			slot.character = CharacterData.random(rng)
 		slot.difficulty = AIDifficulty.preset(bot_level)
 		config.slots.append(slot)
 	return config
+
+
+## Estilos armados para los bots: sin repetir, y sin el que ya tiene alguna
+## persona (si alcanzan; si no, se repiten los que usan las personas antes que
+## quedarse sin estilo). En orden al azar.
+static func bot_styles(humans: Array, count: int, rng: RandomNumberGenerator) -> Array[int]:
+	var taken := {}
+	for slot in humans:
+		var style := style_of((slot as RacerSlot).character)
+		if style >= 0:
+			taken[style] = true
+	var free: Array[int] = []
+	var used: Array[int] = []
+	for i in CharacterData.PRESET_NAMES.size():
+		if taken.has(i):
+			used.append(i)
+		else:
+			free.append(i)
+	_shuffle(free, rng)
+	_shuffle(used, rng)
+	free.append_array(used)
+	return free.slice(0, mini(count, free.size()))
+
+
+## Qué estilo armado es el personaje (-1 si está armado a gusto).
+static func style_of(character: CharacterData) -> int:
+	if character == null:
+		return -1
+	var mine := character.to_dict()
+	for i in CharacterData.PRESET_NAMES.size():
+		var p := CharacterData.new()
+		p.apply_preset(i)
+		if p.to_dict() == mine:
+			return i
+	return -1
+
+
+static func _shuffle(list: Array[int], rng: RandomNumberGenerator) -> void:
+	for i in range(list.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var t := list[i]
+		list[i] = list[j]
+		list[j] = t
 
 
 ## Demo: la misma carrera que está armada en el menú, pero todos bots:

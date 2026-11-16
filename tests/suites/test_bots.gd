@@ -4,6 +4,7 @@ extends "res://tests/test_base.gd"
 
 func run() -> void:
 	_test_bot_paths()
+	_test_bot_styles()
 	await _test_bot_race()
 	await _test_demo()
 
@@ -62,6 +63,34 @@ func _test_bot_paths() -> void:
 	_check(inside, "la línea de carrera no se sale de la pista")
 	_check(length < track.length() * 0.88, "la línea de carrera es mucho más corta que el centro (%d m / %d m)" % [length, track.length()])
 	_check(imp.eager_turbo and imp.line_skill >= 1.0 and pro.line_skill > 0.5, "los mejores bots siguen la línea y usan el turbo apenas pueden")
+
+
+## Los bots usan los estilos armados, sin repetir y sin el de las personas.
+func _test_bot_styles() -> void:
+	print("Estilos de los bots:")
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	var all_ok := true
+	var never_human := true
+	for t in 20:
+		var human := RacerSlot.new()
+		human.kind = RacerSlot.Kind.HUMAN
+		human.character = CharacterData.new()
+		human.character.apply_preset(t % CharacterData.PRESET_NAMES.size())
+		var styles := RaceConfig.bot_styles([human], CharacterData.PRESET_NAMES.size() - 1, rng)
+		var seen := {}
+		for st in styles:
+			if seen.has(st):
+				all_ok = false
+			seen[st] = true
+			if st == t % CharacterData.PRESET_NAMES.size():
+				never_human = false
+	_check(all_ok, "los bots no repiten estilo")
+	_check(never_human, "ningún bot tiene el estilo del jugador (si alcanzan los estilos)")
+	var custom := CharacterData.new()
+	custom.apply_preset(0)
+	custom.hair_index = 3
+	_check(RaceConfig.style_of(custom) == -1, "un personaje armado a gusto no cuenta como estilo")
 
 
 func _test_bot_race() -> void:
@@ -227,15 +256,15 @@ func _test_demo() -> void:
 		"sin cambiar el mapa ni el clima elegidos"
 	)
 	_check(split.views.size() == 2, "con la pantalla en 2 (una vista por bot)")
-	var weights: Array[float] = []
+	var styles: Array[int] = []
 	for r in race.racers:
-		weights.append((r.get_node("Visual") as RiderVisual).character.weight)
-	var spread := true
-	for i in weights.size():
+		styles.append(RaceConfig.style_of((r.get_node("Visual") as RiderVisual).character))
+	var distinct := not styles.has(-1)
+	for i in styles.size():
 		for j in i:
-			if absf(weights[i] - weights[j]) < 0.08:
-				spread = false
-	_check(spread, "los bots tienen pesos distintos %s" % str(weights))
+			if styles[i] == styles[j]:
+				distinct = false
+	_check(distinct, "cada bot es un estilo armado distinto %s" % str(styles))
 	race.skip_countdown()
 	await _wait(8.0)
 	var moving := true

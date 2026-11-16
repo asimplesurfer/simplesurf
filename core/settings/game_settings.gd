@@ -45,6 +45,9 @@ const SONG_NAMES := ["Simple Surf", "King of the Tide"]
 const SONG_PATHS := ["res://assets/audio/simple_surf.ogg", "res://assets/audio/king_of_the_tide.ogg"]
 const MUSIC_SHUFFLE := 2
 static var music_choice: int = MUSIC_SHUFFLE
+## Volúmenes (0..1) de la música y de los efectos (menú de pausa).
+static var music_volume: float = 1.0
+static var sfx_volume: float = 1.0
 ## Modo libre: nivel de las olas (0 = sin olas grandes .. SANDBOX_WAVE_LEVELS =
 ## como en una carrera). Se recuerda mientras el juego está abierto.
 const SANDBOX_WAVE_LEVELS := 5
@@ -78,6 +81,8 @@ static func load_settings() -> void:
 		bot_count = clampi(int(cfg.get_value("gameplay", "bot_count", 1)), 0, 3)
 		bot_level = clampi(int(cfg.get_value("gameplay", "bot_level", 1)), 0, AIDifficulty.NAMES.size() - 1)
 		music_choice = clampi(int(cfg.get_value("audio", "music", MUSIC_SHUFFLE)), 0, MUSIC_SHUFFLE)
+		music_volume = clampf(float(cfg.get_value("audio", "music_volume", 1.0)), 0.0, 1.0)
+		sfx_volume = clampf(float(cfg.get_value("audio", "sfx_volume", 1.0)), 0.0, 1.0)
 		for i in InputSetup.MAX_PLAYERS:
 			var key := "player_%d" % i
 			if not cfg.has_section_key("characters", key):
@@ -100,6 +105,8 @@ static func save_settings() -> void:
 	cfg.set_value("gameplay", "bot_count", bot_count)
 	cfg.set_value("gameplay", "bot_level", bot_level)
 	cfg.set_value("audio", "music", music_choice)
+	cfg.set_value("audio", "music_volume", music_volume)
+	cfg.set_value("audio", "sfx_volume", sfx_volume)
 	for i in characters:
 		cfg.set_value("characters", "player_%d" % i, (characters[i] as CharacterData).to_dict())
 	cfg.save(PATH)

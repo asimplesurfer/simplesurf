@@ -275,6 +275,10 @@ func _retire_passed() -> void:
 ## Distancia hasta la que una persona puede ver una ola (m): la cámara ve hasta
 ## ~320 m, con bruma desde ~170.
 const SEEN_DISTANCE := 260.0
+## Una ola a la que le queda menos que esto (s) ya casi no se ve.
+const ALMOST_GONE := 0.8
+## Desvanecido rápido (s) cuando hay que hacer lugar y todas se ven.
+const QUICK_FADE := 1.5
 
 
 ## true si alguna persona (o la cámara de la demo) puede estar viendo la ola:
@@ -314,7 +318,15 @@ func _free_slot() -> void:
 			worst = s
 	if worst:
 		_water.swells.erase(worst)
-	elif worst_seen:
+		return
+	# Todas se ven: sale una que ya casi terminó de desvanecerse (no se nota);
+	# si no hay, la menos útil se desvanece rápido (nunca de golpe).
+	for sw in _water.swells:
+		if sw.lifetime - sw.age < ALMOST_GONE:
+			_water.swells.erase(sw)
+			return
+	if worst_seen:
+		worst_seen.fade_time = minf(worst_seen.fade_time, QUICK_FADE)
 		worst_seen.retire()
 
 

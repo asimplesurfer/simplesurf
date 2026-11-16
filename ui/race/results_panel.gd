@@ -91,7 +91,7 @@ func _build() -> void:
 	_record_note = _label("", 16, Color(0.8, 1.0, 0.8))
 	_record_note.visible = false
 	box.add_child(_record_note)
-	box.add_child(_label("R o Start: otra carrera\nC o Esc: cambiar personaje", 18, Color(0.8, 0.9, 1.0)))
+	box.add_child(_label("R o Start: otra carrera\nC: cambiar personaje · Esc: pausa", 18, Color(0.8, 0.9, 1.0)))
 
 
 func _label(text: String, font_size: int, color: Color) -> Label:

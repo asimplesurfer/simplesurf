@@ -50,8 +50,10 @@ var recent_sfx: Array[String] = []
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	_make_buses()
 	player = AudioStreamPlayer.new()
 	player.volume_db = -40.0
+	player.bus = MUSIC_BUS
 	add_child(player)
 	player.finished.connect(_on_song_finished)
 	for path in GameSettings.SONG_PATHS:
@@ -66,14 +68,46 @@ func _ready() -> void:
 			_sfx[sfx_name] = stream
 	for i in SFX_VOICES:
 		var v := AudioStreamPlayer.new()
+		v.bus = SFX_BUS
 		add_child(v)
 		_voices.append(v)
 	ocean = AudioStreamPlayer.new()
 	ocean.stream = SfxLoop.make("res://assets/audio/sfx/ocean_loop.wav")
 	ocean.volume_db = -20.0
+	ocean.bus = SFX_BUS
 	add_child(ocean)
+	apply_volumes()
 	if ocean.stream:
 		ocean.play()
+
+
+## Buses de audio: la música y los efectos por separado (cada uno con su
+## volumen en el menú de pausa). Los dos van al Master.
+const MUSIC_BUS := "Music"
+const SFX_BUS := "SFX"
+
+
+func _make_buses() -> void:
+	for bus_name in [MUSIC_BUS, SFX_BUS]:
+		if AudioServer.get_bus_index(bus_name) < 0:
+			AudioServer.add_bus()
+			var idx := AudioServer.bus_count - 1
+			AudioServer.set_bus_name(idx, bus_name)
+			AudioServer.set_bus_send(idx, "Master")
+
+
+## Aplica los volúmenes guardados (GameSettings.music_volume / sfx_volume).
+func apply_volumes() -> void:
+	_set_bus_volume(MUSIC_BUS, GameSettings.music_volume)
+	_set_bus_volume(SFX_BUS, GameSettings.sfx_volume)
+
+
+static func _set_bus_volume(bus_name: String, v: float) -> void:
+	var idx := AudioServer.get_bus_index(bus_name)
+	if idx < 0:
+		return
+	AudioServer.set_bus_mute(idx, v <= 0.001)
+	AudioServer.set_bus_volume_db(idx, linear_to_db(maxf(v, 0.001)))
 
 
 ## Toca un efecto de sonido. Devuelve true si sonó.
@@ -175,9 +209,14 @@ func _play_song(index: int, loop: bool, start: bool) -> void:
 		player.play()
 
 
-## Terminó la canción (solo pasa en aleatoria): otra distinta.
+## Terminó la canción. Con una elegida, vuelve a empezar (por si el bucle no
+## llegó a tomarse: se activa a mitad de la canción y el reproductor no lo ve).
+## En aleatoria, otra distinta.
 func _on_song_finished() -> void:
-	if music_choice != GameSettings.MUSIC_SHUFFLE or _songs.size() == 0:
+	if _songs.size() == 0:
+		return
+	if music_choice != GameSettings.MUSIC_SHUFFLE:
+		_play_song(music_choice, true, true)
 		return
 	var next := song_index
 	if _songs.size() > 1:

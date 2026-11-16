@@ -113,6 +113,7 @@ func _ready() -> void:
 	_rain_sound = AudioStreamPlayer.new()
 	_rain_sound.stream = SfxLoop.make("res://assets/audio/sfx/rain_loop.wav")
 	_rain_sound.volume_db = -11.0
+	_rain_sound.bus = "SFX"
 	add_child(_rain_sound)
 	if _rain_sound.stream:
 		_rain_sound.play()

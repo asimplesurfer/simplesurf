@@ -38,6 +38,7 @@ func setup(p_rider: Rider) -> void:
 		_drift = AudioStreamPlayer.new()
 		_drift.stream = SfxLoop.make("res://assets/audio/sfx/drift_loop.wav")
 		_drift.volume_db = -60.0
+		_drift.bus = "SFX"
 		add_child(_drift)
 
 
