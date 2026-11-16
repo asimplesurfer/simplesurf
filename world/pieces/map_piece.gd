@@ -73,6 +73,18 @@ func to_dict() -> Dictionary:
 	return out
 
 
+## Se llama antes de construir ninguna pieza. Acá una pieza calcula lo que
+## otras necesitan saber y se anota en el registro de Course:
+## - "ground": es tierra; tiene que tener ground_y(p: Vector2) -> float (la
+##   altura del suelo en ese punto, o -INF si ahí no hay tierra).
+## - "river": es un río; tiene que tener distance_to(p: Vector2) -> float y
+##   la variable width.
+## Así un río funciona con cualquier isla que se anote como tierra, y una
+## isla deja libre el cauce de cualquier río.
+func prepare(_course: Course) -> void:
+	pass
+
+
 ## Se llama apenas está el recorrido (antes que las islas del mapa). Acá se
 ## construye todo lo de la pieza (como hijos de `course`).
 func build(_course: Course) -> void:
