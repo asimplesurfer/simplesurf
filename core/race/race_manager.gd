@@ -13,6 +13,8 @@ signal race_started
 signal lap_started(rider: Rider, lap: int)
 signal racer_finished(rider: Rider, place: int)
 signal race_finished(ranking: Array[Rider])
+## Se descargó el registro de la carrera (dónde quedó).
+signal record_downloaded(where: String)
 
 enum State { COUNTDOWN, RACING, FINISHED }
 
@@ -40,6 +42,8 @@ var _finish_order: Array[Rider] = []
 var _countdown: float = 0.0
 var _demo_restart_timer: float = -1.0
 var _last_tick: int = -1
+## Registro de la carrera (para analizar cómo se jugó; no en la demo).
+var recorder: RaceRecorder
 
 
 func _ready() -> void:
@@ -48,6 +52,11 @@ func _ready() -> void:
 	_setup_input()
 	_spawn_racers()
 	_countdown = countdown_time
+	if not is_demo():
+		recorder = RaceRecorder.new()
+		recorder.name = "Recorder"
+		recorder.race = self
+		add_child(recorder)
 	if with_warmup:
 		# Durante la cuenta, se dibujan una vez todos los materiales (sin tirones
 		# la primera vez que aparece un efecto).
@@ -60,6 +69,15 @@ func _ready() -> void:
 		audio.connect_race(self)
 	for r in racers:
 		r.controls_locked = true
+
+
+## Descarga el registro de la carrera. Devuelve dónde quedó ("" si no hay).
+func download_record() -> String:
+	if recorder == null:
+		return ""
+	var where := recorder.download()
+	record_downloaded.emit(where)
+	return where
 
 
 func is_demo() -> bool:
@@ -236,6 +254,11 @@ func _input(event: InputEvent) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	var key := event as InputEventKey
+	# L: descargar el registro de la carrera (en cualquier momento).
+	if key and key.pressed and not key.echo and key.physical_keycode == KEY_L and recorder:
+		get_viewport().set_input_as_handled()
+		download_record()
+		return
 	if key and key.pressed and not key.echo and key.physical_keycode == KEY_R:
 		if state == State.FINISHED:
 			restart()
