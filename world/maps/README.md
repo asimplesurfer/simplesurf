@@ -58,6 +58,13 @@ puede abrir en el editor para cambiarlo.
 
   Después, el juego redondea un poco todo (`smoothing`), para que no queden
   esquinas imposibles de doblar.
+- **Recta de la meta** (`start`, opcional, recomendada): `{"x", "z", "angle",
+  "back", "front", "bend"}`. La largada va en una recta de `back` metros antes
+  y `front` después de la meta (40 y 60 por defecto), en la dirección `angle`
+  (grados: 0 = +x, 90 = -z). `bend` (de -10 a 10 grados) la curva apenas. La
+  pista sale de la punta de adelante, pasa por los puntos de `path` y vuelve
+  por la de atrás. El suavizado no toca la recta, así los surfistas arrancan
+  mirando hacia donde va la pista. Sin `start`, la meta va en el primer punto.
 - **Sin `path`**: la pista es un anillo de radio `ring_radius` alrededor de la
   primera isla (el mapa "isla").
 - **Islas**: `lighthouse` pone un faro. `seed` cambia dónde salen las palmeras;

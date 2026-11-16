@@ -154,6 +154,7 @@ dialog::backdrop { background: rgba(5, 15, 20, 0.5); }
     <hr>
     <button class="tool" data-tool="track" title="Pista: clic pone un punto, arrastrar hace curva (P)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 18c3-9 6 2 9-6s5-4 7-6"/><circle cx="4" cy="18" r="1.8" fill="currentColor"/><circle cx="20" cy="6" r="1.8" fill="currentColor"/></svg><span class="key">P</span></button>
     <button class="tool" data-tool="rock" title="Roca o cueva: dibujá la figura (R)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 19l3-8 4-3 3 2 3-5 5 14z"/><path d="M9 19c0-3 1.5-5 3-5s3 2 3 5" /></svg><span class="key">R</span></button>
+    <button class="tool" data-tool="start" title="Meta: una recta con la largada (M)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M6 21V4"/><path d="M6 4h12l-2 4 2 4H6"/><path d="M10 4v8M14 4v8" stroke-dasharray="2 2"/></svg><span class="key">M</span></button>
     <button class="tool" data-tool="tropical_island" title="Isla tropical: dibujá la figura (T)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 18c3-3 6-2 9-3s6-3 9-1"/><path d="M8 15V9m0 0c-2-2-4-1.5-5 0m5 0c1.5-2 3.5-2 5-.5M15 14V8m0 0c-1.5-1.8-3.5-1.5-4.5 0m4.5 0c1.5-2 3.5-1.8 4.5-.2" stroke-linecap="round"/></svg><span class="key">T</span></button>
     <button class="tool" data-tool="river" title="Río: dibujá el camino del agua, de la naciente al mar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 3c3 3-2 6 1 9s-2 6 1 9"/><path d="M12 3c3 3-2 6 1 9s-2 6 1 9"/></svg></button>
     <button class="tool" data-tool="island" title="Isla (I)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="16" rx="8" ry="3.5"/><path d="M12 15V8m0 0c-2-2-4-2-5-1m5 1c2-2 4-2 5-1m-5 1c-1-2-1-3.5 0-4.5"/></svg><span class="key">I</span></button>
@@ -282,6 +283,7 @@ function fromJSON(d) {
     format: 1, id: d.id || "", name: d.name || d.id || "mapa nuevo", order: d.order ?? 3, laps: d.laps ?? 3,
     half_width: d.half_width ?? 20, ring_count: d.ring_count ?? 10, rock_count: d.rock_count ?? 12,
     smoothing: d.smoothing ?? 60, ring_radius: d.ring_radius ?? 82,
+    start: d.start ? { x: d.start.x, z: d.start.z, angle: d.start.angle ?? 0, back: d.start.back ?? 40, front: d.start.front ?? 60, bend: d.start.bend ?? 0 } : null,
     path: (d.path || []).map(nodeFrom),
     islands: (d.islands || []).map((i) => ({ x: i.x, z: i.z, radius: i.radius, lighthouse: !!i.lighthouse, seed: i.seed ?? -1 })),
     pieces: (d.pieces || []).map((p) => {
@@ -295,7 +297,14 @@ function fromJSON(d) {
 }
 function toJSON(m) {
   const d = { format: 1, id: m.id || slug(m.name), name: m.name, order: m.order, laps: m.laps };
-  if (m.path.length) { d.path = m.path.map(nodeTo); d.smoothing = m.smoothing; }
+  if (m.path.length) {
+    d.path = m.path.map(nodeTo); d.smoothing = m.smoothing;
+    if (m.start) {
+      const r3 = (v) => Math.round(v * 1000) / 1000;
+      d.start = { x: r3(m.start.x), z: r3(m.start.z), angle: r3(m.start.angle), back: r3(m.start.back), front: r3(m.start.front) };
+      if (m.start.bend) d.start.bend = r3(m.start.bend);
+    }
+  }
   else d.ring_radius = m.ring_radius;
   d.half_width = m.half_width; d.ring_count = m.ring_count; d.rock_count = m.rock_count;
   const r = (v) => Math.round(v * 1000) / 1000;
@@ -379,19 +388,64 @@ function trackLine(m) {
     for (let i = 0; i < 180; i++) { const a = (i / 180) * Math.PI * 2; pts.push([Math.cos(a) * m.ring_radius, Math.sin(a) * m.ring_radius]); }
     return pts;
   }
-  if (m.path.length < 3) return [];
+  if (m.path.length < (m.start ? 1 : 3)) return [];
   let raw = [];
-  for (let i = 0; i < m.path.length; i++) { const c = segControls(m.path, i); for (let j = 0; j < 24; j++) raw.push(bez(c, j / 24)); }
+  const fixed = [];
+  if (m.start) {
+    // Igual que PathTrack._build_with_start: la recta de la meta queda fija.
+    const [pts, f] = startStrip(m.start);
+    const last = pts.length - 1;
+    for (let i = f; i <= last; i++) { raw.push(pts[i]); fixed.push(true); }
+    const norm = (v) => { const l = len(v) || 1; return [v[0] / l, v[1] / l]; };
+    const dirF = norm(sub(pts[last], pts[last - 1])), dirB = norm(sub(pts[1], pts[0]));
+    const chain = [{ p: pts[last], in: null, out: null }, ...m.path, { p: pts[0], in: null, out: null }];
+    const k = chain.length - 1;
+    for (let i = 0; i < k; i++) {
+      const p1 = chain[i].p, p2 = chain[i + 1].p, p0 = chain[Math.max(i - 1, 0)].p, p3 = chain[Math.min(i + 2, k)].p;
+      const reach = dist(p1, p2) / 3;
+      const c1 = i === 0 ? add(p1, mul(dirF, reach)) : add(p1, chain[i].out || mul(sub(p2, p0), 1 / 6));
+      const c2 = i + 1 === k ? add(p2, mul(dirB, -reach)) : add(p2, chain[i + 1].in || mul(sub(p1, p3), 1 / 6));
+      for (let j = 1; j < (i + 1 === k ? 24 : 25); j++) { raw.push(bez([p1, c1, c2, p2], j / 24)); fixed.push(false); }
+    }
+    for (let i = 0; i < f; i++) { raw.push(pts[i]); fixed.push(true); }
+  } else {
+    for (let i = 0; i < m.path.length; i++) { const c = segControls(m.path, i); for (let j = 0; j < 24; j++) { raw.push(bez(c, j / 24)); fixed.push(false); } }
+  }
   const k = raw.length;
   for (let it = 0; it < m.smoothing; it++) {
     const s = new Array(k);
     for (let i = 0; i < k; i++) {
+      if (fixed[i]) { s[i] = raw[i]; continue; }
       const a = raw[(i - 1 + k) % k], b = raw[i], c = raw[(i + 1) % k];
       s[i] = [(a[0] + 2 * b[0] + c[0]) / 4, (a[1] + 2 * b[1] + c[1]) / 4];
     }
     raw = s;
   }
   return raw;
+}
+// La recta de la meta (igual que PathTrack.start_strip): puntos de la punta de
+// atrás a la de adelante, cada ~2 m, y el índice de la meta.
+function startStrip(st) {
+  const a = (st.angle * Math.PI) / 180, back = Math.max(st.back ?? 40, 2), front = Math.max(st.front ?? 60, 2);
+  const bend = (Math.max(-10, Math.min(10, st.bend ?? 0)) * Math.PI) / 180, total = back + front;
+  const nb = Math.max(Math.ceil(back / 2), 1), nf = Math.max(Math.ceil(front / 2), 1);
+  let p = [st.x, st.z];
+  const behind = [];
+  for (let i = 0; i < nb; i++) {
+    const h = a + (bend * (-back * (i + 0.5) / nb)) / total;
+    p = [p[0] - Math.cos(h) * (back / nb), p[1] + Math.sin(h) * (back / nb)];
+    behind.push(p);
+  }
+  behind.reverse();
+  const pts = [...behind], f = pts.length;
+  pts.push([st.x, st.z]);
+  p = [st.x, st.z];
+  for (let i = 0; i < nf; i++) {
+    const h = a + (bend * (front * (i + 0.5) / nf)) / total;
+    p = [p[0] + Math.cos(h) * (front / nf), p[1] - Math.sin(h) * (front / nf)];
+    pts.push(p);
+  }
+  return [pts, f];
 }
 function shapePolygon(nodes, step = 4, closed = true) {
   const out = [];
@@ -530,7 +584,8 @@ function draw() {
 
   // Puntos y manijas de la pista.
   const editingPath = tool === "track" || sel?.kind === "path" || drawing?.kind === "path";
-  if (map.path.length && editingPath) drawNodes(map.path, C, sel?.kind === "path" ? sel.node : -1, !(drawing?.kind === "path"));
+  if (map.path.length && editingPath) drawNodes(map.path, C, sel?.kind === "path" ? sel.node : -1, !(drawing?.kind === "path") && !map.start, !map.start);
+  if (map.start) drawStartHandles(C, sel?.kind === "start" || tool === "start");
   if (sel?.kind === "piece" && DRAWN[map.pieces[sel.i]?.type]) drawNodes(nodesOf(map.pieces[sel.i]), C, sel.node ?? -1, isClosed(map.pieces[sel.i]), isClosed(map.pieces[sel.i]));
   if (drawing?.kind === "shape") drawNodes(nodesOf(drawing.piece), C, -1, false, isClosed(drawing.piece));
   drawScale();
@@ -571,6 +626,28 @@ function drawArrows(line) {
     ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(-4, -5); ctx.lineTo(-1.5, 0); ctx.lineTo(-4, 5); ctx.closePath(); ctx.fill();
     ctx.restore();
   }
+}
+// Recta de la meta: la franja recta y sus tres manijas (centro: mover;
+// adelante: girar y alargar; atrás: alargar).
+function startHandles() {
+  const [pts, f] = startStrip(map.start);
+  return { back: pts[0], center: pts[f], front: pts[pts.length - 1], pts };
+}
+function drawStartHandles(C, on) {
+  const h = startHandles();
+  pathLine(h.pts, false);
+  ctx.strokeStyle = on ? C.sel : "rgba(255,255,255,0.55)"; ctx.lineWidth = on ? 2.5 : 1.5; ctx.setLineDash([8, 5]); ctx.stroke(); ctx.setLineDash([]);
+  if (!on) return;
+  for (const [pt, shape] of [[h.back, "sq"], [h.front, "sq"], [h.center, "ci"]]) {
+    const s = toScreen(pt);
+    ctx.fillStyle = C.sel; ctx.strokeStyle = "#0b2230"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); if (shape === "sq") ctx.rect(s[0] - 6, s[1] - 6, 12, 12); else ctx.arc(s[0], s[1], 7, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+  }
+  // Flecha: hacia dónde se corre.
+  const s = toScreen(h.front), d = sub(h.front, h.pts[h.pts.length - 2]);
+  ctx.save(); ctx.translate(s[0], s[1]); ctx.rotate(Math.atan2(d[1], d[0])); ctx.fillStyle = C.sel;
+  ctx.beginPath(); ctx.moveTo(18, 0); ctx.lineTo(9, -6); ctx.lineTo(9, 6); ctx.closePath(); ctx.fill(); ctx.restore();
 }
 function drawStart(line, hw) {
   const a = line[0], b = line[1], d = sub(b, a), l = len(d) || 1, nrm = [-d[1] / l, d[0] / l];
@@ -771,6 +848,11 @@ function hitTest(s) {
     const h = hitNodes(nodesOf(p), s);
     if (h) return { kind: "piece", i: sel.i, ...h };
   }
+  if (map.start && (sel?.kind === "start" || tool === "start")) {
+    const h = startHandles();
+    for (const part of ["front", "back", "center"]) if (dist(toScreen(h[part]), s) < 10) return { kind: "start", part };
+  }
+  if (map.start && (tool === "select" || tool === "start") && distToLine(w, startHandles().pts, false) < map.half_width * 0.5) return { kind: "start", part: "center" };
   if (map.path.length && (tool === "track" || sel?.kind === "path")) {
     const h = hitNodes(map.path, s);
     if (h) return { kind: "path", ...h };
@@ -816,6 +898,11 @@ function onDown(e) {
   const s = [e.offsetX, e.offsetY], w = toWorld(s);
   if (tool === "pan" || spaceDown || e.button === 1) { drag = { kind: "pan", s, cam: { ...cam } }; return; }
 
+  if (tool === "start") {
+    const hit = hitTest(s);
+    if (hit?.kind === "start") { sel = { kind: "start" }; refreshPanel(); drag = { kind: "start", part: hit.part, start: w, orig: { ...map.start }, moved: false }; draw(); return; }
+    placeStart(w); return;
+  }
   if (tool === "track" || tool === "rock" || tool === "tropical_island" || tool === "river") return penDown(s, w, e);
   if (["island", "geyser", "volcano", "rock_arch", "shipwreck", "waterfall"].includes(tool)) {
     if (tool === "island") { map.islands.push({ x: w[0], z: w[1], radius: 20, lighthouse: false, seed: Math.floor(Math.random() * 99999) + 1 }); sel = { kind: "island", i: map.islands.length - 1 }; }
@@ -832,6 +919,7 @@ function onDown(e) {
   const hit = hitTest(s);
   if (!hit) { sel = { kind: "map" }; refreshPanel(); draw(); drag = { kind: "pan", s, cam: { ...cam } }; return; }
   if (hit.kind === "path" && hit.node === undefined) { sel = { kind: "path", node: -1 }; refreshPanel(); draw(); drag = { kind: "pan", s, cam: { ...cam } }; return; }
+  if (hit.kind === "start") { sel = { kind: "start" }; refreshPanel(); draw(); drag = { kind: "start", part: hit.part, start: w, orig: { ...map.start }, moved: false }; return; }
   sel = { kind: hit.kind, i: hit.i, node: hit.node ?? -1, sky: hit.sky };
   refreshPanel(); draw();
   if (hit.node !== undefined && hit.node !== null) {
@@ -878,7 +966,7 @@ function penDown(s, w, e) {
 function finishDrawing() {
   if (!drawing) return;
   if (drawing.kind === "path") {
-    if (map.path.length < 3) { toast("La pista necesita al menos 3 puntos."); return; }
+    if (map.path.length < (map.start ? 1 : 3)) { toast(map.start ? "Poné al menos un punto." : "La pista necesita al menos 3 puntos."); return; }
     if (map.smoothing === 60 && map.path.some((n) => n.in || n.out)) map.smoothing = 20;
     sel = { kind: "path", node: -1 };
   } else {
@@ -887,6 +975,28 @@ function finishDrawing() {
     map.pieces.push(p); sel = { kind: "piece", i: map.pieces.length - 1, node: -1 };
   }
   drawing = null;
+  commit(); refreshPanel(); setTool("select");
+}
+// Pone la recta de la meta donde se tocó: sobre la pista (siguiendo su
+// dirección) si hay pista; si no, ahí mismo. Saca los puntos que quedan sobre
+// la recta y deja primero el que viene después de ella.
+function placeStart(w) {
+  const line = computed().line;
+  let st = { x: w[0], z: w[1], angle: 0, back: 40, front: 60, bend: 0 };
+  if (line.length > 2 && map.path.length) {
+    let best = 0, bd = Infinity;
+    for (let i = 0; i < line.length; i++) { const d = dist(w, line[i]); if (d < bd) { bd = d; best = i; } }
+    const a = line[(best - 2 + line.length) % line.length], b = line[(best + 2) % line.length];
+    st = { x: line[best][0], z: line[best][1], angle: Math.round((Math.atan2(-(b[1] - a[1]), b[0] - a[0]) * 180) / Math.PI * 10) / 10, back: 40, front: 60, bend: 0 };
+    const idxOf = (p) => { let bi = 0, bdd = Infinity; for (let i = 0; i < line.length; i++) { const d = dist(p, line[i]); if (d < bdd) { bdd = d; bi = i; } } return bi; };
+    const n = line.length;
+    let kept = map.path.filter((nd) => dist(nd.p, [st.x, st.z]) > Math.max(st.back, st.front) + 10);
+    if (!kept.length) kept = [map.path[Math.floor(map.path.length / 2)]];
+    kept.sort((p, q) => ((idxOf(p.p) - best + n) % n) - ((idxOf(q.p) - best + n) % n));
+    map.path = kept;
+  }
+  map.start = st;
+  sel = { kind: "start" };
   commit(); refreshPanel(); setTool("select");
 }
 function insertNode(nodes, i, t) {
@@ -943,6 +1053,22 @@ function onMove(e) {
     invalidate(); refreshFieldsValues(); return;
   }
   if (drag.kind === "resize") { drag.target.radius = Math.max(4, Math.round(dist(w, [drag.target.x, drag.target.z]))); invalidate(); refreshFieldsValues(); return; }
+  if (drag.kind === "start") {
+    const st = map.start, o = drag.orig;
+    if (drag.part === "center") { st.x = o.x + (w[0] - drag.start[0]); st.z = o.z + (w[1] - drag.start[1]); }
+    else if (drag.part === "front") {
+      // Adelante: gira la recta y cambia cuánto sigue después de la meta.
+      const d = sub(w, [st.x, st.z]);
+      st.angle = Math.round((Math.atan2(-d[1], d[0]) * 180) / Math.PI * 10) / 10;
+      st.front = Math.round(Math.max(10, Math.min(250, len(d))));
+    } else {
+      // Atrás: cuánta recta hay antes de la meta.
+      const a = (st.angle * Math.PI) / 180, dir = [Math.cos(a), -Math.sin(a)];
+      const d = sub([st.x, st.z], w);
+      st.back = Math.round(Math.max(10, Math.min(250, d[0] * dir[0] + d[1] * dir[1])));
+    }
+    invalidate(); refreshFieldsValues(); return;
+  }
   if (drag.kind === "rotate") { const t = drag.target; t.angle = Math.round((Math.atan2(-(w[1] - t.z), w[0] - t.x) * 180) / Math.PI); invalidate(); refreshFieldsValues(); }
 }
 function onUp(e) {
@@ -996,6 +1122,7 @@ const HINTS = {
   pan: "Arrastrá para mover la vista. Rueda o pellizco para acercar.",
   track: "Clic: un punto (tramo recto). Clic y arrastrar: punto con manijas (curva). Tocá el primer punto o Enter para cerrar la vuelta. El primer punto es la largada.",
   rock: "Dibujá la figura de la roca igual que la pista y cerrala tocando el primer punto. Si tapa la pista es una cueva; si no, una roca de paisaje.",
+  start: "Tocá la pista para poner ahí la recta de la meta (40 m antes y 60 m después). Arrastrá sus puntas para alargarla o girarla.",
   tropical_island: "Dibujá la figura de la isla tropical como la pista (clic: punto, arrastrar: curva) y cerrala tocando el primer punto. Puede tener cualquier forma.",
   river: "Dibujá el río desde la naciente hasta el mar (clic: punto, arrastrar: curva). Enter o doble clic para terminar.",
   island: "Clic para poner una isla. Después arrastrá el cuadradito del borde para cambiar el tamaño.",
@@ -1065,7 +1192,7 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && drawing) { finishDrawing(); return; }
   if (e.key === "Escape") { if (drawing) cancelDrawing(); else { sel = { kind: "map" }; refreshPanel(); draw(); } return; }
   if (e.key === "Delete" || e.key === "Backspace") { deleteSelection(); return; }
-  const map_ = { v: "select", h: "pan", p: "track", r: "rock", t: "tropical_island", i: "island", g: "geyser" };
+  const map_ = { v: "select", h: "pan", p: "track", r: "rock", t: "tropical_island", m: "start", i: "island", g: "geyser" };
   if (map_[k]) setTool(map_[k]);
   if (k === "f") fit();
   if (k === "+" || k === "=") zoomAt([W / 2, H / 2], 1.25);
@@ -1115,6 +1242,15 @@ function refreshPanel() {
     }
     if (!map.path.length) box.append(field("Radio del anillo (m)", "num", map.ring_radius, (v) => (map.ring_radius = v), { id: "ring_radius" }));
     box.append(note(`Archivo: world/maps/${map.id || slug(map.name)}.json. El número de mapa no se cambia en mapas que ya están en el juego (es el de los récords).`));
+  } else if (s.kind === "start" && map.start) {
+    const st = map.start;
+    title.textContent = "Recta de la meta";
+    box.append(field("Metros antes de la meta", "num", st.back, (v) => (st.back = Math.max(10, v)), { bind: "back" }));
+    box.append(field("Metros después de la meta", "num", st.front, (v) => (st.front = Math.max(10, v)), { bind: "front" }));
+    box.append(field("Curva leve (°, –10 a 10)", "num", st.bend, (v) => (st.bend = Math.max(-10, Math.min(10, v))), { bind: "bend" }));
+    box.append(field("Dirección (°)", "num", st.angle, (v) => (st.angle = v), { bind: "angle" }));
+    box.append(note("La largada siempre va en esta recta. La pista sale de la punta de adelante, pasa por tus puntos y vuelve por la de atrás. Arrastrá las puntas para alargarla o girarla; el círculo la mueve."));
+    box.append(btn("Quitar la recta (la meta vuelve al primer punto)", () => { map.start = null; sel = { kind: "map" }; commit(); refreshPanel(); }));
   } else if (s.kind === "path") {
     title.textContent = s.node >= 0 ? `Pista · punto ${s.node + 1}${s.node === 0 ? " (largada)" : ""}` : "Pista";
     if (s.node >= 0) {
@@ -1185,7 +1321,7 @@ function refreshPanel() {
 function refreshFieldsValues() {
   // Mientras se arrastra: actualizar números sin rearmar el panel.
   const s = sel; if (!s) return;
-  const t = s.kind === "island" ? map.islands[s.i] : s.kind === "piece" ? map.pieces[s.i] : null;
+  const t = s.kind === "island" ? map.islands[s.i] : s.kind === "piece" ? map.pieces[s.i] : s.kind === "start" ? map.start : null;
   if (!t) return;
   document.querySelectorAll("#selFields input[data-bind]").forEach((inp) => {
     const b = inp.dataset.bind; if (b in t && typeof t[b] === "number") inp.value = round(t[b]);
@@ -1200,7 +1336,8 @@ function lockedId() { return currentKey.startsWith("builtin:") || currentKey.sta
 function review() {
   const out = [];
   const { line, shapes, length } = computed();
-  if (map.path.length && map.path.length < 3) out.push(["bad", "La pista necesita al menos 3 puntos."]);
+  if (map.path.length && map.path.length < (map.start ? 1 : 3)) out.push(["bad", "La pista necesita al menos 3 puntos."]);
+  if (map.path.length && !map.start) out.push(["warn", "La pista no tiene recta de meta: los surfistas pueden arrancar mirando para cualquier lado si la largada está en una curva. Usá la herramienta Meta."]);
   if (!map.path.length && !map.islands.length) out.push(["bad", "Un mapa de anillo necesita una isla en el medio."]);
   if (line.length > 2) {
     map.islands.forEach((isl, i) => {

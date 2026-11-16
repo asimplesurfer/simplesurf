@@ -594,7 +594,7 @@ func _build() -> void:
 	right_box.offset_left = -260.0
 	right_box.offset_right = -20.0
 	right_box.offset_top = 10.0
-	right_box.offset_bottom = 180.0
+	right_box.offset_bottom = 420.0
 	root.add_child(right_box)
 	_place_label = _make_label(56, PROMPT_COLOR)
 	_place_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -621,6 +621,13 @@ func _build() -> void:
 		bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_waves_box.add_child(bar)
 		_wave_bars.append(bar)
+	# Minimapa: la silueta de la pista y dónde está cada uno.
+	var minimap := TrackMinimap.new()
+	minimap.name = "Minimap"
+	minimap.hud = self
+	var side := 120.0 if compact else 180.0
+	minimap.custom_minimum_size = Vector2(side, side)
+	right_box.add_child(minimap)
 
 	# Nombre del jugador, abajo a la derecha.
 	_name_label = _make_label(28, Color.WHITE)
