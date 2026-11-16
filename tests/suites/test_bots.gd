@@ -220,7 +220,7 @@ func _test_demo() -> void:
 		if ai == null or ai.difficulty.display_name != "Imposible":
 			impossible = false
 	_check(impossible, "los dos en Imposible")
-	_check(demo_course.is_atoll() and demo_course.storm != null, "en El Atolón con tormenta")
+	_check(demo_course.map.id == "atoll" and demo_course.storm != null, "en El Atolón con tormenta")
 	_check(race.config.laps == 3, "a 3 vueltas")
 	_check(
 		GameSettings.track_layout == GameSettings.TrackLayout.CLASSIC and GameSettings.weather == GameSettings.Weather.SUNNY,

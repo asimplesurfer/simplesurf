@@ -336,7 +336,7 @@ func _build_setup() -> void:
 	_setup_row(box, "Dificultad", AIDifficulty.NAMES, GameSettings.bot_level,
 		func(i: int) -> void: GameSettings.bot_level = i)
 	_setup_row(box, "Olas", _capitalized(GameSettings.WAVE_MODE_NAMES), GameSettings.wave_mode, set_wave_mode)
-	_setup_row(box, "Mapa", _capitalized(GameSettings.TRACK_LAYOUT_NAMES), GameSettings.track_layout,
+	_setup_row(box, "Mapa", _capitalized(GameSettings.track_layout_names()), GameSettings.track_layout,
 		set_track_layout)
 	_setup_row(box, "Clima", _capitalized(GameSettings.WEATHER_NAMES), GameSettings.weather,
 		func(i: int) -> void: GameSettings.weather = i as GameSettings.Weather)

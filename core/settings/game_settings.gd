@@ -12,10 +12,10 @@ enum JumpStyle { WAVES, FREE }
 ## CONSTANT_LEFT: una ola constante a la izquierda (lado de afuera de la pista).
 enum WaveMode { SURGES, CONSTANT_LEFT }
 const WAVE_MODE_NAMES := ["grandes que aparecen", "constante a la izquierda"]
-## CLASSIC: un anillo alrededor de una isla. ARCHIPELAGO: un recorrido con
-## curvas entre varias islas.
+## El mapa es un número: su lugar en la lista de world/maps/ (ver TrackMap).
+## Estos son los nombres de los primeros (sus números no cambian nunca); un
+## mapa nuevo no necesita nombre acá.
 enum TrackLayout { CLASSIC, ARCHIPELAGO, ATOLL }
-const TRACK_LAYOUT_NAMES := ["isla (anillo)", "archipiélago", "el atolón"]
 ## Clima: sol o tormenta eléctrica (cielo gris, rayos, mar picado).
 enum Weather { SUNNY, STORM }
 const WEATHER_NAMES := ["soleado", "tormenta"]
@@ -65,7 +65,7 @@ static func load_settings() -> void:
 		# Se juega siempre con el salto de olas (saltito + pop): ya no se elige.
 		jump_style = JumpStyle.WAVES
 		track_layout = clampi(
-			int(cfg.get_value("gameplay", "track_layout", TrackLayout.ARCHIPELAGO)), 0, TRACK_LAYOUT_NAMES.size() - 1
+			int(cfg.get_value("gameplay", "track_layout", TrackLayout.ARCHIPELAGO)), 0, TrackMap.count() - 1
 		) as TrackLayout
 		weather = clampi(int(cfg.get_value("gameplay", "weather", Weather.SUNNY)), 0, WEATHER_NAMES.size() - 1) as Weather
 		wave_mode = clampi(int(cfg.get_value("gameplay", "wave_mode", WaveMode.SURGES)), 0, 1) as WaveMode
@@ -127,12 +127,17 @@ static func wave_mode_name() -> String:
 
 
 static func toggle_track_layout() -> void:
-	track_layout = ((track_layout + 1) % TRACK_LAYOUT_NAMES.size()) as TrackLayout
+	track_layout = ((track_layout + 1) % TrackMap.count()) as TrackLayout
 	save_settings()
 
 
 static func track_layout_name() -> String:
-	return TRACK_LAYOUT_NAMES[track_layout]
+	return TrackMap.for_layout(track_layout).name
+
+
+## Nombres de todos los mapas (para el menú), en orden.
+static func track_layout_names() -> Array[String]:
+	return TrackMap.names()
 
 
 ## Vueltas de la carrera según el mapa (el archipiélago y el atolón son mucho

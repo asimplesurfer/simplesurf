@@ -1,10 +1,153 @@
 extends "res://tests/test_base.gd"
-## Mapas: archipiélago y El Atolón (con tormenta).
+## Mapas: los archivos de mapas y piezas, archipiélago y El Atolón (con tormenta).
 
 
 func run() -> void:
+	_test_map_files()
+	_test_pieces()
+	_test_bezier()
+	await _test_cave()
 	await _test_archipelago()
 	await _test_atoll()
+
+
+func _test_map_files() -> void:
+	print("Archivos de mapas:")
+	var maps := TrackMap.all()
+	_check(maps.size() >= 3, "se leen los mapas de la carpeta (%d)" % maps.size())
+	_check(
+		maps[GameSettings.TrackLayout.CLASSIC].id == "classic"
+		and maps[GameSettings.TrackLayout.ARCHIPELAGO].id == "archipelago"
+		and maps[GameSettings.TrackLayout.ATOLL].id == "atoll",
+		"los primeros mapas conservan su número (récords y configuración guardada)"
+	)
+	var orders := {}
+	var ids := {}
+	var all_ok := true
+	for m in maps:
+		var errors := PackedStringArray()
+		TrackMap.load_file(TrackMap.FOLDER + m.id + ".json", errors)
+		if not errors.is_empty():
+			all_ok = false
+			print("    %s: %s" % [m.id, "; ".join(errors)])
+		orders[m.order] = true
+		ids[m.id] = true
+	_check(all_ok, "todos los mapas están bien escritos")
+	_check(orders.size() == maps.size() and ids.size() == maps.size(), "cada mapa tiene su número y su nombre propios")
+	_check(GameSettings.track_layout_names().size() == maps.size(), "el menú muestra todos los mapas")
+	# Ida y vuelta: leer y volver a escribir un mapa da lo mismo.
+	var atoll := maps[GameSettings.TrackLayout.ATOLL]
+	var again := TrackMap.from_dict(JSON.parse_string(JSON.stringify(atoll.to_dict())))
+	_check(
+		again.path == atoll.path and again.islands == atoll.islands and again.pieces == atoll.pieces
+		and again.laps == atoll.laps,
+		"un mapa se puede exportar y volver a leer igual"
+	)
+
+
+func _test_pieces() -> void:
+	print("Piezas de mapa:")
+	var errors := PackedStringArray()
+	var g := MapPiece.create({"type": "geyser", "x": 5, "z": -3, "calm": 2.0}, errors)
+	_check(errors.is_empty() and g is GeyserPiece, "una pieza se arma por el nombre de su archivo")
+	_check(
+		is_equal_approx(g.x, 5.0) and is_equal_approx(g.calm, 2.0) and is_equal_approx(g.warn, Geyser.WARN),
+		"toma los valores del mapa y deja por defecto los que no dice"
+	)
+	_check(g.to_dict().type == "geyser" and is_equal_approx(g.to_dict().calm, 2.0), "y se puede volver a escribir")
+	errors.clear()
+	MapPiece.create({"type": "no_existe"}, errors)
+	_check(errors.size() == 1, "avisa si la pieza no existe")
+	errors.clear()
+	MapPiece.create({"type": "geyser", "x": 1}, errors)
+	_check(errors.size() == 1 and errors[0].contains("\"z\""), "avisa si falta un dato obligatorio (%s)" % ", ".join(errors))
+	errors.clear()
+	MapPiece.create({"type": "geyser", "x": 1, "z": 1, "fuerza": 3}, errors)
+	_check(errors.size() == 1 and errors[0].contains("fuerza"), "avisa si un dato no existe (mal escrito)")
+	errors.clear()
+	var arch := MapPiece.create({"type": "rock_arch", "x": 0, "z": 0, "stone_color": "#ff8000"}, errors)
+	_check(errors.is_empty() and arch.stone_color == Color8(255, 128, 0), "los colores se escriben como en la web (#rrggbb)")
+
+
+func _test_bezier() -> void:
+	print("Recorrido con manijas (Bézier):")
+	var square := PackedVector2Array([Vector2(0, 0), Vector2(200, 0), Vector2(200, 200), Vector2(0, 200)])
+	var auto := PathTrack.new(square, 20.0)
+	var none := [null, null, null, null]
+	var same := PathTrack.new(square, 20.0, none, none)
+	_check(auto.points == same.points, "sin manijas, la curva es la de siempre (pasa suave por los puntos)")
+	# Manijas en cero: esquinas (sin suavizado, los lados quedan rectos).
+	var zero := [Vector2.ZERO, Vector2.ZERO, Vector2.ZERO, Vector2.ZERO]
+	var corners := PathTrack.new(square, 20.0, zero, zero, 0)
+	_check(absf(corners.length() - 800.0) < 1.0, "manijas en cero: lados rectos (%.0f m)" % corners.length())
+	# Una manija larga hacia afuera en un lado: ese lado se curva (más largo).
+	var outs := [Vector2(60, -80), Vector2.ZERO, Vector2.ZERO, Vector2.ZERO]
+	var ins := [Vector2.ZERO, Vector2(-60, -80), Vector2.ZERO, Vector2.ZERO]
+	var bent := PathTrack.new(square, 20.0, ins, outs, 0)
+	var bulge := bent.position_at(TAU * 0.125)
+	_check(bent.length() > 830.0 and bulge.z < -30.0, "girando las manijas, el tramo se curva (%.0f m)" % bent.length())
+
+
+## El archipiélago con una cueva dibujada sobre la pista y una roca de paisaje.
+func _test_cave() -> void:
+	print("Cueva y roca dibujadas:")
+	GameSettings.track_layout = GameSettings.TrackLayout.ARCHIPELAGO
+	var d: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://world/maps/archipelago.json"))
+	d.pieces = [
+		{"type": "rock_formation", "shape": [[55, -125], [100, -140], [145, -95], [138, -50], [105, -52], [85, -85], [50, -92]],
+			"ceiling": 9.0, "skylights": [[118, -88]]},
+		{"type": "rock_formation", "shape": [[280, 0], [320, -10], [330, 30], [300, 50], [275, 35]], "opening": true},
+	]
+	var errors := PackedStringArray()
+	var map := TrackMap.from_dict(d, errors)
+	_check(errors.is_empty(), "la cueva se escribe como una pieza más (%s)" % ", ".join(errors))
+	var m: Node = load("res://main.tscn").instantiate()
+	var course := m.get_node("Course") as Course
+	course.map = map
+	root.add_child(m)
+	var race := m.get_node("RaceManager") as RaceManager
+	await process_frame
+	await process_frame
+	await process_frame
+	var cave: RockFormationPiece = course.pieces[0]
+	var rock: RockFormationPiece = course.pieces[1]
+	_check(cave.is_cave() and not rock.is_cave(), "si tapa la pista es cueva; si no, roca de paisaje")
+	_check(
+		course.get_node_or_null("Cave/Rock") != null and course.get_node_or_null("RockFormation/Rock") != null,
+		"las dos se arman (roca tallada)"
+	)
+	# Un punto de la pista adentro de la cueva.
+	var inside := Vector3.ZERO
+	for i in 400:
+		var p := course.track.position_at(-PI + TAU * i / 400.0)
+		if cave.covers(p.x, p.z) and BezierShape.distance_to_edge(cave._outline, Vector2(p.x, p.z)) > 15.0:
+			inside = p
+			break
+	_check(inside != Vector3.ZERO, "la pista pasa por adentro de la cueva")
+	_check(cave.darkness_at(inside + Vector3.UP * 2.0) > 0.6 and cave.darkness_at(Vector3(0, 2, 300)) == 0.0, "adentro está oscuro y afuera no")
+	# Con el techo a 9 m no se sube más que el techo, aunque algo lo lance fuerte.
+	race.skip_countdown()
+	await process_frame
+	var r: Rider = race.racers[0]
+	var top := -100.0
+	for i in int(1.5 * FPS):
+		if i == 0:
+			r.position = Vector3(inside.x, r.position.y, inside.z)
+			r.geyser_launch(30.0)
+		r.position.x = inside.x
+		r.position.z = inside.z
+		top = maxf(top, r.position.y)
+		await process_frame
+	_check(top > 2.0 and top < 9.0 - 2.0, "con techo bajo el salto no llega al techo (%.1f m)" % top)
+	# Los ojos: al entrar se ve oscuro y después se acostumbran; al salir, fogonazo.
+	var dark := 1.0 - cave.darkness
+	_check(CaveEyes.seen_brightness(dark, 1.0) < 0.35, "al entrar a la cueva se ve casi negro")
+	_check(CaveEyes.seen_brightness(dark, dark) > 0.7, "con los ojos acostumbrados se ve")
+	_check(CaveEyes.seen_brightness(1.0, dark) > 2.0, "al salir hay un fogonazo de luz")
+	_check(is_equal_approx(CaveEyes.seen_brightness(1.0, 1.0), 1.0), "y afuera todo vuelve a lo normal")
+	m.queue_free()
+	await process_frame
+	GameSettings.track_layout = GameSettings.TrackLayout.CLASSIC
 
 
 func _test_archipelago() -> void:
@@ -158,7 +301,7 @@ func _test_atoll() -> void:
 	)
 	var volcano := false
 	for isl in course.islands:
-		if isl.volcano:
+		if isl is VolcanoPiece.VolcanoIsland:
 			volcano = true
 	_check(volcano, "hay un volcán en el medio")
 	_check(course.get_node_or_null("RockArch") != null, "hay un arco de roca sobre el paso norte")
@@ -170,7 +313,8 @@ func _test_atoll() -> void:
 			clear = false
 			print("    isla en %s muy cerca (%.1f m)" % [isl.position, lat])
 	_check(clear, "las islas no pisan la pista")
-	_check(course.geysers.size() >= 3, "hay géiseres en la laguna (%d)" % course.geysers.size())
+	var geysers := _geysers(course)
+	_check(geysers.size() >= 3, "hay géiseres en la laguna (%d)" % geysers.size())
 	# Tormenta: cielo gris, poca luz, mar picado, rayos con trueno.
 	var storm := course.storm
 	_check(storm != null, "con clima tormenta hay tormenta")
@@ -216,13 +360,13 @@ func _test_atoll() -> void:
 	_check(storm._rain_clock >= 0.0 and storm._rain_clock < 1.0, "el reloj de la lluvia no crece sin parar")
 	_check(storm._rain_sound.playing, "se escucha la lluvia")
 	var on_track := true
-	for g in course.geysers:
+	for g in geysers:
 		if absf(track.lateral_of(g.position)) > track.half_width - 2.0:
 			on_track = false
 	_check(on_track, "los géiseres están sobre la pista")
 
 	# Un géiser que explota lanza al que pasa por arriba.
-	var g0: Geyser = course.geysers[0]
+	var g0: Geyser = geysers[0]
 	var r0: Rider = race.racers[0]
 	race.skip_countdown()
 	await process_frame
@@ -279,3 +423,11 @@ func _test_atoll() -> void:
 	sunny.queue_free()
 	await process_frame
 	GameSettings.track_layout = GameSettings.TrackLayout.CLASSIC
+
+
+func _geysers(course: Course) -> Array[Geyser]:
+	var out: Array[Geyser] = []
+	for n in course.get_tree().get_nodes_in_group("geyser"):
+		if course.is_ancestor_of(n):
+			out.append(n as Geyser)
+	return out

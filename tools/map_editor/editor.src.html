@@ -1,0 +1,1295 @@
+<title>Editor de mapas SimpleSurf</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: carta náutica a pantalla completa; herramientas a la izquierda, propiedades a la derecha (en el teléfono, apiladas). */
+:root {
+  --bg: #e9f0f3;
+  --panel: #ffffff;
+  --panel-2: #f4f8fa;
+  --ink: #10232e;
+  --muted: #587080;
+  --line: #d2dde3;
+  --accent: #f0603f;
+  --accent-ink: #ffffff;
+  --sel: #ff9f1c;
+  --ok: #2c8a57;
+  --warn: #b86e00;
+  --bad: #c2392d;
+  --sea-out: #0f4f73;
+  --sea-in: #1f86ae;
+  --lane: #5cc3d8;
+  --rope: #f6f1e4;
+  --sand: #efd49b;
+  --grass: #74c15c;
+  --rock: #8b6a55;
+  --cave: #0e6f74;
+  --glow: #2fe3c8;
+  --grid: rgba(255, 255, 255, 0.07);
+  --f-display: "Outfit", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Inter", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0a141a; --panel: #101d25; --panel-2: #142530; --ink: #e2edf2; --muted: #8ba2ae; --line: #22363f;
+    --accent: #ff7a5c; --accent-ink: #1a0b06; --sel: #ffb347; --ok: #4cc283; --warn: #f0a63a; --bad: #ff6b5e;
+    --sea-out: #08324a; --sea-in: #135f80; --lane: #3aa3ba; --rope: #d9d2c0; --grid: rgba(255, 255, 255, 0.05);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0a141a; --panel: #101d25; --panel-2: #142530; --ink: #e2edf2; --muted: #8ba2ae; --line: #22363f;
+  --accent: #ff7a5c; --accent-ink: #1a0b06; --sel: #ffb347; --ok: #4cc283; --warn: #f0a63a; --bad: #ff6b5e;
+  --sea-out: #08324a; --sea-in: #135f80; --lane: #3aa3ba; --rope: #d9d2c0; --grid: rgba(255, 255, 255, 0.05);
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 14px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; overflow: hidden;
+}
+* { box-sizing: border-box; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.brand { display: flex; align-items: baseline; gap: 8px; margin-right: auto; min-width: 0; }
+.brand h1 { font-family: var(--f-display); font-weight: 700; font-size: 20px; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+.brand span { color: var(--muted); font-size: 12px; }
+.row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.btn {
+  border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 7px 11px; line-height: 1;
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+}
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.btn:disabled { opacity: 0.45; cursor: default; }
+select.btn { padding-right: 8px; }
+
+.app { flex: 1; min-height: 0; display: grid; grid-template-columns: 56px 1fr 300px; gap: 10px; }
+.tools { display: flex; flex-direction: column; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 6px; }
+.tool {
+  width: 42px; height: 42px; border-radius: 9px; border: 1px solid transparent; background: transparent;
+  display: grid; place-items: center; position: relative; color: var(--ink);
+}
+.tool:hover { background: var(--panel-2); }
+.tool[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
+.tool svg { width: 22px; height: 22px; }
+.tool .key { position: absolute; right: 3px; bottom: 2px; font: 500 9px var(--f-mono); opacity: 0.6; }
+.tools hr { border: 0; border-top: 1px solid var(--line); margin: 4px 2px; }
+
+.stage { position: relative; min-width: 0; min-height: 0; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); background: var(--sea-out); }
+canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.hint {
+  position: absolute; left: 10px; bottom: 10px; right: 10px; pointer-events: none; display: flex; justify-content: space-between; gap: 10px; align-items: end;
+}
+.hint .msg { background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; max-width: 60ch; font-size: 12.5px; }
+.hint .coords { font: 12px var(--f-mono); background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.zoom { position: absolute; right: 10px; top: 10px; display: flex; flex-direction: column; gap: 4px; }
+.zoom .btn { width: 34px; height: 34px; justify-content: center; padding: 0; }
+
+aside { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: auto; min-height: 0; display: flex; flex-direction: column; }
+aside section { padding: 12px 14px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+aside h2 { font-family: var(--f-display); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; margin: 0; color: var(--muted); }
+.field { display: grid; grid-template-columns: 1fr 108px; gap: 8px; align-items: center; }
+.field label { font-size: 13px; min-width: 0; }
+.field input[type="number"], .field input[type="text"] {
+  width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; background: var(--panel-2); font-family: var(--f-mono); font-size: 12.5px; font-variant-numeric: tabular-nums;
+}
+.field input[type="color"] { width: 100%; height: 28px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-2); padding: 2px; }
+.field input[type="checkbox"] { justify-self: start; width: 18px; height: 18px; accent-color: var(--accent); }
+.note { color: var(--muted); font-size: 12.5px; line-height: 1.45; margin: 0; }
+.warns { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.warns li { display: grid; grid-template-columns: auto 1fr; gap: 8px; font-size: 12.5px; line-height: 1.4; }
+.pill { font: 600 10px var(--f-body); text-transform: uppercase; letter-spacing: 0.05em; padding: 3px 6px; border-radius: 99px; align-self: start; }
+.pill.bad { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); }
+.pill.warn { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+.pill.ok { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.stat { background: var(--panel-2); border-radius: 8px; padding: 7px 8px; }
+.stat b { display: block; font: 600 15px var(--f-mono); font-variant-numeric: tabular-nums; }
+.stat span { font-size: 11px; color: var(--muted); }
+
+dialog { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--ink); padding: 0; width: min(640px, calc(100vw - 32px)); }
+dialog::backdrop { background: rgba(5, 15, 20, 0.5); }
+.dlg { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.dlg h3 { margin: 0; font-family: var(--f-display); font-size: 18px; }
+.dlg textarea { width: 100%; min-height: 260px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); font: 12px/1.45 var(--f-mono); padding: 10px; resize: vertical; }
+.toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--panel); padding: 9px 14px; border-radius: 9px; font-size: 13px; z-index: 20; }
+.saved-list { display: flex; flex-direction: column; gap: 4px; }
+.saved-list button { text-align: left; border: 1px solid var(--line); background: var(--panel-2); border-radius: 8px; padding: 7px 9px; display: flex; justify-content: space-between; gap: 8px; }
+.saved-list small { color: var(--muted); font-family: var(--f-mono); }
+
+@media (max-width: 860px) {
+  body { overflow: auto; height: auto; }
+  .app { grid-template-columns: 1fr; grid-template-rows: auto 62vh auto; }
+  .tools { flex-direction: row; flex-wrap: wrap; justify-content: center; }
+  .tools hr { border-top: 0; border-left: 1px solid var(--line); margin: 2px 4px; }
+  aside { overflow: visible; }
+  .hint .msg { font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<header>
+  <div class="brand"><h1>Editor de mapas</h1><span>SimpleSurf · vista desde arriba, en metros</span></div>
+  <div class="row">
+    <select class="btn" id="mapPicker" aria-label="Abrir un mapa"></select>
+    <button class="btn" id="undoBtn" title="Deshacer (Ctrl+Z)">Deshacer</button>
+    <button class="btn" id="redoBtn" title="Rehacer (Ctrl+Shift+Z)">Rehacer</button>
+    <button class="btn" id="importBtn">Importar</button>
+    <button class="btn" id="exportBtn">Ver JSON</button>
+    <button class="btn primary" id="saveBtn" title="Lo deja guardado para que Claude lo agregue al juego">Guardar para el juego</button>
+  </div>
+</header>
+
+<div class="app">
+  <nav class="tools" aria-label="Herramientas">
+    <button class="tool" data-tool="select" title="Seleccionar y mover (V)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M5 3l14 8-6 1.5L10 19z"/></svg><span class="key">V</span></button>
+    <button class="tool" data-tool="pan" title="Mover la vista (H o espacio)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 12V6a1.5 1.5 0 013 0v5M11 11V4.5a1.5 1.5 0 013 0V11M14 11V6a1.5 1.5 0 013 0v7c0 4-2.5 7-6 7s-5-2-6.5-5L3.8 12a1.4 1.4 0 012.3-1.6L8 13"/></svg><span class="key">H</span></button>
+    <hr>
+    <button class="tool" data-tool="track" title="Pista: clic pone un punto, arrastrar hace curva (P)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 18c3-9 6 2 9-6s5-4 7-6"/><circle cx="4" cy="18" r="1.8" fill="currentColor"/><circle cx="20" cy="6" r="1.8" fill="currentColor"/></svg><span class="key">P</span></button>
+    <button class="tool" data-tool="rock" title="Roca o cueva: dibujá la figura (R)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 19l3-8 4-3 3 2 3-5 5 14z"/><path d="M9 19c0-3 1.5-5 3-5s3 2 3 5" /></svg><span class="key">R</span></button>
+    <button class="tool" data-tool="island" title="Isla (I)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="16" rx="8" ry="3.5"/><path d="M12 15V8m0 0c-2-2-4-2-5-1m5 1c2-2 4-2 5-1m-5 1c-1-2-1-3.5 0-4.5"/></svg><span class="key">I</span></button>
+    <hr>
+    <button class="tool" data-tool="geyser" title="Géiser (G)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><ellipse cx="12" cy="19" rx="6" ry="2"/><path d="M12 17V6m-3 4l3-4 3 4M8 13c-1-2 0-4 1-5m7 5c1-2 0-4-1-5"/></svg><span class="key">G</span></button>
+    <button class="tool" data-tool="volcano" title="Isla volcán"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 20l6-11h6l6 11z"/><path d="M10 9c0-2 1-3 2-5m2 5c0-2 1-3 2-4" stroke-linecap="round"/></svg></button>
+    <button class="tool" data-tool="rock_arch" title="Arco de roca (paisaje)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 20V12a9 9 0 0118 0v8h-4v-8a5 5 0 00-10 0v8z"/></svg></button>
+    <button class="tool" data-tool="shipwreck" title="Barco hundido (paisaje)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 15h18l-3 5H6z"/><path d="M11 15V4l6 7h-6"/></svg></button>
+  </nav>
+
+  <div class="stage">
+    <canvas id="cv" aria-label="Mapa"></canvas>
+    <div class="zoom">
+      <button class="btn" id="zoomIn" aria-label="Acercar">+</button>
+      <button class="btn" id="zoomOut" aria-label="Alejar">−</button>
+      <button class="btn" id="zoomFit" aria-label="Ver todo el mapa" title="Ver todo (F)">⤢</button>
+    </div>
+    <div class="hint"><div class="msg" id="hint"></div><div class="coords" id="coords">x 0 · z 0</div></div>
+  </div>
+
+  <aside>
+    <section id="selSection">
+      <h2 id="selTitle">Mapa</h2>
+      <div id="selFields"></div>
+    </section>
+    <section>
+      <h2>Revisión</h2>
+      <div class="stats" id="stats"></div>
+      <ul class="warns" id="warns"></ul>
+    </section>
+    <section>
+      <h2>Guardados para el juego</h2>
+      <div class="saved-list" id="savedList"><p class="note">Cargando…</p></div>
+    </section>
+  </aside>
+</div>
+
+<dialog id="jsonDlg">
+  <form method="dialog" class="dlg">
+    <h3 id="jsonTitle">JSON del mapa</h3>
+    <p class="note" id="jsonNote">Este es el archivo del mapa, tal como lo lee el juego (world/maps/).</p>
+    <textarea id="jsonText" spellcheck="false"></textarea>
+    <div class="row" style="justify-content:flex-end">
+      <button class="btn" id="jsonCopy" type="button">Copiar</button>
+      <button class="btn" id="jsonDownload" type="button">Descargar .json</button>
+      <button class="btn primary" id="jsonLoad" type="button" hidden>Abrir este mapa</button>
+      <button class="btn" value="close">Cerrar</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" hidden></div>
+
+<script>
+"use strict";
+// ---------------------------------------------------------------------------
+// Datos: mismo formato que world/maps/*.json del juego.
+// ---------------------------------------------------------------------------
+const BUILTIN = /*MAPS*/;
+
+// Piezas que entiende el juego (world/pieces/*.gd) y sus parámetros.
+// k: tipo de campo; d: valor por defecto (si el mapa no lo dice, el juego usa este).
+const PIECES = {
+  geyser: { name: "Géiser", params: [
+    ["phase", "Desfase (s)", "num", 0], ["calm", "Tranquilo (s)", "num", 3.6], ["warn", "Aviso (s)", "num", 1.4],
+    ["erupt", "Chorro (s)", "num", 1.3], ["launch_speed", "Fuerza (m/s)", "num", 17] ] },
+  volcano: { name: "Isla volcán", params: [["radius", "Radio (m)", "num", 40], ["island_seed", "Semilla palmeras", "int", -1]] },
+  rock_arch: { name: "Arco de roca", params: [
+    ["angle", "Ángulo (°)", "num", 0], ["span", "Ancho (m)", "num", 40], ["height", "Alto (m)", "num", 26],
+    ["shape_seed", "Semilla", "int", 77], ["stone_color", "Piedra", "color", "#806b5c"], ["moss_color", "Musgo", "color", "#5c8c4d"] ] },
+  shipwreck: { name: "Barco hundido", params: [["angle", "Ángulo (°)", "num", 40.107], ["size", "Tamaño", "num", 1.5]] },
+  rock_formation: { name: "Roca / cueva", params: [
+    ["height", "Alto de la roca (m)", "num", 34], ["ceiling", "Altura del techo (m)", "num", 12],
+    ["opening", "Arco abajo (si no toca la pista)", "bool", false], ["opening_width", "Ancho del arco (m)", "num", 16],
+    ["darkness", "Oscuridad al entrar (0–1)", "num", 0.78], ["adapt_time", "Ojos se acostumbran (s)", "num", 1.6],
+    ["stone_low", "Piedra abajo", "color", "#8a4a2e"], ["stone_high", "Piedra arriba", "color", "#b89a74"],
+    ["grass_color", "Pasto arriba", "color", "#6fae4a"], ["moss_color", "Musgo", "color", "#6f8f3a"],
+    ["glow_color", "Agua y luz de la cueva", "color", "#2fe3c8"], ["shape_seed", "Semilla", "int", 1] ] },
+};
+const GEYSER_RADIUS = 4;
+// Parámetros que el juego exige aunque tengan el valor de siempre.
+const REQUIRED = { volcano: ["radius"] };
+
+const MAP_FIELDS = [
+  ["name", "Nombre en el menú", "text"], ["order", "Número de mapa", "int"], ["laps", "Vueltas", "int"],
+  ["half_width", "Mitad del ancho de pista (m)", "num"], ["smoothing", "Redondeo de curvas", "int"],
+  ["ring_count", "Círculos de nitro", "int"], ["rock_count", "Rocas en la pista", "int"],
+];
+
+// Mapa en el editor: los puntos son {p:[x,z], in:[dx,dz]|null, out:[dx,dz]|null}
+// (null = manija automática, como en el juego).
+function nodeFrom(n) {
+  if (Array.isArray(n)) return { p: [n[0], n[1]], in: null, out: null };
+  return { p: [n.p[0], n.p[1]], in: n.in ? [n.in[0], n.in[1]] : null, out: n.out ? [n.out[0], n.out[1]] : null };
+}
+function nodeTo(n) {
+  const r = (v) => Math.round(v * 1000) / 1000;
+  if (!n.in && !n.out) return [r(n.p[0]), r(n.p[1])];
+  const o = { p: [r(n.p[0]), r(n.p[1])] };
+  if (n.in) o.in = [r(n.in[0]), r(n.in[1])];
+  if (n.out) o.out = [r(n.out[0]), r(n.out[1])];
+  return o;
+}
+function fromJSON(d) {
+  const m = {
+    format: 1, id: d.id || "", name: d.name || d.id || "mapa nuevo", order: d.order ?? 3, laps: d.laps ?? 3,
+    half_width: d.half_width ?? 20, ring_count: d.ring_count ?? 10, rock_count: d.rock_count ?? 12,
+    smoothing: d.smoothing ?? 60, ring_radius: d.ring_radius ?? 82,
+    path: (d.path || []).map(nodeFrom),
+    islands: (d.islands || []).map((i) => ({ x: i.x, z: i.z, radius: i.radius, lighthouse: !!i.lighthouse, seed: i.seed ?? -1 })),
+    pieces: (d.pieces || []).map((p) => {
+      const c = JSON.parse(JSON.stringify(p));
+      if (c.type === "rock_formation") { c.shape = (c.shape || []).map(nodeFrom); c.skylights = c.skylights || []; }
+      return c;
+    }),
+  };
+  return m;
+}
+function toJSON(m) {
+  const d = { format: 1, id: m.id || slug(m.name), name: m.name, order: m.order, laps: m.laps };
+  if (m.path.length) { d.path = m.path.map(nodeTo); d.smoothing = m.smoothing; }
+  else d.ring_radius = m.ring_radius;
+  d.half_width = m.half_width; d.ring_count = m.ring_count; d.rock_count = m.rock_count;
+  const r = (v) => Math.round(v * 1000) / 1000;
+  d.islands = m.islands.map((i) => {
+    const o = { x: r(i.x), z: r(i.z), radius: r(i.radius), lighthouse: !!i.lighthouse };
+    if (i.seed >= 0) o.seed = i.seed;
+    return o;
+  });
+  d.pieces = m.pieces.map((p) => {
+    const o = { type: p.type };
+    if ("x" in p) { o.x = r(p.x); o.z = r(p.z); }
+    if (p.type === "rock_formation") o.shape = p.shape.map(nodeTo);
+    for (const [k, , , def] of PIECES[p.type]?.params || []) {
+      if (p[k] !== undefined && (p[k] !== def || (REQUIRED[p.type] || []).includes(k))) o[k] = typeof p[k] === "number" ? r(p[k]) : p[k];
+    }
+    if (p.type === "rock_formation" && p.skylights?.length) o.skylights = p.skylights.map((s) => [r(s[0]), r(s[1])]);
+    // Parámetros que el editor no conoce: se dejan como estaban.
+    for (const k in p) if (!(k in o) && !["shape", "skylights"].includes(k) && !(PIECES[p.type]?.params || []).some((q) => q[0] === k)) o[k] = p[k];
+    return o;
+  });
+  return d;
+}
+function slug(s) {
+  return (s || "mapa").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "mapa";
+}
+function prettyJSON(d) {
+  // Un punto, isla o pieza por línea (como los archivos del juego).
+  const lines = ["{"];
+  const keys = Object.keys(d);
+  keys.forEach((k, i) => {
+    const v = d[k];
+    const end = i < keys.length - 1 ? "," : "";
+    if (Array.isArray(v) && v.length && typeof v[0] === "object") {
+      lines.push(`\t${JSON.stringify(k)}: [`);
+      v.forEach((it, j) => lines.push(`\t\t${JSON.stringify(it)}${j < v.length - 1 ? "," : ""}`));
+      lines.push(`\t]${end}`);
+    } else lines.push(`\t${JSON.stringify(k)}: ${JSON.stringify(v)}${end}`);
+  });
+  lines.push("}");
+  return lines.join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// Curvas: igual que el juego (core/track/path_track.gd, world/pieces/lib/bezier_shape.gd).
+// ---------------------------------------------------------------------------
+const add = (a, b) => [a[0] + b[0], a[1] + b[1]];
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1]];
+const mul = (a, k) => [a[0] * k, a[1] * k];
+const len = (a) => Math.hypot(a[0], a[1]);
+const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+
+function autoOut(nodes, i) {
+  const n = nodes.length;
+  return mul(sub(nodes[(i + 1) % n].p, nodes[(i - 1 + n) % n].p), 1 / 6);
+}
+function handleOut(nodes, i) { return nodes[i].out || autoOut(nodes, i); }
+function handleIn(nodes, i) { return nodes[i].in || mul(autoOut(nodes, i), -1); }
+function segControls(nodes, i) {
+  const n = nodes.length, j = (i + 1) % n;
+  const p1 = nodes[i].p, p2 = nodes[j].p;
+  return [p1, add(p1, handleOut(nodes, i)), add(p2, handleIn(nodes, j)), p2];
+}
+function bez(c, t) {
+  const u = 1 - t;
+  return [
+    u * u * u * c[0][0] + 3 * u * u * t * c[1][0] + 3 * u * t * t * c[2][0] + t * t * t * c[3][0],
+    u * u * u * c[0][1] + 3 * u * u * t * c[1][1] + 3 * u * t * t * c[2][1] + t * t * t * c[3][1],
+  ];
+}
+// Lo que arma el juego: 24 muestras por tramo y el suavizado.
+function trackLine(m) {
+  if (!m.path.length) {
+    const pts = [];
+    for (let i = 0; i < 180; i++) { const a = (i / 180) * Math.PI * 2; pts.push([Math.cos(a) * m.ring_radius, Math.sin(a) * m.ring_radius]); }
+    return pts;
+  }
+  if (m.path.length < 3) return [];
+  let raw = [];
+  for (let i = 0; i < m.path.length; i++) { const c = segControls(m.path, i); for (let j = 0; j < 24; j++) raw.push(bez(c, j / 24)); }
+  const k = raw.length;
+  for (let it = 0; it < m.smoothing; it++) {
+    const s = new Array(k);
+    for (let i = 0; i < k; i++) {
+      const a = raw[(i - 1 + k) % k], b = raw[i], c = raw[(i + 1) % k];
+      s[i] = [(a[0] + 2 * b[0] + c[0]) / 4, (a[1] + 2 * b[1] + c[1]) / 4];
+    }
+    raw = s;
+  }
+  return raw;
+}
+function shapePolygon(nodes, step = 4) {
+  const out = [];
+  if (nodes.length < 3) return out;
+  for (let i = 0; i < nodes.length; i++) {
+    const c = segControls(nodes, i);
+    const approx = dist(c[0], c[1]) + dist(c[1], c[2]) + dist(c[2], c[3]);
+    const count = Math.max(1, Math.ceil(approx / step));
+    for (let j = 0; j < count; j++) out.push(bez(c, j / count));
+  }
+  return out;
+}
+function pointInPoly(p, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], b = poly[j];
+    if ((a[1] > p[1]) !== (b[1] > p[1]) && p[0] < ((b[0] - a[0]) * (p[1] - a[1])) / (b[1] - a[1]) + a[0]) inside = !inside;
+  }
+  return inside;
+}
+function segDist(p, a, b) {
+  const ab = sub(b, a), t = Math.max(0, Math.min(1, ((p[0] - a[0]) * ab[0] + (p[1] - a[1]) * ab[1]) / Math.max(1e-9, ab[0] * ab[0] + ab[1] * ab[1])));
+  return dist(p, add(a, mul(ab, t)));
+}
+function distToLine(p, line, closed = true) {
+  let best = Infinity;
+  const n = line.length;
+  for (let i = 0; i < (closed ? n : n - 1); i++) best = Math.min(best, segDist(p, line[i], line[(i + 1) % n]));
+  return best;
+}
+function lineLength(line) { let s = 0; for (let i = 0; i < line.length; i++) s += dist(line[i], line[(i + 1) % line.length]); return s; }
+
+// ---------------------------------------------------------------------------
+// Estado
+// ---------------------------------------------------------------------------
+let map = fromJSON(BUILTIN[1]);
+let currentKey = "builtin:1";
+let tool = "select";
+let sel = null; // {kind:"map"|"path"|"island"|"piece", i, node, sky}
+let drawing = null; // {kind:"path"} o {kind:"shape", piece}
+const cam = { x: 0, z: 0, zoom: 1 };
+const hist = { stack: [], at: -1 };
+let cache = null;
+let db = null;
+
+const cv = document.getElementById("cv");
+const ctx = cv.getContext("2d");
+const $ = (id) => document.getElementById(id);
+
+function snapshot() { return JSON.stringify(map); }
+function commit() {
+  hist.stack = hist.stack.slice(0, hist.at + 1);
+  hist.stack.push(snapshot());
+  if (hist.stack.length > 200) hist.stack.shift();
+  hist.at = hist.stack.length - 1;
+  invalidate();
+  saveDraft();
+}
+function undo() { if (hist.at > 0) { hist.at--; map = JSON.parse(hist.stack[hist.at]); sel = null; drawing = null; invalidate(); refreshPanel(); } }
+function redo() { if (hist.at < hist.stack.length - 1) { hist.at++; map = JSON.parse(hist.stack[hist.at]); sel = null; drawing = null; invalidate(); refreshPanel(); } }
+function resetHistory() { hist.stack = [snapshot()]; hist.at = 0; }
+function invalidate() { cache = null; draw(); updateButtons(); }
+
+function computed() {
+  if (cache) return cache;
+  const line = trackLine(map);
+  const shapes = map.pieces.map((p) => (p.type === "rock_formation" ? shapePolygon(p.shape) : null));
+  cache = { line, shapes, length: line.length ? lineLength(line) : 0 };
+  return cache;
+}
+
+// ---------------------------------------------------------------------------
+// Vista
+// ---------------------------------------------------------------------------
+let W = 0, H = 0, DPR = 1;
+function resize() {
+  const r = cv.getBoundingClientRect();
+  DPR = window.devicePixelRatio || 1;
+  W = r.width; H = r.height;
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  draw();
+}
+const toScreen = (p) => [(p[0] - cam.x) * cam.zoom + W / 2, (p[1] - cam.z) * cam.zoom + H / 2];
+const toWorld = (s) => [(s[0] - W / 2) / cam.zoom + cam.x, (s[1] - H / 2) / cam.zoom + cam.z];
+function fit() {
+  const pts = [];
+  computed().line.forEach((p) => pts.push(p));
+  map.islands.forEach((i) => { pts.push([i.x - i.radius, i.z - i.radius]); pts.push([i.x + i.radius, i.z + i.radius]); });
+  map.pieces.forEach((p) => { if ("x" in p) pts.push([p.x, p.z]); (p.shape || []).forEach((n) => pts.push(n.p)); });
+  if (!pts.length) { cam.x = 0; cam.z = 0; cam.zoom = Math.min(W, H) / 600; draw(); return; }
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  for (const p of pts) { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); z0 = Math.min(z0, p[1]); z1 = Math.max(z1, p[1]); }
+  cam.x = (x0 + x1) / 2; cam.z = (z0 + z1) / 2;
+  cam.zoom = Math.min(W / (x1 - x0 + 80), H / (z1 - z0 + 80));
+  draw();
+}
+function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+function draw() {
+  if (!W) return;
+  const C = {
+    out: css("--sea-out"), sea: css("--sea-in"), lane: css("--lane"), rope: css("--rope"), sand: css("--sand"),
+    grass: css("--grass"), rock: css("--rock"), cave: css("--cave"), glow: css("--glow"), sel: css("--sel"),
+    accent: css("--accent"), grid: css("--grid"), bad: css("--bad"),
+  };
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.fillStyle = C.out;
+  ctx.fillRect(0, 0, W, H);
+  drawGrid(C);
+  const { line, shapes } = computed();
+  const hw = map.half_width;
+
+  // Pista: agua clara del ancho de la pista, corcheras en los bordes.
+  if (line.length > 2) {
+    pathLine(line, true);
+    ctx.lineJoin = "round"; ctx.lineCap = "round";
+    ctx.strokeStyle = C.rope; ctx.lineWidth = (hw * 2 + 1.4) * cam.zoom; ctx.stroke();
+    ctx.strokeStyle = C.lane; ctx.lineWidth = hw * 2 * cam.zoom; ctx.stroke();
+    ctx.setLineDash([6, 8]); ctx.strokeStyle = "rgba(255,255,255,0.45)"; ctx.lineWidth = 1.2; ctx.stroke(); ctx.setLineDash([]);
+    drawArrows(line);
+    drawStart(line, hw);
+  }
+
+  // Islas.
+  map.islands.forEach((isl, i) => drawIsland(isl, C, sel?.kind === "island" && sel.i === i));
+
+  // Piezas (las rocas, semitransparentes, encima de la pista).
+  map.pieces.forEach((p, i) => {
+    const on = sel?.kind === "piece" && sel.i === i;
+    if (p.type === "rock_formation") drawRock(p, shapes[i], line, C, on);
+    else drawPiece(p, C, on);
+  });
+
+  // Puntos y manijas de la pista.
+  const editingPath = tool === "track" || sel?.kind === "path" || drawing?.kind === "path";
+  if (map.path.length && editingPath) drawNodes(map.path, C, sel?.kind === "path" ? sel.node : -1, !(drawing?.kind === "path"));
+  if (sel?.kind === "piece" && map.pieces[sel.i]?.type === "rock_formation") drawNodes(map.pieces[sel.i].shape, C, sel.node ?? -1, !(drawing?.kind === "shape"));
+  if (drawing?.kind === "shape") drawNodes(drawing.piece.shape, C, -1, false);
+  drawScale();
+}
+function drawGrid(C) {
+  const step = niceStep(80 / cam.zoom);
+  const a = toWorld([0, 0]), b = toWorld([W, H]);
+  ctx.strokeStyle = C.grid; ctx.lineWidth = 1; ctx.beginPath();
+  for (let x = Math.floor(a[0] / step) * step; x <= b[0]; x += step) { const s = toScreen([x, 0])[0]; ctx.moveTo(s, 0); ctx.lineTo(s, H); }
+  for (let z = Math.floor(a[1] / step) * step; z <= b[1]; z += step) { const s = toScreen([0, z])[1]; ctx.moveTo(0, s); ctx.lineTo(W, s); }
+  ctx.stroke();
+}
+function niceStep(v) { const p = Math.pow(10, Math.floor(Math.log10(v))); for (const k of [1, 2, 5, 10]) if (k * p >= v) return k * p; return 10 * p; }
+function drawScale() {
+  const m = niceStep(100 / cam.zoom), px = m * cam.zoom;
+  const x = 14, y = 22;
+  ctx.fillStyle = "rgba(255,255,255,0.9)"; ctx.fillRect(x, y, px, 3);
+  ctx.fillRect(x, y - 4, 1.5, 11); ctx.fillRect(x + px - 1.5, y - 4, 1.5, 11);
+  ctx.font = "500 11px JetBrains Mono, monospace"; ctx.fillText(`${m} m`, x + px + 6, y + 4);
+}
+function pathLine(pts, closed) {
+  ctx.beginPath();
+  pts.forEach((p, i) => { const s = toScreen(p); i ? ctx.lineTo(s[0], s[1]) : ctx.moveTo(s[0], s[1]); });
+  if (closed) ctx.closePath();
+}
+function drawArrows(line) {
+  const total = lineLength(line);
+  const every = Math.max(60, 140 / cam.zoom);
+  let acc = 0;
+  ctx.fillStyle = "rgba(255,255,255,0.75)";
+  for (let i = 0; i < line.length; i++) {
+    const a = line[i], b = line[(i + 1) % line.length];
+    acc += dist(a, b);
+    if (acc < every) continue;
+    acc = 0;
+    const s = toScreen(a), d = sub(b, a), ang = Math.atan2(d[1], d[0]);
+    ctx.save(); ctx.translate(s[0], s[1]); ctx.rotate(ang);
+    ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(-4, -5); ctx.lineTo(-1.5, 0); ctx.lineTo(-4, 5); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+}
+function drawStart(line, hw) {
+  const a = line[0], b = line[1], d = sub(b, a), l = len(d) || 1, nrm = [-d[1] / l, d[0] / l];
+  const p0 = toScreen(add(a, mul(nrm, hw))), p1 = toScreen(add(a, mul(nrm, -hw)));
+  ctx.lineWidth = Math.max(3, 3 * cam.zoom); ctx.lineCap = "butt";
+  const n = 8;
+  for (let i = 0; i < n; i++) {
+    ctx.strokeStyle = i % 2 ? "#111" : "#fff";
+    ctx.beginPath(); ctx.moveTo(p0[0] + (p1[0] - p0[0]) * i / n, p0[1] + (p1[1] - p0[1]) * i / n);
+    ctx.lineTo(p0[0] + (p1[0] - p0[0]) * (i + 1) / n, p0[1] + (p1[1] - p0[1]) * (i + 1) / n); ctx.stroke();
+  }
+}
+function drawIsland(isl, C, on) {
+  const s = toScreen([isl.x, isl.z]), r = isl.radius * cam.zoom;
+  ctx.beginPath(); ctx.arc(s[0], s[1], r + 12 * cam.zoom * 0.5, 0, Math.PI * 2); ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.fill();
+  ctx.beginPath(); ctx.arc(s[0], s[1], r, 0, Math.PI * 2); ctx.fillStyle = C.sand; ctx.fill();
+  ctx.beginPath(); ctx.arc(s[0], s[1], r * 0.8, 0, Math.PI * 2); ctx.fillStyle = C.grass; ctx.fill();
+  if (isl.lighthouse) {
+    ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(s[0], s[1], Math.max(3, 2.2 * cam.zoom), 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#d9403a"; ctx.beginPath(); ctx.arc(s[0], s[1], Math.max(1.6, 1.1 * cam.zoom), 0, Math.PI * 2); ctx.fill();
+  }
+  if (on) ring(s, r, C.sel, true);
+}
+function ring(s, r, color, handle) {
+  ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+  ctx.beginPath(); ctx.arc(s[0], s[1], r + 3, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+  if (handle) { ctx.fillStyle = color; ctx.fillRect(s[0] + r + 3 - 5, s[1] - 5, 10, 10); }
+}
+function drawPiece(p, C, on) {
+  const s = toScreen([p.x, p.z]);
+  if (p.type === "geyser") {
+    const r = Math.max(5, GEYSER_RADIUS * cam.zoom);
+    ctx.beginPath(); ctx.arc(s[0], s[1], r, 0, Math.PI * 2); ctx.fillStyle = "rgba(255,255,255,0.85)"; ctx.fill();
+    ctx.strokeStyle = C.sea; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(s[0], s[1] + r * 0.5); ctx.lineTo(s[0], s[1] - r * 0.6); ctx.stroke();
+    if (on) ring(s, r, C.sel, false);
+  } else if (p.type === "volcano") {
+    const r = (p.radius ?? 40) * cam.zoom;
+    ctx.beginPath(); ctx.arc(s[0], s[1], r, 0, Math.PI * 2); ctx.fillStyle = C.sand; ctx.fill();
+    ctx.beginPath(); ctx.arc(s[0], s[1], r * 0.92, 0, Math.PI * 2); ctx.fillStyle = C.grass; ctx.fill();
+    ctx.beginPath(); ctx.arc(s[0], s[1], r * 0.72, 0, Math.PI * 2); ctx.fillStyle = "#6b564b"; ctx.fill();
+    ctx.beginPath(); ctx.arc(s[0], s[1], r * 0.18, 0, Math.PI * 2); ctx.fillStyle = "#ff7a1a"; ctx.fill();
+    if (on) ring(s, r, C.sel, true);
+  } else if (p.type === "rock_arch") {
+    const a = ((p.angle ?? 0) * Math.PI) / 180, span = (p.span ?? 40);
+    const dx = [Math.cos(a) * span, -Math.sin(a) * span];
+    const e0 = toScreen([p.x - dx[0], p.z - dx[1]]), e1 = toScreen([p.x + dx[0], p.z + dx[1]]);
+    ctx.strokeStyle = p.stone_color || "#806b5c"; ctx.lineWidth = Math.max(4, 9 * cam.zoom); ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(e0[0], e0[1]); ctx.lineTo(e1[0], e1[1]); ctx.stroke();
+    ctx.fillStyle = "#fff"; ctx.font = "600 11px Inter, sans-serif"; ctx.textAlign = "center"; ctx.fillText("arco", s[0], s[1] - 8); ctx.textAlign = "start";
+    if (on) { ring(s, Math.max(10, span * cam.zoom), C.sel, false); const h = toScreen([p.x + dx[0], p.z + dx[1]]); ctx.fillStyle = C.sel; ctx.beginPath(); ctx.arc(h[0], h[1], 6, 0, Math.PI * 2); ctx.fill(); }
+  } else if (p.type === "shipwreck") {
+    const a = ((p.angle ?? 40.107) * Math.PI) / 180, k = Math.max(0.6, cam.zoom) * (p.size ?? 1.5);
+    ctx.save(); ctx.translate(s[0], s[1]); ctx.rotate(-a);
+    ctx.fillStyle = "#6b4426"; ctx.beginPath(); ctx.ellipse(0, 0, 3 * k, 8 * k, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    if (on) ring(s, 10 * k, C.sel, false);
+  } else {
+    ctx.fillStyle = C.bad; ctx.beginPath(); ctx.arc(s[0], s[1], 6, 0, Math.PI * 2); ctx.fill();
+  }
+}
+function drawRock(p, poly, line, C, on) {
+  if (!poly || poly.length < 3) return;
+  const cave = line.length > 2 && rockTouchesTrack(poly, line);
+  // La parte de pista que queda adentro: agua de cueva.
+  if (cave) {
+    ctx.save(); pathLine(poly, true); ctx.clip();
+    pathLine(line, true); ctx.lineJoin = "round";
+    ctx.strokeStyle = C.cave; ctx.lineWidth = map.half_width * 2 * cam.zoom; ctx.stroke();
+    ctx.strokeStyle = C.glow; ctx.globalAlpha = 0.6; ctx.lineWidth = Math.max(1.5, map.half_width * 0.5 * cam.zoom); ctx.stroke(); ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+  pathLine(poly, true);
+  ctx.fillStyle = hexA(p.stone_low || "#8a4a2e", cave ? 0.5 : 0.78); ctx.fill();
+  ctx.strokeStyle = on ? C.sel : hexA(p.stone_high || "#b89a74", 0.95); ctx.lineWidth = on ? 2.2 : 1.6; ctx.stroke();
+  // Agujeros del techo.
+  (p.skylights || []).forEach((sk, k) => {
+    const s = toScreen(sk);
+    ctx.fillStyle = "rgba(255,236,170,0.9)"; ctx.beginPath(); ctx.arc(s[0], s[1], Math.max(4, 5 * cam.zoom), 0, Math.PI * 2); ctx.fill();
+    if (on && sel.sky === k) ring(s, Math.max(4, 5 * cam.zoom), C.sel, false);
+  });
+  const c = centroid(poly), s = toScreen(c);
+  ctx.font = "600 12px Outfit, sans-serif"; ctx.textAlign = "center"; ctx.fillStyle = "#fff";
+  ctx.fillText(cave ? `cueva · techo ${p.ceiling ?? 12} m` : p.opening ? "roca con arco" : "roca", s[0], s[1]);
+  ctx.textAlign = "start";
+}
+function rockTouchesTrack(poly, line) {
+  for (let i = 0; i < line.length; i += 3) if (pointInPoly(line[i], poly) || distToLine(line[i], poly) < map.half_width + 4) return true;
+  return false;
+}
+function centroid(poly) { let x = 0, z = 0; poly.forEach((p) => { x += p[0]; z += p[1]; }); return [x / poly.length, z / poly.length]; }
+function hexA(hex, a) {
+  const h = hex.replace("#", "");
+  const n = parseInt(h.length === 3 ? h.split("").map((c) => c + c).join("") : h.slice(0, 6), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+function drawNodes(nodes, C, selNode, closed) {
+  // La figura de control (fina) para ver las manijas.
+  if (nodes.length >= 2) {
+    ctx.beginPath();
+    const segs = closed ? nodes.length : nodes.length - 1;
+    for (let i = 0; i < segs; i++) {
+      const c = segControls(nodes, i);
+      const a = toScreen(c[0]), b = toScreen(c[1]), d = toScreen(c[2]), e = toScreen(c[3]);
+      if (i === 0) ctx.moveTo(a[0], a[1]);
+      ctx.bezierCurveTo(b[0], b[1], d[0], d[1], e[0], e[1]);
+    }
+    ctx.strokeStyle = "rgba(255,255,255,0.85)"; ctx.lineWidth = 1.2; ctx.stroke();
+  }
+  nodes.forEach((n, i) => {
+    const s = toScreen(n.p);
+    const show = i === selNode || nodes.length <= 40 || cam.zoom > 1.2;
+    if (show && nodes.length >= 2) {
+      for (const [h, auto] of [[handleIn(nodes, i), !n.in], [handleOut(nodes, i), !n.out]]) {
+        if (len(h) < 0.01) continue;
+        const hs = toScreen(add(n.p, h));
+        ctx.strokeStyle = auto ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.8)"; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(s[0], s[1]); ctx.lineTo(hs[0], hs[1]); ctx.stroke();
+        ctx.fillStyle = auto ? "rgba(255,255,255,0.45)" : "#fff";
+        ctx.beginPath(); ctx.arc(hs[0], hs[1], 3.5, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    ctx.fillStyle = i === selNode ? C.sel : i === 0 ? C.accent : "#fff";
+    ctx.strokeStyle = "#0b2230"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.rect(s[0] - 5, s[1] - 5, 10, 10); ctx.fill(); ctx.stroke();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Tocar y arrastrar
+// ---------------------------------------------------------------------------
+let drag = null;
+const pointers = new Map();
+let spaceDown = false;
+
+function hitNodes(nodes, s) {
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const n = nodes[i];
+    if (nodes.length >= 2) {
+      for (const which of ["in", "out"]) {
+        const h = which === "in" ? handleIn(nodes, i) : handleOut(nodes, i);
+        if (len(h) < 0.01) continue;
+        if (dist(toScreen(add(n.p, h)), s) < 8) return { node: i, handle: which };
+      }
+    }
+    if (dist(toScreen(n.p), s) < 9) return { node: i, handle: null };
+  }
+  return null;
+}
+function hitSegment(nodes, s) {
+  for (let i = 0; i < nodes.length; i++) {
+    const c = segControls(nodes, i);
+    let prev = toScreen(c[0]);
+    for (let k = 1; k <= 24; k++) {
+      const t = k / 24, cur = toScreen(bez(c, t));
+      if (segDist(s, prev, cur) < 8) return { seg: i, t: (k - 0.5) / 24 };
+      prev = cur;
+    }
+  }
+  return null;
+}
+function hitTest(s) {
+  const w = toWorld(s);
+  // Primero lo que está seleccionado (sus puntos y manijas).
+  if (sel?.kind === "piece" && map.pieces[sel.i]?.type === "rock_formation") {
+    const p = map.pieces[sel.i];
+    for (let k = (p.skylights || []).length - 1; k >= 0; k--) if (dist(toScreen(p.skylights[k]), s) < 9) return { kind: "piece", i: sel.i, sky: k };
+    const h = hitNodes(p.shape, s);
+    if (h) return { kind: "piece", i: sel.i, ...h };
+  }
+  if (map.path.length && (tool === "track" || sel?.kind === "path")) {
+    const h = hitNodes(map.path, s);
+    if (h) return { kind: "path", ...h };
+  }
+  // Manija de tamaño de la isla o del volcán seleccionados.
+  if (sel?.kind === "island") {
+    const isl = map.islands[sel.i], hs = toScreen([isl.x, isl.z]);
+    if (dist([hs[0] + isl.radius * cam.zoom + 3, hs[1]], s) < 9) return { kind: "island", i: sel.i, resize: true };
+  }
+  if (sel?.kind === "piece") {
+    const p = map.pieces[sel.i];
+    if (p.type === "volcano") { const hs = toScreen([p.x, p.z]); if (dist([hs[0] + (p.radius ?? 40) * cam.zoom + 3, hs[1]], s) < 9) return { kind: "piece", i: sel.i, resize: true }; }
+    if (p.type === "rock_arch") {
+      const a = ((p.angle ?? 0) * Math.PI) / 180, span = p.span ?? 40;
+      if (dist(toScreen([p.x + Math.cos(a) * span, p.z - Math.sin(a) * span]), s) < 9) return { kind: "piece", i: sel.i, rotate: true };
+    }
+  }
+  // Piezas chicas arriba de todo, después islas, rocas y la pista.
+  for (let i = map.pieces.length - 1; i >= 0; i--) {
+    const p = map.pieces[i];
+    if (!("x" in p)) continue;
+    const r = p.type === "volcano" ? (p.radius ?? 40) : p.type === "rock_arch" ? 12 : p.type === "shipwreck" ? 12 : GEYSER_RADIUS + 2;
+    if (dist(w, [p.x, p.z]) < Math.max(r, 9 / cam.zoom)) return { kind: "piece", i };
+  }
+  for (let i = map.islands.length - 1; i >= 0; i--) {
+    const isl = map.islands[i];
+    if (dist(w, [isl.x, isl.z]) < Math.max(isl.radius, 8 / cam.zoom)) return { kind: "island", i };
+  }
+  const { shapes, line } = computed();
+  for (let i = map.pieces.length - 1; i >= 0; i--) if (shapes[i] && pointInPoly(w, shapes[i])) return { kind: "piece", i };
+  if (line.length > 2 && distToLine(w, line) < map.half_width) return { kind: "path" };
+  return null;
+}
+
+function onDown(e) {
+  cv.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, [e.offsetX, e.offsetY]);
+  if (pointers.size === 2) { drag = { kind: "pinch", start: pinchState() }; return; }
+  const s = [e.offsetX, e.offsetY], w = toWorld(s);
+  if (tool === "pan" || spaceDown || e.button === 1) { drag = { kind: "pan", s, cam: { ...cam } }; return; }
+
+  if (tool === "track" || tool === "rock") return penDown(s, w, e);
+  if (["island", "geyser", "volcano", "rock_arch", "shipwreck"].includes(tool)) {
+    if (tool === "island") { map.islands.push({ x: w[0], z: w[1], radius: 20, lighthouse: false, seed: Math.floor(Math.random() * 99999) + 1 }); sel = { kind: "island", i: map.islands.length - 1 }; }
+    else {
+      const p = { type: tool, x: w[0], z: w[1] };
+      if (tool === "volcano") { p.radius = 40; }
+      map.pieces.push(p); sel = { kind: "piece", i: map.pieces.length - 1 };
+    }
+    commit(); refreshPanel(); setTool("select");
+    drag = { kind: "move", start: w, moved: false, orig: JSON.parse(JSON.stringify(sel.kind === "island" ? map.islands[sel.i] : map.pieces[sel.i])) };
+    return;
+  }
+  // Seleccionar
+  const hit = hitTest(s);
+  if (!hit) { sel = { kind: "map" }; refreshPanel(); draw(); drag = { kind: "pan", s, cam: { ...cam } }; return; }
+  if (hit.kind === "path" && hit.node === undefined) { sel = { kind: "path", node: -1 }; refreshPanel(); draw(); drag = { kind: "pan", s, cam: { ...cam } }; return; }
+  sel = { kind: hit.kind, i: hit.i, node: hit.node ?? -1, sky: hit.sky };
+  refreshPanel(); draw();
+  if (hit.node !== undefined && hit.node !== null) {
+    const nodes = hit.kind === "path" ? map.path : map.pieces[hit.i].shape;
+    drag = { kind: "node", nodes, node: hit.node, handle: hit.handle, start: w, orig: JSON.parse(JSON.stringify(nodes[hit.node])), alt: e.altKey, moved: false };
+  } else if (hit.sky !== undefined) {
+    drag = { kind: "sky", p: map.pieces[hit.i], k: hit.sky, moved: false };
+  } else if (hit.resize) drag = { kind: "resize", target: hit.kind === "island" ? map.islands[hit.i] : map.pieces[hit.i], moved: false };
+  else if (hit.rotate) drag = { kind: "rotate", target: map.pieces[hit.i], moved: false };
+  else {
+    const target = hit.kind === "island" ? map.islands[hit.i] : map.pieces[hit.i];
+    drag = { kind: "move", start: w, moved: false, orig: JSON.parse(JSON.stringify(target)) };
+  }
+}
+function penDown(s, w, e) {
+  const isTrack = tool === "track";
+  if (isTrack && map.path.length && !drawing) {
+    // Pista ya hecha: tocar un tramo agrega un punto; tocar un punto lo selecciona.
+    const h = hitNodes(map.path, s);
+    if (h) { sel = { kind: "path", node: h.node }; refreshPanel(); drag = { kind: "node", nodes: map.path, node: h.node, handle: h.handle, start: w, orig: JSON.parse(JSON.stringify(map.path[h.node])), alt: e.altKey, moved: false }; draw(); return; }
+    const seg = hitSegment(map.path, s);
+    if (seg) { insertNode(map.path, seg.seg, seg.t); sel = { kind: "path", node: seg.seg + 1 }; commit(); refreshPanel(); return; }
+    toast("La pista ya está dibujada: tocá un tramo para agregar un punto, o un punto para moverlo.");
+    return;
+  }
+  if (!drawing) {
+    if (isTrack) { map.path = []; drawing = { kind: "path" }; sel = { kind: "path", node: -1 }; }
+    else { const piece = { type: "rock_formation", shape: [], skylights: [] }; drawing = { kind: "shape", piece }; }
+  }
+  const nodes = drawing.kind === "path" ? map.path : drawing.piece.shape;
+  // Tocar el primer punto cierra la figura.
+  if (nodes.length >= 3 && dist(toScreen(nodes[0].p), s) < 10) { finishDrawing(); return; }
+  nodes.push({ p: w, in: [0, 0], out: [0, 0] });
+  drag = { kind: "pen", nodes, node: nodes.length - 1, start: w };
+  invalidate();
+  setHint();
+}
+function finishDrawing() {
+  if (!drawing) return;
+  if (drawing.kind === "path") {
+    if (map.path.length < 3) { toast("La pista necesita al menos 3 puntos."); return; }
+    if (map.smoothing === 60 && map.path.some((n) => n.in || n.out)) map.smoothing = 20;
+    sel = { kind: "path", node: -1 };
+  } else {
+    const p = drawing.piece;
+    if (p.shape.length < 3) { drawing = null; invalidate(); return; }
+    map.pieces.push(p); sel = { kind: "piece", i: map.pieces.length - 1, node: -1 };
+  }
+  drawing = null;
+  commit(); refreshPanel(); setTool("select");
+}
+function insertNode(nodes, i, t) {
+  const n = nodes.length, j = (i + 1) % n;
+  const c = segControls(nodes, i);
+  // De Casteljau: parte el tramo en dos sin cambiar la curva.
+  const lerp = (a, b) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+  const a = lerp(c[0], c[1]), b = lerp(c[1], c[2]), d = lerp(c[2], c[3]);
+  const e = lerp(a, b), f = lerp(b, d), p = lerp(e, f);
+  // Los vecinos dejan de ser automáticos (si no, su curva cambiaría).
+  const prevIn = handleIn(nodes, i), nextOut = handleOut(nodes, j);
+  nodes[i].in = prevIn; nodes[i].out = sub(a, c[0]);
+  nodes[j].in = sub(d, c[3]); nodes[j].out = nextOut;
+  nodes.splice(i + 1, 0, { p, in: sub(e, p), out: sub(f, p) });
+}
+function onMove(e) {
+  const s = [e.offsetX, e.offsetY];
+  if (pointers.has(e.pointerId)) pointers.set(e.pointerId, s);
+  const w = toWorld(s);
+  $("coords").textContent = `x ${Math.round(w[0])} · z ${Math.round(w[1])}`;
+  if (!drag) return;
+  if (drag.kind === "pinch") { if (pointers.size === 2) applyPinch(drag.start); return; }
+  if (drag.kind === "pan") { cam.x = drag.cam.x - (s[0] - drag.s[0]) / cam.zoom; cam.z = drag.cam.z - (s[1] - drag.s[1]) / cam.zoom; draw(); return; }
+  if (drag.kind === "pen") {
+    const n = drag.nodes[drag.node], d = sub(w, n.p);
+    if (len(d) * cam.zoom > 3) { n.out = d; n.in = mul(d, -1); }
+    invalidate(); return;
+  }
+  drag.moved = true;
+  if (drag.kind === "node") {
+    const n = drag.nodes[drag.node];
+    if (!drag.handle) { n.p = add(drag.orig.p, sub(w, drag.start)); }
+    else {
+      const other = drag.handle === "in" ? "out" : "in";
+      const otherNow = other === "in" ? handleIn(drag.nodes, drag.node) : handleOut(drag.nodes, drag.node);
+      const h = sub(w, n.p);
+      n[drag.handle] = h;
+      // Por defecto las manijas quedan en línea (curva suave). Con Alt se separan.
+      if (!(e.altKey || drag.alt)) { const l = len(otherNow) || len(h); n[other] = mul(h, -l / (len(h) || 1)); }
+      else n[other] = otherNow;
+    }
+    invalidate(); return;
+  }
+  if (drag.kind === "sky") { drag.p.skylights[drag.k] = w; invalidate(); return; }
+  if (drag.kind === "move") {
+    const t = sel.kind === "island" ? map.islands[sel.i] : map.pieces[sel.i];
+    const d = sub(w, drag.start);
+    if (t.type === "rock_formation") { t.shape = drag.orig.shape.map((n) => ({ ...n, p: add(n.p, d) })); t.skylights = (drag.orig.skylights || []).map((k) => add(k, d)); }
+    else { t.x = drag.orig.x + d[0]; t.z = drag.orig.z + d[1]; }
+    invalidate(); refreshFieldsValues(); return;
+  }
+  if (drag.kind === "resize") { drag.target.radius = Math.max(4, Math.round(dist(w, [drag.target.x, drag.target.z]))); invalidate(); refreshFieldsValues(); return; }
+  if (drag.kind === "rotate") { const t = drag.target; t.angle = Math.round((Math.atan2(-(w[1] - t.z), w[0] - t.x) * 180) / Math.PI); invalidate(); refreshFieldsValues(); }
+}
+function onUp(e) {
+  pointers.delete(e.pointerId);
+  if (!drag) return;
+  const d = drag; drag = null;
+  if (d.kind === "pen") { setHint(); return; }
+  if (d.moved) { commit(); refreshPanel(); }
+}
+function pinchState() { const [a, b] = [...pointers.values()]; return { d: dist(a, b), mid: mul(add(a, b), 0.5), cam: { ...cam } }; }
+function applyPinch(st) {
+  const [a, b] = [...pointers.values()];
+  const k = dist(a, b) / (st.d || 1);
+  const before = [(st.mid[0] - W / 2) / st.cam.zoom + st.cam.x, (st.mid[1] - H / 2) / st.cam.zoom + st.cam.z];
+  cam.zoom = Math.min(20, Math.max(0.1, st.cam.zoom * k));
+  const mid = mul(add(a, b), 0.5);
+  cam.x = before[0] - (mid[0] - W / 2) / cam.zoom; cam.z = before[1] - (mid[1] - H / 2) / cam.zoom;
+  draw();
+}
+function zoomAt(s, k) {
+  const before = toWorld(s);
+  cam.zoom = Math.min(20, Math.max(0.1, cam.zoom * k));
+  const after = toWorld(s);
+  cam.x += before[0] - after[0]; cam.z += before[1] - after[1];
+  draw();
+}
+cv.addEventListener("pointerdown", onDown);
+cv.addEventListener("pointermove", onMove);
+cv.addEventListener("pointerup", onUp);
+cv.addEventListener("pointercancel", onUp);
+cv.addEventListener("wheel", (e) => { e.preventDefault(); zoomAt([e.offsetX, e.offsetY], Math.exp(-e.deltaY * 0.0015)); }, { passive: false });
+cv.addEventListener("dblclick", (e) => {
+  const s = [e.offsetX, e.offsetY];
+  if (drawing) { finishDrawing(); return; }
+  const hit = hitTest(s);
+  if (hit && hit.node !== undefined && hit.node !== null && !hit.handle) {
+    // Doble clic en un punto: esquina <-> curva automática.
+    const nodes = hit.kind === "path" ? map.path : map.pieces[hit.i].shape;
+    const n = nodes[hit.node];
+    const corner = n.in && n.out && len(n.in) < 0.01 && len(n.out) < 0.01;
+    if (corner) { n.in = null; n.out = null; } else { n.in = [0, 0]; n.out = [0, 0]; }
+    commit(); refreshPanel();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Herramientas, teclado y botones
+// ---------------------------------------------------------------------------
+const HINTS = {
+  select: "Tocá algo para elegirlo y arrastralo para moverlo. En los puntos: arrastrá las manijas para curvar (Alt las separa), doble clic hace esquina o curva. Supr borra.",
+  pan: "Arrastrá para mover la vista. Rueda o pellizco para acercar.",
+  track: "Clic: un punto (tramo recto). Clic y arrastrar: punto con manijas (curva). Tocá el primer punto o Enter para cerrar la vuelta. El primer punto es la largada.",
+  rock: "Dibujá la figura de la roca igual que la pista y cerrala tocando el primer punto. Si tapa la pista es una cueva; si no, una roca de paisaje.",
+  island: "Clic para poner una isla. Después arrastrá el cuadradito del borde para cambiar el tamaño.",
+  geyser: "Clic para poner un géiser (mejor sobre la pista).",
+  volcano: "Clic para poner una isla volcán.",
+  rock_arch: "Clic para poner un arco de roca. El puntito del extremo lo gira.",
+  shipwreck: "Clic para poner un barco hundido.",
+};
+function setHint() {
+  let h = HINTS[tool] || "";
+  if (drawing) h = `Dibujando ${drawing.kind === "path" ? "la pista" : "una roca"}: ${(drawing.kind === "path" ? map.path : drawing.piece.shape).length} puntos. Tocá el primero o Enter para cerrar, Esc para cancelar.`;
+  $("hint").textContent = h;
+}
+function setTool(t) {
+  if (drawing && t !== tool) cancelDrawing();
+  tool = t;
+  document.querySelectorAll(".tool").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.tool === t)));
+  cv.style.cursor = t === "pan" ? "grab" : t === "select" ? "default" : "crosshair";
+  if (t === "track" && map.path.length) sel = { kind: "path", node: -1 };
+  setHint(); refreshPanel(); draw();
+}
+function cancelDrawing() {
+  if (!drawing) return;
+  if (drawing.kind === "path") { map = JSON.parse(hist.stack[hist.at]); }
+  drawing = null; invalidate(); refreshPanel();
+}
+document.querySelectorAll(".tool").forEach((b) => b.addEventListener("click", () => setTool(b.dataset.tool)));
+function deleteSelection() {
+  if (!sel) return;
+  if (sel.kind === "path" && sel.node >= 0) { if (map.path.length <= 3) return toast("La pista necesita al menos 3 puntos."); map.path.splice(sel.node, 1); sel.node = -1; }
+  else if (sel.kind === "path") { map.path = []; sel = { kind: "map" }; }
+  else if (sel.kind === "island") { map.islands.splice(sel.i, 1); sel = { kind: "map" }; }
+  else if (sel.kind === "piece") {
+    const p = map.pieces[sel.i];
+    if (p.type === "rock_formation" && sel.sky !== undefined && sel.sky !== null) { p.skylights.splice(sel.sky, 1); sel.sky = null; }
+    else if (p.type === "rock_formation" && sel.node >= 0) { if (p.shape.length <= 3) return toast("La figura necesita al menos 3 puntos."); p.shape.splice(sel.node, 1); sel.node = -1; }
+    else { map.pieces.splice(sel.i, 1); sel = { kind: "map" }; }
+  } else return;
+  commit(); refreshPanel();
+}
+window.addEventListener("keydown", (e) => {
+  if (e.target.closest("input, textarea, select")) return;
+  const k = e.key.toLowerCase();
+  if ((e.ctrlKey || e.metaKey) && k === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+  if ((e.ctrlKey || e.metaKey) && k === "y") { e.preventDefault(); redo(); return; }
+  if (e.key === " ") { spaceDown = true; cv.style.cursor = "grab"; e.preventDefault(); return; }
+  if (e.key === "Enter" && drawing) { finishDrawing(); return; }
+  if (e.key === "Escape") { if (drawing) cancelDrawing(); else { sel = { kind: "map" }; refreshPanel(); draw(); } return; }
+  if (e.key === "Delete" || e.key === "Backspace") { deleteSelection(); return; }
+  const map_ = { v: "select", h: "pan", p: "track", r: "rock", i: "island", g: "geyser" };
+  if (map_[k]) setTool(map_[k]);
+  if (k === "f") fit();
+  if (k === "+" || k === "=") zoomAt([W / 2, H / 2], 1.25);
+  if (k === "-") zoomAt([W / 2, H / 2], 0.8);
+});
+window.addEventListener("keyup", (e) => { if (e.key === " ") { spaceDown = false; setTool(tool); } });
+$("zoomIn").onclick = () => zoomAt([W / 2, H / 2], 1.25);
+$("zoomOut").onclick = () => zoomAt([W / 2, H / 2], 0.8);
+$("zoomFit").onclick = fit;
+$("undoBtn").onclick = undo;
+$("redoBtn").onclick = redo;
+function updateButtons() { $("undoBtn").disabled = hist.at <= 0; $("redoBtn").disabled = hist.at >= hist.stack.length - 1; }
+
+// ---------------------------------------------------------------------------
+// Panel de propiedades
+// ---------------------------------------------------------------------------
+function field(label, kind, value, onChange, opts = {}) {
+  const wrap = document.createElement("div"); wrap.className = "field";
+  const id = "f_" + (opts.id || label).replace(/[^a-z0-9]/gi, "_");
+  const l = document.createElement("label"); l.textContent = label; l.htmlFor = id;
+  const inp = document.createElement("input"); inp.id = id;
+  if (kind === "bool") { inp.type = "checkbox"; inp.checked = !!value; }
+  else if (kind === "color") { inp.type = "color"; inp.value = (value || "#000000").slice(0, 7); }
+  else if (kind === "text") { inp.type = "text"; inp.value = value ?? ""; }
+  else { inp.type = "number"; inp.step = kind === "int" ? "1" : "any"; inp.value = value ?? ""; }
+  inp.addEventListener("change", () => {
+    let v = kind === "bool" ? inp.checked : kind === "color" || kind === "text" ? inp.value : Number(inp.value);
+    if ((kind === "num" || kind === "int") && !Number.isFinite(v)) return;
+    if (kind === "int") v = Math.round(v);
+    onChange(v); commit(); refreshPanel();
+  });
+  inp.dataset.bind = opts.bind || "";
+  wrap.append(l, inp);
+  return wrap;
+}
+function btn(text, fn, primary) { const b = document.createElement("button"); b.className = "btn" + (primary ? " primary" : ""); b.type = "button"; b.textContent = text; b.onclick = fn; return b; }
+function note(text) { const p = document.createElement("p"); p.className = "note"; p.textContent = text; return p; }
+function refreshPanel() {
+  const box = $("selFields"); box.innerHTML = "";
+  const title = $("selTitle");
+  const s = sel || { kind: "map" };
+  if (s.kind === "map" || (s.kind === "path" && !map.path.length)) {
+    title.textContent = "Mapa";
+    for (const [k, label, kind] of MAP_FIELDS) {
+      if (k === "smoothing" && !map.path.length) continue;
+      box.append(field(label, kind, map[k], (v) => { map[k] = v; if (k === "name" && !lockedId()) map.id = slug(v); }, { id: k }));
+    }
+    if (!map.path.length) box.append(field("Radio del anillo (m)", "num", map.ring_radius, (v) => (map.ring_radius = v), { id: "ring_radius" }));
+    box.append(note(`Archivo: world/maps/${map.id || slug(map.name)}.json. El número de mapa no se cambia en mapas que ya están en el juego (es el de los récords).`));
+  } else if (s.kind === "path") {
+    title.textContent = s.node >= 0 ? `Pista · punto ${s.node + 1}${s.node === 0 ? " (largada)" : ""}` : "Pista";
+    if (s.node >= 0) {
+      const n = map.path[s.node];
+      box.append(field("x (m)", "num", round(n.p[0]), (v) => (n.p[0] = v), { bind: "nx" }));
+      box.append(field("z (m)", "num", round(n.p[1]), (v) => (n.p[1] = v), { bind: "nz" }));
+      const row = document.createElement("div"); row.className = "row";
+      row.append(btn("Esquina", () => { n.in = [0, 0]; n.out = [0, 0]; commit(); refreshPanel(); }),
+        btn("Curva automática", () => { n.in = null; n.out = null; commit(); refreshPanel(); }),
+        btn("Largada acá", () => { map.path = map.path.slice(s.node).concat(map.path.slice(0, s.node)); sel.node = 0; commit(); refreshPanel(); }));
+      box.append(row);
+    }
+    box.append(field("Redondeo de curvas", "int", map.smoothing, (v) => (map.smoothing = Math.max(0, v)), { id: "smoothing" }));
+    box.append(field("Mitad del ancho (m)", "num", map.half_width, (v) => (map.half_width = Math.max(6, v)), { id: "half_width" }));
+    const row = document.createElement("div"); row.className = "row";
+    row.append(btn("Invertir sentido", () => { map.path.reverse(); map.path.forEach((n) => { const t = n.in; n.in = n.out; n.out = t; }); commit(); refreshPanel(); }),
+      btn("Borrar pista", () => { map.path = []; sel = { kind: "map" }; commit(); refreshPanel(); }));
+    box.append(row);
+    box.append(note("La línea fina es la que dibujás; la banda celeste es la pista tal como queda en el juego (con el redondeo). La flecha marca el sentido de la carrera."));
+  } else if (s.kind === "island") {
+    const isl = map.islands[s.i];
+    title.textContent = `Isla ${s.i + 1}`;
+    box.append(field("x (m)", "num", round(isl.x), (v) => (isl.x = v), { bind: "x" }));
+    box.append(field("z (m)", "num", round(isl.z), (v) => (isl.z = v), { bind: "z" }));
+    box.append(field("Radio (m)", "num", isl.radius, (v) => (isl.radius = Math.max(4, v)), { bind: "radius" }));
+    box.append(field("Faro", "bool", isl.lighthouse, (v) => (isl.lighthouse = v)));
+    box.append(field("Semilla palmeras", "int", isl.seed, (v) => (isl.seed = v)));
+    box.append(btn("Borrar isla", deleteSelection));
+  } else if (s.kind === "piece") {
+    const p = map.pieces[s.i];
+    const def = PIECES[p.type];
+    title.textContent = def ? def.name : `Pieza "${p.type}"`;
+    if ("x" in p) {
+      box.append(field("x (m)", "num", round(p.x), (v) => (p.x = v), { bind: "x" }));
+      box.append(field("z (m)", "num", round(p.z), (v) => (p.z = v), { bind: "z" }));
+    }
+    for (const [k, label, kind, d] of def?.params || []) {
+      box.append(field(label, kind, p[k] ?? d, (v) => (p[k] = v), { id: k, bind: k }));
+    }
+    if (p.type === "rock_formation") {
+      const { line, shapes } = computed();
+      const cave = line.length > 2 && rockTouchesTrack(shapes[s.i], line);
+      box.append(note(cave
+        ? "Tapa la pista: es una cueva. Con el techo bajo, los saltos adentro son más bajos (nunca tocan el techo)."
+        : "No toca la pista: es una roca de paisaje. Con \"Arco abajo\" se ve el mar a través."));
+      const row = document.createElement("div"); row.className = "row";
+      row.append(btn("Agujero en el techo", () => {
+        const c = centroid(shapes[s.i]); p.skylights = p.skylights || []; p.skylights.push(c); sel.sky = p.skylights.length - 1; commit(); refreshPanel();
+        toast("Agujero agregado en el medio: arrastralo a donde quieras.");
+      }));
+      if (s.node >= 0) row.append(btn("Esquina", () => { p.shape[s.node].in = [0, 0]; p.shape[s.node].out = [0, 0]; commit(); refreshPanel(); }),
+        btn("Curva automática", () => { p.shape[s.node].in = null; p.shape[s.node].out = null; commit(); refreshPanel(); }));
+      box.append(row);
+    }
+    if (!def) box.append(note("El editor no conoce esta pieza: se guarda tal cual."));
+    box.append(btn(s.sky !== undefined && s.sky !== null ? "Borrar agujero" : s.node >= 0 ? "Borrar punto" : "Borrar pieza", deleteSelection));
+  }
+  refreshReview();
+  updateButtons();
+}
+function refreshFieldsValues() {
+  // Mientras se arrastra: actualizar números sin rearmar el panel.
+  const s = sel; if (!s) return;
+  const t = s.kind === "island" ? map.islands[s.i] : s.kind === "piece" ? map.pieces[s.i] : null;
+  if (!t) return;
+  document.querySelectorAll("#selFields input[data-bind]").forEach((inp) => {
+    const b = inp.dataset.bind; if (b in t && typeof t[b] === "number") inp.value = round(t[b]);
+  });
+}
+const round = (v) => Math.round(v * 10) / 10;
+function lockedId() { return currentKey.startsWith("builtin:") || currentKey.startsWith("saved:"); }
+
+// ---------------------------------------------------------------------------
+// Revisión: lo mismo que revisan los tests del juego.
+// ---------------------------------------------------------------------------
+function review() {
+  const out = [];
+  const { line, shapes, length } = computed();
+  if (map.path.length && map.path.length < 3) out.push(["bad", "La pista necesita al menos 3 puntos."]);
+  if (!map.path.length && !map.islands.length) out.push(["bad", "Un mapa de anillo necesita una isla en el medio."]);
+  if (line.length > 2) {
+    map.islands.forEach((isl, i) => {
+      const d = distToLine([isl.x, isl.z], line);
+      if (d < map.half_width + isl.radius + 0.5) out.push(["bad", `La isla ${i + 1} pisa la pista.`]);
+    });
+    map.pieces.forEach((p, i) => {
+      if (p.type === "volcano" && distToLine([p.x, p.z], line) < map.half_width + (p.radius ?? 40) + 0.5) out.push(["bad", "El volcán pisa la pista."]);
+      if (p.type === "geyser" && distToLine([p.x, p.z], line) > map.half_width - 2) out.push(["warn", "Hay un géiser fuera de la pista: nadie va a pasar por arriba."]);
+      if (p.type === "rock_formation" && shapes[i]?.length >= 3 && rockTouchesTrack(shapes[i], line) && (p.ceiling ?? 12) < 7)
+        out.push(["warn", "Una cueva tiene el techo muy bajo (menos de 7 m): la cámara puede quedar dentro de la roca."]);
+    });
+    // Curvas demasiado cerradas (radio chico en la pista final).
+    let tight = 0;
+    for (let i = 0; i < line.length; i += 2) {
+      const a = line[(i - 4 + line.length) % line.length], b = line[i], c = line[(i + 4) % line.length];
+      const ab = dist(a, b), bc = dist(b, c), ac = dist(a, c);
+      const area = Math.abs((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])) / 2;
+      if (area > 1e-6) { const R = (ab * bc * ac) / (4 * area); if (R < map.half_width * 0.6) tight++; }
+    }
+    if (tight) out.push(["warn", "Hay curvas muy cerradas: subí el redondeo o abrí las manijas."]);
+    // La pista no se tiene que cruzar con sí misma (cerca de otro tramo que no es el vecino).
+    let cross = false;
+    const step = Math.max(1, Math.floor(line.length / 160));
+    for (let i = 0; i < line.length && !cross; i += step) for (let j = i + 40; j < line.length - 40 + i && !cross; j += step) {
+      const jj = j % line.length;
+      if (Math.abs(jj - i) < 40 || line.length - Math.abs(jj - i) < 40) continue;
+      if (dist(line[i], line[jj]) < map.half_width * 2) cross = true;
+    }
+    if (cross) out.push(["warn", "La pista pasa muy cerca de sí misma: los tramos se pueden tocar."]);
+  }
+  const taken = Object.values(BUILTIN).filter((b) => b.id !== map.id).map((b) => b.order);
+  if (taken.includes(map.order)) out.push(["bad", `El número de mapa ${map.order} ya lo usa otro mapa del juego. Usá ${Math.max(...taken) + 1}.`]);
+  if (!out.length) out.push(["ok", "Todo en orden para el juego."]);
+  return { out, length };
+}
+function refreshReview() {
+  const { out, length } = review();
+  const geysers = map.pieces.filter((p) => p.type === "geyser").length;
+  const caves = map.pieces.filter((p, i) => p.type === "rock_formation" && computed().line.length > 2 && computed().shapes[i]?.length >= 3 && rockTouchesTrack(computed().shapes[i], computed().line)).length;
+  $("stats").innerHTML = "";
+  for (const [v, l] of [[Math.round(length), "m por vuelta"], [map.islands.length, "islas"], [caves, caves === 1 ? "cueva" : "cuevas"], [map.laps, "vueltas"], [map.path.length, "puntos"], [geysers, "géiseres"]]) {
+    const d = document.createElement("div"); d.className = "stat";
+    const b = document.createElement("b"); b.textContent = v; const sp = document.createElement("span"); sp.textContent = l;
+    d.append(b, sp); $("stats").append(d);
+  }
+  const ul = $("warns"); ul.innerHTML = "";
+  for (const [lvl, text] of out) {
+    const li = document.createElement("li");
+    const pill = document.createElement("span"); pill.className = "pill " + lvl; pill.textContent = lvl === "bad" ? "Error" : lvl === "warn" ? "Ojo" : "Bien";
+    const t = document.createElement("span"); t.textContent = text;
+    li.append(pill, t); ul.append(li);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Abrir, importar, exportar y guardar para el juego
+// ---------------------------------------------------------------------------
+const saved = new Map();
+function fillPicker() {
+  const pk = $("mapPicker"); pk.innerHTML = "";
+  const g1 = document.createElement("optgroup"); g1.label = "Mapas del juego";
+  BUILTIN.forEach((b, i) => { const o = document.createElement("option"); o.value = "builtin:" + i; o.textContent = cap(b.name); g1.append(o); });
+  pk.append(g1);
+  if (saved.size) {
+    const g2 = document.createElement("optgroup"); g2.label = "Guardados";
+    for (const [id, d] of saved) { const o = document.createElement("option"); o.value = "saved:" + id; o.textContent = cap(d.name || id); g2.append(o); }
+    pk.append(g2);
+  }
+  const o = document.createElement("option"); o.value = "new"; o.textContent = "+ Mapa nuevo"; pk.append(o);
+  if (currentKey === "draft") { const od = document.createElement("option"); od.value = "draft"; od.textContent = `Borrador: ${cap(map.name)}`; pk.prepend(od); }
+  pk.value = currentKey;
+}
+const cap = (t) => (t ? t[0].toUpperCase() + t.slice(1) : t);
+function openMap(key) {
+  if (key === "new") {
+    const next = Math.max(...BUILTIN.map((b) => b.order), ...[...saved.values()].map((d) => d.order ?? 0)) + 1;
+    map = fromJSON({ id: "mapa_nuevo", name: "mapa nuevo", order: next, laps: 3, half_width: 20, smoothing: 20, ring_count: 12, rock_count: 10, path: [], islands: [], pieces: [] });
+    currentKey = "draft"; setTool("track");
+  } else if (key.startsWith("builtin:")) { map = fromJSON(BUILTIN[+key.slice(8)]); currentKey = key; }
+  else if (key.startsWith("saved:")) { map = fromJSON(saved.get(key.slice(6))); currentKey = key; }
+  sel = { kind: "map" }; drawing = null;
+  resetHistory(); fillPicker(); invalidate(); refreshPanel(); fit(); saveDraft();
+}
+$("mapPicker").addEventListener("change", (e) => openMap(e.target.value));
+
+function showJSON() {
+  $("jsonTitle").textContent = "JSON del mapa";
+  $("jsonNote").textContent = `Este es el archivo del mapa, tal como lo lee el juego (world/maps/${toJSON(map).id}.json).`;
+  $("jsonText").value = prettyJSON(toJSON(map)); $("jsonText").readOnly = true;
+  $("jsonLoad").hidden = true; $("jsonCopy").hidden = false; $("jsonDownload").hidden = false;
+  $("jsonDlg").showModal();
+}
+function showImport() {
+  $("jsonTitle").textContent = "Importar un mapa";
+  $("jsonNote").textContent = "Pegá acá el JSON de un mapa (por ejemplo un archivo de world/maps/).";
+  $("jsonText").value = ""; $("jsonText").readOnly = false;
+  $("jsonLoad").hidden = false; $("jsonCopy").hidden = true; $("jsonDownload").hidden = true;
+  $("jsonDlg").showModal(); $("jsonText").focus();
+}
+$("exportBtn").onclick = showJSON;
+$("importBtn").onclick = showImport;
+$("jsonLoad").onclick = () => {
+  try {
+    const d = JSON.parse($("jsonText").value);
+    if (!d || typeof d !== "object" || (!d.path && !d.islands)) throw new Error("no parece un mapa");
+    map = fromJSON(d); currentKey = "draft"; sel = { kind: "map" };
+    resetHistory(); fillPicker(); invalidate(); refreshPanel(); fit(); saveDraft();
+    $("jsonDlg").close(); toast("Mapa importado.");
+  } catch (err) { toast("No se pudo leer: " + err.message); }
+};
+$("jsonCopy").onclick = async () => {
+  const ta = $("jsonText");
+  try { await navigator.clipboard.writeText(ta.value); toast("JSON copiado."); }
+  catch { ta.focus(); ta.select(); toast("Seleccionado: copialo con Ctrl+C."); }
+};
+$("jsonDownload").onclick = async () => {
+  const d = toJSON(map);
+  try {
+    const dl = await window.claude?.use?.("downloads");
+    if (!dl) throw { code: "unavailable" };
+    await dl.save({ filename: `${d.id}.json`, data: prettyJSON(d) + "\n" });
+    toast("Archivo listo.");
+  } catch (err) {
+    if (err?.code === "declined") return;
+    toast("Acá no se puede descargar: usá Copiar.");
+  }
+};
+
+async function saveForGame() {
+  const errs = review().out.filter((r) => r[0] === "bad");
+  if (errs.length) { toast("Primero arreglá los errores de la revisión."); return; }
+  if (drawing) finishDrawing();
+  const d = toJSON(map);
+  if (!db) { showJSON(); toast("No se pudo guardar acá: copiá el JSON y pasáselo a Claude."); return; }
+  try {
+    await db.collection("maps").doc(d.id).set({ id: d.id, name: d.name, order: d.order, json: prettyJSON(d), updated: new Date().toISOString() });
+    currentKey = "saved:" + d.id;
+    toast(`Guardado "${cap(d.name)}". Avisale a Claude que lo agregue al juego.`);
+  } catch (err) {
+    showJSON(); toast("No se pudo guardar (" + (err?.code || "error") + "): copiá el JSON.");
+  }
+}
+$("saveBtn").onclick = saveForGame;
+
+function renderSaved() {
+  const box = $("savedList"); box.innerHTML = "";
+  if (!db) { box.append(note("Guardar para el juego no está disponible en esta vista. Usá Ver JSON y copiáselo a Claude.")); return; }
+  if (!saved.size) { box.append(note("Todavía no guardaste ninguno. Cuando un mapa esté listo, tocá Guardar para el juego y avisale a Claude.")); return; }
+  for (const [id, d] of saved) {
+    const b = document.createElement("button"); b.type = "button";
+    const n = document.createElement("span"); n.textContent = cap(d.name || id);
+    const t = document.createElement("small"); t.textContent = (d.updated || "").slice(0, 10) + ` · #${d.order}`;
+    b.append(n, t); b.onclick = () => openMap("saved:" + id);
+    box.append(b);
+  }
+}
+async function connectDb() {
+  const timer = setTimeout(() => { if (!db) renderSaved(); }, 10000);
+  try {
+    db = await window.claude?.use?.("db");
+  } catch { db = null; }
+  clearTimeout(timer);
+  if (!db) { renderSaved(); return; }
+  db.collection("maps").onSnapshot((snap) => {
+    saved.clear();
+    snap.docs.forEach((doc) => { try { const d = doc.data(); const m = JSON.parse(d.json); saved.set(doc.id, { ...m, updated: d.updated }); } catch {} });
+    renderSaved(); fillPicker();
+  }, () => renderSaved());
+}
+
+// Borrador local (por si se cierra la página).
+function saveDraft() { try { localStorage.setItem("simplesurf-editor-draft", JSON.stringify({ key: currentKey, map: toJSON(map) })); } catch {} }
+function loadDraft() {
+  try {
+    const d = JSON.parse(localStorage.getItem("simplesurf-editor-draft") || "null");
+    if (d?.map) { map = fromJSON(d.map); currentKey = d.key?.startsWith("builtin:") ? d.key : "draft"; return true; }
+  } catch {}
+  return false;
+}
+
+let toastTimer = 0;
+function toast(t) { const el = $("toast"); el.textContent = t; el.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => (el.hidden = true), 3200); }
+
+// ---------------------------------------------------------------------------
+// Arranque: abre el archipiélago (o el borrador que quedó).
+// ---------------------------------------------------------------------------
+new ResizeObserver(resize).observe(cv);
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
+new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+loadDraft();
+resetHistory();
+fillPicker();
+sel = { kind: "map" };
+setTool("select");
+requestAnimationFrame(() => { resize(); fit(); });
+document.fonts?.ready.then(draw);
+connectDb();
+</script>

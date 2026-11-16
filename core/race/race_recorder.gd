@@ -163,8 +163,8 @@ func to_dict() -> Dictionary:
 		if is_instance_valid(ring):
 			rings.append([_r(ring.position.x), _r(ring.position.z)])
 	var geysers: Array = []
-	for g in course.geysers:
-		if is_instance_valid(g):
+	for g in course.get_tree().get_nodes_in_group("geyser"):
+		if course.is_ancestor_of(g):
 			geysers.append([_r(g.position.x), _r(g.position.z)])
 	return {
 		"version": VERSION,

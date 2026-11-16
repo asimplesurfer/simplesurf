@@ -1,0 +1,15 @@
+{
+	"format": 1,
+	"id": "classic",
+	"name": "isla (anillo)",
+	"order": 0,
+	"laps": 5,
+	"ring_radius": 82,
+	"half_width": 20,
+	"ring_count": 10,
+	"rock_count": 12,
+	"islands": [
+		{"x": 0, "z": 0, "radius": 45, "lighthouse": true, "seed": 11}
+	],
+	"pieces": []
+}
