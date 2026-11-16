@@ -254,7 +254,12 @@ func _leave_edge(rider: Rider) -> void:
 
 
 ## Choque: se cae, queda fuera del obstáculo y mirando en el sentido de la
-## carrera (para no volver a chocarlo apenas se levanta).
+## carrera (para no volver a chocarlo apenas se levanta). Lo usan también las
+## piezas que se chocan (una isla tropical).
+func crash(rider: Rider, safe_position: Vector3) -> void:
+	_crash(rider, safe_position)
+
+
 func _crash(rider: Rider, safe_position: Vector3) -> void:
 	rider.crash(safe_position)
 	rider.heading = track.heading_at(track.angle_of(rider.position))

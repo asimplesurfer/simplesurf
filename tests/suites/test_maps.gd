@@ -8,6 +8,7 @@ func run() -> void:
 	_test_bezier()
 	await _test_cave()
 	await _test_cave_map()
+	await _test_tropical_island()
 	await _test_archipelago()
 	await _test_atoll()
 
@@ -225,6 +226,45 @@ func _test_cave_map() -> void:
 		if not race.finished(rr):
 			all_done = false
 	_check(finished or all_done, "los bots completan la vuelta de la cueva")
+	m.queue_free()
+	await process_frame
+	GameSettings.track_layout = GameSettings.TrackLayout.CLASSIC
+
+
+## Una isla tropical dibujada: arena, selva y palmeras (todo en pocas
+## MultiMesh) y se choca como una isla.
+func _test_tropical_island() -> void:
+	print("Isla tropical dibujada:")
+	GameSettings.track_layout = GameSettings.TrackLayout.ARCHIPELAGO
+	var d: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://world/maps/archipelago.json"))
+	d.pieces = [{"type": "tropical_island", "shape": [[205, -60], [260, -95], [330, -80], [365, -20], [345, 40], [290, 55], [240, 25], [215, -10]]}]
+	var m: Node = load("res://main.tscn").instantiate()
+	var course := m.get_node("Course") as Course
+	course.map = TrackMap.from_dict(d)
+	root.add_child(m)
+	var race := m.get_node("RaceManager") as RaceManager
+	await process_frame
+	await process_frame
+	var isl := course.get_node_or_null("TropicalIsland")
+	_check(isl != null and isl.get_node_or_null("Sand") != null and isl.get_node_or_null("Grass") != null, "tiene arena y pasto")
+	var palms := (isl.get_node("Fronds") as MultiMeshInstance3D).multimesh.instance_count
+	var draws := 0
+	for c in isl.get_children():
+		if c is MultiMeshInstance3D or c is MeshInstance3D:
+			draws += 1
+	_check(palms > 600 and draws <= 8, "muchas palmeras en pocas mallas (%d hojas, %d mallas)" % [palms, draws])
+	_check(
+		(isl.get_node("Bushes") as MultiMeshInstance3D).cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,
+		"los arbustos no hacen sombra"
+	)
+	race.skip_countdown()
+	await process_frame
+	var r: Rider = race.racers[0]
+	r.position = Vector3(285, r.position.y, -15)
+	await process_frame
+	await process_frame
+	var piece: TropicalIslandPiece = course.pieces[0]
+	_check(r.is_fallen() and not piece.covers(r.position.x, r.position.z), "subirse a la isla tira al surfista y lo deja en el agua")
 	m.queue_free()
 	await process_frame
 	GameSettings.track_layout = GameSettings.TrackLayout.CLASSIC
