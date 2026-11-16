@@ -82,7 +82,7 @@ const ACCENT_NAMES := [
 const SHORTS_TWO_COLORS := [1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
 const BOARD_TWO_COLORS := [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
 
-const HEAD_SHAPES := ["Normal", "Ancha", "Alargada", "Chata"]
+const HEAD_SHAPES := ["Normal", "Ancha", "Alargada", "Chata", "Redonda", "Ovalada", "Suave"]
 ## Silueta: normal (la de la barra) o flaca (todo más finito, sin músculos).
 const BUILDS := ["Normal", "Flaca"]
 const SLIM := 1
@@ -92,6 +92,11 @@ const HEAD_SCALES := [
 	Vector3(1.3, 0.92, 1.1),
 	Vector3(0.85, 1.28, 0.92),
 	Vector3(1.15, 0.78, 1.15),
+	# Redonda, Ovalada y Suave: la forma la da el perfil de la cara (ver
+	# AvatarFeatures.HEAD_PROFILES), no la escala.
+	Vector3(1.0, 1.0, 1.0),
+	Vector3(0.96, 1.04, 0.98),
+	Vector3(1.0, 1.0, 1.0),
 ]
 const HAIR_STYLES := [
 	"Pelado", "Rapado", "Melena surfer", "Rulos", "Cresta", "Pinchos", "Moño", "Peluquín",
@@ -160,7 +165,7 @@ const PRESETS := [
 		"shorts_pattern_color2": 3, "skin": 3, "top": 0, "weight": 0.2},
 	{"board": 2, "board_design": 5, "board_design_color": 0, "board_design_color2": 1, "bottom": 0, "build": 0,
 		"ears": 0, "extra": 0, "eyes": 0, "glasses": 13, "hair": 15, "hair_color": 1, "hat": 0, "hat_color": 1,
-		"head": 0, "mouth": 0, "neck": 10, "nose": 5, "shorts": 1, "shorts_pattern": 14, "shorts_pattern_color": 9,
+		"head": 0, "mouth": 13, "neck": 10, "nose": 5, "shorts": 1, "shorts_pattern": 14, "shorts_pattern_color": 9,
 		"shorts_pattern_color2": 2, "shorts_tie": 0, "skin": 1, "top": 0, "top_color": 4, "top_color2": 2,
 		"trim_color": 0, "weight": 0.0},
 ]
