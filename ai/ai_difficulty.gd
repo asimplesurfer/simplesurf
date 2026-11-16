@@ -37,6 +37,12 @@ extends Resource
 ## Línea de carrera: 0 = sigue su camino; 1 = corta siempre por adentro de las
 ## curvas (el camino más corto), como un experto.
 @export_range(0.0, 1.0) var line_skill: float = 0.0
+## Cuánto se sale de su línea (m) para ir a buscar una ola o un aro. Los
+## mejores no se desvían: las olas les llegan solas a la línea.
+@export var detour: float = 40.0
+## Tira el turbo apenas tiene una carga (sobre todo en el aire), sin guardar.
+## Así juegan los que mejor juegan: turbo casi todo el tiempo.
+@export var eager_turbo: bool = false
 ## Margen (s) que deja antes de tocar el agua para terminar una vuelta de truco.
 ## Menos margen = más vueltas (y más nitro), con más riesgo.
 @export var trick_margin: float = 0.12
@@ -113,7 +119,9 @@ static func preset(level: int) -> AIDifficulty:
 			d.pop_skill = 0.93
 			d.wave_seek = 0.9
 			d.mash_rate = 8.5
-			d.line_skill = 0.3
+			d.line_skill = 0.75
+			d.detour = 9.0
+			d.eager_turbo = true
 			d.trick_margin = 0.11
 			d.rock_throttle = 0.7
 			d.evade_skill = 0.35
@@ -136,10 +144,12 @@ static func preset(level: int) -> AIDifficulty:
 			d.pop_skill = 1.0
 			d.wave_seek = 1.0
 			d.mash_rate = 10.0
-			d.line_skill = 0.8
+			d.line_skill = 1.0
+			d.detour = 3.0
+			d.eager_turbo = true
 			d.trick_margin = 0.1
 			d.rock_throttle = 0.9
-			d.saves_turbo_for_waves = true
+			d.saves_turbo_for_waves = false
 			d.evade_skill = 1.0
 			d.rock_margin = 1.5
 			d.reads_landing = true
