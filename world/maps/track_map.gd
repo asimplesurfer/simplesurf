@@ -28,6 +28,9 @@ var laps: int = 3
 var path: PackedVector2Array = PackedVector2Array()
 var handles_in: Array = []
 var handles_out: Array = []
+## Recta de la meta (opcional; ver PathTrack.start_strip). Vacío: la meta va
+## en el primer punto del recorrido (como en los primeros mapas).
+var start: Dictionary = {}
 ## Cuánto se redondean las curvas del recorrido (pasadas de suavizado).
 var smoothing: int = 60
 var ring_radius: float = 82.0
@@ -139,7 +142,13 @@ static func from_dict(d: Dictionary, errors: PackedStringArray = PackedStringArr
 			m.handles_out.append(_vec(node["out"]) if node.get("out") != null else null)
 		else:
 			errors.append("punto del recorrido mal escrito: %s" % str(node))
-	if not m.path.is_empty() and m.path.size() < 3:
+	var st: Variant = d.get("start")
+	if st is Dictionary and not (st as Dictionary).is_empty():
+		for key in ["x", "z", "angle"]:
+			if not (st as Dictionary).has(key):
+				errors.append("a la recta de la meta le falta \"%s\"" % key)
+		m.start = st
+	if not m.path.is_empty() and m.path.size() < (1 if not m.start.is_empty() else 3):
 		errors.append("el recorrido necesita al menos 3 puntos")
 	for isl in d.get("islands", []):
 		if not isl is Dictionary or not isl.has("x") or not isl.has("z") or not isl.has("radius"):
@@ -184,6 +193,8 @@ func to_dict() -> Dictionary:
 	else:
 		d["path"] = path_out
 		d["smoothing"] = smoothing
+		if not start.is_empty():
+			d["start"] = start
 	return d
 
 

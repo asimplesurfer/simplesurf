@@ -27,19 +27,62 @@ var _grid: Dictionary = {}
 ## `handles_in` / `handles_out`: manija de entrada y de salida de cada punto
 ## (relativas al punto; null o vacío = automática). `smoothing`: pasadas de
 ## suavizado (redondean las curvas más cerradas).
+## `start`: recta de la meta (opcional, ver start_strip). Si está, la meta va
+## en esa recta, la pista sale de su punta de adelante, pasa por los puntos de
+## control y vuelve a entrar por la punta de atrás. La recta no se suaviza.
 func _init(
 	control: PackedVector2Array = PackedVector2Array(), p_half_width: float = 20.0,
-	handles_in: Array = [], handles_out: Array = [], smoothing: int = 60
+	handles_in: Array = [], handles_out: Array = [], smoothing: int = 60, start: Dictionary = {}
 ) -> void:
 	half_width = p_half_width
-	if control.size() >= 3:
-		_build(control, handles_in, handles_out, smoothing)
+	if control.size() >= (1 if not start.is_empty() else 3):
+		_build(control, handles_in, handles_out, smoothing, start)
 
 
-func _build(control: PackedVector2Array, handles_in: Array, handles_out: Array, smoothing: int) -> void:
+## La recta de la meta: {"x", "z": la línea de llegada; "angle": hacia dónde
+## corre la carrera (grados; 0 = +X, 90 = -Z); "back" / "front": metros de
+## recta antes y después de la meta; "bend": curva leve (grados que gira de
+## punta a punta)}. Devuelve [puntos de la punta de atrás a la de adelante
+## (cada ~2 m), índice de la meta].
+static func start_strip(start: Dictionary) -> Array:
+	var finish := Vector2(float(start.get("x", 0.0)), float(start.get("z", 0.0)))
+	var a := deg_to_rad(float(start.get("angle", 0.0)))
+	var back := maxf(float(start.get("back", 40.0)), 2.0)
+	var front := maxf(float(start.get("front", 60.0)), 2.0)
+	var bend := deg_to_rad(clampf(float(start.get("bend", 0.0)), -10.0, 10.0))
+	var total := back + front
+	var nb := maxi(int(ceil(back / 2.0)), 1)
+	var nf := maxi(int(ceil(front / 2.0)), 1)
+	var pts: Array[Vector2] = []
+	# Hacia atrás desde la meta.
+	var p := finish
+	var behind: Array[Vector2] = []
+	for i in nb:
+		var s := -back * (i + 0.5) / nb
+		var h := a + bend * s / total
+		p -= Vector2(cos(h), -sin(h)) * (back / nb)
+		behind.append(p)
+	behind.reverse()
+	pts.append_array(behind)
+	var f := pts.size()
+	pts.append(finish)
+	p = finish
+	for i in nf:
+		var s := front * (i + 0.5) / nf
+		var h := a + bend * s / total
+		p += Vector2(cos(h), -sin(h)) * (front / nf)
+		pts.append(p)
+	return [PackedVector2Array(pts), f]
+
+
+func _build(control: PackedVector2Array, handles_in: Array, handles_out: Array, smoothing: int, start: Dictionary = {}) -> void:
 	# Curva por los puntos de control.
 	var raw := PackedVector2Array()
-	var n := control.size()
+	# Muestras que no se suavizan (la recta de la meta).
+	var fixed: Array[bool] = []
+	if not start.is_empty():
+		_build_with_start(control, handles_in, handles_out, start, raw, fixed)
+	var n := 0 if not start.is_empty() else control.size()
 	for i in n:
 		var p0 := control[(i - 1 + n) % n]
 		var p1 := control[i]
@@ -56,13 +99,16 @@ func _build(control: PackedVector2Array, handles_in: Array, handles_out: Array, 
 			var c2: Vector2 = p2 + (h_in if h_in != null else (p1 - p3) / 6.0)
 			for j in 24:
 				raw.append(_bezier(p1, c1, c2, p2, j / 24.0))
-	# Suavizado (agranda las curvas más cerradas).
+	# Suavizado (agranda las curvas más cerradas). La recta de la meta queda.
 	var m := raw.size()
 	for it in smoothing:
 		var smooth := PackedVector2Array()
 		smooth.resize(m)
 		for i in m:
-			smooth[i] = (raw[(i - 1 + m) % m] + raw[i] * 2.0 + raw[(i + 1) % m]) * 0.25
+			if not fixed.is_empty() and fixed[i]:
+				smooth[i] = raw[i]
+			else:
+				smooth[i] = (raw[(i - 1 + m) % m] + raw[i] * 2.0 + raw[(i + 1) % m]) * 0.25
 		raw = smooth
 	# Re-muestreo en tramos iguales: así el "ángulo" avanza parejo.
 	var total := 0.0
@@ -89,6 +135,50 @@ func _build(control: PackedVector2Array, handles_in: Array, handles_out: Array, 
 		c += p
 	center = c / count
 	_build_grid()
+
+
+## Con recta de meta: meta -> punta de adelante (fija), curvas por los puntos
+## de control (las manijas de las puntas siguen la recta, así empalma sin
+## quiebre), punta de atrás -> meta (fija). La muestra 0 es la meta.
+static func _build_with_start(control: PackedVector2Array, handles_in: Array, handles_out: Array,
+		start: Dictionary, raw: PackedVector2Array, fixed: Array[bool]) -> void:
+	var strip := start_strip(start)
+	var pts: PackedVector2Array = strip[0]
+	var f: int = strip[1]
+	var last := pts.size() - 1
+	for i in range(f, pts.size()):
+		raw.append(pts[i])
+		fixed.append(true)
+	var front_end := pts[last]
+	var back_end := pts[0]
+	var dir_front := (pts[last] - pts[last - 1]).normalized()
+	var dir_back := (pts[1] - pts[0]).normalized()
+	var chain := PackedVector2Array([front_end])
+	chain.append_array(control)
+	chain.append(back_end)
+	var ins: Array = [null]
+	var outs: Array = [null]
+	for i in control.size():
+		ins.append(handles_in[i] if i < handles_in.size() else null)
+		outs.append(handles_out[i] if i < handles_out.size() else null)
+	ins.append(null)
+	outs.append(null)
+	var k := chain.size() - 1
+	for i in k:
+		var p1 := chain[i]
+		var p2 := chain[i + 1]
+		var p0 := chain[maxi(i - 1, 0)]
+		var p3 := chain[mini(i + 2, k)]
+		var reach := p1.distance_to(p2) / 3.0
+		var c1: Vector2 = p1 + (dir_front * reach if i == 0 else (outs[i] if outs[i] != null else (p2 - p0) / 6.0))
+		var c2: Vector2 = p2 + (-dir_back * reach if i + 1 == k else (ins[i + 1] if ins[i + 1] != null else (p1 - p3) / 6.0))
+		# Sin repetir las puntas de la recta (ya están).
+		for j in range(1, 24 if i + 1 == k else 25):
+			raw.append(_bezier(p1, c1, c2, p2, j / 24.0))
+			fixed.append(false)
+	for i in f:
+		raw.append(pts[i])
+		fixed.append(true)
 
 
 static func _bezier(p0: Vector2, c1: Vector2, c2: Vector2, p1: Vector2, t: float) -> Vector2:

@@ -6,6 +6,7 @@ func run() -> void:
 	_test_map_files()
 	_test_pieces()
 	_test_bezier()
+	_test_start_straight()
 	await _test_cave()
 	await _test_cave_map()
 	await _test_tropical_island()
@@ -88,6 +89,39 @@ func _test_bezier() -> void:
 	var bent := PathTrack.new(square, 20.0, ins, outs, 0)
 	var bulge := bent.position_at(TAU * 0.125)
 	_check(bent.length() > 830.0 and bulge.z < -30.0, "girando las manijas, el tramo se curva (%.0f m)" % bent.length())
+
+
+## Recta de la meta: la largada siempre en un tramo recto (40 m antes y 60
+## después por defecto) que no se suaviza; los surfistas arrancan mirando
+## hacia donde va la pista.
+func _test_start_straight() -> void:
+	print("Recta de la meta:")
+	var control := PackedVector2Array([Vector2(200, 80), Vector2(120, 220), Vector2(-80, 200)])
+	var start := {"x": 0.0, "z": 0.0, "angle": 30.0, "back": 40.0, "front": 60.0}
+	var t := PathTrack.new(control, 20.0, [], [], 40, start)
+	var p0 := t.position_at(0.0)
+	_check(Vector2(p0.x, p0.z).length() < 0.5, "la meta está en la recta (y la vuelta empieza ahí)")
+	var dir := Vector2(cos(deg_to_rad(30.0)), -sin(deg_to_rad(30.0)))
+	var straight := true
+	for m in range(-36, 57, 3):
+		var tg := t.tangent_at(float(m) / t.length() * TAU)
+		if absf(Vector2(tg.x, tg.z).angle_to(dir)) > deg_to_rad(0.5):
+			straight = false
+	_check(straight, "40 m antes y 60 m después la pista es recta (no la redondea el suavizado)")
+	var h := t.heading_at(RaceManager.START_ANGLE)
+	_check(Vector2(-sin(h), -cos(h)).dot(dir) > 0.999, "en la largada se mira hacia donde va la pista")
+	var q := t.position_at(TAU * 0.5)
+	_check(absf(t.lateral_of(q)) < 0.5 and t.length() > 600.0, "la recta empalma con el resto de la pista (%.0f m)" % t.length())
+	# Curva leve: gira de punta a punta lo que se pidió.
+	start["bend"] = 8.0
+	var tb := PathTrack.new(control, 20.0, [], [], 40, start)
+	var a0 := tb.tangent_at(-36.0 / tb.length() * TAU)
+	var a1 := tb.tangent_at(56.0 / tb.length() * TAU)
+	var turn := rad_to_deg(absf(Vector2(a0.x, a0.z).angle_to(Vector2(a1.x, a1.z))))
+	_check(turn > 5.0 and turn < 9.0, "con curva leve, la recta gira apenas (%.1f grados)" % turn)
+	# El archivo del mapa la guarda y la lee igual.
+	var d := TrackMap.from_dict({"id": "x", "path": [[200, 80]], "start": start}).to_dict()
+	_check(d.get("start", {}).get("bend") == 8.0, "el mapa guarda la recta de la meta")
 
 
 ## El archipiélago con una cueva dibujada sobre la pista y una roca de paisaje.
