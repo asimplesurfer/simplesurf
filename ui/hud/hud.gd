@@ -266,6 +266,12 @@ func _process(delta: float) -> void:
 		var race := _race()
 		_lap_label.text = "VUELTA %d/%d" % [race.lap_of(rider), race.config.laps]
 		_place_label.text = "%dº" % race.place_of(rider)
+		if race.time_trial:
+			# Contrarreloj: el tiempo en vez del puesto, y el récord a batir.
+			var t: float = race.finish_times.get(rider, race.race_time)
+			_place_label.text = ResultsPanel.format_time(t)
+			var best := race.time_trial.best_time
+			_lap_label.text += "\nRécord %s" % (ResultsPanel.format_time(best) if best > 0.0 else "--")
 		if race.is_wrong_way(rider) and _center_time <= 0.0:
 			_center_label.text = "¡Al revés!"
 			_center_label.add_theme_color_override("font_color", BAD_COLOR)

@@ -44,6 +44,8 @@ var _demo_restart_timer: float = -1.0
 var _last_tick: int = -1
 ## Registro de la carrera (para analizar cómo se jugó; no en la demo).
 var recorder: RaceRecorder
+## Contrarreloj: tiempos, récords y fantasma (null en las carreras normales).
+var time_trial: TimeTrial
 
 
 func _ready() -> void:
@@ -52,6 +54,16 @@ func _ready() -> void:
 	_setup_input()
 	_spawn_racers()
 	_countdown = countdown_time
+	if config.is_time_trial():
+		time_trial = TimeTrial.new()
+		time_trial.name = "TimeTrial"
+		add_child(time_trial)
+		time_trial.setup(self)
+		# Olas siempre en los mismos lugares (para que los tiempos se comparen).
+		var waves := get_parent().get_node_or_null("WaveManager") as WaveManager
+		if waves:
+			waves.set_mode(GameSettings.WaveMode.SURGES)
+			waves.fixed_waves = true
 	if not is_demo():
 		recorder = RaceRecorder.new()
 		recorder.name = "Recorder"

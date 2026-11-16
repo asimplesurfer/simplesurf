@@ -46,6 +46,18 @@ var _ensure_timer: float = 0.0
 var _rng := RandomNumberGenerator.new()
 var _timer: float = 1.0
 var _water: Water
+## Contrarreloj: las olas grandes salen siempre en los mismos lugares de la
+## pista (sembradas por mapa), cuando el corredor se acerca. Así cada intento
+## tiene las mismas olas y los tiempos se pueden comparar.
+var fixed_waves: bool = false
+## Olas fijas: [metros donde aparece, metros donde se dispara, lateral,
+## altura, ancho (x altura), velocidad, vida, giro].
+var _fixed: Array = []
+var _next_fixed: int = 0
+## Dónde nació cada ola fija (x, z), en orden (para comparar intentos).
+var fixed_spawned: Array = []
+## Cada cuántos metros de pista hay una ola fija (al azar entre los dos).
+const FIXED_SPACING := Vector2(42.0, 70.0)
 
 
 func _ready() -> void:
@@ -120,6 +132,9 @@ func _physics_process(delta: float) -> void:
 	if not enabled or _water == null or mode != GameSettings.WaveMode.SURGES or amplitude_scale <= 0.0:
 		return
 	_retire_passed()
+	if fixed_waves:
+		_update_fixed()
+		return
 	# Nunca un rato largo sin olas: cada jugador tiene que tener una viniendo.
 	_ensure_timer -= delta
 	if _ensure_timer <= 0.0:
@@ -140,6 +155,59 @@ func _physics_process(delta: float) -> void:
 		var s := make_swell()
 		if s:
 			_water.add_swell(s)
+
+
+## Olas fijas de la contrarreloj: cada una aparece adelante del corredor
+## cuando llega a su punto de la pista (siempre las mismas, en el mismo orden).
+func _update_fixed() -> void:
+	var course := GameSession.find_in_scene(self, "course") as Course
+	var race := GameSession.find_in_scene(self, "race_manager") as RaceManager
+	if course == null or race == null or race.racers.is_empty():
+		return
+	var track := course.track
+	var lap_m := track.length()
+	if _fixed.is_empty():
+		_build_fixed(course, race.config.laps * lap_m + 200.0)
+	var r := race.racers[0]
+	var at_m := race.progress_of(r) / TAU * lap_m
+	while _next_fixed < _fixed.size() and at_m >= float(_fixed[_next_fixed][1]):
+		var f: Array = _fixed[_next_fixed]
+		_next_fixed += 1
+		var angle: float = float(f[0]) / lap_m * TAU
+		var pos := track.position_at(angle, f[2])
+		var t := track.tangent_at(angle)
+		var s := Swell.new()
+		s.center = Vector2(pos.x, pos.z)
+		s.direction = -Vector2(t.x, t.z).normalized().rotated(f[7])
+		s.half_length = course.half_width + 10.0
+		s.max_amplitude = f[3]
+		s.width = s.max_amplitude * float(f[4])
+		s.speed = f[5]
+		s.lifetime = f[6]
+		s.grow_time = 2.5
+		s.fade_time = 4.0
+		if not _far_from_island(s):
+			continue
+		_free_slot()
+		if _water.can_add_swell():
+			_water.add_swell(s)
+			fixed_spawned.append([snappedf(s.center.x, 0.01), snappedf(s.center.y, 0.01)])
+
+
+## Arma la lista de olas fijas para `total_m` metros de pista (semilla por mapa).
+func _build_fixed(course: Course, total_m: float) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7919 * (course.layout + 1) + 31
+	var d := 60.0
+	while d < total_m:
+		var ahead := rng.randf_range(incoming_distance_min, incoming_distance_max)
+		var amp := rng.randf_range(amplitude_min, amplitude_max)
+		_fixed.append([
+			d, d - ahead, rng.randf_range(-6.0, 6.0), amp, rng.randf_range(1.6, 2.0),
+			rng.randf_range(4.0, 6.5), rng.randf_range(18.0, 26.0), rng.randf_range(-0.15, 0.15),
+		])
+		d += rng.randf_range(FIXED_SPACING.x, FIXED_SPACING.y)
+	_next_fixed = 0
 
 
 ## Jugadores a los que se les garantizan olas: las personas (si no hay, como
