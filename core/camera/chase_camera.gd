@@ -25,6 +25,12 @@ var _water: Water
 ## cada ola) y todo en el aire (para no perderlo cuando sube mucho).
 var _follow_y: float = 0.6
 
+## Intro de la carrera (ver _intro_camera).
+const INTRO_SPAN := 2.2
+var _race: RaceManager
+var _race_checked: bool = false
+var _in_intro: bool = false
+
 ## Sacudón (al atravesar una ola): se va apagando solo.
 var _shake: float = 0.0
 
@@ -34,24 +40,18 @@ var looking_back: bool = false
 const BASE_FOV := 70.0
 const BOOST_FOV := 82.0
 
-## Con turbo o motivación la cámara se aleja un poco hacia atrás (sensación de
-## velocidad). Tres distancias para probar: la tecla B pasa a la siguiente y
-## hace un alejamiento de muestra.
-const BOOST_PULLBACKS: Array[float] = [0.7, 1.4, 2.3]
+## Con turbo o motivación la cámara se aleja hacia atrás (sensación de
+## velocidad): TURBO_BASE + esto (8,3 m).
+const BOOST_PULLBACK := 2.3
 ## Con turbo, la distancia es esta + el alejamiento (la cámara antes iba a 6 m).
 const TURBO_BASE := 6.0
 ## Mirando hacia atrás va más lejos que de frente: al ir rápido la cámara se
 ## atrasa un poco, y desde cerca quedaría encima del personaje.
 const LOOK_BACK_DISTANCE := 6.0
-static var boost_option: int = 2
-## Muestra del alejamiento (s que quedan), al apretar B.
-const PREVIEW_TIME := 1.6
-var _preview: float = 0.0
+## Mirando hacia atrás, apunta a este punto detrás del personaje (m).
+const LOOK_BACK_FAR := 22.0
 ## 0..1: cuánto se alejó (se acerca y aleja suave).
 var _boost: float = 0.0
-## Cuadro en que se cambió la opción (con pantalla dividida hay varias cámaras
-## y todas reciben la tecla: cambia una sola vez).
-static var _cycled_frame: int = -1
 
 
 func _ready() -> void:
@@ -61,6 +61,8 @@ func _ready() -> void:
 		target = get_node_or_null(target_path) as Rider
 	if target:
 		target.wave_punched.connect(func() -> void: shake(0.6))
+		# Lo chocaron: un sacudón según la fuerza del golpe.
+		target.bumped.connect(func(_dir: Vector3, strength: float) -> void: shake(0.2 + 0.4 * strength))
 	_water = GameSession.find_in_scene(self, "water") as Water
 	if target:
 		global_position = _desired_position()
@@ -70,10 +72,11 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if target == null:
 		return
+	if _intro_camera():
+		return
 	var follow_target := 0.6 if target.grounded else 1.0
 	_follow_y = lerpf(_follow_y, follow_target, 1.0 - exp(-3.0 * delta))
 	var w := 1.0 - exp(-follow_sharpness * minf(delta, 0.1))
-	_preview = maxf(_preview - delta, 0.0)
 	var boosting_now := boosting()
 	_boost = move_toward(_boost, 1.0 if boosting_now else 0.0, delta * (2.5 if boosting_now else 1.5))
 	var back := target.input != null and target.input.look_back and not target.is_fallen()
@@ -104,24 +107,47 @@ func _process(delta: float) -> void:
 	fov = lerpf(fov, BOOST_FOV if boosting_now else BASE_FOV, 1.0 - exp(-4.0 * delta))
 
 
-## true con turbo o motivación (o la muestra de la tecla B).
+## Intro de la carrera: baja volando por la pista hacia la largada y termina
+## justo en su lugar detrás del surfista. Devuelve true mientras dura.
+func _intro_camera() -> bool:
+	if not _race_checked:
+		_race_checked = true
+		_race = GameSession.find_in_scene(self, "race_manager") as RaceManager
+	if _race == null or _race.intro_left() <= 0.0 or _race.course == null:
+		if _in_intro:
+			_in_intro = false
+			if _water:
+				_water.retarget_follower(self, target)
+		return false
+	if not _in_intro:
+		_in_intro = true
+		if _water:
+			_water.retarget_follower(target, self)
+	var u := _race.intro_progress()
+	var track := _race.course.track
+	var start := RaceManager.START_ANGLE
+	var ease := 1.0 - pow(1.0 - u, 2.2)
+	var a := lerpf(start - INTRO_SPAN, start, ease)
+	var along := track.position_at(a)
+	var ahead := track.position_at(a + 0.12)
+	var dir := (ahead - along).normalized()
+	var fly := along - dir * 18.0 + Vector3.UP * lerpf(48.0, 9.0, smoothstep(0.0, 1.0, u))
+	# Al final se junta con su lugar de siempre (sin salto al terminar).
+	var k := smoothstep(0.72, 1.0, u)
+	global_position = fly.lerp(_desired_position(), k)
+	look_at(ahead.lerp(_look_point(), k), Vector3.UP)
+	fov = BASE_FOV
+	return true
+
+
+## true con turbo o motivación.
 func boosting() -> bool:
-	return target.turbo_active or target.motivation_timer > 0.0 or _preview > 0.0
+	return target.turbo_active or target.motivation_timer > 0.0
 
 
-## Cuántos metros se aleja con turbo, según la opción elegida.
+## Cuántos metros se aleja con turbo.
 static func boost_pullback() -> float:
-	return BOOST_PULLBACKS[boost_option]
-
-
-func _unhandled_input(event: InputEvent) -> void:
-	var key := event as InputEventKey
-	if key and key.pressed and not key.echo and key.physical_keycode == KEY_B:
-		var frame := Engine.get_process_frames()
-		if _cycled_frame != frame:
-			_cycled_frame = frame
-			boost_option = (boost_option + 1) % BOOST_PULLBACKS.size()
-		_preview = PREVIEW_TIME
+	return BOOST_PULLBACK
 
 
 ## Sacude la cámara (0..1).
@@ -148,4 +174,8 @@ func _desired_position() -> Vector3:
 func _look_point() -> Vector3:
 	var p := target.global_position
 	p.y = p.y * lerpf(0.5, 1.0, (_follow_y - 0.6) / 0.4) + look_height
+	if looking_back:
+		# Mirando hacia atrás: hacia el horizonte (lejos, detrás del personaje),
+		# así se ve bien quiénes vienen; el personaje queda abajo en la imagen.
+		return p - target.forward() * LOOK_BACK_FAR + Vector3.UP * 0.6
 	return p

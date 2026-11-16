@@ -74,6 +74,7 @@ func _ready() -> void:
 		_water.set_islands(fade)
 		if uses_path():
 			_water.set_track(Vector2.ZERO, 0.0, 0.0)
+			_water.set_track_path((track as PathTrack).points, half_width)
 		else:
 			_water.set_track(track.center, inner_limit(), outer_limit())
 	markers = CourseMarkers.new()

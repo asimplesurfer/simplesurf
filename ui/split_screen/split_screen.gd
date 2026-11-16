@@ -43,11 +43,6 @@ func _ready() -> void:
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(box)
 	_tune_shadows(humans.size())
-	if not spectating:
-		var panel := TuningPanel.new()
-		panel.name = "TuningPanel"
-		# Arriba de las vistas (se agrega después de armarlas).
-		add_child.call_deferred(panel)
 	for i in humans.size():
 		var rider := humans[i]
 		var container := SubViewportContainer.new()
@@ -74,7 +69,6 @@ func _ready() -> void:
 		var hud := Hud.new()
 		hud.rider = rider
 		hud.session = session
-		hud.show_help = humans.size() == 1 and not spectating
 		hud.demo = spectating
 		hud.compact = humans.size() >= 3
 		hud.free_ride = session.free_ride()

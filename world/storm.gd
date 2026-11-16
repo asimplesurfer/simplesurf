@@ -231,7 +231,7 @@ func _paint_sky() -> void:
 		"island_far_color": Color(0.3, 0.35, 0.4),
 		"ocean_color": Color(0.1, 0.15, 0.2),
 		"cloud_coverage": 0.86,
-		"cloud_speed": 0.06,
+		"cloud_speed": 0.016,
 	}
 	for k in p:
 		_sky_mat.set_shader_parameter(k, p[k])

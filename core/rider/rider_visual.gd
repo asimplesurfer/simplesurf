@@ -33,6 +33,8 @@ const LEAN_ANGLE := 0.35
 const TUMBLE_TIME := 0.7
 ## Acostado: cuánto más atrás en la tabla va el cuerpo (m).
 const PRONE_BACK := 0.5
+## Cuánto tarda en pararse desde acostado (empuja, recoge las piernas, se para).
+const POP_UP_PRONE_TIME := 0.65
 
 var rider: Rider
 ## Para los golpes de despegue y aterrizaje de la animación.
@@ -250,9 +252,10 @@ func _on_recovery_stage_changed(stage: Rider.RecoveryStage) -> void:
 			else:  # Modo libre: frena y se acuesta a remar.
 				_pose_duration = 0.4
 				_pose_arc = 0.2
-		_:  # Se para de un salto.
-			_pose_duration = 0.3
-			_pose_arc = 0.35
+		_:  # Se para: desde acostado, empuja con las manos y sube las piernas.
+			var from_prone := _pose_from.basis.get_euler().x < -0.8
+			_pose_duration = POP_UP_PRONE_TIME if from_prone else 0.3
+			_pose_arc = 0.2 if from_prone else 0.35
 
 
 func _on_mash_pressed() -> void:
@@ -487,10 +490,17 @@ func _update_avatar_anim(delta: float) -> void:
 			a = &"flail" if _stage_time < 1.4 or _punch > 0.3 else &"tread"
 		Rider.RecoveryStage.PRONE:
 			a = &"climb" if _climbing and _stage_time < rider.stats.climb_time else &"paddle"
-			_body.effort = maxf(_body.effort, clampf(rider.speed / 3.0, 0.0, 1.0))
+			# Rema solo si empuja (quieto o dejándose llevar, los brazos
+			# descansan); cuanto más rápido va, brazadas más rápidas y amplias.
+			var push := 1.0
+			if rider.input != null and rider.free_ride:
+				push = clampf(rider.input.throttle, 0.0, 1.0)
+			var pace := clampf(rider.speed / 2.7, 0.0, 1.0)
+			_body.effort = maxf(_body.effort, push * (0.3 + 0.7 * pace))
 		_:
-			if _stage_time < 0.3 and _pose_t < 1.0:
+			if _stage_time < _pose_duration and _pose_t < 1.0:
 				a = &"pop_up"
+				_body.pop_time = _pose_duration
 			elif duck_time > 0.0:
 				a = &"duck"
 			elif not rider.grounded:

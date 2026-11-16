@@ -9,7 +9,8 @@ extends Control
 ## 3. "Armá la partida": bots, dificultad, olas, mapa, clima. De ahí arranca la
 ##    carrera (o el modo libre). Cada jugador juega con el dispositivo con el
 ##    que se unió.
-## Sin tocar nada 10 s arranca la demo (carrera de bots).
+## Sin tocar nada 10 s arranca la demo (carrera de bots). Apenas alguien usa
+## el juego (teclado, mouse o mando) la demo ya no arranca sola.
 
 signal start_requested
 ## Eligió el modo libre (mar abierto).
@@ -93,6 +94,9 @@ var cards: Array[PlayerCard] = []
 ## Dispositivo de cada jugador que ya se unió (para volver a las tarjetas).
 var _joined: Dictionary = {}
 var _idle_time: float = 0.0
+## Alguien ya usó el juego (teclado, mouse o mando): la demo no vuelve a
+## arrancar sola mientras siga abierto.
+static var someone_played: bool = false
 var _demo_label: Label
 var _thumbs: ThumbRenderer
 var _count_label: Label
@@ -442,7 +446,8 @@ func _launch(scene_path: String, config: RaceConfig, done: Signal) -> void:
 	started_config = config
 	done.emit()
 	if auto_start:
-		GameSession.launch(get_tree(), scene_path, config)
+		# Desde el menú, con la intro (mientras carga, la cámara recorre la pista).
+		GameSession.launch(get_tree(), scene_path, config, null, true)
 
 
 # ---------------------------------------------------------------- entrada
@@ -524,6 +529,11 @@ func _input(event: InputEvent) -> void:
 	var moved := event is InputEventJoypadMotion and absf(event.axis_value) > 0.5
 	if GameSession.is_any_press(event) or moved or event is InputEventMouseButton:
 		_idle_time = 0.0
+		# El toque de celular no cuenta (la demo sigue para mostrar el juego).
+		if not is_touch(event):
+			someone_played = true
+	elif event is InputEventMouseMotion and not is_touch(event) and (event as InputEventMouseMotion).relative.length() > 2.0:
+		someone_played = true
 	if screen == "setup":
 		_setup_input(event)
 		return
@@ -566,7 +576,17 @@ func _setup_input(event: InputEvent) -> void:
 			go_players()
 
 
+## true si el evento viene de tocar la pantalla (o el mouse que imita el toque).
+static func is_touch(event: InputEvent) -> bool:
+	return event is InputEventScreenTouch or event is InputEventScreenDrag \
+		or (event is InputEventMouse and event.device == InputEvent.DEVICE_ID_EMULATION)
+
+
 func _process(delta: float) -> void:
+	if someone_played:
+		if _demo_label:
+			_demo_label.text = ""
+		return
 	_idle_time += delta
 	var left := IDLE_DEMO_TIME - _idle_time
 	if _demo_label:
