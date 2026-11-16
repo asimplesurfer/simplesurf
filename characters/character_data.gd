@@ -123,7 +123,7 @@ const FACE_EXTRAS := [
 const EARS := ["Sin orejas", "Normales", "Grandes", "Dumbo"]
 const NECKLACES := [
 	"Nada", "Perlas", "Collar de flores", "Cadena de oro", "Dientes de tiburón", "Silbato", "Caracol",
-	"Cuentas rasta", "Paz y amor", "Dientes en cordón blanco",
+	"Cuentas rasta", "Paz y amor", "Cuellito blanco",
 ]
 ## Sombreros y gorros (de playa y de mar).
 const HATS := [
