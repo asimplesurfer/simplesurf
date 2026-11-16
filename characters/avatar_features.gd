@@ -859,24 +859,27 @@ func _shaggy(hair: Color) -> void:
 	_piece(_shaggy_shell[0], Vector3.ZERO, Vector3.ONE, hair)
 	# Por dentro, más oscuro (se ve debajo de las puntas que se abren).
 	_piece(_shaggy_shell[1], Vector3.ZERO, Vector3.ONE, hair.darkened(0.35), false)
-	# Arriba: mechones que se levantan y se doblan hacia afuera (despeinado).
-	var tufts := [
-		[Vector3(-0.2, 0.68, 0.1), Vector3(-0.9, 0.7, 0.3), Vector3(-0.3, -1.0, 0.0), 0.3],
-		[Vector3(0.04, 0.74, 0.08), Vector3(-0.3, 0.8, 0.5), Vector3(-1.0, -0.4, 0.0), 0.26],
-		[Vector3(0.24, 0.68, 0.06), Vector3(0.9, 0.7, 0.3), Vector3(0.3, -1.0, 0.0), 0.3],
-		[Vector3(0.05, 0.72, -0.22), Vector3(0.4, 0.8, -0.8), Vector3(0.5, -1.0, 0.0), 0.26],
-		[Vector3(-0.3, 0.6, -0.2), Vector3(-1.0, 0.5, -0.5), Vector3(0.0, -1.0, 0.0), 0.28],
-		[Vector3(0.34, 0.58, -0.22), Vector3(1.0, 0.5, -0.5), Vector3(0.0, -1.0, 0.0), 0.26],
-	]
-	for t in tufts:
-		_lock_piece(t[0], t[1], float(t[3]) * 1.3, 0.3, t[2], hair)
-	# Costados: mechones que salen del volumen hacia afuera y abajo, con la
-	# punta curvada para arriba (como en el dibujo).
+	# Arriba: mechones acostados sobre el volumen, barridos hacia un costado
+	# y para atrás, con la punta apenas levantada (peinado con onda).
+	var vol := Vector3(0.66, 0.64, 0.6) * 1.0
+	var center := Vector3(0.0, 0.14, -0.06)
+	var sweep := Vector3(0.75, 0.0, -0.65).normalized()
+	for k in 6:
+		var a := lerpf(-0.9, 0.9, k / 5.0)
+		var d := Vector3(sin(a) * 0.45, 0.85, cos(a) * 0.45 - 0.1).normalized()
+		var root := center + _on_ellipsoid(vol, d, -0.06)
+		var n := _normal(vol, d)
+		var along := (sweep - n * sweep.dot(n)).normalized()
+		_lock_piece(root, along + n * (0.3 + 0.15 * sin(k * 1.7)), 0.32 + 0.05 * sin(k * 2.3), 0.28,
+			n.cross(along) * (1.0 if k % 2 == 0 else -1.0),
+			hair.darkened(0.1) if k % 2 == 1 else hair)
+	# Costados: puntas cortas pegadas a la cabeza que se curvan para afuera y
+	# para arriba (vistas de frente y de atrás).
 	for side in [-1.0, 1.0]:
 		for k in 3:
-			var root := Vector3(side * 0.6, 0.3 - k * 0.17, -0.05 - k * 0.1)
-			var dir := Vector3(side * 0.8, -0.6 + k * 0.05, -0.1)
-			_lock_piece(root, dir, 0.34 - k * 0.04, 0.24, Vector3(0.0, 1.0, 0.0),
+			var root := Vector3(side * 0.56, 0.08 - k * 0.1, 0.05 - k * 0.2)
+			var dir := Vector3(side * 0.7, -1.0, 0.0)
+			_lock_piece(root, dir, 0.2 - k * 0.02, 0.2, Vector3(0.0, 1.0, 0.0),
 				hair.darkened(0.12) if k == 1 else hair)
 	# Flequillo calcado del dibujo: mechones planos en punta sobre la frente,
 	# que caen por encima del borde de los anteojos.
@@ -916,7 +919,7 @@ static func _make_shaggy_shell(inner: bool) -> ArrayMesh:
 		var front := maxf(cos(th), 0.0)
 		# Hasta dónde baja (0 = coronilla, PI = abajo): la frente queda libre
 		# (la tapa el flequillo); costados hasta la mandíbula; atrás, la nuca.
-		var hem := lerpf(2.0, 1.12, pow(front, 1.2))
+		var hem := lerpf(1.82, 1.12, pow(front, 1.2))
 		# Puntas: triángulos alrededor.
 		var tri := 1.0 - absf(fmod(c * teeth / float(cols), 1.0) * 2.0 - 1.0)
 		var tooth := tri * (1.0 - pow(front, 2.0))
@@ -928,10 +931,10 @@ static func _make_shaggy_shell(inner: bool) -> ArrayMesh:
 			# Bultos de pelo (no un casco liso).
 			var lump := 1.0 + 0.07 * sin(th * 7.0 + 1.3) * sin(ph * 3.0)
 			# Cerca del borde se abre bien hacia afuera (más en las puntas).
-			var flare := lump + (0.06 + 0.45 * tooth) * pow(t, 4.0)
+			var flare := lump + (0.04 + 0.2 * tooth) * pow(t, 4.0)
 			var p := center + d * radii * (flare - (0.05 if inner else 0.0))
 			# Las puntas de los costados se levantan (se curvan para arriba).
-			p.y += 0.3 * tooth * pow(t, 6.0) * (0.4 + 0.6 * absf(sin(th)))
+			p.y += 0.16 * tooth * pow(t, 6.0) * (0.4 + 0.6 * absf(sin(th)))
 			st.set_uv(Vector2(c, r))
 			st.add_vertex(p)
 	for c in cols:
