@@ -159,7 +159,13 @@ var has_view: bool = false
 var _punch_tick: int = 0
 ## Bots sin pantalla: el chapuzón se revisa cada tantos cuadros (solo se ve
 ## de lejos en la pantalla de otro).
-const PUNCH_CHECK_EVERY_NO_VIEW := 3
+const PUNCH_CHECK_EVERY_NO_VIEW := 6
+## Con pantalla propia, cada tantos cuadros (es la cuenta más cara del juego:
+## revisa la malla del agua tal como se dibuja; a 30 por segundo no se nota).
+const PUNCH_CHECK_EVERY_VIEW := 2
+## Bots sin pantalla: si no hay ninguna persona a esta distancia, ni se revisa
+## (nadie ve el chapuzón).
+const PUNCH_SEEN_DISTANCE := 60.0
 ## Tiempo mínimo entre dos chapuzones (s).
 const PUNCH_MIN_GAP := 0.3
 ## La cara estaba adentro de una ola el frame anterior.
@@ -544,10 +550,13 @@ func jump() -> void:
 func _check_wave_punch() -> void:
 	if water == null or visual == null:
 		return
-	if not has_view:
-		_punch_tick += 1
-		if (_punch_tick + player_index) % PUNCH_CHECK_EVERY_NO_VIEW != 0:
-			return
+	_punch_tick += 1
+	var every := PUNCH_CHECK_EVERY_VIEW if has_view else PUNCH_CHECK_EVERY_NO_VIEW
+	if (_punch_tick + get_instance_id()) % every != 0:
+		return
+	if not has_view and not _someone_watching():
+		_face_in_wave = false
+		return
 	# Solo atravesando una ola grande de pie o en el aire: caerse al agua o
 	# nadar no cuenta (aunque la cabeza se moje).
 	if is_fallen():
@@ -561,6 +570,15 @@ func _check_wave_punch() -> void:
 		_punch_cooldown = PUNCH_MIN_GAP
 		wave_punched.emit()
 	_face_in_wave = inside
+
+
+## true si algún surfista con pantalla propia está cerca (para ver este).
+func _someone_watching() -> bool:
+	for node in get_tree().get_nodes_in_group("riders"):
+		var r := node as Rider
+		if r and r.has_view and r.position.distance_squared_to(position) < PUNCH_SEEN_DISTANCE * PUNCH_SEEN_DISTANCE:
+			return true
+	return false
 
 
 ## Modo olas: true en el momento justo para el pop (subiendo una ola grande o

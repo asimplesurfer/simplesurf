@@ -22,9 +22,6 @@ const START_ANGLE := -0.03
 const DEMO_RESTART_DELAY := 6.0
 ## Separación lateral entre corredores en la largada (m).
 const GRID_SPACING := 7.0
-## Intro antes de la cuenta regresiva (s): la cámara baja volando por la pista
-## hasta quedar detrás del surfista, mientras se preparan los efectos.
-const INTRO_TIME := 4.5
 
 @export var countdown_time: float = 3.0
 @export var course_path: NodePath
@@ -43,7 +40,6 @@ var _finish_order: Array[Rider] = []
 var _countdown: float = 0.0
 var _demo_restart_timer: float = -1.0
 var _last_tick: int = -1
-var _intro_left: float = 0.0
 
 
 func _ready() -> void:
@@ -52,8 +48,9 @@ func _ready() -> void:
 	_setup_input()
 	_spawn_racers()
 	_countdown = countdown_time
-	if with_intro:
-		_intro_left = INTRO_TIME
+	if with_warmup:
+		# Durante la cuenta, se dibujan una vez todos los materiales (sin tirones
+		# la primera vez que aparece un efecto).
 		var warm := ShaderWarmup.new()
 		warm.name = "ShaderWarmup"
 		add_child(warm)
@@ -63,16 +60,6 @@ func _ready() -> void:
 		audio.connect_race(self)
 	for r in racers:
 		r.controls_locked = true
-
-
-## Segundos que quedan de intro (0 = ya terminó o no hay).
-func intro_left() -> float:
-	return _intro_left
-
-
-## 0..1: cuánto avanzó la intro.
-func intro_progress() -> float:
-	return 1.0 - _intro_left / INTRO_TIME
 
 
 func is_demo() -> bool:
@@ -99,7 +86,6 @@ func _spawn_racers() -> void:
 
 ## Termina la cuenta regresiva ya (para tests).
 func skip_countdown() -> void:
-	_intro_left = 0.0
 	if state == State.COUNTDOWN:
 		_start_race()
 
@@ -114,9 +100,6 @@ func _start_race() -> void:
 
 ## En pasos fijos (cuenta regresiva, progreso, tiempos): igual con cualquier FPS.
 func _physics_process(delta: float) -> void:
-	if state == State.COUNTDOWN and _intro_left > 0.0:
-		_intro_left = maxf(0.0, _intro_left - delta)
-		return
 	if state == State.COUNTDOWN:
 		_countdown -= delta
 		var tick := ceili(_countdown)

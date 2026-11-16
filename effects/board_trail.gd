@@ -10,7 +10,7 @@ const SHADER := preload("res://effects/shaders/board_trail.gdshader")
 ## Cuánto dura la estela (s).
 @export var lifetime: float = 2.6
 ## Cada cuántos metros se guarda un punto.
-@export var sample_distance: float = 0.4
+@export var sample_distance: float = 0.7
 ## Ancho (a cada lado) recién hecha (m).
 @export var start_width: float = 0.32
 ## Cuánto se abre por segundo (m).
@@ -27,6 +27,12 @@ var _emitting: bool = false
 var _last_pos: Vector2 = Vector2.ZERO
 var _mesh := ImmediateMesh.new()
 var _material := ShaderMaterial.new()
+## Para repartir entre cuadros la altura del agua de los puntos (cada punto
+## guarda la suya y se actualiza uno de cada REFRESH_EVERY por cuadro).
+var _frame: int = 0
+const REFRESH_EVERY := 4
+## Sin nadie que la vea a esta distancia (bots lejos), no se arma.
+const SEEN_DISTANCE := 90.0
 
 
 func setup(p_rider: Rider) -> void:
@@ -44,8 +50,13 @@ func _process(delta: float) -> void:
 	if rider == null:
 		return
 	_time += minf(delta, 0.1)
+	_frame += 1
 	while not _points.is_empty() and _time - float(_points[0].time) > lifetime:
 		_points.pop_front()
+	if not rider.has_view and not _watched():
+		if not _points.is_empty():
+			clear()
+		return
 
 	var on_water := (
 		rider.grounded
@@ -61,6 +72,14 @@ func _process(delta: float) -> void:
 	else:
 		_emitting = false
 	_rebuild(head if _emitting else {})
+
+
+func _watched() -> bool:
+	for node in rider.get_tree().get_nodes_in_group("riders"):
+		var r := node as Rider
+		if r and r.has_view and r.position.distance_squared_to(rider.position) < SEEN_DISTANCE * SEEN_DISTANCE:
+			return true
+	return false
 
 
 func clear() -> void:
@@ -101,9 +120,14 @@ func _rebuild(head: Dictionary) -> void:
 		return
 
 	_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES, _material)
+	var edges := {}
 	for i in segments:
-		var a := _edge_vertices(pts[i - 1])
-		var b := _edge_vertices(pts[i])
+		if not edges.has(i - 1):
+			edges[i - 1] = _edge_vertices(pts[i - 1], i - 1)
+		if not edges.has(i):
+			edges[i] = _edge_vertices(pts[i], i)
+		var a: Array = edges[i - 1]
+		var b: Array = edges[i]
 		# Dos triángulos: a.izq, a.der, b.izq / a.der, b.der, b.izq
 		_vertex(a, 0)
 		_vertex(a, 1)
@@ -115,7 +139,7 @@ func _rebuild(head: Dictionary) -> void:
 
 
 ## Devuelve [pos_izq, pos_der, edad (0..1), intensidad].
-func _edge_vertices(p: Dictionary) -> Array:
+func _edge_vertices(p: Dictionary, index: int) -> Array:
 	var age: float = _time - float(p.time)
 	var k := clampf(age / lifetime, 0.0, 1.0)
 	var width := start_width + age * spread_speed
@@ -123,7 +147,13 @@ func _edge_vertices(p: Dictionary) -> Array:
 	var side: Vector2 = p.side
 	var left := pos - side * width
 	var right := pos + side * width
-	return [_on_water(left), _on_water(right), k, float(p.strength)]
+	# La altura del agua se guarda en el punto y se actualiza de a tandas.
+	if not p.has("yl") or (index + _frame) % REFRESH_EVERY == 0:
+		p["yl"] = _water_y(left)
+		p["yr"] = _water_y(right)
+	return [
+		Vector3(left.x, float(p.yl), left.y), Vector3(right.x, float(p.yr), right.y), k, float(p.strength)
+	]
 
 
 func _vertex(edge: Array, which: int) -> void:
@@ -132,8 +162,8 @@ func _vertex(edge: Array, which: int) -> void:
 	_mesh.surface_add_vertex(edge[which])
 
 
-func _on_water(p: Vector2) -> Vector3:
+func _water_y(p: Vector2) -> float:
 	var y := height_offset
 	if rider.water:
 		y += rider.water.height_at(p.x, p.y)
-	return Vector3(p.x, y, p.y)
+	return y
