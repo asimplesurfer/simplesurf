@@ -415,9 +415,9 @@ func set_wave_mode(mode: int) -> void:
 		GameSettings.toggle_wave_mode()
 
 
+## El mapa elegido en la lista (exactamente ese, no el siguiente).
 func set_track_layout(layout: int) -> void:
-	if GameSettings.track_layout != layout:
-		GameSettings.toggle_track_layout()
+	GameSettings.set_track_layout(layout)
 
 
 # ---------------------------------------------------------------- flujo

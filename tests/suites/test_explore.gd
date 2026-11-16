@@ -24,6 +24,13 @@ func _test_menu_choice() -> void:
 	menu.start_sandbox()
 	_check(menu.started_config.mode == RaceConfig.Mode.SANDBOX, "con bots: el modo libre de siempre (mar abierto)")
 	GameSettings.bot_count = saved
+	# Elegir un mapa en la lista deja exactamente ese (antes pasaba al siguiente).
+	var saved_layout := GameSettings.track_layout
+	for want in [TrackMap.count() - 1, 0, mini(2, TrackMap.count() - 1)]:
+		GameSettings.track_layout = GameSettings.TrackLayout.ARCHIPELAGO
+		menu.set_track_layout(want)
+		_check(GameSettings.track_layout == want, "elegir el mapa %d en el menú deja ese mapa" % want)
+	GameSettings.track_layout = saved_layout
 	menu.queue_free()
 	await process_frame
 
