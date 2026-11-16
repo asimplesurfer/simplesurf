@@ -37,6 +37,9 @@ var rings: Array[NitroRing] = []
 var rocks: Array[Rock] = []
 ## Las piezas del mapa (armadas para esta carrera).
 var pieces: Array[MapPiece] = []
+## Registro de las piezas: cada una se anota con un tipo para que las otras la
+## encuentren (por ejemplo "ground": las que son tierra; "river": los ríos).
+var _registry: Dictionary = {}
 ## -1: el clima elegido en el menú (GameSettings.weather).
 @export var weather: int = -1
 ## La tormenta, si hay.
@@ -73,6 +76,10 @@ func _ready() -> void:
 	# (el volcán) queda primera, y el agua alrededor de las primeras islas se
 	# dibuja con más detalle.
 	pieces = map.make_pieces()
+	# Primero todas se preparan (y se anotan: "soy tierra", "soy un río"...),
+	# después se construyen: así cada una puede tener en cuenta a las demás.
+	for piece in pieces:
+		piece.prepare(self)
 	for piece in pieces:
 		piece.build(self)
 	for i in map.islands.size():
@@ -126,6 +133,18 @@ func _add_map_island(d: Dictionary, index: int) -> void:
 	isl.lighthouse = d.lighthouse
 	isl.position = Vector3(pos.x, 0.0, pos.y)
 	add_island(isl)
+
+
+## Anota algo en el registro de las piezas (ver `_registry`).
+func register(kind: String, item: Object) -> void:
+	if not _registry.has(kind):
+		_registry[kind] = []
+	_registry[kind].append(item)
+
+
+## Lo anotado de un tipo (vacío si no hay nada).
+func registered(kind: String) -> Array:
+	return _registry.get(kind, [])
 
 
 ## Suma una isla al mapa (se choca con la orilla y el agua la rodea). La usan

@@ -241,7 +241,10 @@ func _test_tropical_island() -> void:
 	print("Isla tropical dibujada:")
 	GameSettings.track_layout = GameSettings.TrackLayout.ARCHIPELAGO
 	var d: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://world/maps/archipelago.json"))
-	d.pieces = [{"type": "tropical_island", "shape": ISLAND_SHAPE}]
+	d.pieces = [
+		{"type": "tropical_island", "shape": ISLAND_SHAPE},
+		{"type": "river", "path": [[238, -100], [228, -68], [222, -40], [196, -22], [178, -16]]},
+	]
 	var keep: Array = []
 	for i in d.islands:
 		if Vector2(i.x, i.z).distance_to(Vector2(230, -10)) > 110:
@@ -266,13 +269,27 @@ func _test_tropical_island() -> void:
 		(isl.get_node("Ferns0") as MultiMeshInstance3D).cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,
 		"los helechos no hacen sombra"
 	)
+	# El río cruza la isla y no hay palmeras en su cauce.
+	var river := course.get_node_or_null("River")
+	_check(river != null and river.get_node_or_null("Water") != null, "un río dibujado cruza la isla")
+	var piece: TropicalIslandPiece = course.pieces[0]
+	var rp: RiverPiece = course.pieces[1]
+	var in_bed := 0
+	for c in isl.get_children():
+		if c is MultiMeshInstance3D and String(c.name).contains("Palms"):
+			var mm: MultiMesh = c.multimesh
+			for k in mm.instance_count:
+				var o := mm.get_instance_transform(k).origin
+				if rp.distance_to(Vector2(o.x, o.z)) < rp.width * 0.5 + 1.0:
+					in_bed += 1
+	_check(in_bed == 0, "no hay palmeras en el cauce del río")
+	_check(piece.ground_y(Vector2(225, 10)) > 0.5 and piece.ground_y(Vector2(0, 0)) == -INF, "la isla dice dónde hay tierra (para los ríos)")
 	race.skip_countdown()
 	await process_frame
 	var r: Rider = race.racers[0]
 	r.position = Vector3(225, r.position.y, 10)
 	await process_frame
 	await process_frame
-	var piece: TropicalIslandPiece = course.pieces[0]
 	_check(r.is_fallen() and not piece.covers(r.position.x, r.position.z), "subirse a la isla tira al surfista y lo deja en el agua")
 	m.queue_free()
 	await process_frame

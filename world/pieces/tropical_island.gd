@@ -18,7 +18,7 @@ var shape: Array = []
 ## Ancho de la franja de arena antes de la selva (m).
 var beach_width: float = 12.0
 ## Palmeras cada 100 m² (más = más tupida).
-var palm_density: float = 1.0
+var palm_density: float = 1.2
 ## Piedras sobre la arena.
 var rocks: int = 3
 var sand_color: Color = Color("f2d8a0")
@@ -35,14 +35,19 @@ var _outline := PackedVector2Array()
 var _lo := Vector2.ZERO
 var _hi := Vector2.ZERO
 var _grass: Array[PackedVector2Array] = []
+## Ancho de la franja pasto-arena en cada punto del borde del pasto.
+var _fades: Array[PackedFloat32Array] = []
+## Ríos que pueden cruzar la isla (no se pone vegetación en su cauce).
+var _rivers: Array = []
 var _rng := RandomNumberGenerator.new()
 var _palms: int = 0
 
 
-func build(course: Course) -> void:
+## Antes de construir: la forma de la isla y dónde empieza el pasto. Se anota
+## como tierra (para los ríos) y mira qué ríos la cruzan.
+func prepare(course: Course) -> void:
 	var bez := BezierShape.parse(shape)
 	if not bez.is_valid():
-		push_error("tropical_island: la figura necesita al menos 3 puntos")
 		return
 	_outline = bez.polygon(4.0)
 	_lo = _outline[0]
@@ -51,10 +56,61 @@ func build(course: Course) -> void:
 		_lo = _lo.min(p)
 		_hi = _hi.max(p)
 	_rng.seed = shape_seed
+	_make_grass()
+	course.register("ground", self)
+
+
+## El pasto empieza a distinta distancia de la orilla según el tramo (y la
+## franja donde se mezcla con la arena también cambia), para que no quede una
+## línea pareja alrededor de toda la isla.
+func _make_grass() -> void:
+	var noise := FastNoiseLite.new()
+	noise.seed = shape_seed
+	noise.frequency = 0.035
 	# Achicar una figura simple no deja agujeros: todo lo que sale es selva.
 	for g in Geometry2D.offset_polygon(_outline, -beach_width):
-		if g.size() >= 3:
-			_grass.append(g)
+		if g.size() < 3:
+			continue
+		var normals := _normals(g)
+		var fades := PackedFloat32Array()
+		var pushes := PackedFloat32Array()
+		var along := 0.0
+		for i in g.size():
+			if i > 0:
+				along += g[i].distance_to(g[i - 1])
+			pushes.append(clampf(noise.get_noise_1d(along) * beach_width * 0.75, -beach_width * 0.6, beach_width * 0.5))
+			fades.append(FADE * (1.0 + 0.6 * noise.get_noise_1d(along + 500.0)))
+		# Si al mover el borde la figura se cruza (no se puede dibujar), se
+		# mueve menos.
+		var moved := g
+		for k in [1.0, 0.6, 0.3, 0.0]:
+			var tryp := PackedVector2Array()
+			for i in g.size():
+				tryp.append(g[i] + normals[i] * pushes[i] * k)
+			if not Geometry2D.triangulate_polygon(tryp).is_empty():
+				moved = tryp
+				break
+		_grass.append(moved)
+		_fades.append(fades)
+
+
+## Altura del suelo en un punto (-INF si ahí no hay isla). La usan los ríos.
+func ground_y(p: Vector2) -> float:
+	if _outline.is_empty() or not Geometry2D.is_point_in_polygon(p, _outline):
+		return -INF
+	if _on_grass(p):
+		return GRASS_Y
+	var d := INF
+	for g in _grass:
+		d = minf(d, BezierShape.distance_to_edge(g, p))
+	return lerpf(GRASS_Y, SAND_Y, clampf(d / FADE, 0.0, 1.0))
+
+
+func build(course: Course) -> void:
+	if _outline.is_empty():
+		push_error("tropical_island: la figura necesita al menos 3 puntos")
+		return
+	_rivers = course.registered("river")
 	var root := Node3D.new()
 	root.name = "TropicalIsland"
 	course.add_child(root, true)
@@ -168,21 +224,21 @@ func _grass_mesh() -> MeshInstance3D:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var sandy := grass_color.lerp(sand_color, 0.55)
-	for g in _grass:
+	for gi in _grass.size():
+		var g := _grass[gi]
+		var fades := _fades[gi]
 		var normals := _normals(g)
 		var n := g.size()
-		# Tres anillos: borde del pasto, mitad (pasto con arena) y arena.
-		var rings := [
-			[0.0, GRASS_Y, grass_color], [FADE * 0.45, lerpf(GRASS_Y, SAND_Y, 0.6) + 0.03, sandy],
-			[FADE, SAND_Y + 0.02, sand_color],
-		]
+		# Tres anillos: borde del pasto, mitad (pasto con arena) y arena. El
+		# ancho de la franja cambia en cada punto.
+		var rings := [[0.0, GRASS_Y, grass_color], [0.45, lerpf(GRASS_Y, SAND_Y, 0.6) + 0.03, sandy], [1.0, SAND_Y + 0.02, sand_color]]
 		for r in 2:
 			for i in n:
 				var j := (i + 1) % n
-				var a0: Vector2 = g[i] + normals[i] * rings[r][0]
-				var b0: Vector2 = g[j] + normals[j] * rings[r][0]
-				var a1: Vector2 = g[i] + normals[i] * rings[r + 1][0]
-				var b1: Vector2 = g[j] + normals[j] * rings[r + 1][0]
+				var a0: Vector2 = g[i] + normals[i] * rings[r][0] * fades[i]
+				var b0: Vector2 = g[j] + normals[j] * rings[r][0] * fades[j]
+				var a1: Vector2 = g[i] + normals[i] * rings[r + 1][0] * fades[i]
+				var b1: Vector2 = g[j] + normals[j] * rings[r + 1][0] * fades[j]
 				for v in [[a0, r], [b0, r], [b1, r + 1], [a0, r], [b1, r + 1], [a1, r + 1]]:
 					st.set_normal(Vector3.UP)
 					st.set_color(rings[v[1]][2])
@@ -253,7 +309,7 @@ func _add_vegetation(root: Node3D, track: TrackSpace) -> void:
 			if not Geometry2D.is_point_in_polygon(p, _outline):
 				continue
 			var depth := BezierShape.distance_to_edge(_outline, p)
-			if depth < beach_width * 0.4:
+			if depth < beach_width * 0.4 or _in_river(p, 3.0):
 				continue
 			var facing := _facing(p)
 			if _rng.randf() > 0.2 + 0.8 * facing:
@@ -320,13 +376,13 @@ func _add_vegetation(root: Node3D, track: TrackSpace) -> void:
 		stones.append(Transform3D(basis, Vector3(p.x, SAND_Y + r * 0.2, p.y)))
 
 	for i in TALL_MODELS:
-		root.add_child(_multi("Palms%d" % i, tall_models[i], tall[i], [], true))
+		root.add_child(_multi("Palms%d" % i, tall_models[i], tall[i], _tints(tall[i].size()), true))
 	for i in MID_MODELS:
-		root.add_child(_multi("MidPalms%d" % i, mid_models[i], mid[i], [], true))
+		root.add_child(_multi("MidPalms%d" % i, mid_models[i], mid[i], _tints(mid[i].size()), true))
 	for i in YOUNG_MODELS:
-		root.add_child(_multi("YoungPalms%d" % i, young_models[i], young[i], [], false))
+		root.add_child(_multi("YoungPalms%d" % i, young_models[i], young[i], _tints(young[i].size()), false))
 	for i in FERN_MODELS:
-		var f := _multi("Ferns%d" % i, fern_models[i], ferns[i], [], false)
+		var f := _multi("Ferns%d" % i, fern_models[i], ferns[i], _tints(ferns[i].size()), false)
 		f.visibility_range_end = 360.0
 		root.add_child(f)
 	var b := _multi("Bushes", _bush_mesh(), bushes, bush_colors, false)
@@ -335,10 +391,26 @@ func _add_vegetation(root: Node3D, track: TrackSpace) -> void:
 	root.add_child(_multi("Stones", _stone_mesh(), stones, [], true))
 
 
+## true si `p` está en el cauce de algún río (más `margin` metros).
+func _in_river(p: Vector2, margin: float) -> bool:
+	for r in _rivers:
+		if r.distance_to(p) < r.width * 0.5 + RiverPiece.BANK + margin:
+			return true
+	return false
+
+
 func _lists(count: int) -> Array:
 	var out := []
 	for i in count:
 		out.append([] as Array[Transform3D])
+	return out
+
+
+## Un tono por planta: del verde de siempre (el más claro) a uno más oscuro.
+func _tints(count: int) -> Array[Color]:
+	var out: Array[Color] = []
+	for i in count:
+		out.append(Color.WHITE.lerp(Color(0.55, 0.68, 0.55), _rng.randf()))
 	return out
 
 
@@ -377,16 +449,18 @@ func _base_cover(ferns: Array, bushes: Array[Transform3D], colors: Array[Color],
 ## Un helecho o un arbusto redondo, de tamaño variado (`size` lo agranda).
 func _cover_at(ferns: Array, bushes: Array[Transform3D], colors: Array[Color], p: Vector2, ground: float, size: float) -> void:
 	var q := p + Vector2(_rng.randf_range(-0.6, 0.6), _rng.randf_range(-0.6, 0.6))
+	if _in_river(q, 1.0):
+		return
 	if _rng.randf() < 0.55:
 		var s := _rng.randf_range(0.6, 1.6) * size
 		ferns[_rng.randi() % FERN_MODELS].append(_placed(q, ground + 0.05, Vector2.RIGHT.rotated(_rng.randf() * TAU), s))
 	else:
 		# Arbustos: de bajitos y anchos a altos y redondos.
-		var r := _rng.randf_range(0.9, 2.4) * size
-		var tall := _rng.randf_range(0.6, 1.5)
+		var r := _rng.randf_range(0.45, 1.1) * size
+		var tall := _rng.randf_range(0.7, 1.4)
 		var basis := Basis(Vector3.UP, _rng.randf() * TAU).scaled(Vector3(r, r * tall, r))
 		bushes.append(Transform3D(basis, Vector3(q.x, ground + r * tall * 0.35, q.y)))
-		colors.append(Color("1f5a22").lerp(Color("4f9a34"), _rng.randf()))
+		colors.append(Color("123d16").lerp(Color("4f9a34"), _rng.randf()))
 
 
 ## Dónde va una palmera modelo: en `p`, inclinada hacia `dir` (los modelos se

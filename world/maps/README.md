@@ -77,6 +77,8 @@ pieza se puede repetir todas las veces que haga falta.
 | `rock_arch` | Arco de roca de paisaje, se pasa por debajo | `x`, `z`; `angle` (grados), `span`, `height`, `shape_seed`, `stone_color`, `moss_color` |
 | `shipwreck` | Barco hundido de paisaje | `x`, `z`; `angle` (grados), `size` |
 | `waterfall` | Cascada que se atraviesa: moja la pantalla y frena un poco | `x`, `z`; `angle` (grados), `width`, `height`, `color`, `drag` |
+| `tropical_island` | Isla tropical dibujada como figura: arena, selva, palmeras, helechos y arbustos. Se choca | `shape`; `beach_width`, `palm_density`, `rocks`, `sand_color`, `grass_color`, `leaf_color`, `shape_seed` |
+| `river` | Río dibujado como camino abierto (de la naciente al mar). Corre sobre las islas que son tierra | `path`; `width`, `color`, `deep_color`, `flow_speed` |
 | `rock_formation` | Roca o cueva dibujada como figura (ver abajo) | `shape`; `height`, `ceiling`, `opening`, `opening_width`, `skylights`, `stone_low`, `stone_high`, `grass_color`, `moss_color`, `glow_color`, `darkness`, `adapt_time`, `shape_seed` |
 
 Los colores se escriben como en la web: `"#8a6d5a"`.
@@ -118,6 +120,19 @@ cuevas marinas, llevadas al estilo low-poly del juego:
   que se acostumban), en todas las cuevas de todos los mapas.
 
 Para cambiar el clima de una cueva (de hielo, volcánica...) se usan sus colores.
+
+### Islas tropicales y ríos
+
+La isla tropical se dibuja como figura cerrada. Toda la figura es arena; más
+adentro (a `beach_width` de la orilla, un poco irregular) empieza la selva.
+Del lado que da a la pista la vegetación va tupida; atrás, más rala (pesa
+menos y casi no se ve).
+
+El río se dibuja como un camino abierto, de la naciente a la desembocadura. No
+depende de la isla tropical: corre sobre cualquier pieza que se anote como
+tierra (`ground`) y las islas dejan libre el cauce de cualquier río (`river`).
+Ver `MapPiece.prepare`. Una isla nueva que quiera ríos solo tiene que anotarse
+como tierra y respetar los ríos.
 
 ### Hacer una pieza nueva
 

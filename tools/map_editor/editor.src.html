@@ -154,6 +154,8 @@ dialog::backdrop { background: rgba(5, 15, 20, 0.5); }
     <hr>
     <button class="tool" data-tool="track" title="Pista: clic pone un punto, arrastrar hace curva (P)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 18c3-9 6 2 9-6s5-4 7-6"/><circle cx="4" cy="18" r="1.8" fill="currentColor"/><circle cx="20" cy="6" r="1.8" fill="currentColor"/></svg><span class="key">P</span></button>
     <button class="tool" data-tool="rock" title="Roca o cueva: dibujá la figura (R)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 19l3-8 4-3 3 2 3-5 5 14z"/><path d="M9 19c0-3 1.5-5 3-5s3 2 3 5" /></svg><span class="key">R</span></button>
+    <button class="tool" data-tool="tropical_island" title="Isla tropical: dibujá la figura (T)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 18c3-3 6-2 9-3s6-3 9-1"/><path d="M8 15V9m0 0c-2-2-4-1.5-5 0m5 0c1.5-2 3.5-2 5-.5M15 14V8m0 0c-1.5-1.8-3.5-1.5-4.5 0m4.5 0c1.5-2 3.5-1.8 4.5-.2" stroke-linecap="round"/></svg><span class="key">T</span></button>
+    <button class="tool" data-tool="river" title="Río: dibujá el camino del agua, de la naciente al mar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 3c3 3-2 6 1 9s-2 6 1 9"/><path d="M12 3c3 3-2 6 1 9s-2 6 1 9"/></svg></button>
     <button class="tool" data-tool="island" title="Isla (I)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="16" rx="8" ry="3.5"/><path d="M12 15V8m0 0c-2-2-4-2-5-1m5 1c2-2 4-2 5-1m-5 1c-1-2-1-3.5 0-4.5"/></svg><span class="key">I</span></button>
     <hr>
     <button class="tool" data-tool="geyser" title="Géiser (G)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><ellipse cx="12" cy="19" rx="6" ry="2"/><path d="M12 17V6m-3 4l3-4 3 4M8 13c-1-2 0-4 1-5m7 5c1-2 0-4-1-5"/></svg><span class="key">G</span></button>
@@ -227,6 +229,13 @@ const PIECES = {
   waterfall: { name: "Cascada", params: [
     ["angle", "Ángulo (°)", "num", 0], ["width", "Ancho (m)", "num", 50], ["height", "Altura (m)", "num", 34],
     ["color", "Agua", "color", "#bdf3ff"], ["drag", "Cuánto frena (0–1)", "num", 0.12] ] },
+  tropical_island: { name: "Isla tropical", params: [
+    ["beach_width", "Ancho de la playa (m)", "num", 12], ["palm_density", "Palmeras (cada 100 m²)", "num", 1.2],
+    ["rocks", "Piedras en la arena", "int", 3], ["sand_color", "Arena", "color", "#f2d8a0"],
+    ["grass_color", "Pasto", "color", "#3f7f2c"], ["leaf_color", "Hojas", "color", "#2f8f2c"], ["shape_seed", "Semilla", "int", 1] ] },
+  river: { name: "Río", params: [
+    ["width", "Ancho (m)", "num", 9], ["color", "Agua", "color", "#47c9d6"], ["deep_color", "Agua honda", "color", "#1f7f9a"],
+    ["flow_speed", "Velocidad del agua", "num", 1] ] },
   rock_formation: { name: "Roca / cueva", params: [
     ["height", "Alto de la roca (m)", "num", 34], ["ceiling", "Altura del techo (m)", "num", 12],
     ["opening", "Arco abajo (si no toca la pista)", "bool", false], ["opening_width", "Ancho del arco (m)", "num", 16],
@@ -236,6 +245,15 @@ const PIECES = {
     ["glow_color", "Agua y luz de la cueva", "color", "#2fe3c8"], ["shape_seed", "Semilla", "int", 1] ] },
 };
 const GEYSER_RADIUS = 4;
+// Piezas que se dibujan con puntos y manijas: dónde guardan los puntos y si la
+// figura es cerrada (roca, isla) o un camino abierto (río).
+const DRAWN = {
+  rock_formation: { key: "shape", closed: true, tool: "rock", label: "una roca" },
+  tropical_island: { key: "shape", closed: true, tool: "tropical_island", label: "una isla" },
+  river: { key: "path", closed: false, tool: "river", label: "un río" },
+};
+const nodesOf = (p) => p[DRAWN[p.type].key];
+const isClosed = (p) => DRAWN[p.type]?.closed !== false;
 // Parámetros que el juego exige aunque tengan el valor de siempre.
 const REQUIRED = { volcano: ["radius"] };
 
@@ -268,7 +286,8 @@ function fromJSON(d) {
     islands: (d.islands || []).map((i) => ({ x: i.x, z: i.z, radius: i.radius, lighthouse: !!i.lighthouse, seed: i.seed ?? -1 })),
     pieces: (d.pieces || []).map((p) => {
       const c = JSON.parse(JSON.stringify(p));
-      if (c.type === "rock_formation") { c.shape = (c.shape || []).map(nodeFrom); c.skylights = c.skylights || []; }
+      if (DRAWN[c.type]) c[DRAWN[c.type].key] = (c[DRAWN[c.type].key] || []).map(nodeFrom);
+      if (c.type === "rock_formation") c.skylights = c.skylights || [];
       return c;
     }),
   };
@@ -288,13 +307,13 @@ function toJSON(m) {
   d.pieces = m.pieces.map((p) => {
     const o = { type: p.type };
     if ("x" in p) { o.x = r(p.x); o.z = r(p.z); }
-    if (p.type === "rock_formation") o.shape = p.shape.map(nodeTo);
+    if (DRAWN[p.type]) o[DRAWN[p.type].key] = nodesOf(p).map(nodeTo);
     for (const [k, , , def] of PIECES[p.type]?.params || []) {
       if (p[k] !== undefined && (p[k] !== def || (REQUIRED[p.type] || []).includes(k))) o[k] = typeof p[k] === "number" ? r(p[k]) : p[k];
     }
     if (p.type === "rock_formation" && p.skylights?.length) o.skylights = p.skylights.map((s) => [r(s[0]), r(s[1])]);
     // Parámetros que el editor no conoce: se dejan como estaban.
-    for (const k in p) if (!(k in o) && !["shape", "skylights"].includes(k) && !(PIECES[p.type]?.params || []).some((q) => q[0] === k)) o[k] = p[k];
+    for (const k in p) if (!(k in o) && !["shape", "path", "skylights"].includes(k) && !(PIECES[p.type]?.params || []).some((q) => q[0] === k)) o[k] = p[k];
     return o;
   });
   return d;
@@ -334,9 +353,16 @@ function autoOut(nodes, i) {
 }
 function handleOut(nodes, i) { return nodes[i].out || autoOut(nodes, i); }
 function handleIn(nodes, i) { return nodes[i].in || mul(autoOut(nodes, i), -1); }
-function segControls(nodes, i) {
+function segControls(nodes, i, closed = true) {
   const n = nodes.length, j = (i + 1) % n;
   const p1 = nodes[i].p, p2 = nodes[j].p;
+  if (!closed) {
+    // Camino abierto: en las puntas, la manija automática mira solo al vecino.
+    const p0 = nodes[Math.max(i - 1, 0)].p, p3 = nodes[Math.min(i + 2, n - 1)].p;
+    const c1 = nodes[i].out ? add(p1, nodes[i].out) : add(p1, mul(sub(p2, p0), 1 / 6));
+    const c2 = nodes[j].in ? add(p2, nodes[j].in) : add(p2, mul(sub(p1, p3), 1 / 6));
+    return [p1, c1, c2, p2];
+  }
   return [p1, add(p1, handleOut(nodes, i)), add(p2, handleIn(nodes, j)), p2];
 }
 function bez(c, t) {
@@ -367,15 +393,16 @@ function trackLine(m) {
   }
   return raw;
 }
-function shapePolygon(nodes, step = 4) {
+function shapePolygon(nodes, step = 4, closed = true) {
   const out = [];
-  if (nodes.length < 3) return out;
-  for (let i = 0; i < nodes.length; i++) {
-    const c = segControls(nodes, i);
+  if (nodes.length < (closed ? 3 : 2)) return out;
+  for (let i = 0; i < (closed ? nodes.length : nodes.length - 1); i++) {
+    const c = segControls(nodes, i, closed);
     const approx = dist(c[0], c[1]) + dist(c[1], c[2]) + dist(c[2], c[3]);
     const count = Math.max(1, Math.ceil(approx / step));
     for (let j = 0; j < count; j++) out.push(bez(c, j / count));
   }
+  if (!closed) out.push(nodes[nodes.length - 1].p);
   return out;
 }
 function pointInPoly(p, poly) {
@@ -432,7 +459,7 @@ function invalidate() { cache = null; draw(); updateButtons(); }
 function computed() {
   if (cache) return cache;
   const line = trackLine(map);
-  const shapes = map.pieces.map((p) => (p.type === "rock_formation" ? shapePolygon(p.shape) : null));
+  const shapes = map.pieces.map((p) => (DRAWN[p.type] ? shapePolygon(nodesOf(p), 4, isClosed(p)) : null));
   cache = { line, shapes, length: line.length ? lineLength(line) : 0 };
   return cache;
 }
@@ -454,7 +481,7 @@ function fit() {
   const pts = [];
   computed().line.forEach((p) => pts.push(p));
   map.islands.forEach((i) => { pts.push([i.x - i.radius, i.z - i.radius]); pts.push([i.x + i.radius, i.z + i.radius]); });
-  map.pieces.forEach((p) => { if ("x" in p) pts.push([p.x, p.z]); (p.shape || []).forEach((n) => pts.push(n.p)); });
+  map.pieces.forEach((p) => { if ("x" in p) pts.push([p.x, p.z]); (DRAWN[p.type] ? nodesOf(p) : []).forEach((n) => pts.push(n.p)); });
   if (!pts.length) { cam.x = 0; cam.z = 0; cam.zoom = Math.min(W, H) / 600; draw(); return; }
   let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
   for (const p of pts) { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); z0 = Math.min(z0, p[1]); z1 = Math.max(z1, p[1]); }
@@ -493,17 +520,19 @@ function draw() {
   map.islands.forEach((isl, i) => drawIsland(isl, C, sel?.kind === "island" && sel.i === i));
 
   // Piezas (las rocas, semitransparentes, encima de la pista).
+  map.pieces.forEach((p, i) => { if (p.type === "tropical_island") drawIsle(p, shapes[i], C, sel?.kind === "piece" && sel.i === i); });
+  map.pieces.forEach((p, i) => { if (p.type === "river") drawRiver(p, shapes[i], C, sel?.kind === "piece" && sel.i === i); });
   map.pieces.forEach((p, i) => {
     const on = sel?.kind === "piece" && sel.i === i;
     if (p.type === "rock_formation") drawRock(p, shapes[i], line, C, on);
-    else drawPiece(p, C, on);
+    else if (!DRAWN[p.type]) drawPiece(p, C, on);
   });
 
   // Puntos y manijas de la pista.
   const editingPath = tool === "track" || sel?.kind === "path" || drawing?.kind === "path";
   if (map.path.length && editingPath) drawNodes(map.path, C, sel?.kind === "path" ? sel.node : -1, !(drawing?.kind === "path"));
-  if (sel?.kind === "piece" && map.pieces[sel.i]?.type === "rock_formation") drawNodes(map.pieces[sel.i].shape, C, sel.node ?? -1, !(drawing?.kind === "shape"));
-  if (drawing?.kind === "shape") drawNodes(drawing.piece.shape, C, -1, false);
+  if (sel?.kind === "piece" && DRAWN[map.pieces[sel.i]?.type]) drawNodes(nodesOf(map.pieces[sel.i]), C, sel.node ?? -1, isClosed(map.pieces[sel.i]), isClosed(map.pieces[sel.i]));
+  if (drawing?.kind === "shape") drawNodes(nodesOf(drawing.piece), C, -1, false, isClosed(drawing.piece));
   drawScale();
 }
 function drawGrid(C) {
@@ -635,6 +664,29 @@ function drawRock(p, poly, line, C, on) {
   ctx.fillText(cave ? `cueva · techo ${p.ceiling ?? 12} m` : p.opening ? "roca con arco" : "roca", s[0], s[1]);
   ctx.textAlign = "start";
 }
+function drawIsle(p, poly, C, on) {
+  if (!poly || poly.length < 3) return;
+  // Arena, y adentro la selva (lo que queda a más de "ancho de playa" del borde).
+  ctx.save(); pathLine(poly, true); ctx.clip();
+  ctx.fillStyle = p.grass_color || "#3f7f2c"; ctx.fill();
+  pathLine(poly, true); ctx.strokeStyle = p.sand_color || "#f2d8a0"; ctx.lineJoin = "round";
+  ctx.lineWidth = 2 * (p.beach_width ?? 12) * cam.zoom; ctx.stroke();
+  ctx.restore();
+  pathLine(poly, true); ctx.strokeStyle = on ? C.sel : "rgba(255,255,255,0.7)"; ctx.lineWidth = on ? 2.2 : 1.2; ctx.stroke();
+  const c = toScreen(centroid(poly));
+  ctx.font = "600 12px Outfit, sans-serif"; ctx.textAlign = "center"; ctx.fillStyle = "#fff"; ctx.fillText("isla tropical", c[0], c[1]); ctx.textAlign = "start";
+}
+function drawRiver(p, line, C, on) {
+  if (!line || line.length < 2) return;
+  pathLine(line, false); ctx.lineJoin = "round"; ctx.lineCap = "round";
+  ctx.strokeStyle = "#d9bd84"; ctx.lineWidth = ((p.width ?? 9) + 5) * cam.zoom; ctx.stroke();
+  ctx.strokeStyle = p.color || "#47c9d6"; ctx.lineWidth = Math.max(2, (p.width ?? 9) * cam.zoom); ctx.stroke();
+  if (on) { ctx.strokeStyle = C.sel; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.stroke(); ctx.setLineDash([]); }
+  // Flechita: para dónde corre el agua.
+  const a = line[line.length - 2], b = line[line.length - 1], s = toScreen(b), d = sub(b, a);
+  ctx.save(); ctx.translate(s[0], s[1]); ctx.rotate(Math.atan2(d[1], d[0])); ctx.fillStyle = "#fff";
+  ctx.beginPath(); ctx.moveTo(7, 0); ctx.lineTo(-4, -5); ctx.lineTo(-4, 5); ctx.closePath(); ctx.fill(); ctx.restore();
+}
 function rockTouchesTrack(poly, line) {
   for (let i = 0; i < line.length; i += 3) if (pointInPoly(line[i], poly) || distToLine(line[i], poly) < map.half_width + 4) return true;
   return false;
@@ -645,13 +697,13 @@ function hexA(hex, a) {
   const n = parseInt(h.length === 3 ? h.split("").map((c) => c + c).join("") : h.slice(0, 6), 16);
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
-function drawNodes(nodes, C, selNode, closed) {
+function drawNodes(nodes, C, selNode, closed, closedCurve = true) {
   // La figura de control (fina) para ver las manijas.
   if (nodes.length >= 2) {
     ctx.beginPath();
     const segs = closed ? nodes.length : nodes.length - 1;
     for (let i = 0; i < segs; i++) {
-      const c = segControls(nodes, i);
+      const c = segControls(nodes, i, closedCurve);
       const a = toScreen(c[0]), b = toScreen(c[1]), d = toScreen(c[2]), e = toScreen(c[3]);
       if (i === 0) ctx.moveTo(a[0], a[1]);
       ctx.bezierCurveTo(b[0], b[1], d[0], d[1], e[0], e[1]);
@@ -713,10 +765,10 @@ function hitSegment(nodes, s) {
 function hitTest(s) {
   const w = toWorld(s);
   // Primero lo que está seleccionado (sus puntos y manijas).
-  if (sel?.kind === "piece" && map.pieces[sel.i]?.type === "rock_formation") {
+  if (sel?.kind === "piece" && DRAWN[map.pieces[sel.i]?.type]) {
     const p = map.pieces[sel.i];
     for (let k = (p.skylights || []).length - 1; k >= 0; k--) if (dist(toScreen(p.skylights[k]), s) < 9) return { kind: "piece", i: sel.i, sky: k };
-    const h = hitNodes(p.shape, s);
+    const h = hitNodes(nodesOf(p), s);
     if (h) return { kind: "piece", i: sel.i, ...h };
   }
   if (map.path.length && (tool === "track" || sel?.kind === "path")) {
@@ -748,7 +800,11 @@ function hitTest(s) {
     if (dist(w, [isl.x, isl.z]) < Math.max(isl.radius, 8 / cam.zoom)) return { kind: "island", i };
   }
   const { shapes, line } = computed();
-  for (let i = map.pieces.length - 1; i >= 0; i--) if (shapes[i] && pointInPoly(w, shapes[i])) return { kind: "piece", i };
+  for (let i = map.pieces.length - 1; i >= 0; i--) {
+    const p = map.pieces[i];
+    if (p.type === "river" && shapes[i]?.length >= 2 && distToLine(w, shapes[i], false) < Math.max((p.width ?? 9) / 2 + 2, 8 / cam.zoom)) return { kind: "piece", i };
+  }
+  for (let i = map.pieces.length - 1; i >= 0; i--) if (shapes[i] && map.pieces[i].type !== "river" && pointInPoly(w, shapes[i])) return { kind: "piece", i };
   if (line.length > 2 && distToLine(w, line) < map.half_width) return { kind: "path" };
   return null;
 }
@@ -760,7 +816,7 @@ function onDown(e) {
   const s = [e.offsetX, e.offsetY], w = toWorld(s);
   if (tool === "pan" || spaceDown || e.button === 1) { drag = { kind: "pan", s, cam: { ...cam } }; return; }
 
-  if (tool === "track" || tool === "rock") return penDown(s, w, e);
+  if (tool === "track" || tool === "rock" || tool === "tropical_island" || tool === "river") return penDown(s, w, e);
   if (["island", "geyser", "volcano", "rock_arch", "shipwreck", "waterfall"].includes(tool)) {
     if (tool === "island") { map.islands.push({ x: w[0], z: w[1], radius: 20, lighthouse: false, seed: Math.floor(Math.random() * 99999) + 1 }); sel = { kind: "island", i: map.islands.length - 1 }; }
     else {
@@ -779,7 +835,7 @@ function onDown(e) {
   sel = { kind: hit.kind, i: hit.i, node: hit.node ?? -1, sky: hit.sky };
   refreshPanel(); draw();
   if (hit.node !== undefined && hit.node !== null) {
-    const nodes = hit.kind === "path" ? map.path : map.pieces[hit.i].shape;
+    const nodes = hit.kind === "path" ? map.path : nodesOf(map.pieces[hit.i]);
     drag = { kind: "node", nodes, node: hit.node, handle: hit.handle, start: w, orig: JSON.parse(JSON.stringify(nodes[hit.node])), alt: e.altKey, moved: false };
   } else if (hit.sky !== undefined) {
     drag = { kind: "sky", p: map.pieces[hit.i], k: hit.sky, moved: false };
@@ -803,11 +859,17 @@ function penDown(s, w, e) {
   }
   if (!drawing) {
     if (isTrack) { map.path = []; drawing = { kind: "path" }; sel = { kind: "path", node: -1 }; }
-    else { const piece = { type: "rock_formation", shape: [], skylights: [] }; drawing = { kind: "shape", piece }; }
+    else {
+      const type = tool === "rock" ? "rock_formation" : tool;
+      const piece = { type, [DRAWN[type].key]: [] };
+      if (type === "rock_formation") piece.skylights = [];
+      drawing = { kind: "shape", piece };
+    }
   }
-  const nodes = drawing.kind === "path" ? map.path : drawing.piece.shape;
-  // Tocar el primer punto cierra la figura.
-  if (nodes.length >= 3 && dist(toScreen(nodes[0].p), s) < 10) { finishDrawing(); return; }
+  const nodes = drawing.kind === "path" ? map.path : nodesOf(drawing.piece);
+  // Tocar el primer punto cierra la figura (un río se termina con Enter o doble clic).
+  const closedShape = drawing.kind === "path" || isClosed(drawing.piece);
+  if (closedShape && nodes.length >= 3 && dist(toScreen(nodes[0].p), s) < 10) { finishDrawing(); return; }
   nodes.push({ p: w, in: [0, 0], out: [0, 0] });
   drag = { kind: "pen", nodes, node: nodes.length - 1, start: w };
   invalidate();
@@ -821,7 +883,7 @@ function finishDrawing() {
     sel = { kind: "path", node: -1 };
   } else {
     const p = drawing.piece;
-    if (p.shape.length < 3) { drawing = null; invalidate(); return; }
+    if (nodesOf(p).length < (isClosed(p) ? 3 : 2)) { drawing = null; invalidate(); return; }
     map.pieces.push(p); sel = { kind: "piece", i: map.pieces.length - 1, node: -1 };
   }
   drawing = null;
@@ -872,7 +934,11 @@ function onMove(e) {
   if (drag.kind === "move") {
     const t = sel.kind === "island" ? map.islands[sel.i] : map.pieces[sel.i];
     const d = sub(w, drag.start);
-    if (t.type === "rock_formation") { t.shape = drag.orig.shape.map((n) => ({ ...n, p: add(n.p, d) })); t.skylights = (drag.orig.skylights || []).map((k) => add(k, d)); }
+    if (DRAWN[t.type]) {
+      const key = DRAWN[t.type].key;
+      t[key] = drag.orig[key].map((n) => ({ ...n, p: add(n.p, d) }));
+      if (t.skylights) t.skylights = (drag.orig.skylights || []).map((k) => add(k, d));
+    }
     else { t.x = drag.orig.x + d[0]; t.z = drag.orig.z + d[1]; }
     invalidate(); refreshFieldsValues(); return;
   }
@@ -914,7 +980,7 @@ cv.addEventListener("dblclick", (e) => {
   const hit = hitTest(s);
   if (hit && hit.node !== undefined && hit.node !== null && !hit.handle) {
     // Doble clic en un punto: esquina <-> curva automática.
-    const nodes = hit.kind === "path" ? map.path : map.pieces[hit.i].shape;
+    const nodes = hit.kind === "path" ? map.path : nodesOf(map.pieces[hit.i]);
     const n = nodes[hit.node];
     const corner = n.in && n.out && len(n.in) < 0.01 && len(n.out) < 0.01;
     if (corner) { n.in = null; n.out = null; } else { n.in = [0, 0]; n.out = [0, 0]; }
@@ -930,6 +996,8 @@ const HINTS = {
   pan: "Arrastrá para mover la vista. Rueda o pellizco para acercar.",
   track: "Clic: un punto (tramo recto). Clic y arrastrar: punto con manijas (curva). Tocá el primer punto o Enter para cerrar la vuelta. El primer punto es la largada.",
   rock: "Dibujá la figura de la roca igual que la pista y cerrala tocando el primer punto. Si tapa la pista es una cueva; si no, una roca de paisaje.",
+  tropical_island: "Dibujá la figura de la isla tropical como la pista (clic: punto, arrastrar: curva) y cerrala tocando el primer punto. Puede tener cualquier forma.",
+  river: "Dibujá el río desde la naciente hasta el mar (clic: punto, arrastrar: curva). Enter o doble clic para terminar.",
   island: "Clic para poner una isla. Después arrastrá el cuadradito del borde para cambiar el tamaño.",
   geyser: "Clic para poner un géiser (mejor sobre la pista).",
   volcano: "Clic para poner una isla volcán.",
@@ -939,7 +1007,12 @@ const HINTS = {
 };
 function setHint() {
   let h = HINTS[tool] || "";
-  if (drawing) h = `Dibujando ${drawing.kind === "path" ? "la pista" : "una roca"}: ${(drawing.kind === "path" ? map.path : drawing.piece.shape).length} puntos. Tocá el primero o Enter para cerrar, Esc para cancelar.`;
+  if (drawing) {
+    const what = drawing.kind === "path" ? "la pista" : DRAWN[drawing.piece.type].label;
+    const count = (drawing.kind === "path" ? map.path : nodesOf(drawing.piece)).length;
+    const end = drawing.kind === "shape" && !isClosed(drawing.piece) ? "Enter o doble clic para terminar" : "Tocá el primero o Enter para cerrar";
+    h = `Dibujando ${what}: ${count} puntos. ${end}, Esc para cancelar.`;
+  }
   $("hint").textContent = h;
 }
 function setTool(t) {
@@ -964,7 +1037,11 @@ function deleteSelection() {
   else if (sel.kind === "piece") {
     const p = map.pieces[sel.i];
     if (p.type === "rock_formation" && sel.sky !== undefined && sel.sky !== null) { p.skylights.splice(sel.sky, 1); sel.sky = null; }
-    else if (p.type === "rock_formation" && sel.node >= 0) { if (p.shape.length <= 3) return toast("La figura necesita al menos 3 puntos."); p.shape.splice(sel.node, 1); sel.node = -1; }
+    else if (DRAWN[p.type] && sel.node >= 0) {
+      const min = isClosed(p) ? 3 : 2;
+      if (nodesOf(p).length <= min) return toast(`La figura necesita al menos ${min} puntos.`);
+      nodesOf(p).splice(sel.node, 1); sel.node = -1;
+    }
     else { map.pieces.splice(sel.i, 1); sel = { kind: "map" }; }
   } else return;
   commit(); refreshPanel();
@@ -978,7 +1055,7 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && drawing) { finishDrawing(); return; }
   if (e.key === "Escape") { if (drawing) cancelDrawing(); else { sel = { kind: "map" }; refreshPanel(); draw(); } return; }
   if (e.key === "Delete" || e.key === "Backspace") { deleteSelection(); return; }
-  const map_ = { v: "select", h: "pan", p: "track", r: "rock", i: "island", g: "geyser" };
+  const map_ = { v: "select", h: "pan", p: "track", r: "rock", t: "tropical_island", i: "island", g: "geyser" };
   if (map_[k]) setTool(map_[k]);
   if (k === "f") fit();
   if (k === "+" || k === "=") zoomAt([W / 2, H / 2], 1.25);
@@ -1078,8 +1155,15 @@ function refreshPanel() {
         const c = centroid(shapes[s.i]); p.skylights = p.skylights || []; p.skylights.push(c); sel.sky = p.skylights.length - 1; commit(); refreshPanel();
         toast("Agujero agregado en el medio: arrastralo a donde quieras.");
       }));
-      if (s.node >= 0) row.append(btn("Esquina", () => { p.shape[s.node].in = [0, 0]; p.shape[s.node].out = [0, 0]; commit(); refreshPanel(); }),
-        btn("Curva automática", () => { p.shape[s.node].in = null; p.shape[s.node].out = null; commit(); refreshPanel(); }));
+      box.append(row);
+    }
+    if (p.type === "tropical_island") box.append(note("Arena en toda la figura y selva adentro. Del lado que da a la pista va más tupida; atrás, más rala. Se choca como una isla."));
+    if (p.type === "river") box.append(note("El agua corre del primer punto al último y desemboca en el mar. Pasa por arriba de las islas tropicales (que dejan libre el cauce)."));
+    if (DRAWN[p.type] && s.node >= 0) {
+      const row = document.createElement("div"); row.className = "row";
+      const n = nodesOf(p)[s.node];
+      row.append(btn("Esquina", () => { n.in = [0, 0]; n.out = [0, 0]; commit(); refreshPanel(); }),
+        btn("Curva automática", () => { n.in = null; n.out = null; commit(); refreshPanel(); }));
       box.append(row);
     }
     if (!def) box.append(note("El editor no conoce esta pieza: se guarda tal cual."));
@@ -1116,6 +1200,12 @@ function review() {
     map.pieces.forEach((p, i) => {
       if (p.type === "volcano" && distToLine([p.x, p.z], line) < map.half_width + (p.radius ?? 40) + 0.5) out.push(["bad", "El volcán pisa la pista."]);
       if (p.type === "geyser" && distToLine([p.x, p.z], line) > map.half_width - 2) out.push(["warn", "Hay un géiser fuera de la pista: nadie va a pasar por arriba."]);
+      if (p.type === "tropical_island" && shapes[i]?.length >= 3 && rockTouchesTrack(shapes[i], line))
+        out.push(["bad", "Una isla tropical pisa la pista."]);
+      if (p.type === "river" && shapes[i]?.length >= 2) {
+        const isles = map.pieces.map((q, k) => (q.type === "tropical_island" ? shapes[k] : null)).filter((q) => q && q.length >= 3);
+        if (!shapes[i].some((pt) => isles.some((poly) => pointInPoly(pt, poly)))) out.push(["warn", "Hay un río que no pasa por ninguna isla tropical: no se va a ver."]);
+      }
       if (p.type === "rock_formation" && shapes[i]?.length >= 3 && rockTouchesTrack(shapes[i], line) && (p.ceiling ?? 12) < 7)
         out.push(["warn", "Una cueva tiene el techo muy bajo (menos de 7 m): la cámara puede quedar dentro de la roca."]);
     });
