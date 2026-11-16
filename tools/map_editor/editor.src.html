@@ -159,6 +159,7 @@ dialog::backdrop { background: rgba(5, 15, 20, 0.5); }
     <button class="tool" data-tool="geyser" title="Géiser (G)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><ellipse cx="12" cy="19" rx="6" ry="2"/><path d="M12 17V6m-3 4l3-4 3 4M8 13c-1-2 0-4 1-5m7 5c1-2 0-4-1-5"/></svg><span class="key">G</span></button>
     <button class="tool" data-tool="volcano" title="Isla volcán"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 20l6-11h6l6 11z"/><path d="M10 9c0-2 1-3 2-5m2 5c0-2 1-3 2-4" stroke-linecap="round"/></svg></button>
     <button class="tool" data-tool="rock_arch" title="Arco de roca (paisaje)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 20V12a9 9 0 0118 0v8h-4v-8a5 5 0 00-10 0v8z"/></svg></button>
+    <button class="tool" data-tool="waterfall" title="Cascada (ponela en la salida de una cueva, cruzando la pista)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 4h16M7 4v12M11 4v14M15 4v12M19 4v10"/><path d="M4 20c2-1.5 4-1.5 6 0s4 1.5 6 0 3-1 4-.5"/></svg></button>
     <button class="tool" data-tool="shipwreck" title="Barco hundido (paisaje)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 15h18l-3 5H6z"/><path d="M11 15V4l6 7h-6"/></svg></button>
   </nav>
 
@@ -223,6 +224,9 @@ const PIECES = {
     ["angle", "Ángulo (°)", "num", 0], ["span", "Ancho (m)", "num", 40], ["height", "Alto (m)", "num", 26],
     ["shape_seed", "Semilla", "int", 77], ["stone_color", "Piedra", "color", "#806b5c"], ["moss_color", "Musgo", "color", "#5c8c4d"] ] },
   shipwreck: { name: "Barco hundido", params: [["angle", "Ángulo (°)", "num", 40.107], ["size", "Tamaño", "num", 1.5]] },
+  waterfall: { name: "Cascada", params: [
+    ["angle", "Ángulo (°)", "num", 0], ["width", "Ancho (m)", "num", 50], ["height", "Altura (m)", "num", 34],
+    ["color", "Agua", "color", "#bdf3ff"], ["drag", "Cuánto frena (0–1)", "num", 0.12] ] },
   rock_formation: { name: "Roca / cueva", params: [
     ["height", "Alto de la roca (m)", "num", 34], ["ceiling", "Altura del techo (m)", "num", 12],
     ["opening", "Arco abajo (si no toca la pista)", "bool", false], ["opening_width", "Ancho del arco (m)", "num", 16],
@@ -588,6 +592,14 @@ function drawPiece(p, C, on) {
     ctx.beginPath(); ctx.moveTo(e0[0], e0[1]); ctx.lineTo(e1[0], e1[1]); ctx.stroke();
     ctx.fillStyle = "#fff"; ctx.font = "600 11px Inter, sans-serif"; ctx.textAlign = "center"; ctx.fillText("arco", s[0], s[1] - 8); ctx.textAlign = "start";
     if (on) { ring(s, Math.max(10, span * cam.zoom), C.sel, false); const h = toScreen([p.x + dx[0], p.z + dx[1]]); ctx.fillStyle = C.sel; ctx.beginPath(); ctx.arc(h[0], h[1], 6, 0, Math.PI * 2); ctx.fill(); }
+  } else if (p.type === "waterfall") {
+    const a = ((p.angle ?? 0) * Math.PI) / 180, half = (p.width ?? 50) / 2;
+    const dx = [Math.cos(a) * half, -Math.sin(a) * half];
+    const e0 = toScreen([p.x - dx[0], p.z - dx[1]]), e1 = toScreen([p.x + dx[0], p.z + dx[1]]);
+    ctx.strokeStyle = "rgba(225,250,255,0.95)"; ctx.lineWidth = Math.max(4, 4 * cam.zoom); ctx.lineCap = "round";
+    ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(e0[0], e0[1]); ctx.lineTo(e1[0], e1[1]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = "#fff"; ctx.font = "600 11px Inter, sans-serif"; ctx.textAlign = "center"; ctx.fillText("cascada", s[0], s[1] - 9); ctx.textAlign = "start";
+    if (on) { ring(s, Math.max(10, half * cam.zoom), C.sel, false); const h = toScreen([p.x + dx[0], p.z + dx[1]]); ctx.fillStyle = C.sel; ctx.beginPath(); ctx.arc(h[0], h[1], 6, 0, Math.PI * 2); ctx.fill(); }
   } else if (p.type === "shipwreck") {
     const a = ((p.angle ?? 40.107) * Math.PI) / 180, k = Math.max(0.6, cam.zoom) * (p.size ?? 1.5);
     ctx.save(); ctx.translate(s[0], s[1]); ctx.rotate(-a);
@@ -719,8 +731,8 @@ function hitTest(s) {
   if (sel?.kind === "piece") {
     const p = map.pieces[sel.i];
     if (p.type === "volcano") { const hs = toScreen([p.x, p.z]); if (dist([hs[0] + (p.radius ?? 40) * cam.zoom + 3, hs[1]], s) < 9) return { kind: "piece", i: sel.i, resize: true }; }
-    if (p.type === "rock_arch") {
-      const a = ((p.angle ?? 0) * Math.PI) / 180, span = p.span ?? 40;
+    if (p.type === "rock_arch" || p.type === "waterfall") {
+      const a = ((p.angle ?? 0) * Math.PI) / 180, span = p.type === "waterfall" ? (p.width ?? 50) / 2 : p.span ?? 40;
       if (dist(toScreen([p.x + Math.cos(a) * span, p.z - Math.sin(a) * span]), s) < 9) return { kind: "piece", i: sel.i, rotate: true };
     }
   }
@@ -728,7 +740,7 @@ function hitTest(s) {
   for (let i = map.pieces.length - 1; i >= 0; i--) {
     const p = map.pieces[i];
     if (!("x" in p)) continue;
-    const r = p.type === "volcano" ? (p.radius ?? 40) : p.type === "rock_arch" ? 12 : p.type === "shipwreck" ? 12 : GEYSER_RADIUS + 2;
+    const r = p.type === "volcano" ? (p.radius ?? 40) : p.type === "rock_arch" || p.type === "waterfall" ? 12 : p.type === "shipwreck" ? 12 : GEYSER_RADIUS + 2;
     if (dist(w, [p.x, p.z]) < Math.max(r, 9 / cam.zoom)) return { kind: "piece", i };
   }
   for (let i = map.islands.length - 1; i >= 0; i--) {
@@ -749,7 +761,7 @@ function onDown(e) {
   if (tool === "pan" || spaceDown || e.button === 1) { drag = { kind: "pan", s, cam: { ...cam } }; return; }
 
   if (tool === "track" || tool === "rock") return penDown(s, w, e);
-  if (["island", "geyser", "volcano", "rock_arch", "shipwreck"].includes(tool)) {
+  if (["island", "geyser", "volcano", "rock_arch", "shipwreck", "waterfall"].includes(tool)) {
     if (tool === "island") { map.islands.push({ x: w[0], z: w[1], radius: 20, lighthouse: false, seed: Math.floor(Math.random() * 99999) + 1 }); sel = { kind: "island", i: map.islands.length - 1 }; }
     else {
       const p = { type: tool, x: w[0], z: w[1] };
@@ -923,6 +935,7 @@ const HINTS = {
   volcano: "Clic para poner una isla volcán.",
   rock_arch: "Clic para poner un arco de roca. El puntito del extremo lo gira.",
   shipwreck: "Clic para poner un barco hundido.",
+  waterfall: "Clic para poner una cascada. Ponela en la salida de una cueva, cruzando la pista; el puntito del extremo la gira.",
 };
 function setHint() {
   let h = HINTS[tool] || "";

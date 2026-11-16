@@ -72,7 +72,7 @@ func _ready() -> void:
 		piece.build(self)
 	for i in map.islands.size():
 		_add_map_island(map.islands[i], i)
-	island = islands[0]
+	island = islands[0] if not islands.is_empty() else null
 
 	if _water:
 		var fade: Array[Vector3] = []

@@ -409,8 +409,8 @@ func _water_glow(pts: PackedVector2Array) -> MeshInstance3D:
 			for tri in [[0, 1, 2], [0, 2, 3]]:
 				for v in tri:
 					var p: Vector2 = q[v][0]
-					st.set_color(Color(glow_color, 0.5 * q[v][1]))
-					st.add_vertex(Vector3(p.x, 0.35, p.y))
+					st.set_color(Color(glow_color, 0.3 * q[v][1]))
+					st.add_vertex(Vector3(p.x, 0.9, p.y))
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -440,7 +440,7 @@ func _sunbeam(at: Vector2) -> Node3D:
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	mat.albedo_color = Color(1.0, 0.92, 0.7, 0.16)
+	mat.albedo_color = Color(1.0, 0.92, 0.7, 0.04)
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	cone.material = mat
 	var mi := MeshInstance3D.new()
@@ -450,7 +450,7 @@ func _sunbeam(at: Vector2) -> Node3D:
 	beam.add_child(mi)
 	var light := OmniLight3D.new()
 	light.light_color = Color(1.0, 0.9, 0.7)
-	light.light_energy = 1.6
+	light.light_energy = 0.9
 	light.omni_range = 14.0
 	light.position.y = ceiling * 0.4
 	beam.add_child(light)
