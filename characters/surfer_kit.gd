@@ -77,6 +77,10 @@ var _yaw: float = STANCE_YAW
 var _materials: Dictionary = {}
 ## Con rastas el pelo se sacude menos (ver _secondary).
 var _dreads: bool = false
+## Con la lycra puesta, el pecho, la cintura y los hombros son de tela.
+var _lycra: bool = false
+## Bikini abajo: las piernas del short no se arman (queda la cadera).
+var _bikini: bool = false
 
 
 ## Arma el personaje dentro de `parent` según `data`.
@@ -87,6 +91,8 @@ func build(parent: Node3D, data: CharacterData, features: AvatarFeatures) -> voi
 	root.free()
 	parent.add_child(character)
 	character.basis = Basis(Vector3.UP, _yaw)
+	_lycra = data.get_option("top") == CharacterData.LYCRA
+	_bikini = data.get_option("bottom") == CharacterData.BIKINI
 	_fist_left_hand()
 	_choose_accessories(data)
 	_apply_sliders(data)
@@ -357,6 +363,11 @@ const BELLY_SIDE := 0.25
 const SHORTS_FOLLOW := 1.4
 ## Tamaño de la cabeza (ya no se elige).
 const HEAD_SCALE := 1.085
+## Silueta flaca: cuánto se afinan el pecho, la cintura, la cadera y las piernas.
+const SLIM_CHEST := Vector3(0.92, 1.0, 0.93)
+const SLIM_WAIST := Vector3(0.84, 1.0, 0.84)
+const SLIM_HIPS := Vector3(0.94, 1.0, 0.94)
+const SLIM_LEGS := Vector3(0.87, 1.0, 0.87)
 ## Músculos desde los que aparecen los hombros (0..1).
 const SHOULDERS_FROM := 0.45
 
@@ -390,7 +401,8 @@ func _apply_sliders(data: CharacterData) -> void:
 	# Pecho: con músculos más ancho; con panza, más redondo.
 	chest.scale = Vector3((0.8 + 0.2 * m) * (1.0 + 0.08 * w), 0.92 + 0.08 * m, 1.0 + 0.3 * w)
 	# Hombros: solo del lado musculoso, y ya grandes (nunca hombritos chicos).
-	var shoulders := m >= SHOULDERS_FROM
+	var slim := data.get_option("build") == CharacterData.SLIM
+	var shoulders := m >= SHOULDERS_FROM and not slim
 	var delt := lerpf(0.8, 1.0, inverse_lerp(SHOULDERS_FROM, 1.0, m))
 	for side in ["DeltL", "DeltR"]:
 		var d := torso.find_child(side, false, false) as Node3D
@@ -400,7 +412,11 @@ func _apply_sliders(data: CharacterData) -> void:
 			continue
 		d.scale = Vector3.ONE * delt
 		d.position.x *= 0.85 + 0.15 * m
-	var lines_visible := m > 0.55 and w < 0.4
+	var lines_visible := m > 0.55 and w < 0.4 and not slim
+	if slim:
+		# Flaca: pecho y cintura más finitos (sin músculos).
+		chest.scale *= SLIM_CHEST
+		waist.scale *= SLIM_WAIST
 	for line in ["PecLineL", "PecLineR", "Sternum", "AbMid"]:
 		var l := torso.find_child(line, false, false) as Node3D
 		if l and not lines_visible:
@@ -414,10 +430,21 @@ func _apply_sliders(data: CharacterData) -> void:
 	var hips := character.find_child("ShortsHips", false, false) as Node3D
 	# El short acompaña la panza por delante (así se sigue viendo).
 	hips.scale = Vector3(1.0 + 0.35 * w + 0.35 * BELLY_SIDE * e, 1.0 + 0.08 * w, 1.0 + 0.45 * w + SHORTS_FOLLOW * e)
+	if data.get_option("bottom") == CharacterData.BIKINI:
+		# Bikini: la cadera más chica y más abajo (no un short).
+		hips.scale *= Vector3(0.94, 0.62, 0.9)
+		hips.position.y -= 0.06
 	for part in ["SleeveL", "SleeveR", "ThighL", "ThighR"]:
 		(character.find_child(part, false, false) as Node3D).scale *= Vector3(1.0 + 0.35 * w, 1.0, 1.0 + 0.35 * w)
 	for part in ["ShinL", "ShinR"]:
 		(character.find_child(part, false, false) as Node3D).scale *= Vector3(1.0 + 0.2 * w, 1.0, 1.0 + 0.2 * w)
+	if slim:
+		hips.scale *= SLIM_HIPS
+		for part in ["SleeveL", "SleeveR", "ThighL", "ThighR", "ShinL", "ShinR"]:
+			(character.find_child(part, false, false) as Node3D).scale *= SLIM_LEGS
+		for part in ["HandL", "HandR"]:
+			var hand := character.find_child(part, false, false) as Node3D
+			hand.position.x *= 0.95
 	# Las manos se abren un poco con la panza.
 	for part in ["HandL", "HandR"]:
 		var hand := character.find_child(part, false, false) as Node3D
@@ -460,6 +487,9 @@ func _make_materials(data: CharacterData) -> void:
 	shorts.set_shader_parameter("color2", data.accent("shorts_pattern_color2"))
 	shorts.set_shader_parameter("pattern", data.get_option("shorts_pattern"))
 	_materials["shorts"] = shorts
+	var top := (_materials["skin"] as BaseMaterial3D).duplicate() as BaseMaterial3D
+	top.albedo_color = data.accent("top_color")
+	_materials["top"] = top
 
 
 ## Junta todas las piezas debajo de `part` en una malla (una superficie por color),
@@ -474,6 +504,15 @@ func _bake(part: Node3D) -> void:
 			continue
 		var mat := inst.mesh.surface_get_material(0) as BaseMaterial3D
 		var key := mat.resource_name if mat else "skin"
+		if _bikini and String(part.name).begins_with("Sleeve"):
+			continue
+		if _lycra and part.name == "Torso":
+			# La lycra tapa el torso: la piel se vuelve tela y las líneas de
+			# los músculos no se ven.
+			if key == "skin_line":
+				continue
+			if key == "skin":
+				key = "top"
 		# El contorno del modelo no se usa tal cual (se agrandaría con la pieza):
 		# se vuelve a armar abajo a partir de la pieza, con el grosor de siempre.
 		if key == "outline":
@@ -537,6 +576,9 @@ func _bake(part: Node3D) -> void:
 			mat.set_shader_parameter("y_offset", to_char_xf.origin.y)
 			mat.set_shader_parameter("y_scale", to_char_xf.basis.get_scale().y)
 		mesh.surface_set_material(mesh.get_surface_count() - 1, mat)
+	if mesh.get_surface_count() == 0:
+		# Parte sin nada que dibujar (por ejemplo, las piernas del short con bikini).
+		return
 	var out := MeshInstance3D.new()
 	out.name = "Mesh"
 	out.mesh = mesh

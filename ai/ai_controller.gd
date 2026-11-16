@@ -63,6 +63,18 @@ var _ring_peak_angle: float = NAN
 var _ring_peak_choice: bool = false
 var _water: Water
 var _last_lap: int = -1
+## Sombra del derrape: por cada rival de adelante, si decidió no quedarse
+## detrás (id -> bool) y de qué lado lo pasa (id -> -1 / 1).
+var _shadow_choice: Dictionary = {}
+var _shadow_side: Dictionary = {}
+## Hasta cuántos metros más allá del alcance del derrape mira la sombra, y
+## cuánto margen deja al costado del cono.
+const SHADOW_EXTRA := 6.0
+const SHADOW_MARGIN := 1.4
+## El destino de ahora es su línea (no una ola, un aro, una roca o un rival).
+var _on_line: bool = false
+## Siguiendo su línea, apunta a este punto más adelante (m).
+const AIM_DISTANCE := 14.0
 
 
 func _ready() -> void:
@@ -119,7 +131,12 @@ func _drive(delta: float, input: RiderInput) -> void:
 		_think_timer = difficulty.think_interval
 		_think(angle, lateral)
 
-	input.steer = _steer_towards(angle, lateral, _target_lateral)
+	# Siguiendo su línea, apunta a donde va la línea más adelante (no a la de acá).
+	var aim_lateral := _target_lateral
+	if _on_line and difficulty.line_skill > 0.0:
+		var lane := track.half_width - 3.0
+		aim_lateral = _line_target(angle + AIM_DISTANCE / maxf(track.radius + lateral, 10.0), lane) + _noise
+	input.steer = _steer_towards(angle, lateral, aim_lateral)
 	input.throttle = difficulty.max_throttle * (difficulty.rock_throttle if _brake else 1.0)
 
 	# Derrape (para tirar al de atrás).
@@ -129,7 +146,12 @@ func _drive(delta: float, input: RiderInput) -> void:
 
 	# Turbo en ráfagas: lo mejor es justo antes de que una ola lo lance; si no,
 	# en una recta cuando junta suficiente nitro.
-	if difficulty.uses_turbo and rider.turbo_time <= 0.0 and rider.turbo_charges() >= 1:
+	if difficulty.eager_turbo and rider.turbo_time <= 0.0 and rider.turbo_charges() >= 1:
+		# Como juegan los mejores: turbo apenas hay una carga (salvo en una
+		# curva cerrada o frenando por una roca).
+		if absf(input.steer) < 0.8 and not _brake:
+			input.turbo_pressed = true
+	elif difficulty.uses_turbo and rider.turbo_time <= 0.0 and rider.turbo_charges() >= 1:
 		var before_wave := rider.pop_ready() and _rng.randf() < difficulty.pop_skill
 		var straight := (
 			rider.nitro >= maxf(difficulty.turbo_threshold, Rider.TURBO_CHARGE)
@@ -200,10 +222,9 @@ func _think(angle: float, lateral: float) -> void:
 				_pick_path()
 			_last_lap = lap
 
-	var target := path_lateral(angle, lane) + _noise
-	# Línea de carrera: los expertos cortan por adentro de la curva que viene.
-	if difficulty.line_skill > 0.0:
-		target = lerpf(target, _inside_line(angle, lane), difficulty.line_skill)
+	var target := _line_target(angle, lane) + _noise
+	var line_here := target
+	_on_line = true
 
 	# Círculo de velocidad próximo.
 	var ring := _next_ring(angle)
@@ -211,14 +232,19 @@ func _think(angle: float, lateral: float) -> void:
 		var id := ring.get_instance_id()
 		if not _ring_choice.has(id):
 			_ring_choice[id] = _rng.randf() < difficulty.ring_seek
-		if _ring_choice[id]:
-			target = track.lateral_of(ring.position)
+		var ring_lat := track.lateral_of(ring.position)
+		if _ring_choice[id] and absf(ring_lat - line_here) < difficulty.detour:
+			target = ring_lat
+			_on_line = false
 
 	# Modo olas: ir a buscar una ola grande que tiene adelante.
 	if GameSettings.jump_style == GameSettings.JumpStyle.WAVES:
 		var swell := _next_swell(angle, lateral)
 		if swell:
-			target = track.lateral_of(Vector3(swell.center.x, 0.0, swell.center.y))
+			var swell_lat := track.lateral_of(Vector3(swell.center.x, 0.0, swell.center.y))
+			if absf(swell_lat - line_here) < difficulty.detour:
+				target = swell_lat
+				_on_line = false
 		var ring_target := _ring_wave_target(angle, lateral)
 		if not is_nan(ring_target):
 			target = ring_target
@@ -227,23 +253,46 @@ func _think(angle: float, lateral: float) -> void:
 	var to_line := _arc_ahead(angle, 0.0, lateral)
 	if to_line > 0.0 and to_line < FINISH_APPROACH:
 		target = lateral
+		_on_line = false
 
-	# Rival adelante y cerca: no quedarse justo detrás (puede derrapar).
-	# Rival justo detrás: derraparle encima.
+	# Rivales. Adelante: no quedarse en la "sombra" de su derrape (el cono de
+	# agua que barre hacia atrás), aunque esa sea la línea más corta: se va al
+	# borde del cono que menos lo aparta de donde quería ir, y lo mantiene hasta
+	# pasarlo. Cada rival se decide una vez (los mejores casi siempre lo
+	# esquivan). Atrás y cerca: derraparle encima (a quien sea, bot o persona).
+	var range_back := rider.stats.drift_range + SHADOW_EXTRA
+	var tan_cone := tan(deg_to_rad(rider.stats.drift_cone_half_angle))
 	for other in race.racers if race else []:
 		if other == rider or other.is_fallen():
 			continue
+		var id := other.get_instance_id()
 		var ahead := _arc_ahead(angle, track.angle_of(other.position), lateral)
-		var dlat := track.lateral_of(other.position) - lateral
-		# Los buenos se salen del todo del cono que barre el derrape del de
-		# adelante (se abre con la distancia), así no los pueden tirar.
-		var cone := 0.8 + maxf(ahead, 0.0) * tan(deg_to_rad(rider.stats.drift_cone_half_angle)) + 1.2
-		if ahead > 0.0 and ahead < rider.stats.drift_range + 4.0 and absf(dlat) < cone and _rng.randf() < difficulty.evade_skill:
-			var away := -1.0 if dlat > 0.0 else 1.0
-			target = track.lateral_of(other.position) + away * (cone + 0.6)
-		elif ahead > 0.0 and ahead < 10.0 and absf(dlat) < 2.5:
-			target = lateral + (4.0 if dlat <= 0.0 else -4.0)
-		elif ahead < 0.0 and ahead > -6.0 and absf(dlat) < 2.5:
+		var other_lat := track.lateral_of(other.position)
+		var dlat := other_lat - lateral
+		if ahead > 0.0 and ahead < range_back:
+			if not _shadow_choice.has(id):
+				_shadow_choice[id] = _rng.randf() < difficulty.evade_skill
+			var cone := 0.8 + ahead * tan_cone + SHADOW_MARGIN
+			if _shadow_choice[id] and absf(target - other_lat) < cone:
+				var left := other_lat - cone
+				var right := other_lat + cone
+				if not _shadow_side.has(id):
+					var side := -1 if absf(left - target) < absf(right - target) else 1
+					if side < 0 and left < -lane:
+						side = 1
+					elif side > 0 and right > lane:
+						side = -1
+					_shadow_side[id] = side
+				target = other_lat + cone * _shadow_side[id]
+				_on_line = false
+			elif not _shadow_choice[id] and ahead < 10.0 and absf(dlat) < 2.5:
+				# Sin esquivar la sombra, al menos no chocarlo de atrás.
+				target = lateral + (4.0 if dlat <= 0.0 else -4.0)
+				_on_line = false
+		else:
+			_shadow_choice.erase(id)
+			_shadow_side.erase(id)
+		if ahead < 0.0 and ahead > -6.0 and absf(dlat) < 2.5:
 			if rider.speed > rider.stats.drift_min_speed + 1.0 and _rng.randf() < difficulty.aggression:
 				_drift_timer = 0.6
 
@@ -284,11 +333,22 @@ func _think(angle: float, lateral: float) -> void:
 				side = -1
 			_rock_side[id] = side
 		target = rock_lat + clearance * _rock_side[id]
+		_on_line = false
 		# Cerca y todavía no está al costado: aflojar para poder girar más cerrado.
 		if nearest_ahead < 14.0 and absf(rock_lat - lateral) < clearance:
 			_brake = true
 
 	_target_lateral = clampf(target, -lane, lane)
+
+
+## Desvío lateral al que va según su habilidad: entre su camino (que cambia
+## cada vuelta) y la línea más corta de la pista (RacingLine).
+func _line_target(angle: float, lane: float) -> float:
+	var base := path_lateral(angle, lane)
+	if difficulty.line_skill <= 0.0:
+		return base
+	var line := RacingLine.for_track(course.track, lane).lateral_at(angle)
+	return lerpf(base, line, difficulty.line_skill)
 
 
 ## Desvío lateral que va por adentro de la curva que viene (0 si es recta):
@@ -399,7 +459,11 @@ func _air(_delta: float, input: RiderInput) -> void:
 	var track := course.track
 	var angle := track.angle_of(rider.position)
 	var lateral := track.lateral_of(rider.position)
-	input.steer = _steer_towards(angle, lateral, _target_lateral)
+	# En el aire también sigue su línea (más de la mitad del tiempo va volando).
+	var aim_lateral := _target_lateral
+	if _on_line and difficulty.line_skill > 0.0:
+		aim_lateral = _line_target(angle + AIM_DISTANCE / maxf(track.radius + lateral, 10.0), track.half_width - 3.0) + _noise
+	input.steer = _steer_towards(angle, lateral, aim_lateral)
 	_jump_hold = 0.0
 
 	if not _was_airborne:
@@ -413,7 +477,8 @@ func _air(_delta: float, input: RiderInput) -> void:
 	var t_land := _time_to_land()
 	# Turbo en el aire para subir más y tener tiempo para más vueltas.
 	if difficulty.uses_turbo and rider.vertical_speed > -2.0:
-		if rider.turbo_time <= 0.0 and rider.nitro > maxf(difficulty.turbo_threshold, Rider.TURBO_CHARGE):
+		var ready := rider.turbo_charges() >= 1 if difficulty.eager_turbo else rider.nitro > maxf(difficulty.turbo_threshold, Rider.TURBO_CHARGE)
+		if rider.turbo_time <= 0.0 and ready:
 			input.turbo_pressed = true
 		if rider.turbo_time > 0.0:
 			t_land += 0.5

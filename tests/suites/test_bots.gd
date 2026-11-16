@@ -44,6 +44,24 @@ func _test_bot_paths() -> void:
 	_check(AIController.PATHS.size() == 5, "hay 5 caminos")
 	_check(distinct >= 4, "los caminos van por lugares distintos (%d distintos)" % distinct)
 	ai.free()
+	# Línea de carrera: la más corta dentro de la pista (corta las curvas).
+	var map := TrackMap.for_layout(GameSettings.TrackLayout.ARCHIPELAGO)
+	var track := PathTrack.new(map.path, map.half_width)
+	var lane := map.half_width - 3.0
+	var line := RacingLine.for_track(track, lane)
+	var length := 0.0
+	var inside := true
+	var prev := track.position_at(0.0, line.lateral_at(0.0))
+	for i in range(1, 401):
+		var a := i / 400.0 * TAU
+		var lat := line.lateral_at(a)
+		inside = inside and absf(lat) <= lane + 0.01
+		var p := track.position_at(a, lat)
+		length += p.distance_to(prev)
+		prev = p
+	_check(inside, "la línea de carrera no se sale de la pista")
+	_check(length < track.length() * 0.88, "la línea de carrera es mucho más corta que el centro (%d m / %d m)" % [length, track.length()])
+	_check(imp.eager_turbo and imp.line_skill >= 1.0 and pro.line_skill > 0.5, "los mejores bots siguen la línea y usan el turbo apenas pueden")
 
 
 func _test_bot_race() -> void:

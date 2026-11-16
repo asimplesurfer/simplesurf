@@ -210,18 +210,16 @@ func _build_fixed(course: Course, total_m: float) -> void:
 	_next_fixed = 0
 
 
-## Jugadores a los que se les garantizan olas: las personas (si no hay, como
-## en la demo, todos los corredores).
+## Corredores a los que se les garantizan olas: todos, personas y bots (antes
+## solo las personas, y los bots que quedaban lejos no tenían ninguna ola:
+## no saltaban, no juntaban nitro y quedaban muy atrás).
 func _targets() -> Array[Rider]:
-	var humans: Array[Rider] = []
 	var everyone: Array[Rider] = []
 	for node in get_tree().get_nodes_in_group("riders"):
 		var r := node as Rider
 		if r and not r.race_finished:
 			everyone.append(r)
-			if r.is_human:
-				humans.append(r)
-	return humans if not humans.is_empty() else everyone
+	return everyone
 
 
 ## Dirección de la pista donde está el corredor (o su frente, si no hay pista).

@@ -23,6 +23,11 @@ var _cyl: CylinderMesh
 ## Aros de anteojos (fino y grueso).
 var _ring: TorusMesh
 var _ring_thick: TorusMesh
+## Mechón: una hoja que se afina hasta la punta y se curva hacia +X.
+var _lock: ArrayMesh
+## Mechón ondulado (en S): primero se abomba para un lado y la punta se da
+## vuelta para el otro.
+var _wavy: ArrayMesh
 var _materials: Dictionary = {}
 ## Raíz del personaje (la pone SurferKit): el contorno se mide ahí, así tiene
 ## el mismo grosor que el del cuerpo aunque la cabeza esté agrandada.
@@ -41,9 +46,19 @@ var _group: Node3D
 ## Transformación extra para las piezas (agrandar el sombrero sobre pelos grandes).
 var _extra_xf := Transform3D.IDENTITY
 ## Pelos voluminosos: el sombrero va más grande y más arriba (si no, lo tapan).
-const BIG_HAIR := [2, 3, 4, 5, 12, 13, 14]
+const BIG_HAIR := [2, 3, 4, 5, 12, 13, 14, 15]
+## Colita alta (peinado 16).
+const HIGH_PONYTAIL := 16
 ## Rastas (peinado 14).
 const DREADS := 14
+## Altura del ribete de la bombacha (en radios de la cadera).
+const BIKINI_TRIM_Y := 0.5
+## Bikini: color de los lunares (transparente si no lleva) y del ribete.
+var _bikini_dots := Color(0, 0, 0, 0)
+var _bikini_trim := Color("#e8302a")
+## Franja de la lycra: altura (en el grupo del pecho) y tamaño (en radios del pecho).
+const LYCRA_BAND_Y := -0.2
+const LYCRA_BAND_R := Vector2(1.0, 1.04)
 ## Ancho y fondo del pecho (para el collar).
 var _neck_scale := Vector2.ONE
 
@@ -73,6 +88,8 @@ func _init() -> void:
 	_ring.outer_radius = 1.0
 	_ring.rings = 20
 	_ring.ring_segments = 6
+	_lock = _make_lock(0.9, 0.0)
+	_wavy = _make_lock(0.8, -0.28)
 	_ring_thick = TorusMesh.new()
 	_ring_thick.inner_radius = 0.7
 	_ring_thick.outer_radius = 1.0
@@ -127,8 +144,10 @@ func build_head(group: Node3D, hair_group: Node3D, data: CharacterData, skin: Co
 ## atrás. `neck_scale` = ancho y fondo del pecho (x, z), que cambian con el cuerpo.
 func build_chest(group: Node3D, data: CharacterData, radii: Vector3, neck_scale := Vector2.ONE) -> void:
 	_begin(group)
-	_top(data.get_option("top"), data.shorts_color(), radii)
 	_neck_scale = neck_scale
+	_bikini_dots = data.accent("shorts_pattern_color") if data.get_option("shorts_pattern") == 2 else Color(0, 0, 0, 0)
+	_bikini_trim = data.accent("trim_color")
+	_top(data.get_option("top"), data.shorts_color(), radii, data.accent("top_color2"))
 	var front := _neck_at(0.0)
 	# Hacia adelante y un poco para arriba (como el pecho).
 	var face := Basis(Vector3.RIGHT, -0.3)
@@ -164,6 +183,19 @@ func build_chest(group: Node3D, data: CharacterData, radii: Vector3, neck_scale 
 		7:
 			# Cuentas rasta: rojo, amarillo y verde.
 			_necklace(24, 0.045, [Color("#e8302a"), Color("#ffd23f"), Color("#2fa84f")])
+		10:
+			# Dije: cordón finito oscuro y una gotita dorada adelante.
+			_necklace(72, 0.012, [Color("#3a2414")], false)
+			var pos := front + Vector3(0.0, -0.05, 0.02)
+			_piece(_sphere, pos, Vector3(0.028, 0.038, 0.016), Color("#ffc21f"), true, face)
+		9:
+			# Cuellito blanco: cordón fino y dos puntas en V adelante (como un
+			# cuello de camisa).
+			_necklace(56, 0.012, [WHITE])
+			for side in [-1.0, 1.0]:
+				var pos := _neck_at(side * 0.12) + Vector3(side * 0.02, -0.045, 0.03)
+				_piece(_cone, pos, Vector3(0.05, 0.055, 0.012), WHITE, true,
+					face * Basis(Vector3.BACK, PI + side * 0.55))
 		8:
 			# Paz y amor: cordón de cuero y el símbolo de la paz.
 			_necklace(34, 0.02, [Color("#7a4a24")])
@@ -180,11 +212,39 @@ func build_chest(group: Node3D, data: CharacterData, radii: Vector3, neck_scale 
 	_commit()
 
 
+## Altura y fondo del moño del short (en radios de la cadera).
+const TIE_HEIGHT := 0.75
+const TIE_DEPTH := 1.0
 ## Cadera: el estampado del short ya no se arma con piezas (se pinta en la
 ## tela, ver shorts_pattern.gdshader); queda el grupo por si se agrega algo.
-func build_hips(group: Node3D, _data: CharacterData, _radii: Vector3) -> void:
+func build_hips(group: Node3D, data: CharacterData, radii: Vector3) -> void:
 	_begin(group)
+	var tie := data.get_option("shorts_tie")
+	if tie > 0:
+		var color := WHITE
+		if tie == 2:
+			color = BLACK
+		elif tie == 3:
+			color = data.accent("shorts_pattern_color")
+		_shorts_tie(radii, color)
+	if data.get_option("bottom") == CharacterData.BIKINI:
+		# Ribete de la bombacha del bikini, en la cintura.
+		_piece(_cyl, Vector3(0.0, radii.y * BIKINI_TRIM_Y, 0.0), Vector3(radii.x * 1.0, 0.03, radii.z * 1.04),
+			data.accent("trim_color"), true)
 	_commit()
+
+
+## Cordón del short: un moño adelante, arriba, con las dos puntas colgando.
+func _shorts_tie(radii: Vector3, color: Color) -> void:
+	var c := Vector3(0.0, radii.y * TIE_HEIGHT, radii.z * TIE_DEPTH)
+	_piece(_sphere, c, Vector3(0.022, 0.022, 0.016), color, true)
+	for side in [-1.0, 1.0]:
+		# Las dos orejas del moño.
+		_piece(_sphere, c + Vector3(side * 0.04, 0.005, 0.0), Vector3(0.04, 0.02, 0.012), color, true,
+			Basis(Vector3.BACK, side * 0.25))
+		# Las puntas, cayendo un poco abiertas.
+		_piece(_sphere, c + Vector3(side * 0.022, -0.065, 0.006), Vector3(0.012, 0.06, 0.01), color, true,
+			Basis(Vector3.BACK, side * 0.22))
 
 
 # ---------------------------------------------------------------- cabeza
@@ -272,6 +332,31 @@ func _eyes(style: int, glasses: int = 0) -> void:
 				else:
 					_piece(_sphere, p + Vector3(0, -0.01, 0.01), Vector3(0.07, 0.014, 0.02), BLACK, false,
 						Basis(Vector3.BACK, 0.25))
+			11:
+				# Claros y tiernos: óvalo chico de color (sin blanco alrededor,
+				# así no miran fijo), más claro abajo, pupila, brillo grande y
+				# dos pestañitas hacia afuera.
+				_piece(_sphere, p, Vector3(0.062, 0.08, 0.03), Color("#1f5f6e"), false)
+				_piece(_sphere, p + Vector3(0.0, -0.022, 0.012), Vector3(0.048, 0.05, 0.02), Color("#58b9c9"), false)
+				_piece(_sphere, p + Vector3(0.0, 0.005, 0.022), Vector3(0.026, 0.032, 0.012), Color("#0e2a30"), false)
+				_piece(_sphere, p + Vector3(-0.02, 0.028, 0.03), Vector3(0.02, 0.022, 0.01), WHITE, false)
+				_piece(_sphere, p + Vector3(0.018, -0.032, 0.03), Vector3.ONE * 0.008, WHITE, false)
+				for j in 2:
+					_piece(_sphere, p + Vector3(side * (0.055 + j * 0.016), 0.06 - j * 0.02, 0.01),
+						Vector3(0.009, 0.024, 0.008), BLACK, false, Basis(Vector3.BACK, -side * (0.8 + j * 0.35)))
+			10:
+				# Grandes con brillo y cejas finas arqueadas.
+				_piece(_sphere, p, Vector3(0.075, 0.1, 0.04) * maxf(k, 0.8), BLACK, false)
+				_piece(_sphere, p + Vector3(-0.025, 0.035, 0.035), Vector3.ONE * 0.028, WHITE, false)
+				var brow := PackedVector2Array()
+				var ex := p.x
+				for j in 7:
+					var u := j / 6.0
+					brow.append(Vector2(ex + (u - 0.5) * 0.17, 0.215 + 0.035 * sin(u * PI)))
+				for j in 7:
+					var u := 1.0 - j / 6.0
+					brow.append(Vector2(ex + (u - 0.5) * 0.15, 0.215 + 0.015 * sin(u * PI) - 0.008))
+				_extruded(brow, 0.004, 0.006, func(_q: Vector2) -> Color: return Color("#3a2414"), false)
 			9:
 				# Enojados: punto y ceja en diagonal hacia el centro.
 				_piece(_sphere, p, Vector3.ONE * 0.06, BLACK, false)
@@ -348,6 +433,8 @@ func _glasses(style: int) -> void:
 			for side in [-1.0, 1.0]:
 				_piece(_sphere, Vector3(side * 0.44, 0.12, 0.12), Vector3(0.012, 0.012, 0.18), frame, false,
 					Basis(Vector3.UP, side * 0.35))
+		13:
+			_wrap_shades()
 		10:
 			# Snorkel: antiparras de buceo y el tubo al costado.
 			_piece(_sphere, _face(0.0, 0.1, 0.06), Vector3(0.38, 0.17, 0.05), Color("#2fbfb0"))
@@ -356,6 +443,97 @@ func _glasses(style: int) -> void:
 			_piece(_cyl, Vector3(0.46, 0.2, 0.02), Vector3(0.035, 0.3, 0.035), Color("#ff7a2f"))
 			_piece(_cyl, Vector3(0.36, -0.15, 0.32), Vector3(0.03, 0.13, 0.03), Color("#ff7a2f"), true,
 				Basis(Vector3.BACK, 0.9))
+
+
+## Anteojos de sol envolventes y cuadrados: una sola pieza recortada (los dos
+## vidrios y el puente) que sigue la curva de la cara, azul con degradé (más
+## oscuro arriba) y dos brillos en diagonal en cada vidrio.
+func _wrap_shades() -> void:
+	# Contorno de la mitad derecha (x >= 0), en unidades de cabeza; se espeja.
+	var half := [
+		Vector2(0.0, 0.215), Vector2(0.44, 0.23), Vector2(0.46, 0.205), Vector2(0.41, 0.05),
+		Vector2(0.36, 0.012), Vector2(0.15, 0.012), Vector2(0.1, 0.035),
+		Vector2(0.05, 0.1), Vector2(0.0, 0.115),
+	]
+	var poly := PackedVector2Array()
+	for i in range(half.size() - 1, -1, -1):
+		var p: Vector2 = half[i]
+		if p.x > 0.0:
+			poly.append(Vector2(-p.x, p.y))
+	for p in half:
+		poly.append(p)
+	var top := Color("#13215c")
+	var bottom := Color("#2f6be0")
+	_extruded(poly, 0.07, 0.035, func(p: Vector2) -> Color:
+		return top.lerp(bottom, clampf((0.23 - p.y) / 0.2, 0.0, 1.0)), true)
+	# Brillos: dos tiras finas en diagonal en cada vidrio.
+	var shine := Color("#cfe9ff")
+	for side in [-1.0, 1.0]:
+		for j in 2:
+			var cx: float = side * (0.21 + j * 0.09)
+			var strip := PackedVector2Array([
+				Vector2(cx - 0.035, 0.04), Vector2(cx - 0.01 - j * 0.005, 0.04),
+				Vector2(cx + 0.035 - j * 0.01, 0.2), Vector2(cx + 0.01, 0.2),
+			])
+			_extruded(strip, 0.108, 0.004, func(_p: Vector2) -> Color: return shine, false)
+	# Patillas negras hacia las orejas.
+	for side in [-1.0, 1.0]:
+		_piece(_box, Vector3(side * 0.48, 0.2, 0.08), Vector3(0.012, 0.018, 0.17), BLACK, false,
+			Basis(Vector3.UP, side * 0.25))
+
+
+## Pieza chata con forma de `poly` (x, y sobre la cara) apoyada sobre la cara:
+## la parte de atrás a `out` de la piel y la de adelante `depth` más afuera.
+## El color sale de `color_at` (por punto del contorno).
+func _extruded(poly: PackedVector2Array, out: float, depth: float, color_at: Callable, outline: bool) -> void:
+	var tris := Geometry2D.triangulate_polygon(poly)
+	if tris.is_empty():
+		return
+	var n := poly.size()
+	# Sentido del contorno (para saber de qué lado queda afuera).
+	var area := 0.0
+	for i in n:
+		area += poly[i].cross(poly[(i + 1) % n])
+	var ccw := area > 0.0
+	var b: Dictionary = _batch[outline]
+	var base := (b.verts as PackedVector3Array).size()
+	for layer in 2:
+		for i in n:
+			var p := poly[i]
+			var on_face := _face(p.x, p.y)
+			var face_n := (_face(p.x, p.y, 1.0) - on_face).normalized()
+			var pos := on_face + face_n * (out + depth * layer)
+			# Normal hacia afuera del contorno (en el plano) más hacia adelante o
+			# atrás: así el contorno negro rodea toda la pieza.
+			var e := (poly[(i + 1) % n] - poly[(i - 1 + n) % n]).normalized()
+			var side := Vector2(e.y, -e.x) if ccw else Vector2(-e.y, e.x)
+			var nrm := (Vector3(side.x, side.y, 0.0) + face_n * (0.8 if layer == 1 else -0.8)).normalized()
+			b.verts.append(_extra_xf * pos)
+			b.normals.append(nrm)
+			b.colors.append(color_at.call(p))
+	# Adelante y atrás.
+	for t in range(0, tris.size(), 3):
+		var i0 := tris[t]
+		var i1 := tris[t + 1]
+		var i2 := tris[t + 2]
+		if not ccw:
+			b.indices.append_array([base + n + i0, base + n + i2, base + n + i1])
+			b.indices.append_array([base + i0, base + i1, base + i2])
+		else:
+			b.indices.append_array([base + n + i0, base + n + i1, base + n + i2])
+			b.indices.append_array([base + i0, base + i2, base + i1])
+	# Costados.
+	for i in n:
+		var j := (i + 1) % n
+		var a0 := base + i
+		var a1 := base + j
+		var f0 := base + n + i
+		var f1 := base + n + j
+		if not ccw:
+			b.indices.append_array([a0, a1, f1, a0, f1, f0])
+		else:
+			b.indices.append_array([a0, f1, a1, a0, f0, f1])
+	_count += 1
 
 
 func _nose(style: int, skin: Color) -> void:
@@ -369,6 +547,11 @@ func _nose(style: int, skin: Color) -> void:
 			_piece(_sphere, p + Vector3(0, 0, 0.05), Vector3.ONE * 0.1, Color("#e8302a"))
 		4:
 			_piece(_sphere, p + Vector3(0, 0, 0.22), Vector3(0.05, 0.05, 0.26), skin.darkened(0.06))
+		5:
+			# Con protector solar: nariz redonda pintada de blanco (de guardavidas).
+			_piece(_sphere, p + Vector3(0, -0.01, 0.02), Vector3(0.075, 0.07, 0.07), skin.darkened(0.08))
+			# Franja de protector de lado a lado, sobre la nariz.
+			_piece(_sphere, _face(0.0, 0.0, 0.03), Vector3(0.16, 0.028, 0.05), WHITE, false)
 
 
 ## Bocas armadas (la de costado es la del modelo).
@@ -402,11 +585,65 @@ func _mouth(style: int) -> void:
 			_piece(_sphere, m, Vector3(0.11, 0.012, 0.02), BLACK, false)
 			for side in [-1.0, 1.0]:
 				_piece(_box, m + Vector3(side * 0.031, -0.045, 0.0), Vector3(0.028, 0.042, 0.012), WHITE)
+		11:
+			# Canchera: una línea que sube hacia la derecha, larga y segura.
+			_stroke(_face(0.03, -0.215, 0.012), -0.1, 0.14, 0.03, 0.8)
+		12:
+			# Sonrisa ancha: una sola línea finita de lado a lado, poco curva.
+			_stroke(m + Vector3(0.0, 0.0, 0.007), -0.16, 0.16, 0.035, 0.0)
+		13:
+			# Pícara: sube hacia la izquierda y tiene un hoyuelo en la punta.
+			_stroke(_face(-0.03, -0.215, 0.012), -0.13, 0.08, 0.03, -0.8)
+			_piece(_sphere, _face(-0.18, -0.165, 0.006), Vector3(0.012, 0.022, 0.01), BLACK, false,
+				Basis(Vector3.BACK, -0.5))
+		10:
+			# Sonrisa abierta en D: arriba recta, abajo redonda, con los dientes
+			# de arriba y la lengua.
+			var mouth := PackedVector2Array()
+			var teeth := PackedVector2Array()
+			for j in 13:
+				var u := j / 12.0
+				var x := lerpf(-0.13, 0.13, u)
+				mouth.append(Vector2(x, -0.2 - 0.11 * sin(u * PI)))
+				teeth.append(Vector2(lerpf(-0.105, 0.105, u), -0.212 - 0.025 * sin(u * PI)))
+			mouth.reverse()
+			mouth.append(Vector2(-0.135, -0.19))
+			mouth.append(Vector2(0.135, -0.19))
+			teeth.reverse()
+			teeth.append(Vector2(-0.11, -0.205))
+			teeth.append(Vector2(0.11, -0.205))
+			_extruded(mouth, 0.0, 0.012, func(_q: Vector2) -> Color: return Color("#5a1620"), true)
+			_extruded(teeth, 0.014, 0.004, func(_q: Vector2) -> Color: return WHITE, false)
+			_piece(_sphere, _face(0.0, -0.28, 0.008), Vector3(0.06, 0.025, 0.01), Color("#ff7b8a"), false)
+		9:
+			# Sonrisota: boca grande en media luna con los dientes de arriba.
+			var c := _face(0.0, -0.235, 0.01)
+			_piece(_sphere, c + Vector3(0.0, -0.01, 0.0), Vector3(0.17, 0.075, 0.04), Color("#5a1620"))
+			_piece(_sphere, c + Vector3(0.0, -0.05, 0.02), Vector3(0.08, 0.03, 0.025), Color("#ff7b8a"), false)
+			_piece(_sphere, c + Vector3(0.0, 0.025, 0.028), Vector3(0.145, 0.03, 0.02), WHITE, false)
+			for side in [-1.0, 1.0]:
+				# Comisuras para arriba.
+				_piece(_sphere, c + Vector3(side * 0.17, 0.035, 0.0), Vector3(0.03, 0.012, 0.02), BLACK, false,
+					Basis(Vector3.BACK, side * 0.7))
 		5:
 			for i in 4:
 				var x := -0.11 + i * 0.073
 				_piece(_sphere, m + Vector3(x, 0, 0), Vector3(0.046, 0.011, 0.02), BLACK, false,
 					Basis(Vector3.FORWARD, 0.5 if i % 2 == 0 else -0.5))
+
+
+## Trazo de boca de una línea, como de pincel: un tubo finito que sigue la
+## misma curva que `_curve` (de `from` a `to`) y se afina en las puntas.
+func _stroke(center: Vector3, from: float, to: float, bend: float, tilt: float) -> void:
+	var path := []
+	var widths := []
+	var n := 10
+	for i in n + 1:
+		var x := lerpf(from, to, i / float(n))
+		var y := bend * pow(x / 0.11, 2.0) + tilt * x * 0.3
+		path.append(center + Vector3(x, y, 0.0))
+		widths.append(0.016 * sin(lerpf(0.25, 0.75, i / float(n)) * PI))
+	_piece(_make_tube(path, widths), Vector3.ZERO, Vector3.ONE, BLACK, false)
 
 
 ## Línea curva de la boca: segmentos negros en arco (`bend` = cuánto se curva,
@@ -446,6 +683,20 @@ func _extra(style: int, hair: Color) -> void:
 			for side in [-1.0, 1.0]:
 				_piece(_sphere, _face(side * 0.07, -0.135, 0.012), Vector3(0.085, 0.024, 0.035), hair, true,
 					Basis(Vector3.BACK, side * 0.22))
+		9:
+			# Pecas: tres en cada cachete.
+			for side in [-1.0, 1.0]:
+				for j in 3:
+					var q := Vector2(side * (0.24 + 0.05 * (j % 2) + 0.02 * j), -0.06 - 0.04 * j)
+					_disc(_face(q.x, q.y, 0.006), (_face(q.x, q.y, 1.0) - _face(q.x, q.y)).normalized(), 0.017,
+						Color("#a85a2f"), false)
+		8:
+			# Bigotón: grueso y redondo, con las puntas para abajo (no tapa la sonrisa).
+			for side in [-1.0, 1.0]:
+				_piece(_sphere, _face(side * 0.08, -0.115, 0.03), Vector3(0.1, 0.042, 0.05), hair, true,
+					Basis(Vector3.BACK, side * 0.25))
+				_piece(_sphere, _face(side * 0.165, -0.145, 0.02), Vector3(0.04, 0.045, 0.04), hair, true,
+					Basis(Vector3.BACK, side * 0.5))
 		7:
 			# Barba tupida: de patilla a patilla, con bigote (la boca queda a la vista).
 			_piece(_sphere, Vector3(0.0, -0.38, 0.1), Vector3(0.42, 0.26, 0.34), hair)
@@ -457,6 +708,13 @@ func _extra(style: int, hair: Color) -> void:
 
 func _ears(style: int, skin: Color) -> void:
 	if style == 0:
+		return
+	if style == 4:
+		# Orejas normales con aritos dorados colgando.
+		for side in [-1.0, 1.0]:
+			_piece(_sphere, Vector3(side * 0.509, 0.05, -0.02), Vector3(0.065, 0.12, 0.09), skin, true)
+			_piece(_ring_thick, Vector3(side * 0.53, -0.1, 0.0), Vector3(0.055, 0.055, 0.055), Color("#ffc21f"),
+				true, Basis(Vector3.BACK, PI / 2.0) * Basis(Vector3.RIGHT, PI / 2.0))
 		return
 	var sizes := [Vector3.ZERO, Vector3(0.065, 0.12, 0.09), Vector3(0.065, 0.19, 0.15), Vector3(0.05, 0.3, 0.28)]
 	for side in [-1.0, 1.0]:
@@ -524,8 +782,15 @@ func _hair(style: int, hair: Color) -> void:
 				_piece(_sphere, Vector3(side * 0.44, -0.07, 0.06), Vector3(0.13, 0.36, 0.26), hair)
 			_piece(_sphere, _face(0.0, 0.32, 0.04), Vector3(0.38, 0.08, 0.08), hair)
 		12:
-			# Afro: una bola grande de pelo (sin tapar los ojos).
-			_piece(_sphere, Vector3(0.0, 0.42, -0.22), Vector3(0.74, 0.62, 0.64), hair)
+			# Afro: una bola grande de pelo (sin tapar los ojos), con el borde en
+			# bultitos como una nube.
+			var c := Vector3(0.0, 0.42, -0.22)
+			var r := Vector3(0.74, 0.62, 0.64)
+			_piece(_sphere, c, r, hair)
+			for d in _cap_dirs(26, -0.55):
+				if d.z > 0.5 and d.y < 0.35:
+					continue
+				_piece(_sphere, c + _on_ellipsoid(r, d, -0.1), Vector3.ONE * 0.2, hair)
 		13:
 			# Dos rodetes arriba.
 			_cap(hair)
@@ -535,10 +800,16 @@ func _hair(style: int, hair: Color) -> void:
 			# Rastas: tiras gruesas con nudos que cuelgan alrededor de la cabeza
 			# (la raíz y el volumen van en _dread_roots, fijos a la cabeza).
 			_dread_strands(hair)
+		15:
+			_shaggy(hair)
+		16:
+			_high_ponytail(hair)
+		17:
+			_wavy_bob(hair)
 
 
 ## Anteojos oscuros: detrás no se ven los ojos.
-const OPAQUE_GLASSES := [1, 5, 6, 7, 8, 10, 11, 12]
+const OPAQUE_GLASSES := [1, 5, 6, 7, 8, 10, 11, 12, 13]
 ## Rojo, amarillo y verde (de arriba a abajo).
 const RASTA := [Color("#e8302a"), Color("#ffd23f"), Color("#2fa84f")]
 
@@ -641,29 +912,56 @@ func _hat(style: int, tint: Color = Color("#ff9b1f")) -> void:
 					Vector3(0.045, 0.045, 0.02), Color("#ff8fd0"), true, Basis(Vector3.UP, 0.9))
 			_piece(_sphere, f + Basis(Vector3.UP, 0.9) * Vector3(0.0, 0.0, 0.015), Vector3.ONE * 0.03,
 				Color("#ffd23f"), false)
+		12:
+			# Vincha deportiva: banda gruesa de toalla con una raya blanca.
+			_piece(_cyl, Vector3(0.0, 0.3, -0.04), Vector3(0.53, 0.07, 0.5), tint, true,
+				Basis(Vector3.RIGHT, -0.12))
+			_piece(_cyl, Vector3(0.0, 0.3, -0.04), Vector3(0.535, 0.015, 0.505), WHITE, false,
+				Basis(Vector3.RIGHT, -0.12))
 
 
 ## Ropa de arriba (del color del short).
-func _top(style: int, color: Color, radii: Vector3) -> void:
+func _top(style: int, color: Color, radii: Vector3, band: Color = WHITE) -> void:
 	match style:
 		1:
+			# El bikini sigue el ancho del pecho (más finito en la silueta flaca).
+			radii *= Vector3(_neck_scale.x, 1.0, _neck_scale.y)
 			# Bikini: dos copas grandes (acordes al torso), banda debajo y tiras al cuello.
 			for side in [-1.0, 1.0]:
 				var d := Vector3(side * 0.5, 0.02, 1.0).normalized()
 				var nrm := _normal(radii, d)
 				var up := Vector3.UP if absf(nrm.y) < 0.95 else Vector3.RIGHT
 				var cup := Basis.looking_at(-nrm, up)
-				_piece(_sphere, _on_ellipsoid(radii, d, 0.02), Vector3(0.2, 0.17, 0.06), color, true, cup)
+				var cup_pos := _on_ellipsoid(radii, d, 0.02)
+				# Copa en triángulo (punta para arriba, hacia la tira del cuello).
+				_piece(_cone, cup_pos + cup * Vector3(0.0, -0.01, 0.0), Vector3(0.16, 0.13, 0.035), color, true, cup)
+				# Ribete abajo de la copa.
+				_piece(_cyl, cup_pos + cup * Vector3(0.0, -0.13, 0.0), Vector3(0.17, 0.018, 0.04), _bikini_trim,
+					false, cup * Basis(Vector3.RIGHT, PI / 2.0))
+				# Lunares (si el estampado es de lunares).
+				if _bikini_dots.a > 0.0:
+					for q2 in [Vector2(-0.075, -0.1), Vector2(0.075, -0.1), Vector2(0.0, -0.08), Vector2(-0.035, -0.03),
+							Vector2(0.035, -0.03), Vector2(0.0, 0.03)]:
+						var dot: Vector2 = q2
+						var depth := 0.035 * (1.0 - (dot.y + 0.14) / 0.27) + 0.006
+						var q := cup * Vector3(dot.x, dot.y, depth)
+						_piece(_sphere, cup_pos + q, Vector3(0.02, 0.02, 0.008), _bikini_dots, false, cup)
 				var neck := Vector3(side * 0.22, 0.85, 0.45).normalized()
 				var top := _on_ellipsoid(radii, neck, 0.01)
 				var bottom := _on_ellipsoid(radii, d, 0.03) + Vector3(0.0, 0.12, 0.0)
 				var mid := (top + bottom) * 0.5
-				_piece(_sphere, mid, Vector3(0.022, top.distance_to(bottom) * 0.5, 0.022), color, false,
+				_piece(_sphere, mid, Vector3(0.018, top.distance_to(bottom) * 0.5, 0.018), _bikini_trim, false,
 					_align_y(top - bottom))
 			_piece(_sphere, Vector3(0.0, -0.1, 0.0), Vector3(radii.x * 1.03, 0.04, radii.z * 1.04), color)
 		2:
 			# Musculosa: cubre el pecho.
 			_piece(_sphere, Vector3(0.0, -0.03, 0.0), radii * Vector3(1.04, 0.95, 1.06), color)
+		CharacterData.LYCRA:
+			# Lycra de surf: el torso ya es de tela (SurferKit); acá va la franja
+			# de otro color alrededor de la panza, sobre la tela.
+			_piece(_cyl, Vector3(0.0, LYCRA_BAND_Y, 0.0),
+				Vector3(radii.x * _neck_scale.x * LYCRA_BAND_R.x, 0.055, radii.z * _neck_scale.y * LYCRA_BAND_R.y),
+				band, true)
 
 
 ## Rastas: dónde nace y hasta dónde cae cada tira (ángulo desde la nuca hacia
@@ -721,6 +1019,418 @@ func _dread_strands(hair: Color) -> void:
 		i += 1
 
 
+## Despeinado: mucho volumen, mechones en punta para todos lados (arriba y a
+## los costados) y un flequillo de puntas que cae hasta los anteojos.
+func _shaggy(hair: Color) -> void:
+	if _shaggy_shell.is_empty():
+		_shaggy_shell = [_make_shaggy_shell(false), _make_shaggy_shell(true)]
+	# Base: tapa la cabeza (casi no se ve, la cubren los mechones).
+	_piece(_shaggy_shell[0], Vector3.ZERO, Vector3.ONE, hair)
+	_piece(_shaggy_shell[1], Vector3.ZERO, Vector3.ONE, hair.darkened(0.35), false)
+	var dark := hair.darkened(0.14)
+	var light := hair.lightened(0.06)
+	# Mechones ondulados que nacen en filas desde la coronilla y caen hacia
+	# afuera, cada uno con la punta para un lado: el despeinado.
+	var rows := [[0.25, 5, 0.45, 0.32], [0.7, 9, 0.45, 0.38], [1.1, 12, 0.35, 0.44], [1.5, 13, 0.4, 0.42]]
+	var n := 0
+	for row in rows:
+		var ph: float = row[0]
+		var count: int = row[1]
+		for i in count:
+			var th := (i + 0.5 * (n % 2)) * TAU / count + 0.3
+			# La cara queda libre (ahí va el flequillo).
+			var front := cos(th)
+			if ph > 0.6 and front > 0.55:
+				continue
+			var d := Vector3(sin(th) * sin(ph), cos(ph), cos(th) * sin(ph))
+			var root := SHAGGY_CENTER + d * SHAGGY_RADII * 0.95
+			var down := Vector3(sin(th) * cos(ph), -sin(ph), cos(th) * cos(ph))
+			var side := Vector3(cos(th), 0.0, -sin(th))
+			var jitter := sin(n * 2.7) * 0.35
+			var dir := down + d * float(row[2]) + side * jitter
+			var len: float = float(row[3]) + 0.06 * sin(n * 1.9)
+			var tone := dark if n % 4 == 1 else (light if n % 4 == 3 else hair)
+			_lock_piece(root, dir, len, 0.28, side * (1.0 if n % 2 == 0 else -1.0), tone, _wavy)
+			n += 1
+	# Patillas: a los costados de la cara bajan hasta las mejillas y la punta
+	# se abre para afuera.
+	for s2 in [-1.0, 1.0]:
+		for k in 2:
+			var root := Vector3(s2 * (0.46 + k * 0.06), 0.34 - k * 0.04, 0.24 - k * 0.16)
+			_lock_piece(root, Vector3(s2 * (0.35 + k * 0.15), -1.0, 0.1), 0.5 - k * 0.04, 0.27,
+				Vector3(s2, 0.0, 0.0), hair if k == 0 else dark, _wavy)
+	# Flequillo: mechones que caen sobre la frente hasta los anteojos, con la
+	# punta para un costado.
+	for k in 5:
+		var x := lerpf(-0.34, 0.34, k / 4.0)
+		var root := Vector3(x * 1.05, 0.56 - absf(x) * 0.25, 0.33 - absf(x) * 0.25)
+		var lean := x * 0.9 + 0.2 * sin(k * 2.3)
+		var flick := Vector3(-1.0 if x < 0.0 else 1.0, 0.0, 0.0)
+		if k == 2:
+			flick = Vector3(-1.0, 0.0, 0.0)
+		_lock_piece(root, Vector3(lean, -1.0, 0.45), 0.36 + 0.04 * cos(k * 1.3), 0.21, flick,
+			hair.darkened(0.25) if k % 2 == 1 else hair, _wavy)
+
+
+## Colita alta: pelo pegado a la cabeza hasta las orejas y la nuca, flequillo
+## de costado que cruza la frente y una colita gruesa atada arriba atrás que
+## sube un poco y cae en curva hasta los hombros (se balancea con el pelo).
+func _high_ponytail(hair: Color) -> void:
+	if _ponytail_meshes.is_empty():
+		_ponytail_meshes = [
+			_make_hair_shell(PONY_CENTER, PONY_RADII, 1.0, 1.9, 2.15, false),
+			_make_hair_shell(PONY_CENTER, PONY_RADII, 1.0, 1.9, 2.15, true),
+			_make_tube(PONY_PATH, PONY_WIDTH),
+		]
+		for x0 in [-0.32, -0.12, 0.12, 0.32]:
+			var path := []
+			var widths := []
+			for k in 6:
+				var u := k / 5.0
+				# Del borde de adelante hacia donde se ata la colita.
+				var d := Vector3(x0 * (1.0 - u) * 1.4, 0.55 + 0.4 * sin(u * PI * 0.5), 0.75 * (1.0 - u) - 0.55 * u)
+				path.append(PONY_CENTER + _on_ellipsoid(PONY_RADII, d.normalized(), 0.008))
+				widths.append(0.011 * sin(maxf(u, 0.08) * PI))
+			_ponytail_meshes.append(_make_tube(path, widths))
+	_piece(_ponytail_meshes[0], Vector3.ZERO, Vector3.ONE, hair)
+	_piece(_ponytail_meshes[1], Vector3.ZERO, Vector3.ONE, hair.darkened(0.35), false)
+	_piece(_ponytail_meshes[2], Vector3.ZERO, Vector3.ONE, hair)
+	# Rayas de peinado: de la frente hacia la colita (así no parece un casco).
+	for line in _ponytail_meshes.slice(3):
+		_piece(line, Vector3.ZERO, Vector3.ONE, hair.darkened(0.3), false)
+	# Gomita.
+	var tie: Vector3 = PONY_PATH[0].lerp(PONY_PATH[1], 0.5)
+	_piece(_ring_thick, tie, Vector3(0.13, 0.16, 0.13), Color("#ff6f61"), true,
+		_align_y(PONY_PATH[1] - PONY_PATH[0]))
+	# Flequillo de costado: una sola pieza que cruza la frente, más baja del
+	# lado izquierdo (de quien mira) y con la punta en la sien.
+	_extruded(PackedVector2Array(PONY_FRINGE), 0.0, 0.05, func(_p: Vector2) -> Color: return hair, true)
+	_extruded(PackedVector2Array(PONY_FRINGE_LINE), 0.052, 0.006,
+		func(_p: Vector2) -> Color: return hair.darkened(0.3), false)
+
+
+const PONY_CENTER := Vector3(0.0, 0.14, -0.05)
+const PONY_RADII := Vector3(0.56, 0.6, 0.53)
+## Camino de la colita (desde donde se ata) y su grosor en cada punto.
+const PONY_PATH := [
+	Vector3(0.0, 0.62, -0.36), Vector3(0.02, 0.74, -0.52), Vector3(0.1, 0.72, -0.72),
+	Vector3(0.2, 0.55, -0.84), Vector3(0.28, 0.3, -0.86), Vector3(0.3, 0.06, -0.8),
+	Vector3(0.27, -0.14, -0.72), Vector3(0.2, -0.28, -0.66),
+]
+const PONY_WIDTH := [0.11, 0.13, 0.17, 0.19, 0.18, 0.15, 0.09, 0.0]
+## Flequillo de costado (x, y sobre la cara).
+const PONY_FRINGE := [
+	Vector2(-0.42, 0.42), Vector2(-0.34, 0.5), Vector2(-0.1, 0.53), Vector2(0.22, 0.5), Vector2(0.4, 0.42),
+	Vector2(0.42, 0.34), Vector2(0.3, 0.39), Vector2(0.1, 0.4), Vector2(-0.12, 0.35), Vector2(-0.3, 0.29),
+	Vector2(-0.43, 0.27),
+]
+## Raya que marca el mechón del flequillo.
+const PONY_FRINGE_LINE := [
+	Vector2(0.18, 0.52), Vector2(0.2, 0.505), Vector2(-0.14, 0.38), Vector2(-0.3, 0.3), Vector2(-0.31, 0.315),
+	Vector2(-0.15, 0.4),
+]
+
+var _ponytail_meshes: Array = []
+
+
+## Cáscara de pelo lisa sobre la cabeza: baja hasta `hem_front` en la frente,
+## `hem_side` a los costados y `hem_back` atrás (ángulos desde la coronilla).
+## `inner`: la cara de adentro (más oscura, se ve por debajo del borde).
+static func _make_hair_shell(center: Vector3, radii: Vector3, hem_front: float, hem_side: float,
+		hem_back: float, inner: bool) -> ArrayMesh:
+	var cols := 64
+	var rows := 10
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for c in cols:
+		var th := c * TAU / cols
+		var f := cos(th)
+		var hem := lerpf(hem_side, hem_front, pow(maxf(f, 0.0), 1.3)) if f >= 0.0 \
+			else lerpf(hem_side, hem_back, pow(-f, 1.3))
+		for r in rows + 1:
+			var t := r / float(rows)
+			var ph := hem * t
+			var d := Vector3(sin(th) * sin(ph), cos(ph), cos(th) * sin(ph))
+			# El borde se mete un poquito hacia la cabeza (no queda como casco).
+			var tuck := 1.0 - 0.04 * pow(t, 6.0)
+			st.add_vertex(center + d * radii * (tuck - (0.04 if inner else 0.0)))
+	for c in cols:
+		var c2 := (c + 1) % cols
+		for r in rows:
+			var a := c * (rows + 1) + r
+			var b := c2 * (rows + 1) + r
+			if inner:
+				st.add_index(a); st.add_index(a + 1); st.add_index(b)
+				st.add_index(b); st.add_index(a + 1); st.add_index(b + 1)
+			else:
+				st.add_index(a); st.add_index(b); st.add_index(a + 1)
+				st.add_index(b); st.add_index(b + 1); st.add_index(a + 1)
+	st.generate_normals()
+	return st.commit()
+
+
+## Tubo suave que sigue `path` con el grosor `widths` en cada punto (curva
+## Catmull-Rom, así no se ven quiebres). Cerrado en las puntas.
+static func _make_tube(path: Array, widths: Array) -> ArrayMesh:
+	var samples: Array[Vector3] = []
+	var ws: Array[float] = []
+	var steps := 5
+	for i in path.size() - 1:
+		var p0: Vector3 = path[maxi(i - 1, 0)]
+		var p1: Vector3 = path[i]
+		var p2: Vector3 = path[i + 1]
+		var p3: Vector3 = path[mini(i + 2, path.size() - 1)]
+		for k in steps:
+			var t := k / float(steps)
+			samples.append(0.5 * ((2.0 * p1) + (-p0 + p2) * t + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t * t
+				+ (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t * t * t))
+			ws.append(lerpf(widths[i], widths[i + 1], t))
+	samples.append(path[path.size() - 1])
+	ws.append(widths[widths.size() - 1])
+	var sides := 10
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var normal := Vector3.RIGHT
+	for i in samples.size():
+		var fwd := (samples[mini(i + 1, samples.size() - 1)] - samples[maxi(i - 1, 0)]).normalized()
+		var side := fwd.cross(normal).normalized()
+		normal = side.cross(fwd).normalized()
+		for j in sides:
+			var a := j * TAU / sides
+			# Un poco chata (de costado es más finita).
+			st.add_vertex(samples[i] + (normal * cos(a) * 0.8 + side * sin(a)) * ws[i])
+	for i in samples.size() - 1:
+		for j in sides:
+			var a := i * sides + j
+			var b := i * sides + (j + 1) % sides
+			st.add_index(a); st.add_index(a + sides); st.add_index(b)
+			st.add_index(b); st.add_index(a + sides); st.add_index(b + sides)
+	# Tapa de la base (la punta ya termina en grosor 0).
+	var cap := samples.size() * sides
+	st.add_vertex(samples[0])
+	for j in sides:
+		st.add_index(cap); st.add_index(j); st.add_index((j + 1) % sides)
+	st.generate_normals()
+	return st.commit()
+
+
+## Melena ondulada hasta los hombros: raya al costado, flequillo barrido que
+## enmarca la cara y mechones gruesos que caen ondulando y se abren en la punta.
+func _wavy_bob(hair: Color) -> void:
+	if _bob_meshes.is_empty():
+		_bob_meshes = [
+			_make_hair_shell(BOB_CENTER, BOB_RADII, 1.0, 1.75, 1.95, false),
+			_make_hair_shell(BOB_CENTER, BOB_RADII, 1.0, 1.75, 1.95, true),
+		]
+		_bob_meshes.append(_make_bob_curtain(false))
+		_bob_meshes.append(_make_bob_curtain(true))
+		# Rayas de mechones sobre la melena (con color plano, sin esto no se
+		# ven las ondas).
+		for i in 9:
+			var u := lerpf(0.12, 0.88, i / 8.0) + 0.02 * sin(i * 3.1)
+			var path := []
+			var widths := []
+			for k in 7:
+				var t := lerpf(0.05, 0.85, k / 6.0)
+				path.append(_bob_point(u, t, 0.012))
+				widths.append(0.012 * sin(maxf(k / 6.0, 0.1) * PI))
+			_bob_meshes.append(_make_tube(path, widths))
+	_piece(_bob_meshes[0], Vector3.ZERO, Vector3.ONE, hair)
+	_piece(_bob_meshes[1], Vector3.ZERO, Vector3.ONE, hair.darkened(0.35), false)
+	_piece(_bob_meshes[2], Vector3.ZERO, Vector3.ONE, hair)
+	_piece(_bob_meshes[3], Vector3.ZERO, Vector3.ONE, hair.darkened(0.35), false)
+	for i in range(4, _bob_meshes.size()):
+		_piece(_bob_meshes[i], Vector3.ZERO, Vector3.ONE, hair.darkened(0.32), false)
+	# Flequillo barrido desde la raya (a la derecha de quien mira) hacia la izquierda.
+	_extruded(PackedVector2Array(BOB_FRINGE), 0.0, 0.05, func(_p: Vector2) -> Color: return hair, true)
+	_extruded(PackedVector2Array(BOB_FRINGE_LINE), 0.052, 0.006,
+		func(_p: Vector2) -> Color: return hair.darkened(0.3), false)
+
+
+const BOB_CENTER := Vector3(0.0, 0.14, -0.05)
+const BOB_RADII := Vector3(0.57, 0.6, 0.54)
+const BOB_FRINGE := [
+	Vector2(0.2, 0.55), Vector2(0.42, 0.45), Vector2(0.44, 0.33), Vector2(0.32, 0.42), Vector2(0.16, 0.45),
+	Vector2(-0.05, 0.4), Vector2(-0.25, 0.3), Vector2(-0.4, 0.14), Vector2(-0.46, 0.2), Vector2(-0.44, 0.38),
+	Vector2(-0.3, 0.5), Vector2(-0.05, 0.56),
+]
+const BOB_FRINGE_LINE := [
+	Vector2(0.16, 0.52), Vector2(0.18, 0.5), Vector2(-0.1, 0.43), Vector2(-0.32, 0.3), Vector2(-0.33, 0.32),
+	Vector2(-0.12, 0.45),
+]
+var _bob_meshes: Array = []
+
+
+## Punto de la cortina de la melena: `u` de un costado de la cara al otro
+## (por atrás), `t` de arriba (0) a la punta (1); `out` hacia afuera.
+static func _bob_point(u: float, t: float, out: float) -> Vector3:
+	var th := PI + lerpf(-2.3, 2.3, u)
+	var front := maxf(cos(th), 0.0)
+	# Abajo: más corto adelante (enmarca la cara), ondas en el borde.
+	var bottom := lerpf(-0.6, -0.38, pow(front, 0.8)) + 0.09 * absf(sin(u * PI * 8.0))
+	var y := lerpf(0.32, bottom, t)
+	# Radio: el de la cabeza arriba, y se abre al bajar.
+	var rad := 0.6 + 0.1 * t * t + 0.04 * sin(t * PI * 2.0 + u * 9.0)
+	# Mechones: surcos a lo largo (más marcados abajo).
+	rad += 0.035 * (0.3 + t) * sin(u * PI * 16.0)
+	# Las puntas se abren para afuera.
+	rad += 0.16 * pow(t, 4.0)
+	# Los costados de la cara se meten un poco.
+	rad -= 0.08 * pow(front, 2.0) * (1.0 - t)
+	rad += out
+	return BOB_CENTER * Vector3(1.0, 0.0, 1.0) + Vector3(sin(th) * rad * 0.97, y, cos(th) * rad * 0.92)
+
+
+## Cortina de la melena: sigue la cabeza desde arriba de las orejas hasta los
+## hombros (abierta adelante, donde está la cara), ondula hacia abajo y el
+## borde de abajo hace ondas, con las puntas que se abren para afuera.
+static func _make_bob_curtain(inner: bool) -> ArrayMesh:
+	var cols := 60
+	var rows := 14
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for c in cols + 1:
+		var u := c / float(cols)
+		for r in rows + 1:
+			var t := r / float(rows)
+			var p := _bob_point(u, t, 0.0)
+			if inner:
+				p = BOB_CENTER * Vector3(1.0, 0.0, 1.0) + (p - BOB_CENTER * Vector3(1.0, 0.0, 1.0)) * Vector3(0.93, 1.0, 0.93)
+			st.add_vertex(p)
+	for c in cols:
+		for r in rows:
+			var a := c * (rows + 1) + r
+			var b := (c + 1) * (rows + 1) + r
+			if not inner:
+				st.add_index(a); st.add_index(b); st.add_index(a + 1)
+				st.add_index(b); st.add_index(b + 1); st.add_index(a + 1)
+			else:
+				st.add_index(a); st.add_index(a + 1); st.add_index(b)
+				st.add_index(b); st.add_index(a + 1); st.add_index(b + 1)
+	st.generate_normals()
+	return st.commit()
+
+
+## Volumen del despeinado (centro y radios), en unidades de cabeza.
+const SHAGGY_CENTER := Vector3(0.0, 0.17, -0.06)
+const SHAGGY_RADII := Vector3(0.66, 0.68, 0.6)
+
+
+## Cáscara del despeinado: [por fuera, por dentro].
+var _shaggy_shell: Array = []
+
+
+## Cáscara del despeinado: cubre la cabeza (más ancha que el cráneo) y el borde
+## de abajo es una fila de puntas que se abren hacia afuera, más largas a los
+## costados y atrás.
+static func _make_shaggy_shell(inner: bool) -> ArrayMesh:
+	var center := SHAGGY_CENTER
+	var radii := SHAGGY_RADII
+	var cols := 72
+	var rows := 10
+	var teeth := 24
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for c in cols:
+		var th := c * TAU / cols
+		var front := maxf(cos(th), 0.0)
+		# Hasta dónde baja (0 = coronilla, PI = abajo): la frente queda libre
+		# (la tapa el flequillo); costados hasta la mandíbula; atrás, la nuca.
+		var hem := lerpf(1.82, 1.12, pow(front, 1.2))
+		# Puntas: triángulos alrededor.
+		var tri := 1.0 - absf(fmod(c * teeth / float(cols), 1.0) * 2.0 - 1.0)
+		var tooth := tri * (1.0 - pow(front, 2.0))
+		hem += 0.4 * tooth - 0.12
+		for r in rows + 1:
+			var t := r / float(rows)
+			var ph := hem * t
+			var d := Vector3(sin(th) * sin(ph), cos(ph), cos(th) * sin(ph))
+			# Bultos de pelo (no un casco liso).
+			var lump := 1.0 + 0.07 * sin(th * 7.0 + 1.3) * sin(ph * 3.0)
+			# Cerca del borde se abre bien hacia afuera (más en las puntas).
+			var flare := lump + (0.02 + 0.08 * tooth) * pow(t, 4.0)
+			var p := center + d * radii * (flare - (0.05 if inner else 0.0))
+			# Las puntas de los costados se levantan (se curvan para arriba).
+			p.y += 0.05 * tooth * pow(t, 6.0)
+			st.set_uv(Vector2(c, r))
+			st.add_vertex(p)
+	for c in cols:
+		var c2 := (c + 1) % cols
+		for r in rows:
+			var a := c * (rows + 1) + r
+			var b := c2 * (rows + 1) + r
+			if inner:
+				st.add_index(a)
+				st.add_index(a + 1)
+				st.add_index(b)
+				st.add_index(b)
+				st.add_index(a + 1)
+				st.add_index(b + 1)
+			else:
+				st.add_index(a)
+				st.add_index(b)
+				st.add_index(a + 1)
+				st.add_index(b)
+				st.add_index(b + 1)
+				st.add_index(a + 1)
+	st.generate_normals()
+	return st.commit()
+
+
+## Malla del mechón: de y = -1 (raíz, ancha) a y = 1 (punta), chata (de
+## frente es ancha y de costado finita) y curvada hacia +X al final, como los
+## mechones de pelo de dibujo animado.
+static func _make_lock(bend: float, wave: float) -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var rings := 10
+	var sides := 8
+	var pts := []
+	for i in rings + 1:
+		var t := i / float(rings)
+		# Ancho: redondeado en la raíz y afinándose hasta la punta.
+		var r := sin(minf(t * 3.0, 1.0) * PI * 0.5) * 0.5 + 0.5
+		r *= pow(1.0 - t, 0.9)
+		var center := Vector3(bend * t * t * t + wave * sin(PI * t), -1.0 + 2.0 * t, 0.0)
+		var ring := []
+		for j in sides:
+			var a := j * TAU / sides
+			ring.append(center + Vector3(cos(a) * r, 0.0, sin(a) * r * 0.32))
+		pts.append(ring)
+	for i in rings:
+		for j in sides:
+			var a: Vector3 = pts[i][j]
+			var b: Vector3 = pts[i][(j + 1) % sides]
+			var c: Vector3 = pts[i + 1][j]
+			var d: Vector3 = pts[i + 1][(j + 1) % sides]
+			for v in [a, b, c, b, d, c]:
+				st.add_vertex(v)
+	# Tapa de la raíz.
+	var base := Vector3(0.0, -1.0, 0.0)
+	for j in sides:
+		st.add_vertex(base)
+		st.add_vertex(pts[0][(j + 1) % sides])
+		st.add_vertex(pts[0][j])
+	st.index()
+	st.generate_normals()
+	return st.commit()
+
+
+## Un mechón desde `root` hacia `dir`, de largo `len` y ancho `width`; la
+## punta se curva hacia `bend`. Lo ancho del mechón mira hacia `face`.
+func _lock_piece(
+	root: Vector3, dir: Vector3, len: float, width: float, bend: Vector3, color: Color, mesh: Mesh = null
+) -> void:
+	var y := dir.normalized()
+	var x := bend - y * bend.dot(y)
+	if x.length() < 0.001:
+		x = y.cross(Vector3.FORWARD if absf(y.z) < 0.9 else Vector3.RIGHT)
+	x = x.normalized()
+	var z := x.cross(y)
+	_piece(mesh if mesh else _lock, root + y * len * 0.5, Vector3(width, len * 0.5, width), color, true,
+		Basis(x, y, z))
+
+
 ## Pelo corto pegado a la cabeza (deja la cara a la vista).
 func _cap(hair: Color) -> void:
 	_piece(_sphere, Vector3(0.0, 0.2, -0.07), Vector3(0.54, 0.38, 0.5), hair)
@@ -754,9 +1464,9 @@ func _align_y(d: Vector3) -> Basis:
 # ---------------------------------------------------------------- cuerpo
 
 ## Collar de cuentas que da toda la vuelta al cuello.
-func _necklace(count: int, size: float, colors: Array) -> void:
+func _necklace(count: int, size: float, colors: Array, outline: bool = true) -> void:
 	for i in count:
-		_piece(_sphere, _neck_at(i * TAU / count), Vector3.ONE * size, colors[i % colors.size()])
+		_piece(_sphere, _neck_at(i * TAU / count), Vector3.ONE * size, colors[i % colors.size()], outline)
 
 
 ## Punto del collar alrededor del cuello (a = 0 adelante, PI atrás), en el
@@ -807,7 +1517,11 @@ func _piece(
 
 func _source_for(mesh: Mesh) -> Dictionary:
 	if not _source.has(mesh):
-		var arrays: Array = (mesh as PrimitiveMesh).get_mesh_arrays()
+		var arrays: Array
+		if mesh is PrimitiveMesh:
+			arrays = (mesh as PrimitiveMesh).get_mesh_arrays()
+		else:
+			arrays = mesh.surface_get_arrays(0)
 		_source[mesh] = {
 			"verts": arrays[Mesh.ARRAY_VERTEX],
 			"normals": arrays[Mesh.ARRAY_NORMAL],
