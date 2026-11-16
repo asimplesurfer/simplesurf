@@ -7,6 +7,7 @@ func run() -> void:
 	_test_pieces()
 	_test_bezier()
 	await _test_cave()
+	await _test_cave_map()
 	await _test_archipelago()
 	await _test_atoll()
 
@@ -145,6 +146,85 @@ func _test_cave() -> void:
 	_check(CaveEyes.seen_brightness(dark, dark) > 0.7, "con los ojos acostumbrados se ve")
 	_check(CaveEyes.seen_brightness(1.0, dark) > 2.0, "al salir hay un fogonazo de luz")
 	_check(is_equal_approx(CaveEyes.seen_brightness(1.0, 1.0), 1.0), "y afuera todo vuelve a lo normal")
+	m.queue_free()
+	await process_frame
+	GameSettings.track_layout = GameSettings.TrackLayout.CLASSIC
+
+
+## El mapa La cueva: se entra a la cueva, se sale por detrás de la cascada y
+## los bots dan la vuelta.
+func _test_cave_map() -> void:
+	print("Mapa la cueva:")
+	var idx := TrackMap.index_of("cave")
+	_check(idx >= 0, "el mapa de la cueva está en la lista")
+	GameSettings.track_layout = idx
+	GameSettings.jump_style = GameSettings.JumpStyle.WAVES
+	var config := RaceConfig.new()
+	config.laps = 1
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	for level in [2, 1]:
+		var slot := RacerSlot.new()
+		slot.kind = RacerSlot.Kind.BOT
+		slot.display_name = "Bot %d" % level
+		slot.character = CharacterData.random(rng)
+		slot.difficulty = AIDifficulty.preset(level)
+		config.slots.append(slot)
+	var m: Node = load("res://main.tscn").instantiate()
+	var race := m.get_node("RaceManager") as RaceManager
+	race.config = config
+	race.catchup_enabled = false
+	root.add_child(m)
+	await process_frame
+	await process_frame
+	await process_frame
+	var course := m.get_node("Course") as Course
+	var cave: RockFormationPiece = null
+	var fall: WaterfallPiece = null
+	for p in course.pieces:
+		if p is RockFormationPiece and p.is_cave():
+			cave = p
+		if p is WaterfallPiece:
+			fall = p
+	_check(cave != null and course.get_node_or_null("Cave/Rock") != null, "hay una cueva sobre la pista")
+	_check(fall != null and course.get_node_or_null("Waterfall/Curtain") != null, "hay una cascada")
+	var clear := true
+	for isl in course.islands:
+		if absf(course.track.lateral_of(isl.position)) < course.track.half_width + isl.radius + 0.5:
+			clear = false
+	_check(clear, "las islas no pisan la pista")
+	# La cascada cruza la pista en la salida de la cueva.
+	var on_track := absf(course.track.lateral_of(Vector3(fall.x, 0, fall.z))) < 6.0
+	var at_exit := false
+	for i in 12:
+		var q := Vector3(fall.x, 0, fall.z) - Vector3(fall._across.x, 0, fall._across.y) * float(i)
+		if cave.covers(q.x, q.z):
+			at_exit = true
+	_check(on_track and at_exit, "la cascada está en la salida de la cueva, cruzando la pista")
+	# Atravesarla moja la pantalla.
+	race.skip_countdown()
+	await process_frame
+	var r: Rider = race.racers[0]
+	var wet := [false]
+	r.wave_punched.connect(func() -> void: wet[0] = true)
+	var c := Vector2(fall.x, fall.z)
+	for i in 6:
+		var q := c + fall._across * (6.0 - 2.4 * i)
+		r.position = Vector3(q.x, r.position.y, q.y)
+		await process_frame
+	_check(wet[0], "atravesar la cascada moja (como una ola que rompe)")
+	# Los bots dan la vuelta (pasando por la cueva).
+	var finished := false
+	for i in int(200.0 * FPS):
+		if race.state == RaceManager.State.FINISHED:
+			finished = true
+			break
+		await process_frame
+	var all_done := true
+	for rr in race.racers:
+		if not race.finished(rr):
+			all_done = false
+	_check(finished or all_done, "los bots completan la vuelta de la cueva")
 	m.queue_free()
 	await process_frame
 	GameSettings.track_layout = GameSettings.TrackLayout.CLASSIC
