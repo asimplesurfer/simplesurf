@@ -185,6 +185,59 @@ func _test_customization() -> void:
 	rasta.apply_preset(CharacterData.PRESET_NAMES.find("Rasta"))
 	_check(rasta.get_option("hair") == AvatarFeatures.DREADS and rasta.get_option("hat") == 9,
 		"estilo Rasta: rastas y gorro rasta")
+	# Piezas del despeinado (pelo, anteojos, cuellito y cordón del short).
+	var shaggy := CharacterData.from_dict({"hair": 15, "glasses": 13, "neck": 9, "shorts_tie": 1})
+	_check(shaggy.option_name("hair") == "Despeinado" and shaggy.option_name("glasses") == "Envolventes"
+		and shaggy.option_name("shorts_tie") == "Cordón blanco", "despeinado: pelo, anteojos y cordón")
+	var red := CharacterData.from_dict({"weight": 0.3, "build": 1, "hair": 17, "eyes": 11, "neck": 10,
+		"hat": 1, "top": 1, "bottom": 1, "shorts": 8, "shorts_pattern": 2, "shorts_pattern_color": 10})
+	_check(red.option_name("hair") == "Melena ondulada" and red.option_name("bottom") == "Bikini"
+		and red.option_name("build") == "Flaca", "piezas nuevas: melena, bikini y silueta flaca")
+	# Bikini abajo: no se arman las piernas del short.
+	var av_red := Avatar.new()
+	av_red.data = red
+	root.add_child(av_red)
+	var sleeve := av_red.find_child("SleeveL", true, false)
+	_check(sleeve != null and sleeve.find_children("*", "MeshInstance3D", true, false).is_empty(),
+		"bikini: sin piernas de short")
+	av_red.free()
+	var mar := CharacterData.from_dict({"weight": 0.4, "head": 1, "hair": 16, "eyes": 10, "mouth": 10,
+		"extra": 9, "ears": 4, "top": 3, "top_color": 4, "top_color2": 2})
+	_check(mar.option_name("hair") == "Colita alta" and mar.option_name("top") == "Lycra de surf"
+		and mar.option_name("mouth") == "Sonrisa abierta" and mar.option_name("ears") == "Con aritos",
+		"piezas nuevas: colita alta, lycra, sonrisa abierta y aritos")
+	_check(mar.field_applies("top_color") and not CharacterData.new().field_applies("top_color"),
+		"el color de la lycra solo aparece con la lycra puesta")
+	# Con la lycra, el torso es de tela (otro material que la piel).
+	var av := Avatar.new()
+	av.data = mar
+	root.add_child(av)
+	var torso := av.find_child("Torso", true, false)
+	var has_top := false
+	for mi in torso.find_children("*", "MeshInstance3D", true, false):
+		var mesh := (mi as MeshInstance3D).mesh
+		for si in mesh.get_surface_count():
+			var m := mesh.surface_get_material(si) as BaseMaterial3D
+			if m and m.albedo_color.is_equal_approx(mar.accent("top_color")):
+				has_top = true
+	_check(has_top, "lycra: el torso se pinta del color de la lycra")
+	av.free()
+	var groups := {}
+	for g in ["head", "hair", "chest", "hips"]:
+		groups[g] = Node3D.new()
+	var feats := AvatarFeatures.new()
+	feats.build_head(groups.head, groups.hair, shaggy, shaggy.skin_color())
+	feats.build_chest(groups.chest, shaggy, SurferKit.CHEST_RADII)
+	feats.build_hips(groups.hips, shaggy, SurferKit.HIPS_RADII)
+	_check(int(groups.hair.get_meta("pieces", 0)) >= 10, "despeinado: cáscara, mechones y flequillo")
+	_check(int(groups.hips.get_meta("pieces", 0)) >= 5, "el cordón del short se arma (moño y puntas)")
+	var plain := CharacterData.new()
+	var plain_hips := Node3D.new()
+	feats.build_hips(plain_hips, plain, SurferKit.HIPS_RADII)
+	_check(int(plain_hips.get_meta("pieces", 0)) == 0, "sin cordón no se arma nada en el short")
+	for g in groups.values():
+		(g as Node3D).free()
+	plain_hips.free()
 	# Exportar: el texto vuelve a dar el mismo personaje.
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 11

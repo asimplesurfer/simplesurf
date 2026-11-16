@@ -31,6 +31,7 @@ const CATEGORIES := {
 	"Estilos": [["Estilos armados", "preset", "", ThumbRenderer.Frame.BODY]],
 	"Cuerpo": [
 		["Cuerpo", "slider", "weight", 0],
+		["Silueta", "option", "build", ThumbRenderer.Frame.BODY],
 		["Forma de cabeza", "option", "head", ThumbRenderer.Frame.HEAD],
 	],
 	"Piel": [["Color de piel", "color", "skin", 0]],
@@ -53,10 +54,15 @@ const CATEGORIES := {
 	],
 	"Ropa": [
 		["Arriba", "option", "top", ThumbRenderer.Frame.CHEST],
+		["Color de arriba", "color", "top_color", 0],
+		["Color de la franja", "color", "top_color2", 0],
+		["Abajo", "option", "bottom", ThumbRenderer.Frame.HIPS],
 		["Color del short", "color", "shorts", 0],
 		["Estampado", "option", "shorts_pattern", ThumbRenderer.Frame.HIPS],
 		["Color del estampado", "color", "shorts_pattern_color", 0],
 		["Segundo color", "color", "shorts_pattern_color2", 0],
+		["Cordón", "option", "shorts_tie", ThumbRenderer.Frame.HIPS],
+		["Ribete del bikini", "color", "trim_color", 0],
 	],
 	"Tabla": [
 		["Color de la tabla", "color", "board", 0],
