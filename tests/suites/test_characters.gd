@@ -189,10 +189,10 @@ func _test_customization() -> void:
 	var shaggy := CharacterData.from_dict({"hair": 15, "glasses": 13, "neck": 9, "shorts_tie": 1})
 	_check(shaggy.option_name("hair") == "Despeinado" and shaggy.option_name("glasses") == "Envolventes"
 		and shaggy.option_name("shorts_tie") == "Cordón blanco", "despeinado: pelo, anteojos y cordón")
-	var red := CharacterData.new()
-	red.apply_preset(CharacterData.PRESET_NAMES.find("Pelirroja"))
+	var red := CharacterData.from_dict({"weight": 0.3, "build": 1, "hair": 17, "eyes": 11, "neck": 10,
+		"hat": 1, "top": 1, "bottom": 1, "shorts": 8, "shorts_pattern": 2, "shorts_pattern_color": 10})
 	_check(red.option_name("hair") == "Melena ondulada" and red.option_name("bottom") == "Bikini"
-		and red.option_name("hat") == "Sombrero de paja", "estilo Pelirroja: melena, bikini y sombrero")
+		and red.option_name("build") == "Flaca", "piezas nuevas: melena, bikini y silueta flaca")
 	# Bikini abajo: no se arman las piernas del short.
 	var av_red := Avatar.new()
 	av_red.data = red
@@ -201,11 +201,11 @@ func _test_customization() -> void:
 	_check(sleeve != null and sleeve.find_children("*", "MeshInstance3D", true, false).is_empty(),
 		"bikini: sin piernas de short")
 	av_red.free()
-	var mar := CharacterData.new()
-	mar.apply_preset(CharacterData.PRESET_NAMES.find("Mar"))
+	var mar := CharacterData.from_dict({"weight": 0.4, "head": 1, "hair": 16, "eyes": 10, "mouth": 10,
+		"extra": 9, "ears": 4, "top": 3, "top_color": 4, "top_color2": 2})
 	_check(mar.option_name("hair") == "Colita alta" and mar.option_name("top") == "Lycra de surf"
 		and mar.option_name("mouth") == "Sonrisa abierta" and mar.option_name("ears") == "Con aritos",
-		"estilo Mar: colita alta, lycra, sonrisa abierta y aritos")
+		"piezas nuevas: colita alta, lycra, sonrisa abierta y aritos")
 	_check(mar.field_applies("top_color") and not CharacterData.new().field_applies("top_color"),
 		"el color de la lycra solo aparece con la lycra puesta")
 	# Con la lycra, el torso es de tela (otro material que la piel).

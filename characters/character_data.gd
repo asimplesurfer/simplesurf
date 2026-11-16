@@ -148,21 +148,11 @@ const LYCRA := 3
 const TOPS := ["Nada", "Bikini", "Musculosa", "Lycra de surf"]
 
 ## Estilos armados (el primero es el surfista original del modelo 3D).
-const PRESET_NAMES := ["Surfista rubio", "Pelirroja", "Mar", "Rasta"]
+const PRESET_NAMES := ["Surfista rubio", "Rasta"]
 const PRESETS := [
 	{"weight": 0.0, "skin": 2, "head": 0, "hair": 2, "hair_color": 0,
 		"eyes": 0, "glasses": 1, "nose": 0, "mouth": 2, "extra": 0, "ears": 0, "neck": 1, "shorts": 0,
 		"shorts_pattern": 1, "board": 0, "board_design": 1},
-	# Pelirroja de la playa: sombrero de paja, pecas, melena ondulada y bikini a lunares.
-	{"weight": 0.3, "build": 1, "skin": 0, "head": 0, "hair": 17, "hair_color": 3, "eyes": 11, "glasses": 0, "nose": 0,
-		"mouth": 1, "extra": 9, "ears": 0, "neck": 10, "hat": 1, "top": 1, "bottom": 1, "shorts": 8,
-		"shorts_pattern": 2, "shorts_pattern_color": 10, "trim_color": 0, "shorts_tie": 0, "board": 2,
-		"board_design": 1, "board_design_color": 0, "board_design_color2": 9},
-	# Mar, la surfista: la otra cara del rubio.
-	{"weight": 0.4, "skin": 2, "head": 1, "hair": 16, "hair_color": 1, "eyes": 10, "glasses": 0, "nose": 0,
-		"mouth": 10, "extra": 9, "ears": 4, "neck": 0, "hat": 0, "top": 3, "top_color": 4, "top_color2": 2,
-		"shorts": 0, "shorts_pattern": 15, "shorts_pattern_color": 9, "shorts_tie": 0, "board": 0,
-		"board_design": 2, "board_design_color": 0, "board_design_color2": 0},
 	{"board": 7, "board_design": 10, "board_design_color": 3, "board_design_color2": 0, "ears": 0, "extra": 0,
 		"eyes": 3, "glasses": 0, "hair": 14, "hair_color": 2, "hat": 9, "hat_color": 1, "head": 1, "mouth": 5,
 		"neck": 4, "nose": 0, "shorts": 3, "shorts_pattern": 8, "shorts_pattern_color": 0,
