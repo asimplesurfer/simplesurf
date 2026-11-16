@@ -272,9 +272,17 @@ func _unhandled_input(event: InputEvent) -> void:
 		download_record()
 		return
 	if key and key.pressed and not key.echo and key.physical_keycode == KEY_R:
-		if state == State.FINISHED:
+		# En la contrarreloj, R reinicia en cualquier momento (otro intento ya).
+		if state == State.FINISHED or time_trial:
+			get_viewport().set_input_as_handled()
 			restart()
 		return
+	for slot in config.slots:
+		var p0 := InputSetup.prefix(slot.player_index)
+		if time_trial and InputMap.has_action(p0 + "select") and event.is_action_pressed(p0 + "select"):
+			get_viewport().set_input_as_handled()
+			restart()
+			return
 	for slot in config.slots:
 		var p := InputSetup.prefix(slot.player_index)
 		if InputMap.has_action(p + "start") and event.is_action_pressed(p + "start") and state == State.FINISHED:

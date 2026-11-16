@@ -271,7 +271,7 @@ func _process(delta: float) -> void:
 			var t: float = race.finish_times.get(rider, race.race_time)
 			_place_label.text = ResultsPanel.format_time(t)
 			var best := race.time_trial.best_time
-			_lap_label.text += "\nRécord %s" % (ResultsPanel.format_time(best) if best > 0.0 else "--")
+			_lap_label.text += "\nRécord %s\nR / Select: reiniciar" % (ResultsPanel.format_time(best) if best > 0.0 else "--")
 		if race.is_wrong_way(rider) and _center_time <= 0.0:
 			_center_label.text = "¡Al revés!"
 			_center_label.add_theme_color_override("font_color", BAD_COLOR)
