@@ -70,4 +70,4 @@ func _test_memory() -> void:
 	)
 	_check(last.orphans <= first.orphans, "no quedan nodos sueltos (%d -> %d)" % [first.orphans, last.orphans])
 	_check(in_race_growth <= 200, "durante la carrera no crece la memoria (+%d objetos en 10 s)" % in_race_growth)
-	_check(menu_nodes <= 4 and after_menu <= last.nodes + 2, "el menú no se acumula al rearmarse (%d hijos)" % menu_nodes)
+	_check(menu_nodes <= 5 and after_menu <= last.nodes + 2, "el menú no se acumula al rearmarse (%d hijos: fondo, miniaturas, pantalla, demo y build)" % menu_nodes)

@@ -63,6 +63,14 @@ var _ring_peak_angle: float = NAN
 var _ring_peak_choice: bool = false
 var _water: Water
 var _last_lap: int = -1
+## Sombra del derrape: por cada rival de adelante, si decidió no quedarse
+## detrás (id -> bool) y de qué lado lo pasa (id -> -1 / 1).
+var _shadow_choice: Dictionary = {}
+var _shadow_side: Dictionary = {}
+## Hasta cuántos metros más allá del alcance del derrape mira la sombra, y
+## cuánto margen deja al costado del cono.
+const SHADOW_EXTRA := 6.0
+const SHADOW_MARGIN := 1.4
 ## El destino de ahora es su línea (no una ola, un aro, una roca o un rival).
 var _on_line: bool = false
 ## Siguiendo su línea, apunta a este punto más adelante (m).
@@ -247,26 +255,44 @@ func _think(angle: float, lateral: float) -> void:
 		target = lateral
 		_on_line = false
 
-	# Rival adelante y cerca: no quedarse justo detrás (puede derrapar).
-	# Rival justo detrás: derraparle encima.
+	# Rivales. Adelante: no quedarse en la "sombra" de su derrape (el cono de
+	# agua que barre hacia atrás), aunque esa sea la línea más corta: se va al
+	# borde del cono que menos lo aparta de donde quería ir, y lo mantiene hasta
+	# pasarlo. Cada rival se decide una vez (los mejores casi siempre lo
+	# esquivan). Atrás y cerca: derraparle encima (a quien sea, bot o persona).
+	var range_back := rider.stats.drift_range + SHADOW_EXTRA
+	var tan_cone := tan(deg_to_rad(rider.stats.drift_cone_half_angle))
 	for other in race.racers if race else []:
 		if other == rider or other.is_fallen():
 			continue
+		var id := other.get_instance_id()
 		var ahead := _arc_ahead(angle, track.angle_of(other.position), lateral)
-		var dlat := track.lateral_of(other.position) - lateral
-		# Los buenos se salen del todo del cono que barre el derrape del de
-		# adelante (se abre con la distancia), así no los pueden tirar.
-		var cone := 0.8 + maxf(ahead, 0.0) * tan(deg_to_rad(rider.stats.drift_cone_half_angle)) + 1.2
-		if ahead > 0.0 and ahead < rider.stats.drift_range + 4.0 and absf(dlat) < cone and _rng.randf() < difficulty.evade_skill:
-			var away := -1.0 if dlat > 0.0 else 1.0
-			target = track.lateral_of(other.position) + away * (cone + 0.6)
-			_on_line = false
-		elif ahead > 0.0 and ahead < 10.0 and absf(dlat) < 2.5:
-			target = lateral + (4.0 if dlat <= 0.0 else -4.0)
-			_on_line = false
-		elif ahead < 0.0 and ahead > -6.0 and absf(dlat) < 2.5 and (other.is_human or not _people_racing()):
-			# Derrapa para tirar a las personas (entre bots no se pelean, salvo
-			# en la demo, que son todos bots).
+		var other_lat := track.lateral_of(other.position)
+		var dlat := other_lat - lateral
+		if ahead > 0.0 and ahead < range_back:
+			if not _shadow_choice.has(id):
+				_shadow_choice[id] = _rng.randf() < difficulty.evade_skill
+			var cone := 0.8 + ahead * tan_cone + SHADOW_MARGIN
+			if _shadow_choice[id] and absf(target - other_lat) < cone:
+				var left := other_lat - cone
+				var right := other_lat + cone
+				if not _shadow_side.has(id):
+					var side := -1 if absf(left - target) < absf(right - target) else 1
+					if side < 0 and left < -lane:
+						side = 1
+					elif side > 0 and right > lane:
+						side = -1
+					_shadow_side[id] = side
+				target = other_lat + cone * _shadow_side[id]
+				_on_line = false
+			elif not _shadow_choice[id] and ahead < 10.0 and absf(dlat) < 2.5:
+				# Sin esquivar la sombra, al menos no chocarlo de atrás.
+				target = lateral + (4.0 if dlat <= 0.0 else -4.0)
+				_on_line = false
+		else:
+			_shadow_choice.erase(id)
+			_shadow_side.erase(id)
+		if ahead < 0.0 and ahead > -6.0 and absf(dlat) < 2.5:
 			if rider.speed > rider.stats.drift_min_speed + 1.0 and _rng.randf() < difficulty.aggression:
 				_drift_timer = 0.6
 
@@ -313,16 +339,6 @@ func _think(angle: float, lateral: float) -> void:
 			_brake = true
 
 	_target_lateral = clampf(target, -lane, lane)
-
-
-## true si en la carrera corre alguna persona.
-func _people_racing() -> bool:
-	if race == null:
-		return false
-	for r in race.racers:
-		if r.is_human:
-			return true
-	return false
 
 
 ## Desvío lateral al que va según su habilidad: entre su camino (que cambia

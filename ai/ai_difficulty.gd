@@ -124,7 +124,7 @@ static func preset(level: int) -> AIDifficulty:
 			d.eager_turbo = true
 			d.trick_margin = 0.11
 			d.rock_throttle = 0.7
-			d.evade_skill = 0.35
+			d.evade_skill = 0.75
 			d.rock_margin = 0.6
 		4:
 			# Lo mejor que se puede jugar, sin ninguna ventaja: la línea más corta
