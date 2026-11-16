@@ -31,6 +31,7 @@ const CATEGORIES := {
 	"Estilos": [["Estilos armados", "preset", "", ThumbRenderer.Frame.BODY]],
 	"Cuerpo": [
 		["Cuerpo", "slider", "weight", 0],
+		["Silueta", "option", "build", ThumbRenderer.Frame.BODY],
 		["Forma de cabeza", "option", "head", ThumbRenderer.Frame.HEAD],
 	],
 	"Piel": [["Color de piel", "color", "skin", 0]],

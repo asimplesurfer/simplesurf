@@ -83,6 +83,9 @@ const SHORTS_TWO_COLORS := [1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
 const BOARD_TWO_COLORS := [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
 
 const HEAD_SHAPES := ["Normal", "Ancha", "Alargada", "Chata"]
+## Silueta: normal (la de la barra) o flaca (todo más finito, sin músculos).
+const BUILDS := ["Normal", "Flaca"]
+const SLIM := 1
 ## Escala de la cabeza (x, y, z) para cada forma (el tamaño va aparte, en la barra).
 const HEAD_SCALES := [
 	Vector3(1.0, 1.0, 1.0),
@@ -151,7 +154,7 @@ const PRESETS := [
 		"eyes": 0, "glasses": 1, "nose": 0, "mouth": 2, "extra": 0, "ears": 0, "neck": 1, "shorts": 0,
 		"shorts_pattern": 1, "board": 0, "board_design": 1},
 	# Pelirroja de la playa: sombrero de paja, pecas, melena ondulada y bikini a lunares.
-	{"weight": 0.3, "skin": 0, "head": 0, "hair": 17, "hair_color": 3, "eyes": 11, "glasses": 0, "nose": 0,
+	{"weight": 0.3, "build": 1, "skin": 0, "head": 0, "hair": 17, "hair_color": 3, "eyes": 11, "glasses": 0, "nose": 0,
 		"mouth": 1, "extra": 9, "ears": 0, "neck": 10, "hat": 1, "top": 1, "bottom": 1, "shorts": 8,
 		"shorts_pattern": 2, "shorts_pattern_color": 10, "trim_color": 0, "shorts_tie": 0, "board": 2,
 		"board_design": 1, "board_design_color": 0, "board_design_color2": 9},
@@ -196,6 +199,7 @@ const PRESETS := [
 @export var board_design_color2_index: int = 4
 @export var shorts_tie_index: int = 0
 @export var bottom_index: int = 0
+@export var build_index: int = 0
 @export var trim_color_index: int = 0
 @export var top_color_index: int = 4
 @export var top_color2_index: int = 2
@@ -206,6 +210,7 @@ const SLIDERS := {"weight": "weight", "muscle": "muscle", "head_size": "head_siz
 const FIELDS := {
 	"skin": ["skin_index", SKIN_NAMES],
 	"head": ["head_index", HEAD_SHAPES],
+	"build": ["build_index", BUILDS],
 	"hair": ["hair_index", HAIR_STYLES],
 	"hair_color": ["hair_color_index", HAIR_COLOR_NAMES],
 	"eyes": ["eyes_index", EYES],

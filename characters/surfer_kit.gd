@@ -363,6 +363,11 @@ const BELLY_SIDE := 0.25
 const SHORTS_FOLLOW := 1.4
 ## Tamaño de la cabeza (ya no se elige).
 const HEAD_SCALE := 1.085
+## Silueta flaca: cuánto se afinan el pecho, la cintura, la cadera y las piernas.
+const SLIM_CHEST := Vector3(0.84, 1.0, 0.86)
+const SLIM_WAIST := Vector3(0.66, 1.0, 0.68)
+const SLIM_HIPS := Vector3(0.86, 1.0, 0.88)
+const SLIM_LEGS := Vector3(0.72, 1.0, 0.72)
 ## Músculos desde los que aparecen los hombros (0..1).
 const SHOULDERS_FROM := 0.45
 
@@ -396,7 +401,8 @@ func _apply_sliders(data: CharacterData) -> void:
 	# Pecho: con músculos más ancho; con panza, más redondo.
 	chest.scale = Vector3((0.8 + 0.2 * m) * (1.0 + 0.08 * w), 0.92 + 0.08 * m, 1.0 + 0.3 * w)
 	# Hombros: solo del lado musculoso, y ya grandes (nunca hombritos chicos).
-	var shoulders := m >= SHOULDERS_FROM
+	var slim := data.get_option("build") == CharacterData.SLIM
+	var shoulders := m >= SHOULDERS_FROM and not slim
 	var delt := lerpf(0.8, 1.0, inverse_lerp(SHOULDERS_FROM, 1.0, m))
 	for side in ["DeltL", "DeltR"]:
 		var d := torso.find_child(side, false, false) as Node3D
@@ -406,7 +412,11 @@ func _apply_sliders(data: CharacterData) -> void:
 			continue
 		d.scale = Vector3.ONE * delt
 		d.position.x *= 0.85 + 0.15 * m
-	var lines_visible := m > 0.55 and w < 0.4
+	var lines_visible := m > 0.55 and w < 0.4 and not slim
+	if slim:
+		# Flaca: pecho y cintura más finitos (sin músculos).
+		chest.scale *= SLIM_CHEST
+		waist.scale *= SLIM_WAIST
 	for line in ["PecLineL", "PecLineR", "Sternum", "AbMid"]:
 		var l := torso.find_child(line, false, false) as Node3D
 		if l and not lines_visible:
@@ -428,6 +438,13 @@ func _apply_sliders(data: CharacterData) -> void:
 		(character.find_child(part, false, false) as Node3D).scale *= Vector3(1.0 + 0.35 * w, 1.0, 1.0 + 0.35 * w)
 	for part in ["ShinL", "ShinR"]:
 		(character.find_child(part, false, false) as Node3D).scale *= Vector3(1.0 + 0.2 * w, 1.0, 1.0 + 0.2 * w)
+	if slim:
+		hips.scale *= SLIM_HIPS
+		for part in ["SleeveL", "SleeveR", "ThighL", "ThighR", "ShinL", "ShinR"]:
+			(character.find_child(part, false, false) as Node3D).scale *= SLIM_LEGS
+		for part in ["HandL", "HandR"]:
+			var hand := character.find_child(part, false, false) as Node3D
+			hand.position.x *= 0.88
 	# Las manos se abren un poco con la panza.
 	for part in ["HandL", "HandR"]:
 		var hand := character.find_child(part, false, false) as Node3D

@@ -185,7 +185,7 @@ func build_chest(group: Node3D, data: CharacterData, radii: Vector3, neck_scale 
 			_necklace(24, 0.045, [Color("#e8302a"), Color("#ffd23f"), Color("#2fa84f")])
 		10:
 			# Dije: cordón finito oscuro y una gotita dorada adelante.
-			_necklace(64, 0.009, [Color("#3a2414")])
+			_necklace(72, 0.012, [Color("#3a2414")], false)
 			var pos := front + Vector3(0.0, -0.05, 0.02)
 			_piece(_sphere, pos, Vector3(0.028, 0.038, 0.016), Color("#ffc21f"), true, face)
 		9:
@@ -903,6 +903,8 @@ func _hat(style: int, tint: Color = Color("#ff9b1f")) -> void:
 func _top(style: int, color: Color, radii: Vector3, band: Color = WHITE) -> void:
 	match style:
 		1:
+			# El bikini sigue el ancho del pecho (más finito en la silueta flaca).
+			radii *= Vector3(_neck_scale.x, 1.0, _neck_scale.y)
 			# Bikini: dos copas grandes (acordes al torso), banda debajo y tiras al cuello.
 			for side in [-1.0, 1.0]:
 				var d := Vector3(side * 0.5, 0.02, 1.0).normalized()
@@ -1441,9 +1443,9 @@ func _align_y(d: Vector3) -> Basis:
 # ---------------------------------------------------------------- cuerpo
 
 ## Collar de cuentas que da toda la vuelta al cuello.
-func _necklace(count: int, size: float, colors: Array) -> void:
+func _necklace(count: int, size: float, colors: Array, outline: bool = true) -> void:
 	for i in count:
-		_piece(_sphere, _neck_at(i * TAU / count), Vector3.ONE * size, colors[i % colors.size()])
+		_piece(_sphere, _neck_at(i * TAU / count), Vector3.ONE * size, colors[i % colors.size()], outline)
 
 
 ## Punto del collar alrededor del cuello (a = 0 adelante, PI atrás), en el
