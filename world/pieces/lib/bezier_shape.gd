@@ -66,6 +66,30 @@ func polygon(step: float = 4.0) -> PackedVector2Array:
 	return out
 
 
+## Una curva abierta (un río): no se une el último punto con el primero. En
+## las puntas, la manija automática mira solo al vecino que hay.
+func polyline(step: float = 4.0) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	var n := points.size()
+	if n < 2:
+		return out
+	for i in n - 1:
+		var p0 := points[maxi(i - 1, 0)]
+		var p1 := points[i]
+		var p2 := points[i + 1]
+		var p3 := points[mini(i + 2, n - 1)]
+		var h_out: Variant = handles_out[i]
+		var h_in: Variant = handles_in[i + 1]
+		var c1: Vector2 = p1 + (h_out if h_out != null else (p2 - p0) / 6.0)
+		var c2: Vector2 = p2 + (h_in if h_in != null else (p1 - p3) / 6.0)
+		var approx := p1.distance_to(c1) + c1.distance_to(c2) + c2.distance_to(p2)
+		var count := maxi(int(ceil(approx / step)), 1)
+		for j in count:
+			out.append(bezier(p1, c1, c2, p2, float(j) / count))
+	out.append(points[n - 1])
+	return out
+
+
 static func bezier(p0: Vector2, c1: Vector2, c2: Vector2, p1: Vector2, t: float) -> Vector2:
 	var u := 1.0 - t
 	return u * u * u * p0 + 3.0 * u * u * t * c1 + 3.0 * u * t * t * c2 + t * t * t * p1
