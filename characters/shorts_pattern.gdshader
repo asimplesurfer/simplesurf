@@ -153,6 +153,18 @@ void fragment() {
 		float b = fract(w * 0.5);
 		if (b < 0.2) col = color1;
 		else if (b > 0.42 && b < 0.56) col = color2;
+	} else if (pattern == 14) {
+		// Flores grandes (tipo frangipani): cinco pétalos redondos separados
+		// por rayitas del color del short, alternadas.
+		vec2 c = vec2(u * 0.5, v * 0.5);
+		if (mod(floor(c.y), 2.0) > 0.5) c.x += 0.5;
+		vec2 id = floor(c);
+		vec2 h = hash2(cell_id(id, ring * 0.5));
+		vec2 q = fract(c) - (0.5 + (h - 0.5) * 0.16);
+		float a = atan(q.y, q.x) + h.x * 6.28;
+		float petal = 0.44 * (0.55 + 0.45 * abs(cos(a * 2.5)));
+		float gap = abs(sin(a * 2.5)) * length(q);
+		if (length(q) < petal && !(gap < 0.025 && length(q) > 0.06)) col = color1;
 	}
 	ALBEDO = col;
 }

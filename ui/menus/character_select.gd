@@ -56,6 +56,7 @@ const CATEGORIES := {
 		["Estampado", "option", "shorts_pattern", ThumbRenderer.Frame.HIPS],
 		["Color del estampado", "color", "shorts_pattern_color", 0],
 		["Segundo color", "color", "shorts_pattern_color2", 0],
+		["Cordón", "option", "shorts_tie", ThumbRenderer.Frame.HIPS],
 	],
 	"Tabla": [
 		["Color de la tabla", "color", "board", 0],

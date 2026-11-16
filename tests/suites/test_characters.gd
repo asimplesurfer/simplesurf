@@ -185,6 +185,28 @@ func _test_customization() -> void:
 	rasta.apply_preset(CharacterData.PRESET_NAMES.find("Rasta"))
 	_check(rasta.get_option("hair") == AvatarFeatures.DREADS and rasta.get_option("hat") == 9,
 		"estilo Rasta: rastas y gorro rasta")
+	# Estilo Despeinado: arma sus piezas propias (pelo, anteojos, collar y
+	# cordón del short), cada una con piezas en su grupo.
+	var shaggy := CharacterData.new()
+	shaggy.apply_preset(CharacterData.PRESET_NAMES.find("Despeinado"))
+	_check(shaggy.option_name("hair") == "Despeinado" and shaggy.option_name("glasses") == "Envolventes"
+		and shaggy.option_name("shorts_tie") == "Cordón blanco", "estilo Despeinado: pelo, anteojos y cordón")
+	var groups := {}
+	for g in ["head", "hair", "chest", "hips"]:
+		groups[g] = Node3D.new()
+	var feats := AvatarFeatures.new()
+	feats.build_head(groups.head, groups.hair, shaggy, shaggy.skin_color())
+	feats.build_chest(groups.chest, shaggy, SurferKit.CHEST_RADII)
+	feats.build_hips(groups.hips, shaggy, SurferKit.HIPS_RADII)
+	_check(int(groups.hair.get_meta("pieces", 0)) > 20, "despeinado: muchos mechones")
+	_check(int(groups.hips.get_meta("pieces", 0)) >= 5, "el cordón del short se arma (moño y puntas)")
+	var plain := CharacterData.new()
+	var plain_hips := Node3D.new()
+	feats.build_hips(plain_hips, plain, SurferKit.HIPS_RADII)
+	_check(int(plain_hips.get_meta("pieces", 0)) == 0, "sin cordón no se arma nada en el short")
+	for g in groups.values():
+		(g as Node3D).free()
+	plain_hips.free()
 	# Exportar: el texto vuelve a dar el mismo personaje.
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 11
