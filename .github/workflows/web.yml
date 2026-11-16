@@ -55,6 +55,8 @@ jobs:
         run: |
           sed -i "s/^const BUILD := 0$/const BUILD := ${{ github.run_number }}/" core/build_info.gd
           grep "const BUILD" core/build_info.gd
+          echo "### Build ${{ github.run_number }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "En el menú del juego tiene que decir **build ${{ github.run_number }}** (arriba a la derecha)." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Exportar para web
         run: |
