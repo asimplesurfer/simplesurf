@@ -137,6 +137,7 @@ func _test_bot_race() -> void:
 
 func _test_demo() -> void:
 	print("Demo (menú sin tocar nada):")
+	CharacterSelect.someone_played = false
 	var menu: CharacterSelect = load("res://ui/menus/character_select.tscn").instantiate()
 	menu.auto_start = false
 	var started := [false]
@@ -144,11 +145,13 @@ func _test_demo() -> void:
 	root.add_child(menu)
 	await _wait(9.0)
 	_check(not started[0], "a los 9 s sin tocar nada todavía no arranca")
-	_set_action(&"p1_down", false)
+	# Tocar la pantalla (celular) reinicia la espera, pero la demo sigue.
+	var touch := InputEventScreenTouch.new()
+	touch.pressed = true
+	Input.parse_input_event(touch)
 	await process_frame
-	await _press(&"p1_down")
 	await _wait(9.0)
-	_check(not started[0], "tocar algo reinicia la espera")
+	_check(not started[0], "tocar la pantalla reinicia la espera")
 	await _wait(1.5)
 	var demo_config := menu.started_config
 	_check(
@@ -157,6 +160,22 @@ func _test_demo() -> void:
 	)
 	menu.queue_free()
 	await process_frame
+	# Si alguien usa el juego (teclado, mouse o mando), la demo ya no arranca.
+	var menu2: CharacterSelect = load("res://ui/menus/character_select.tscn").instantiate()
+	menu2.auto_start = false
+	var started2 := [false]
+	menu2.start_requested.connect(func() -> void: started2[0] = true)
+	root.add_child(menu2)
+	await process_frame
+	_set_action(&"p1_down", false)
+	await process_frame
+	await _press(&"p1_down")
+	await _wait(11.0)
+	_check(not started2[0] and CharacterSelect.someone_played, "después de usar el juego, la demo no arranca sola")
+	CharacterSelect.someone_played = false
+	menu2.queue_free()
+	await process_frame
+
 
 	# La demo es siempre igual, elija lo que elija el menú: dos bots en
 	# Imposible, en El Atolón con tormenta (y no cambia lo elegido).

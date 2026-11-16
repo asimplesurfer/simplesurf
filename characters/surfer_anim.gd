@@ -203,11 +203,16 @@ static func _duck(p: Dictionary, _s: Dictionary) -> void:
 
 ## Se para de un salto: empuja con las manos y queda en la postura.
 static func _pop_up(p: Dictionary, s: Dictionary) -> void:
-	var k := clampf(s.t / 0.3, 0.0, 1.0)
-	var push := sin(k * PI)
-	_crouch(p, 0.9 - 0.6 * k)
-	_reach(p, "HandL", Vector3(-0.4, 0.5, 0.35), push)
-	_reach(p, "HandR", Vector3(0.4, 0.5, 0.35), push)
+	var k := clampf(s.t / float(s.get("pop_time", 0.3)), 0.0, 1.0)
+	# Primero empuja con las manos contra la tabla (al lado del pecho); después
+	# las suelta y abre los brazos para equilibrarse mientras se termina de parar.
+	var press := 1.0 - smoothstep(0.35, 0.7, k)
+	var balance := smoothstep(0.4, 0.8, k) * (1.0 - smoothstep(0.85, 1.0, k))
+	_crouch(p, lerpf(1.0, 0.25, smoothstep(0.2, 1.0, k)))
+	_reach(p, "HandL", Vector3(-0.42, 0.55, 0.4), press)
+	_reach(p, "HandR", Vector3(0.42, 0.55, 0.4), press)
+	_reach(p, "HandL", Vector3(-0.85, 1.25, 0.15), balance)
+	_reach(p, "HandR", Vector3(0.85, 1.25, -0.1), balance)
 
 
 ## Se seca la cara: primero sacude la cabeza de lado a lado (como un perro) y
@@ -275,7 +280,8 @@ static func _climb(p: Dictionary, s: Dictionary) -> void:
 static func _paddle(p: Dictionary, s: Dictionary) -> void:
 	# Fase propia del remo (Avatar la avanza según el esfuerzo).
 	var ph: float = s.get("paddle_phase", s.time * 3.0)
-	var amp := smoothstep(0.0, 0.25, float(s.effort))
+	# Brazadas más amplias cuanto más esfuerzo (más velocidad).
+	var amp := smoothstep(0.0, 0.6, float(s.effort))
 	for i in 2:
 		var hand := "HandL" if i == 0 else "HandR"
 		var side := -1.0 if i == 0 else 1.0

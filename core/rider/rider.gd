@@ -20,6 +20,10 @@ signal nitro_changed(value: float, max_value: float)
 signal drift_started(side: int)
 signal drift_ended
 signal drift_hit(victim: Rider)
+## Otro surfista lo chocó (strength: 0..1, sale despedido hacia `direction`).
+signal bumped(direction: Vector3, strength: float)
+## Chocó a otro surfista.
+signal bumped_other(victim: Rider)
 signal motivation_started
 ## Atravesó una ola que estaba rompiendo (para la animación, el chapuzón y la cámara).
 signal wave_punched
@@ -90,6 +94,10 @@ signal trick_preview_started(trick_name: String, index: int, total: int)
 const TRICK_UNITS: Array[int] = [1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 2, 2]
 ## Trucos del salto actual, en orden (se eligen al empezar cada uno).
 var trick_kinds: Array[int] = []
+## Ya eligió su primer truco de la partida.
+var _did_first_trick: bool = false
+## Primeros trucos que ya eligieron los demás surfistas (para no repetirlos).
+static var _first_tricks_taken: Array[int] = []
 ## Tiempos de truco ya completos en este salto (lo lleva el estado del aire).
 var trick_units_done: int = 0
 ## Lado del derrape: -1 izquierda, 1 derecha, 0 sin derrapar.
@@ -100,6 +108,19 @@ var input: RiderInput = RiderInput.new()
 var controls_locked: bool = false
 ## Tiempo que le queda al mini sprint automático (motivación).
 var motivation_timer: float = 0.0
+## Empujón de un choque (m/s, de costado): lo desvía y se va apagando.
+var shove := Vector3.ZERO
+## Choques recientes con cada surfista (para no contar el mismo dos veces).
+var _bump_cooldown: Dictionary = {}
+## Distancia entre dos surfistas para que se choquen (m).
+const BUMP_RADIUS := 1.1
+## Del empujón: cuánto se lleva el chocado y cuánto el que choca (casi nada).
+const BUMP_VICTIM := 1.15
+const BUMP_HITTER := 0.12
+## El empujón se apaga a este ritmo (m/s²).
+const SHOVE_DECEL := 7.0
+## Cuánto gira (rad) el chocado hacia donde lo empujan, con un choque fuerte.
+const BUMP_TURN := 0.5
 ## true mientras el turbo está empujando (para efectos visuales).
 var turbo_active: bool = false
 ## true cuando ya cruzó la meta (festeja).
@@ -198,9 +219,11 @@ func _physics_process(delta: float) -> void:
 	if wave_air_time >= 0.0:
 		wave_air_time += delta
 	turbo_active = false
-	if input.debug_fall and not is_fallen():
-		fall()
 	state_machine.update(delta, input)
+	_bump_riders()
+	if shove != Vector3.ZERO:
+		position += shove * delta
+		shove = shove.move_toward(Vector3.ZERO, SHOVE_DECEL * delta)
 	rotation.y = heading
 	_check_wave_punch()
 
@@ -216,7 +239,19 @@ func choose_next_trick(max_units: int) -> bool:
 			options.append(k)
 	if options.is_empty():
 		return false
-	trick_kinds.append(options[randi() % options.size()])
+	if not _did_first_trick:
+		# El primer truco de cada surfista es distinto del primero de los demás
+		# (si no, en la largada saltan todos juntos y pueden hacer el mismo).
+		var fresh := options.filter(func(k: int) -> bool: return not k in _first_tricks_taken)
+		if fresh.is_empty():
+			_first_tricks_taken.clear()
+		else:
+			options.assign(fresh)
+	var pick: int = options[randi() % options.size()]
+	if not _did_first_trick:
+		_did_first_trick = true
+		_first_tricks_taken.append(pick)
+	trick_kinds.append(pick)
 	return true
 
 
@@ -290,6 +325,63 @@ func trick_end_angle() -> float:
 	if t[0] < 0:
 		return ceilf(trick_angle / TAU - 0.001) * TAU
 	return float(t[1] + t[2] - trick_units_done) * TAU
+
+
+## Choques entre surfistas: si dos se tocan, el que va hacia el otro lo empuja
+## (más fuerte cuanto más rápido lo choca) y casi no se desvía. El chocado sale
+## despedido hacia el otro lado y gira para ese lado (su cámara también), pero
+## no se cae. Cada par lo resuelve uno solo de los dos (el de id más chico).
+func _bump_riders() -> void:
+	for k in _bump_cooldown.keys():
+		_bump_cooldown[k] = float(_bump_cooldown[k]) - get_physics_process_delta_time()
+		if _bump_cooldown[k] <= 0.0:
+			_bump_cooldown.erase(k)
+	if is_fallen():
+		return
+	for node in get_tree().get_nodes_in_group("riders"):
+		var other := node as Rider
+		if other == null or other == self or other.is_fallen() or other.get_instance_id() < get_instance_id():
+			continue
+		# Solo los de la misma partida (en los tests puede haber varias abiertas).
+		if other.water != water:
+			continue
+		var rel := other.position - position
+		if absf(rel.y) > 1.6:
+			continue
+		rel.y = 0.0
+		var dist := rel.length()
+		if dist >= BUMP_RADIUS or dist < 0.001:
+			continue
+		var n := rel / dist
+		# Se separan (sin quedar uno adentro del otro).
+		var overlap := BUMP_RADIUS - dist
+		position -= n * overlap * 0.5
+		other.position += n * overlap * 0.5
+		var va := forward() * speed + shove
+		var vb := other.forward() * other.speed + other.shove
+		var closing := (va - vb).dot(n)
+		if closing < 0.6 or _bump_cooldown.has(other) or other._bump_cooldown.has(self):
+			continue
+		_bump_cooldown[other] = 0.45
+		# El que más va hacia el otro es el que choca.
+		var a_in := va.dot(n)
+		var b_in := -vb.dot(n)
+		if a_in >= b_in:
+			_shove_pair(self, other, n, closing)
+		else:
+			_shove_pair(other, self, -n, closing)
+
+
+static func _shove_pair(hitter: Rider, victim: Rider, n: Vector3, closing: float) -> void:
+	victim.shove += n * closing * BUMP_VICTIM
+	hitter.shove -= n * closing * BUMP_HITTER
+	# El chocado gira hacia donde sale despedido (si lo chocan de la derecha,
+	# hacia la izquierda).
+	var strength := clampf(closing / 10.0, 0.0, 1.0)
+	var side := signf(n.dot(victim.right()))
+	victim.heading -= side * BUMP_TURN * strength
+	victim.bumped.emit(n, strength)
+	hitter.bumped_other.emit(victim)
 
 
 func forward() -> Vector3:
@@ -619,6 +711,7 @@ func reset_nitro() -> void:
 
 
 func fall() -> void:
+	shove = Vector3.ZERO
 	state_machine.transition_to(&"fallen")
 
 

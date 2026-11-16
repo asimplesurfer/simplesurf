@@ -67,6 +67,7 @@ func run() -> void:
 	await _test_jump_and_tricks()
 	await _test_look_back()
 	await _test_drift()
+	await _test_bumps()
 	await _test_swells()
 	await _test_wave_jump()
 	await _test_constant_wave()
@@ -84,7 +85,6 @@ func _test_pad_layouts() -> void:
 	InputSetup.set_player_device(0, 0)
 	InputSetup.set_pad_layout(0, InputSetup.PadLayout.GENERIC)
 	_check(_has_button(&"p1_a", 2), "mando genérico: ✕ (botón 2) es A")
-	_check(_has_button(&"p1_debug_fall", 0), "mando genérico: △ (botón 0) es caerse")
 	_check(not _has_button(&"p1_a", JOY_BUTTON_A), "mando genérico: △ ya no es A")
 	InputSetup.set_pad_layout(0, InputSetup.PadLayout.STANDARD)
 	_check(_has_button(&"p1_a", JOY_BUTTON_A), "mando estándar: A es A")
@@ -120,8 +120,9 @@ func _test_race_start() -> void:
 func _test_get_up() -> void:
 	print("Levantarse:")
 	var punches_before := _punches
-	await _press(&"p1_debug_fall")
-	_check(_rider.is_fallen(), "F tira al jugador al agua")
+	_rider.fall()
+	await process_frame
+	_check(_rider.is_fallen(), "se cae al agua")
 	_check(_rider.recovery_stage == Rider.RecoveryStage.IN_WATER, "cae al agua")
 
 	await _wait(1.0)
@@ -191,7 +192,10 @@ func _test_throttle_and_steer() -> void:
 	_check(absf(_rider.global_position.y - expected_y) < 0.001, "flota a la altura de la ola")
 
 	_set_action(&"p1_down", true)
-	await _wait(1.5)
+	await process_frame
+	await process_frame
+	_check(_state() == &"drifting", "atrás (o S) derrapa")
+	await _wait(3.0)
 	_check(_rider.speed < 3.0, "atrás frena (%.1f)" % _rider.speed)
 	_set_action(&"p1_down", false)
 	await _wait(2.5)
@@ -420,7 +424,7 @@ func _test_drift() -> void:
 	_set_action(&"p1_drift", true)
 	await process_frame
 	await process_frame
-	_check(_state() == &"drifting", "SHIFT derrapa")
+	_check(_state() == &"drifting", "S derrapa")
 	# Sin tocar el stick, derrapar no gira solo ni pone la tabla de costado.
 	_set_action(&"p1_right", false)
 	var heading_before := _rider.heading
@@ -449,9 +453,43 @@ func _test_drift() -> void:
 	_set_action(&"p1_drift", false)
 	_set_action(&"p1_right", false)
 	await _wait(0.1)
-	_check(_state() == &"riding", "soltar SHIFT termina el derrape")
+	_check(_state() == &"riding", "soltar S termina el derrape")
 	victim.queue_free()
 	await _wait(1.0)
+
+
+## Choques entre surfistas: el que choca de costado desvía al otro (sin
+## tirarlo) y casi no se desvía él.
+func _test_bumps() -> void:
+	print("Choques entre surfistas:")
+	var other: Rider = load("res://core/rider/rider.tscn").instantiate()
+	other.player_index = 1
+	_main.add_child(other)
+	await process_frame
+	other.state_machine.transition_to(&"riding")
+	await _wait(0.5)
+	# El otro va a la par, a la izquierda; el jugador gira y lo choca.
+	other.heading = _rider.heading
+	other.speed = _rider.speed
+	other.global_position = _rider.global_position - _rider.right() * 0.95
+	other.position.y = _water_height_here()
+	_rider.shove = Vector3.ZERO
+	var my_heading := _rider.heading
+	var other_heading := other.heading
+	_rider.heading += 0.6
+	var hit := [false]
+	other.bumped.connect(func(_d: Vector3, _s: float) -> void: hit[0] = true)
+	await _wait(0.3)
+	_check(hit[0], "chocar de costado empuja al otro")
+	_check(not other.is_fallen() and not _rider.is_fallen(), "nadie se cae por el choque")
+	var away := other.shove.dot(-_rider.right())
+	_check(other.shove.length() > _rider.shove.length() * 3.0, "el chocado sale despedido y el que choca casi no se desvía")
+	_check(away > 0.0, "sale despedido hacia el otro lado del choque")
+	# Lo chocaron por la derecha: gira hacia la izquierda (su cámara también).
+	_check(wrapf(other.heading - other_heading, -PI, PI) > 0.05, "el chocado gira hacia donde lo empujan (%.2f rad)" % wrapf(other.heading - other_heading, -PI, PI))
+	_rider.heading = my_heading
+	other.queue_free()
+	await _wait(0.5)
 
 
 func _test_swells() -> void:
@@ -951,7 +989,9 @@ func _test_music() -> void:
 	_check(audio.ocean.stream != null and audio.ocean.playing, "suena el mar de fondo")
 	_check((audio.ocean.stream as AudioStreamWAV).loop_mode == AudioStreamWAV.LOOP_FORWARD, "el mar está en bucle")
 	audio.last_sfx = ""
-	await _press(&"p1_debug_fall")
+	_rider.fall()
+	await process_frame
+	await process_frame
 	_check(audio.last_sfx == "splash", "caer al agua suena (%s)" % audio.last_sfx)
 	audio.recent_sfx.clear()
 	await _mash_until_standing(8.0, 4.0)

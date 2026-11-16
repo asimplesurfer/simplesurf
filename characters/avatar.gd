@@ -35,6 +35,8 @@ var steer: float = 0.0
 var drift_side: int = 1
 ## 0..1: esfuerzo (remar o patalear más rápido).
 var effort: float = 0.0
+## Cuánto dura la animación de pararse (pop_up), en s.
+var pop_time: float = 0.3
 ## 0..1: velocidad (rodillas más flexionadas y más rebote cuanto más rápido).
 var speed: float = 0.0
 ## Velocidad vertical (m/s): en el aire, subiendo se recoge y bajando se estira.
@@ -122,7 +124,7 @@ func _process(delta: float) -> void:
 	# Ritmo propio del remo: avanza según el esfuerzo (quieto, no rema) y sin
 	# saltos cuando cambia la velocidad.
 	if anim == &"paddle":
-		_paddle_phase += delta * effort * 5.5
+		_paddle_phase += delta * effort * 7.0
 	_land = move_toward(_land, 0.0, delta / 0.35)
 	_pop = move_toward(_pop, 0.0, delta / 0.25)
 	_shake = move_toward(_shake, 0.0, delta / 1.0)
@@ -135,6 +137,7 @@ func _state() -> Dictionary:
 	return {
 		"anim": anim,
 		"t": _anim_time,
+		"pop_time": pop_time,
 		"time": _time,
 		"steer": steer,
 		"charge": charge,

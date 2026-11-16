@@ -62,7 +62,8 @@ static func load_settings() -> void:
 	if cfg.load(PATH) == OK:
 		player_count = clampi(int(cfg.get_value("gameplay", "player_count", 1)), 1, InputSetup.MAX_PLAYERS)
 		split_vertical = bool(cfg.get_value("gameplay", "split_vertical", true))
-		jump_style = int(cfg.get_value("gameplay", "jump_style", JumpStyle.WAVES)) as JumpStyle
+		# Se juega siempre con el salto de olas (saltito + pop): ya no se elige.
+		jump_style = JumpStyle.WAVES
 		track_layout = clampi(
 			int(cfg.get_value("gameplay", "track_layout", TrackLayout.ARCHIPELAGO)), 0, TRACK_LAYOUT_NAMES.size() - 1
 		) as TrackLayout
@@ -110,11 +111,6 @@ static func character_for(player_index: int) -> CharacterData:
 	if not characters.has(player_index):
 		characters[player_index] = CharacterData.default_for_player(player_index)
 	return characters[player_index]
-
-
-static func toggle_jump_style() -> void:
-	jump_style = JumpStyle.FREE if jump_style == JumpStyle.WAVES else JumpStyle.WAVES
-	save_settings()
 
 
 static func jump_style_name() -> String:

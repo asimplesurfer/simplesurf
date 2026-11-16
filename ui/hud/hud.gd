@@ -26,8 +26,8 @@ var rider: Rider
 ## La partida (carrera o modo libre). Lo de carrera (vuelta, posición, cuenta
 ## regresiva) se pide solo si es una carrera (ver `_race()`).
 var session: GameSession
-## Mostrar la ayuda al empezar.
-var show_help: bool = true
+## Mostrar la ayuda al empezar (escondida: la H la muestra).
+var show_help: bool = false
 ## Demo: muestra "DEMO" y cómo salir.
 var demo: bool = false
 ## Vista chica (pantalla en 4): todo el HUD se dibuja más chico.
@@ -59,6 +59,7 @@ var _place_label: Label
 var _lap_label: Label
 var _name_label: Label
 var _center_label: Label
+var _loading_label: Label
 var _help: Label
 ## Contador de FPS (tecla P). Se recuerda entre carreras.
 static var show_fps: bool = false
@@ -80,7 +81,6 @@ var _trick_pop: float = 0.0
 var _waves_box: HBoxContainer
 var _wave_bars: Array[ColorRect] = []
 ## Para avisar cuando se cambia la distancia de la cámara con turbo (tecla B).
-var _seen_boost_option: int = -1
 var _center_time: float = 0.0
 var _flash: float = 0.0
 var _lines: float = 0.0
@@ -151,14 +151,6 @@ func _connect_rider() -> void:
 	rider.wave_punched.connect(_on_wave_punched)
 	var pc := rider.controller as PlayerController
 	if pc:
-		pc.pad_layout_changed.connect(func(layout_name: String) -> void:
-			show_message("Mando: " + layout_name, Color.WHITE)
-			_update_help()
-		)
-		pc.jump_style_changed.connect(func(style_name: String) -> void:
-			show_message("Salto: " + style_name, Color.WHITE)
-			_update_help()
-		)
 		pc.jump_mode_changed.connect(func(mode_name: String) -> void:
 			show_message("Salto: " + mode_name, Color.WHITE)
 			_update_help()
@@ -248,15 +240,11 @@ func _process(delta: float) -> void:
 		]
 	if rider == null:
 		return
-	if _seen_boost_option != ChaseCamera.boost_option:
-		if _seen_boost_option >= 0:
-			show_message(
-				"Cámara turbo %d/%d  (+%.1f m)" % [
-					ChaseCamera.boost_option + 1, ChaseCamera.BOOST_PULLBACKS.size(), ChaseCamera.boost_pullback()
-				],
-				Color.WHITE
-			)
-		_seen_boost_option = ChaseCamera.boost_option
+	var intro := _race() != null and _race().intro_left() > 0.0
+	_loading_label.visible = intro
+	if intro:
+		var dots := ".".repeat(1 + int(Time.get_ticks_msec() / 350) % 3)
+		_loading_label.text = "Preparando las olas" + dots
 	_update_splash(delta)
 	_update_mash(delta)
 
@@ -452,34 +440,28 @@ func _set_prompt(prompt: ButtonPrompt) -> void:
 
 
 func _update_help() -> void:
-	var layout := "estándar"
-	if rider and rider.controller is PlayerController:
-		layout = (rider.controller as PlayerController).layout_name()
 	if free_ride:
 		_help.text = (
 			"MODO LIBRE · mar abierto\n"
 			+ "Avanzar: W / stick adelante (soltá y te frenás; lento, remás acostado)\n"
 			+ "Girar: A / D o stick   ·   Pop / truco: ESPACIO / botón de abajo\n"
-			+ "Turbo: E o botón derecho   ·   Mirar atrás: Q o gatillo izquierdo\n"
+			+ "Frenar: S / stick atrás   ·   Turbo: E o botón derecho   ·   Mirar atrás: Q o gatillo izquierdo\n"
 			+ "Olas: X sube · Z baja (mando: RB / LB)\n"
 			+ "Tormenta: T (mando: Select)\n"
 			+ "Circuitos a lo lejos: slalom (rojo), círculos (celeste), géiseres (naranja)\n"
-			+ "B: probar distancia de cámara con turbo (1/2/3)  ·  G: ver los trucos uno por uno (cámara lenta)\n"
+			+ "G: ver los trucos uno por uno (cámara lenta)\n"
 			+ "Esc: menú   ·   H: ocultar ayuda"
 		)
 		return
 	_help.text = (
-		"Avanza solo (atrás frena)   ·   Girar: A / D o stick\n"
-		+ "Saltar: ESPACIO / botón de abajo\n"
-		+ "Salto: %s (O cambia)   ·   Pantalla dividida: V\n" % GameSettings.jump_style_name()
+		"Avanza solo   ·   Girar: A / D o stick\n"
+		+ "Saltar: ESPACIO / botón de abajo (pop en la ola)\n"
 		+ "Truco: en el aire, mantener ESPACIO / botón de abajo\n"
-		+ "Derrapar: SHIFT o botón izquierdo / RB   ·   Turbo (tocar, gasta 1 carga): E o botón derecho\n"
-		+ "Mirar atrás: Q o gatillo izquierdo\n"
-		+ "Levantarse: spamear ESPACIO o botón de abajo   ·   Caerse (prueba): F\n"
-		+ "J2: flechas, ENTER salta, . derrapa, - turbo   ·   Esc: menú\n"
-		+ "Olas: %s (se cambia en el menú)\n" % GameSettings.wave_mode_name()
-		+ "Mando: %s (M cambia)   ·   H: ocultar ayuda   ·   P: FPS\n" % layout
-		+ "B: probar distancia de cámara con turbo (1/2/3)  ·  G: ver los trucos uno por uno (cámara lenta)\n"
+		+ "Derrapar (frena y tira a los de atrás): S / stick atrás / botón izquierdo / RB\n"
+		+ "Turbo (tocar, gasta 1 carga): E o botón derecho   ·   Mirar atrás: Q o gatillo izquierdo\n"
+		+ "Levantarse: spamear ESPACIO o botón de abajo\n"
+		+ "Pantalla dividida: V   ·   Esc: menú   ·   H: ocultar ayuda   ·   P: FPS\n"
+		+ "G: ver los trucos uno por uno (cámara lenta)\n"
 		+ "Si no responde, haz clic en el juego"
 	)
 
@@ -686,6 +668,16 @@ func _build() -> void:
 	_fps_label.offset_right = 200.0
 	_fps_label.visible = false
 	root.add_child(_fps_label)
+
+	# Intro de la carrera (mientras carga): un cartel discreto abajo.
+	_loading_label = _make_label(22, Color.WHITE)
+	_loading_label.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_loading_label.offset_top = -80.0
+	_loading_label.offset_bottom = -44.0
+	_loading_label.offset_left = -300.0
+	_loading_label.offset_right = 300.0
+	_loading_label.visible = false
+	root.add_child(_loading_label)
 
 
 func _make_label(font_size: int, color: Color) -> Label:

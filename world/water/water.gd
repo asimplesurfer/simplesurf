@@ -39,28 +39,17 @@ const FACE_MIN_DEPTH := 0.02
 ## Altura mínima de una ola para que atravesarla cuente como chapuzón (m).
 const BIG_WAVE_MIN := 1.0
 
-## Colores del agua de día: los de siempre (los del shader) y el azul marino
-## al que se va con Tuning.water_dark = 1.
-const DAY_COLORS := {
-	"deep_color": Color(0.03, 0.2, 0.34),
-	"shallow_color": Color(0.08, 0.35, 0.48),
-	"wave_color": Color(0.14, 0.55, 0.6),
-	"outside_color": Color(0.03, 0.15, 0.27),
-	"rising_color": Color(0.02, 0.14, 0.28),
-}
-const NAVY_COLORS := {
-	"deep_color": Color(0.01, 0.06, 0.17),
-	"shallow_color": Color(0.03, 0.13, 0.3),
-	"wave_color": Color(0.06, 0.27, 0.42),
-	"outside_color": Color(0.01, 0.05, 0.14),
-	"rising_color": Color(0.01, 0.05, 0.15),
-}
-## Mientras hay tormenta, el agua tiene sus propios colores (no se tocan).
-var storm_colors: bool = false:
-	set(value):
-		storm_colors = value
-		_applied_dark = -1.0
-var _applied_dark: float = -1.0
+## Mientras hay tormenta, el agua tiene sus propios colores (los pone y los
+## devuelve la tormenta).
+var storm_colors: bool = false
+var _world_env: WorldEnvironment
+var _env_checked: bool = false
+## Resolución de la máscara de la pista con curvas (texeles del lado largo).
+const TRACK_MASK_SIZE := 256
+## Distancias (m) de los anillos planos de afuera del agua (hasta el horizonte).
+## Llegan más allá de lo que ve la cámara (320 m), donde el agua ya se
+## confunde con el horizonte (ver `haze` en el shader).
+const FAR_RINGS: Array[float] = [180.0, 250.0, 340.0]
 
 var _plane: ArrayMesh
 var _material: ShaderMaterial
@@ -120,6 +109,11 @@ func _build_mesh() -> ArrayMesh:
 		edge += step * 4.0
 		coords.append(edge)
 		coords.push_front(-edge)
+	# Más allá, anillos planos enormes hasta el horizonte (las olas ya se
+	# apagaron en el shader): así desde arriba no se ve dónde termina el agua.
+	for far in FAR_RINGS:
+		coords.append(far)
+		coords.push_front(-far)
 	var n := coords.size()
 	var verts := PackedVector3Array()
 	var normals := PackedVector3Array()
@@ -164,6 +158,15 @@ func add_follower(node: Node3D, layer_index: int = -1) -> MeshInstance3D:
 	return mi
 
 
+## El plano que seguía a `old` pasa a seguir a `node` (la cámara de la intro,
+## que se va lejos del surfista).
+func retarget_follower(old: Node3D, node: Node3D) -> void:
+	for f in _followers:
+		if f.node == old:
+			f.node = node
+			_snap(f.mesh, node)
+
+
 ## Máscara de render para la cámara del jugador `layer_index`: todo menos el
 ## agua de los demás jugadores.
 static func camera_cull_mask(layer_index: int, max_players: int = 4) -> int:
@@ -201,8 +204,16 @@ func _push_time() -> void:
 
 
 func _process(_delta: float) -> void:
-	if not storm_colors and _applied_dark != Tuning.water_dark:
-		_apply_day_colors(Tuning.water_dark)
+	# Bruma del horizonte: el mismo color que la niebla (cambia con la tormenta).
+	if not _env_checked:
+		_env_checked = true
+		if get_parent():
+			for n in get_parent().get_children():
+				if n is WorldEnvironment:
+					_world_env = n
+	var env := _world_env.environment if is_instance_valid(_world_env) else null
+	if env and env.fog_enabled:
+		_material.set_shader_parameter("haze_color", env.fog_light_color)
 	for f in _followers:
 		if is_instance_valid(f.node):
 			_snap(f.mesh, f.node)
@@ -475,6 +486,45 @@ func set_track(center: Vector2, inner: float, outer: float) -> void:
 	_material.set_shader_parameter("track_band", Vector4(center.x, center.y, inner, outer))
 
 
+## Pista con curvas: el agua fuera de la banda de `half_width` alrededor de los
+## puntos del recorrido se ve más oscura (para que se note por dónde ir). Se
+## arma una máscara vista desde arriba (una textura chica).
+func set_track_path(points: PackedVector2Array, half_width: float) -> void:
+	if points.is_empty():
+		_material.set_shader_parameter("track_mask_rect", Vector4.ZERO)
+		return
+	var lo := points[0]
+	var hi := points[0]
+	for p in points:
+		lo = Vector2(minf(lo.x, p.x), minf(lo.y, p.y))
+		hi = Vector2(maxf(hi.x, p.x), maxf(hi.y, p.y))
+	var margin := half_width + 12.0
+	lo -= Vector2(margin, margin)
+	hi += Vector2(margin, margin)
+	var size := hi - lo
+	var res := TRACK_MASK_SIZE
+	var texel := maxf(size.x, size.y) / res
+	var w := clampi(int(ceil(size.x / texel)), 8, res)
+	var h := clampi(int(ceil(size.y / texel)), 8, res)
+	var img := Image.create(w, h, false, Image.FORMAT_L8)
+	# Un disco por cada muestra del recorrido (se superponen: una banda).
+	var r := (half_width + 0.5) / texel
+	var r2 := r * r
+	var step := maxi(1, int(r * texel * 0.4 / 2.0))
+	var white := Color.WHITE
+	for i in range(0, points.size(), step):
+		var c := (points[i] - lo) / texel
+		for y in range(maxi(0, int(c.y - r)), mini(h, int(c.y + r) + 1)):
+			var dy := y + 0.5 - c.y
+			var half := sqrt(maxf(r2 - dy * dy, 0.0))
+			var x0 := maxi(0, int(c.x - half + 0.5))
+			var x1 := mini(w - 1, int(c.x + half - 0.5))
+			if x1 >= x0:
+				img.fill_rect(Rect2i(x0, y, x1 - x0 + 1, 1), white)
+	_material.set_shader_parameter("track_mask", ImageTexture.create_from_image(img))
+	_material.set_shader_parameter("track_mask_rect", Vector4(lo.x, lo.y, w * texel, h * texel))
+
+
 func set_island(center: Vector2, radius: float) -> void:
 	var list: Array[Vector3] = [Vector3(center.x, center.y, radius)]
 	set_islands(list)
@@ -508,14 +558,3 @@ func _push_swells() -> void:
 		rb = ring_wave.shader_b()
 	_material.set_shader_parameter("ring_a", ra)
 	_material.set_shader_parameter("ring_b", rb)
-
-
-## Color del agua de día entre el de siempre (0) y azul marino (1). En 0 deja
-## los valores del shader (sin parámetros puestos).
-func _apply_day_colors(dark: float) -> void:
-	_applied_dark = dark
-	for param in DAY_COLORS:
-		if dark <= 0.0001:
-			_material.set_shader_parameter(param, null)
-		else:
-			_material.set_shader_parameter(param, (DAY_COLORS[param] as Color).lerp(NAVY_COLORS[param], dark))

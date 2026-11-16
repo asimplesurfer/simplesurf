@@ -28,6 +28,7 @@ func setup(p_rider: Rider) -> void:
 	)
 	rider.trick_failed.connect(func() -> void: _play("trick_fail"))
 	rider.drift_hit.connect(func(_victim: Rider) -> void: _play("bonk"))
+	rider.bumped.connect(func(_dir: Vector3, strength: float) -> void: _play("bonk", -10.0 + 8.0 * strength))
 	rider.mash_pressed.connect(func() -> void:
 		if rider.is_human:
 			_audio.play("mash", -6.0, randf_range(0.9, 1.15))
