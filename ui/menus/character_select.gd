@@ -338,6 +338,7 @@ func _build_setup() -> void:
 		set_track_layout)
 	_setup_row(box, "Clima", _capitalized(GameSettings.WEATHER_NAMES), GameSettings.weather,
 		func(i: int) -> void: GameSettings.weather = i as GameSettings.Weather)
+	_setup_row(box, "Música", GameSettings.music_names(), GameSettings.music_choice, set_music)
 	if GameSettings.player_count == 2:
 		_setup_row(box, "Pantalla", ["Lado a lado", "Arriba y abajo"], 0 if GameSettings.split_vertical else 1,
 			func(i: int) -> void: GameSettings.split_vertical = i == 0)
@@ -399,6 +400,14 @@ func _setup_row(parent: Control, title: String, names: Array, selected: int, on_
 		row.add_child(b)
 		buttons.append(b)
 	return buttons[0]
+
+
+## Música: una canción en bucle o aleatoria (suena enseguida, para escucharla).
+func set_music(choice: int) -> void:
+	GameSettings.music_choice = choice
+	var audio := get_node_or_null("/root/AudioManager")
+	if audio:
+		audio.set_music(choice)
 
 
 func set_wave_mode(mode: int) -> void:
