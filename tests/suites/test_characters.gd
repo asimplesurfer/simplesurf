@@ -185,12 +185,15 @@ func _test_customization() -> void:
 	rasta.apply_preset(CharacterData.PRESET_NAMES.find("Rasta"))
 	_check(rasta.get_option("hair") == AvatarFeatures.DREADS and rasta.get_option("hat") == 9,
 		"estilo Rasta: rastas y gorro rasta")
-	# Estilo Despeinado: arma sus piezas propias (pelo, anteojos, collar y
-	# cordón del short), cada una con piezas en su grupo.
-	var shaggy := CharacterData.new()
-	shaggy.apply_preset(CharacterData.PRESET_NAMES.find("Despeinado"))
+	# Piezas del despeinado (pelo, anteojos, cuellito y cordón del short).
+	var shaggy := CharacterData.from_dict({"hair": 15, "glasses": 13, "neck": 9, "shorts_tie": 1})
 	_check(shaggy.option_name("hair") == "Despeinado" and shaggy.option_name("glasses") == "Envolventes"
-		and shaggy.option_name("shorts_tie") == "Cordón blanco", "estilo Despeinado: pelo, anteojos y cordón")
+		and shaggy.option_name("shorts_tie") == "Cordón blanco", "despeinado: pelo, anteojos y cordón")
+	var coco := CharacterData.new()
+	coco.apply_preset(CharacterData.PRESET_NAMES.find("Coco"))
+	_check(coco.option_name("hair") == "Afro" and coco.option_name("mouth") == "Sonrisota"
+		and coco.option_name("hat") == "Vincha deportiva" and coco.option_name("nose") == "Con protector solar",
+		"estilo Coco: afro, sonrisota, vincha y protector solar")
 	var groups := {}
 	for g in ["head", "hair", "chest", "hips"]:
 		groups[g] = Node3D.new()

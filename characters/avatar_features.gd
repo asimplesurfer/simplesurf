@@ -501,6 +501,15 @@ func _nose(style: int, skin: Color) -> void:
 			_piece(_sphere, p + Vector3(0, 0, 0.05), Vector3.ONE * 0.1, Color("#e8302a"))
 		4:
 			_piece(_sphere, p + Vector3(0, 0, 0.22), Vector3(0.05, 0.05, 0.26), skin.darkened(0.06))
+		5:
+			# Con protector solar: nariz redonda pintada de blanco (de guardavidas).
+			_piece(_sphere, p + Vector3(0, -0.01, 0.02), Vector3(0.075, 0.07, 0.07), skin.darkened(0.08))
+			# Franja de protector de lado a lado, sobre la nariz.
+			_piece(_sphere, _face(0.0, 0.0, 0.03), Vector3(0.16, 0.028, 0.05), WHITE, false)
+			for side in [-1.0, 1.0]:
+				# Rayitas en los cachetes.
+				_piece(_sphere, _face(side * 0.24, -0.06, 0.012), Vector3(0.05, 0.014, 0.01), WHITE, false,
+					Basis(Vector3.BACK, side * 0.15))
 
 
 ## Bocas armadas (la de costado es la del modelo).
@@ -534,6 +543,16 @@ func _mouth(style: int) -> void:
 			_piece(_sphere, m, Vector3(0.11, 0.012, 0.02), BLACK, false)
 			for side in [-1.0, 1.0]:
 				_piece(_box, m + Vector3(side * 0.031, -0.045, 0.0), Vector3(0.028, 0.042, 0.012), WHITE)
+		9:
+			# Sonrisota: boca grande en media luna con los dientes de arriba.
+			var c := _face(0.0, -0.235, 0.01)
+			_piece(_sphere, c + Vector3(0.0, -0.01, 0.0), Vector3(0.17, 0.075, 0.04), Color("#5a1620"))
+			_piece(_sphere, c + Vector3(0.0, -0.05, 0.02), Vector3(0.08, 0.03, 0.025), Color("#ff7b8a"), false)
+			_piece(_sphere, c + Vector3(0.0, 0.025, 0.028), Vector3(0.145, 0.03, 0.02), WHITE, false)
+			for side in [-1.0, 1.0]:
+				# Comisuras para arriba.
+				_piece(_sphere, c + Vector3(side * 0.17, 0.035, 0.0), Vector3(0.03, 0.012, 0.02), BLACK, false,
+					Basis(Vector3.BACK, side * 0.7))
 		5:
 			for i in 4:
 				var x := -0.11 + i * 0.073
@@ -578,6 +597,13 @@ func _extra(style: int, hair: Color) -> void:
 			for side in [-1.0, 1.0]:
 				_piece(_sphere, _face(side * 0.07, -0.135, 0.012), Vector3(0.085, 0.024, 0.035), hair, true,
 					Basis(Vector3.BACK, side * 0.22))
+		8:
+			# Bigotón: grueso y redondo, con las puntas para abajo (no tapa la sonrisa).
+			for side in [-1.0, 1.0]:
+				_piece(_sphere, _face(side * 0.08, -0.115, 0.03), Vector3(0.1, 0.042, 0.05), hair, true,
+					Basis(Vector3.BACK, side * 0.25))
+				_piece(_sphere, _face(side * 0.165, -0.145, 0.02), Vector3(0.04, 0.045, 0.04), hair, true,
+					Basis(Vector3.BACK, side * 0.5))
 		7:
 			# Barba tupida: de patilla a patilla, con bigote (la boca queda a la vista).
 			_piece(_sphere, Vector3(0.0, -0.38, 0.1), Vector3(0.42, 0.26, 0.34), hair)
@@ -656,8 +682,15 @@ func _hair(style: int, hair: Color) -> void:
 				_piece(_sphere, Vector3(side * 0.44, -0.07, 0.06), Vector3(0.13, 0.36, 0.26), hair)
 			_piece(_sphere, _face(0.0, 0.32, 0.04), Vector3(0.38, 0.08, 0.08), hair)
 		12:
-			# Afro: una bola grande de pelo (sin tapar los ojos).
-			_piece(_sphere, Vector3(0.0, 0.42, -0.22), Vector3(0.74, 0.62, 0.64), hair)
+			# Afro: una bola grande de pelo (sin tapar los ojos), con el borde en
+			# bultitos como una nube.
+			var c := Vector3(0.0, 0.42, -0.22)
+			var r := Vector3(0.74, 0.62, 0.64)
+			_piece(_sphere, c, r, hair)
+			for d in _cap_dirs(26, -0.55):
+				if d.z > 0.5 and d.y < 0.35:
+					continue
+				_piece(_sphere, c + _on_ellipsoid(r, d, -0.1), Vector3.ONE * 0.2, hair)
 		13:
 			# Dos rodetes arriba.
 			_cap(hair)
@@ -775,6 +808,12 @@ func _hat(style: int, tint: Color = Color("#ff9b1f")) -> void:
 					Vector3(0.045, 0.045, 0.02), Color("#ff8fd0"), true, Basis(Vector3.UP, 0.9))
 			_piece(_sphere, f + Basis(Vector3.UP, 0.9) * Vector3(0.0, 0.0, 0.015), Vector3.ONE * 0.03,
 				Color("#ffd23f"), false)
+		12:
+			# Vincha deportiva: banda gruesa de toalla con una raya blanca.
+			_piece(_cyl, Vector3(0.0, 0.3, -0.04), Vector3(0.53, 0.07, 0.5), tint, true,
+				Basis(Vector3.RIGHT, -0.12))
+			_piece(_cyl, Vector3(0.0, 0.3, -0.04), Vector3(0.535, 0.015, 0.505), WHITE, false,
+				Basis(Vector3.RIGHT, -0.12))
 
 
 ## Ropa de arriba (del color del short).

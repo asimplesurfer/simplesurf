@@ -165,6 +165,11 @@ void fragment() {
 		float petal = 0.44 * (0.55 + 0.45 * abs(cos(a * 2.5)));
 		float gap = abs(sin(a * 2.5)) * length(q);
 		if (length(q) < petal && !(gap < 0.025 && length(q) > 0.06)) col = color1;
+	} else if (pattern == 15) {
+		// Guardavidas: una franja blanca a cada costado.
+		float a = ang;
+		float sidex = min(abs(a - 0.25), abs(a - 0.75));
+		if (sidex < 0.03) col = color1;
 	}
 	ALBEDO = col;
 }
