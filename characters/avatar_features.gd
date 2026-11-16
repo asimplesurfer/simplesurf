@@ -49,6 +49,8 @@ var _extra_xf := Transform3D.IDENTITY
 const BIG_HAIR := [2, 3, 4, 5, 12, 13, 14, 15, 17]
 ## Melena ondulada (peinado 17).
 const WAVY_BOB := 17
+## Cuánto se sube el sombrero con la melena ondulada (con otros pelos grandes, 0.07).
+const HAT_LIFT_BOB := -0.03
 ## Colita alta (peinado 16).
 const HIGH_PONYTAIL := 16
 ## Rastas (peinado 14).
@@ -182,7 +184,9 @@ func build_head(group: Node3D, hair_group: Node3D, data: CharacterData, skin: Co
 	if data.get_option("hair") in BIG_HAIR:
 		# Agrandado desde la frente (así no se corre hacia atrás) y un poco arriba.
 		var pivot := Vector3(0.0, 0.3, 0.0)
-		_extra_xf = Transform3D(Basis.from_scale(Vector3.ONE * 1.15), pivot + Vector3(0.0, 0.07, 0.0)) \
+		# La melena ondulada es lisa arriba: el sombrero va más abajo (calzado).
+		var lift := HAT_LIFT_BOB if data.get_option("hair") == WAVY_BOB else 0.07
+		_extra_xf = Transform3D(Basis.from_scale(Vector3.ONE * 1.15), pivot + Vector3(0.0, lift, 0.0)) \
 			* Transform3D(Basis.IDENTITY, -pivot)
 	_hat(data.get_option("hat"), data.accent("hat_color"))
 	_extra_xf = Transform3D.IDENTITY
@@ -683,13 +687,16 @@ func _cute_eye(p: Vector3, side: float) -> void:
 	var n := 10
 	for i in n + 1:
 		var u := i / float(n)
-		var x := lerpf(-0.08, 0.11, u)
-		var y := 0.083 + 0.026 * sin(u * PI * 0.85)
-		if u > 0.72:
-			y += (u - 0.72) * 0.2
+		# Arco parejo y redondeado (si sube mucho hacia afuera parece enojada),
+		# con una colita chiquita al final.
+		var x := lerpf(-0.08, 0.1, u)
+		# La punta de adentro un poco más alta (mirada dulce, no enojada).
+		var y := 0.08 + 0.034 * sin(u * PI) + 0.02 * (1.0 - u)
+		if u > 0.82:
+			y += (u - 0.82) * 0.12
 		var q := Vector2(e.x + side * x, e.y + y)
 		lid.append(_face(q.x, q.y, 0.032))
-		widths.append(0.021 * sin(lerpf(0.12, 0.88, u) * PI) + 0.002)
+		widths.append(0.018 * sin(lerpf(0.04, 0.88, u) * PI) * smoothstep(0.0, 0.35, u) + 0.002)
 	_piece(_make_tube(lid, widths), Vector3.ZERO, Vector3.ONE, BLACK, false)
 
 
