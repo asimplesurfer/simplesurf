@@ -15,7 +15,7 @@ static func build() -> ArrayMesh:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 2611
 	# Fila de atrás: montañas largas y altas (casi del color del horizonte).
-	_row(st, rng, Horizon.RING_DISTANCE + 70.0, 1.0, 9, Vector2(0.35, 0.7), Vector2(16.0, 34.0))
+	_row(st, rng, Horizon.RING_DISTANCE + 35.0, 1.0, 9, Vector2(0.35, 0.7), Vector2(16.0, 34.0))
 	# Fila de adelante: islas más chicas y separadas, con huecos de mar abierto.
 	_row(st, rng, Horizon.RING_DISTANCE, 0.0, 13, Vector2(0.12, 0.3), Vector2(7.0, 20.0))
 	_mesh = st.commit()

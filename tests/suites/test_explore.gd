@@ -69,6 +69,28 @@ func _test_explore() -> void:
 	await process_frame
 	lat = absf(course.track.lateral_of(r.position))
 	_check(not explore.buoys_open and lat < course.half_width, "otra vez F: las boyas vuelven a frenar")
+	# Volar (con F): ESPACIO sube, soltando se queda, SHIFT baja hasta el agua.
+	_tap_f()
+	await process_frame
+	r.position = Vector3(course.track.position_at(0.5).x, r.position.y, course.track.position_at(0.5).z)
+	_phys_key(KEY_SPACE, true)
+	for i in 90:
+		await process_frame
+	_phys_key(KEY_SPACE, false)
+	var up := r.position.y
+	_check(explore.is_flying(r) and up > 12.0, "con F, manteniendo ESPACIO se vuela para arriba (%.0f m)" % up)
+	for i in 60:
+		await process_frame
+	_check(absf(r.position.y - up) < 0.5 and not r.is_fallen(), "soltando, se queda en el aire")
+	_phys_key(KEY_SHIFT, true)
+	for i in 150:
+		await process_frame
+	_phys_key(KEY_SHIFT, false)
+	for i in 90:
+		await process_frame
+	_check(not explore.is_flying(r) and r.position.y < 3.0, "manteniendo SHIFT baja hasta el agua y vuelve a surfear")
+	_tap_f()
+	await process_frame
 	# Olas: X sube, Z baja.
 	var before := explore.wave_level
 	explore.set_wave_level(before - 1)
@@ -84,6 +106,14 @@ func _test_explore() -> void:
 	m.queue_free()
 	await process_frame
 	GameSettings.track_layout = GameSettings.TrackLayout.CLASSIC
+
+
+func _phys_key(code: Key, down: bool) -> void:
+	var ev := InputEventKey.new()
+	ev.physical_keycode = code
+	ev.keycode = code
+	ev.pressed = down
+	Input.parse_input_event(ev)
 
 
 func _tap_f() -> void:

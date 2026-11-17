@@ -448,7 +448,7 @@ func _update_help() -> void:
 			+ "Girar: A / D o stick   ·   Pop / truco: ESPACIO / botón de abajo\n"
 			+ "Frenar: S / stick atrás   ·   Turbo: E o botón derecho   ·   Mirar atrás: Q o gatillo izquierdo\n"
 			+ "Olas: X sube · Z baja (mando: RB / LB)   ·   Tormenta: T (mando: Select)\n"
-			+ "Boyas: F (se atraviesan o no, para ver más allá de la pista)\n"
+			+ "F: totalmente libre (se atraviesan las boyas y se vuela: ESPACIO sube, SHIFT baja)\n"
 			+ "G: ver los trucos uno por uno (cámara lenta)\n"
 			+ "Esc / Start: pausa (volumen)   ·   C: menú   ·   H: ocultar ayuda"
 		)

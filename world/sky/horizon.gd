@@ -121,6 +121,7 @@ func _sync_colors() -> void:
 		wm.set_shader_parameter("far_sea_color", _param(_sky_mat, "ocean_color"))
 		wm.set_shader_parameter("fog_tint", _env.fog_light_color)
 		wm.set_shader_parameter("fog_density", _env.fog_density if _env.fog_enabled else 0.0)
+	_ring_mat.set_shader_parameter("far_sea_color", _param(_sky_mat, "ocean_color"))
 	# La niebla de los objetos es la de siempre (su color ya es el del
 	# horizonte; la tormenta lo cambia y lo hace brillar con los rayos): a
 	# VIEW_FAR ya tapa casi todo.
