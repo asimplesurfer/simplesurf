@@ -1045,6 +1045,12 @@ func _test_music() -> void:
 	audio._on_song_finished()
 	_check(audio.song_index != first and player.playing, "aleatoria: al terminar arranca otra distinta")
 	audio.set_music(GameSettings.music_choice)
+	# Sin foco (otra ventana o pestaña), todo en silencio; al volver, suena.
+	audio.notification(NOTIFICATION_APPLICATION_FOCUS_OUT)
+	var master := AudioServer.get_bus_index("Master")
+	_check(AudioServer.is_bus_mute(master), "sin foco el juego queda en silencio")
+	audio.notification(NOTIFICATION_APPLICATION_FOCUS_IN)
+	_check(not AudioServer.is_bus_mute(master), "al volver a la ventana, vuelve el sonido")
 	# Efectos de sonido.
 	_check(audio._sfx.size() == audio.SFX_NAMES.size(), "están todos los efectos de sonido (%d)" % audio._sfx.size())
 	_check(audio.ocean.stream != null and audio.ocean.playing, "suena el mar de fondo")
