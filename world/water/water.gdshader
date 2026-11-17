@@ -32,6 +32,14 @@ uniform vec2 far_sea_range = vec2(150.0, 320.0);
 // siempre; lejos se va al mar con bruma y al horizonte, no a una franja blanca.
 // Densidad y color de la niebla del Environment (los pone Horizon).
 uniform float fog_density = 0.0045;
+// El mar de la zona media (de la pista al horizonte) no es liso: sombras de
+// nubes que pasan, el camino de brillo del sol y algunos arrecifes con espuma.
+// Solo desde MID_START metros (cerca de la pista el agua queda como siempre).
+uniform vec3 sun_dir = vec3(0.4, 0.6, 0.7);
+// 1 con sol, 0 con tormenta (no hay brillo del sol).
+uniform float sun_glitter = 1.0;
+uniform vec3 reef_color : source_color = vec3(0.33, 0.78, 0.76);
+const vec2 MID_START = vec2(70.0, 150.0);
 uniform vec3 fog_tint : source_color = vec3(0.93, 0.9, 0.96);
 
 uniform vec3 deep_color : source_color = vec3(0.03, 0.2, 0.34);
@@ -162,11 +170,12 @@ void fragment() {
 	sparkle *= (1.0 - clamp(foam, 0.0, 1.0)) * (0.3 + fresnel * 1.5);
 
 	// Fuera de la pista, el agua más oscura (con un borde suave).
+	float outside = 1.0;
 	if (track_band.w > 0.0) {
 		float d = distance(v_world.xz, track_band.xy);
 		float out_inner = 1.0 - smoothstep(track_band.z - 3.0, track_band.z - 0.5, d);
 		float out_outer = smoothstep(track_band.w + 0.5, track_band.w + 3.0, d);
-		float outside = max(out_inner, out_outer);
+		outside = max(out_inner, out_outer);
 		col = mix(col, outside_color, outside * outside_strength);
 	} else if (track_mask_rect.z > 0.0) {
 		vec2 uv = (v_world.xz - track_mask_rect.xy) / track_mask_rect.zw;
@@ -174,7 +183,7 @@ void fragment() {
 		if (uv.x > 0.0 && uv.y > 0.0 && uv.x < 1.0 && uv.y < 1.0) {
 			inside = texture(track_mask, uv).r;
 		}
-		float outside = 1.0 - smoothstep(0.25, 0.75, inside);
+		outside = 1.0 - smoothstep(0.25, 0.75, inside);
 		col = mix(col, outside_color, outside * outside_strength);
 	}
 
@@ -186,6 +195,38 @@ void fragment() {
 	float a2 = smoothstep(far_sea_range.x, far_sea_range.y, far_d) * 0.85;
 	float haze = smoothstep(haze_range.x, haze_range.y, far_d);
 	vec3 c2 = mix(far_sea_color, h_col, 0.45);
+
+	// --- Zona media: le da vida y escala al mar entre la pista y el horizonte.
+	float mid = smoothstep(MID_START.x, MID_START.y, far_d) * (1.0 - haze);
+	if (mid > 0.0) {
+		// Sombras de nubes: manchas grandes y suaves que se mueven con el viento.
+		vec2 wind = vec2(t * 0.9, t * 0.35);
+		float cloud = fx_noise((wp + wind) * 0.006) * 0.7 + fx_noise((wp + wind) * 0.015 + 7.3) * 0.3;
+		float shade = 1.0 - 0.42 * smoothstep(0.46, 0.7, cloud) * mid;
+		// Arrecifes: unas pocas manchas turquesa (mar bajito), con espuma en el
+		// borde donde rompe el mar. Solo fuera de la pista.
+		float reef_n = fx_noise(wp * 0.0045 + vec2(17.3, 4.1)) * 0.75 + fx_noise(wp * 0.02 + 3.7) * 0.25;
+		float reef = smoothstep(0.64, 0.68, reef_n) * outside * mid;
+		float edge = (smoothstep(0.6, 0.64, reef_n) - smoothstep(0.64, 0.68, reef_n)) * outside * mid;
+		float surf = step(0.45, fx_noise(wp * 0.25 + vec2(t * 0.6, t * 0.2)));
+		vec3 shallow_mid = mix(c2, reef_color, 0.75);
+		// Camino de brillo del sol: el reflejo del sol en un mar picado.
+		vec3 view = normalize(to_far);
+		vec2 ripple = vec2(fx_noise(wp * 0.45 + t * 0.7), fx_noise(wp * 0.45 - t * 0.6 + 9.1)) - 0.5;
+		vec3 n = normalize(vec3(ripple.x * 0.35, 1.0, ripple.y * 0.35));
+		// Con un sol "bajo" en la misma dirección: la franja se estira hasta el
+		// horizonte (con el sol alto, el reflejo caería cerca, sobre la pista).
+		vec3 low_sun = normalize(vec3(sun_dir.x, 0.12, sun_dir.z));
+		float glint = pow(max(dot(reflect(view, n), low_sun), 0.0), 60.0);
+		glint *= step(0.55, fx_noise(wp * 1.6 + vec2(t * 0.8, -t * 0.5))) * mid * sun_glitter;
+		// Se aplica al agua y a la niebla de mar lejano (que de lejos la tapa).
+		col = mix(col, reef_color, reef * 0.55) * shade;
+		c2 = mix(c2, shallow_mid, reef) * shade;
+		col = mix(col, foam_color, edge * surf * 0.8);
+		c2 = mix(c2, foam_color, edge * surf * 0.7);
+		c2 += vec3(1.0, 0.94, 0.82) * glint * 1.6;
+		sparkle += glint * 1.5;
+	}
 	float keep = (1.0 - a1) * (1.0 - a2) * (1.0 - haze);
 	// El motor pasa el color de su niebla en lineal; acá llega como se ve
 	// (sRGB): se convierte para que de cerca quede igual que antes.
