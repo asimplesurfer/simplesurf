@@ -23,6 +23,8 @@ var _cyl: CylinderMesh
 ## Aros de anteojos (fino y grueso).
 var _ring: TorusMesh
 var _ring_thick: TorusMesh
+## Media esfera (para copas de sombrero que no cuelgan debajo del ala).
+var _hemi: SphereMesh
 ## Mechón: una hoja que se afina hasta la punta y se curva hacia +X.
 var _lock: ArrayMesh
 ## Mechón ondulado (en S): primero se abomba para un lado y la punta se da
@@ -46,7 +48,7 @@ var _group: Node3D
 ## Transformación extra para las piezas (agrandar el sombrero sobre pelos grandes).
 var _extra_xf := Transform3D.IDENTITY
 ## Pelos voluminosos: el sombrero va más grande y más arriba (si no, lo tapan).
-const BIG_HAIR := [2, 3, 4, 5, 12, 13, 14, 15, 17, 18]
+const BIG_HAIR := [2, 3, 4, 5, 12, 13, 14, 15, 17]
 ## Melena ondulada (peinado 17).
 const WAVY_BOB := 17
 ## Cuánto se sube el sombrero con la melena ondulada (con otros pelos grandes, 0.07).
@@ -94,6 +96,12 @@ func _init() -> void:
 	_ring.ring_segments = 6
 	_lock = _make_lock(0.9, 0.0)
 	_wavy = _make_lock(0.8, -0.28)
+	_hemi = SphereMesh.new()
+	_hemi.radius = 1.0
+	_hemi.height = 1.0
+	_hemi.is_hemisphere = true
+	_hemi.radial_segments = 16
+	_hemi.rings = 6
 	_ring_thick = TorusMesh.new()
 	_ring_thick.inner_radius = 0.7
 	_ring_thick.outer_radius = 1.0
@@ -748,26 +756,26 @@ func _wrinkles(skin: Color) -> void:
 ## Pelo de científico: pelado arriba y mechones blancos despeinados que salen
 ## para todos lados por los costados y atrás (y un par de pelitos sueltos arriba).
 func _scientist_hair(hair: Color) -> void:
-	# Base por atrás y los costados (así no se ve cabeza entre los mechones).
+	# Pelado arriba; a los costados y atrás, nubes de pelo esponjoso (bolitas
+	# de distinto tamaño que sobresalen), como algodón.
 	_piece(_sphere, Vector3(0.0, 0.12, -0.16), Vector3(0.55, 0.28, 0.4), hair)
 	var i := 0
-	for row in 3:
-		var y := 0.06 + row * 0.12
-		var n := 9 - row
+	for row in 4:
+		var y := 0.0 + row * 0.09
+		var n := 13 - row * 2
 		for k in n:
-			var a := lerpf(-2.1, 2.1, k / float(n - 1)) + 0.15 * row
+			var a := lerpf(-2.2, 2.2, k / float(n - 1)) + 0.1 * row
 			var th := PI + a
 			var out := Vector3(sin(th), 0.0, cos(th))
 			var h := fposmod(sin(i * 12.9898) * 43758.5453, 1.0)
-			var root := Vector3(out.x * 0.5, y, out.z * 0.46 - 0.04)
-			var dir := out + Vector3(0.0, 0.35 + 0.5 * h + 0.3 * row, 0.0) + out.cross(Vector3.UP) * (h - 0.5) * 0.8
-			var bend := out.cross(Vector3.UP) * (1.0 if i % 2 == 0 else -1.0) + Vector3(0.0, 0.5, 0.0)
-			_lock_piece(root, dir, 0.2 + 0.14 * h, 0.17, bend, hair.darkened(0.08) if i % 3 == 0 else hair)
+			var r := 0.085 + 0.045 * h
+			# Un poco más afuera a los costados (despeinado), pegado atrás.
+			var side := absf(sin(th))
+			var reach := 0.47 + 0.07 * side + 0.04 * h
+			var p := Vector3(out.x * reach, y + 0.03 * sin(i * 2.3), out.z * reach * 0.92 - 0.04)
+			_piece(_sphere, p, Vector3(r, r * 0.85, r), hair.darkened(0.07) if i % 4 == 1 else hair)
 			i += 1
-	# Dos pelitos sueltos arriba de la pelada.
-	for side in [-1.0, 1.0]:
-		_lock_piece(Vector3(side * 0.06, 0.5, -0.02), Vector3(side * 0.4, 1.0, 0.2), 0.14, 0.05,
-			Vector3(-side, 0.0, 0.0), hair)
+
 
 
 ## Trazo de boca de una línea, como de pincel: un tubo finito que sigue la
@@ -1062,14 +1070,17 @@ func _hat(style: int, tint: Color = Color("#ff9b1f")) -> void:
 			_piece(_sphere, f + Basis(Vector3.UP, 0.9) * Vector3(0.0, 0.0, 0.015), Vector3.ONE * 0.03,
 				Color("#ffd23f"), false)
 		13:
-			# Galera: copa alta, ala fina y una cinta (más oscura que el color
-			# elegido, o dorada si la galera es oscura).
+			# Bombín: chico (el pelo sobresale por los costados), copa redonda,
+			# ala corta con el borde enrollado y una cinta (más oscura que el
+			# color elegido, o dorada si el bombín es oscuro). La copa es media
+			# esfera: nada cuelga debajo del ala.
 			var band := tint.darkened(0.55) if tint.get_luminance() > 0.25 else Color("#c9a227")
-			# Ala: un poco más ancha a los costados que adelante.
-			_piece(_cyl, Vector3(0.0, 0.43, -0.03), Vector3(0.66, 0.018, 0.56), tint, true, Basis(Vector3.RIGHT, -0.06))
-			_piece(_cyl, Vector3(0.0, 0.72, -0.04), Vector3(0.38, 0.29, 0.36), tint, true)
-			_piece(_cyl, Vector3(0.0, 1.0, -0.04), Vector3(0.405, 0.012, 0.385), tint, true)
-			_piece(_cyl, Vector3(0.0, 0.52, -0.04), Vector3(0.39, 0.065, 0.37), band, true)
+			var c := Vector3(0.0, 0.46, -0.04)
+			_piece(_cyl, c, Vector3(0.5, 0.014, 0.46), tint, true, Basis(Vector3.RIGHT, -0.08))
+			_piece(_ring_thick, c + Vector3(0.0, 0.012, 0.0), Vector3(0.5, 0.06, 0.46), tint, true,
+				Basis(Vector3.RIGHT, -0.08))
+			_piece(_hemi, c, Vector3(0.37, 0.36, 0.36), tint, true)
+			_piece(_cyl, c + Vector3(0.0, 0.05, 0.0), Vector3(0.375, 0.045, 0.365), band, true)
 		12:
 			# Vincha deportiva: banda gruesa de toalla con una raya blanca.
 			_piece(_cyl, Vector3(0.0, 0.3, -0.04), Vector3(0.53, 0.07, 0.5), tint, true,

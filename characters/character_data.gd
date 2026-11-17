@@ -143,7 +143,7 @@ const NECKLACES := [
 const HATS := [
 	"Nada", "Sombrero de paja", "Sombrero pirata", "Gorra de capitán", "Gorro de tiburón",
 	"Pañuelo", "Gorra", "Gorro de lana", "Corona de flores", "Gorro rasta", "Bandana rasta",
-	"Vincha hippie", "Vincha deportiva", "Galera",
+	"Vincha hippie", "Vincha deportiva", "Bombín",
 ]
 ## Sombreros a los que se les puede cambiar el color (el de paja, no).
 const HAT_COLORABLE := [5, 6, 7, 11, 12, 13]
