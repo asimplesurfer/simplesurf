@@ -129,6 +129,19 @@ func _test_explore() -> void:
 	explore.set_storm(false)
 	await process_frame
 	_check(course.storm == null, "y apagarla")
+	# Coma (mantener): el contador de trucos sube solo (para ver la fuente y los colores).
+	var hud: Hud = null
+	for h in m.find_children("*", "Hud", true, false):
+		hud = h
+	var label: Label = hud._trick_label if hud else null
+	_phys_key(KEY_COMMA, true)
+	for i in int(Hud.PREVIEW_STEP * 60.0 * 2.5):
+		await process_frame
+	var shown := label != null and label.visible and label.text == "x3"
+	_phys_key(KEY_COMMA, false)
+	await process_frame
+	await process_frame
+	_check(shown and not label.visible, "manteniendo la coma se ve el contador de trucos subiendo (x3) y al soltarla se va")
 	# Nunca termina.
 	_check(config.laps >= 99, "no hay final")
 	m.queue_free()

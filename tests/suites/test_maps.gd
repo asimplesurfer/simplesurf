@@ -299,7 +299,7 @@ func _test_tropical_island() -> void:
 			palms += (p as TropicalIslandPiece).palm_count()
 	var draws := 0
 	for c in isl.get_children():
-		if c is MultiMeshInstance3D or c is MeshInstance3D:
+		if (c is MultiMeshInstance3D or c is MeshInstance3D) and not String(c.name).begins_with("Crowd_"):
 			draws += 1
 	_check(palms > 50 and draws <= 20, "palmeras en pocas mallas (%d palmeras, %d mallas)" % [palms, draws])
 	_check(
@@ -325,6 +325,22 @@ func _test_tropical_island() -> void:
 					if absf(o.z + 20.0) < 7.0 and o.x > 180.0 and o.x < 280.0:
 						in_channel += 1
 	_check(in_channel == 0, "no hay palmeras en el mar del corte")
+	# Público: en la orilla (no en el medio de la isla), sin chocarse, en pocas mallas.
+	var spots := 0
+	var far_from_shore := 0
+	var crowd_meshes := 0
+	for node in course.get_children():
+		if String(node.name).begins_with("TropicalIsland"):
+			for c in node.get_children():
+				if c is MultiMeshInstance3D and String(c.name).begins_with("Crowd_"):
+					crowd_meshes += 1
+	for p in parts:
+		for spot in p._crowd_spots:
+			spots += 1
+			if BezierShape.distance_to_edge(p._outline, spot) > TropicalIslandPiece.CROWD_DEPTH + 1.0:
+				far_from_shore += 1
+	_check(spots > 4 and far_from_shore == 0 and crowd_meshes <= 2 * 9,
+		"público en la orilla que da a la pista (%d cosas, %d lejos del agua, %d mallas)" % [spots, far_from_shore, crowd_meshes])
 	var covered := func(x: float, z: float) -> bool:
 		for p in parts:
 			if p.covers(x, z):
