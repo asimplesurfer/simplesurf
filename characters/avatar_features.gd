@@ -670,6 +670,37 @@ func _mouth(style: int) -> void:
 				_extruded(PackedVector2Array([Vector2(x - 0.03, -0.165), Vector2(x + 0.03, -0.165),
 					Vector2(x + 0.026, -0.21), Vector2(x - 0.026, -0.21)]), 0.014, 0.004,
 					func(_q: Vector2) -> Color: return WHITE, false)
+		15:
+			# Risa sin dientes: bien abierta y contenta, con encías rosadas arriba.
+			_open_mouth(_arc_poly(0.15, -0.165, 0.15, 0.012), Color("#5a1620"))
+			_extruded(_arc_poly(0.13, -0.168, 0.035, 0.0), 0.014, 0.004,
+				func(_q: Vector2) -> Color: return Color("#e86a7c"), false)
+			_extruded(_arc_poly(0.07, -0.27, 0.03, 0.0, true), 0.014, 0.004,
+				func(_q: Vector2) -> Color: return Color("#ff7b8a"), false)
+		16:
+			# Un diente: sonrisa ancha cerrada, con un solo diente que asoma.
+			_stroke(_face(0.0, -0.215, 0.012), -0.16, 0.16, 0.04, 0.0)
+			_extruded(PackedVector2Array([Vector2(0.02, -0.2), Vector2(0.07, -0.2), Vector2(0.065, -0.245),
+				Vector2(0.025, -0.245)]), 0.014, 0.006, func(_q: Vector2) -> Color: return WHITE, true)
+		17:
+			# Carcajada: media luna bien abierta con la fila de dientes de arriba.
+			_open_mouth(_arc_poly(0.17, -0.17, 0.13, 0.03), Color("#5a1620"))
+			_extruded(_arc_poly(0.145, -0.172, 0.03, 0.012), 0.014, 0.004,
+				func(_q: Vector2) -> Color: return WHITE, false)
+			_extruded(_arc_poly(0.07, -0.265, 0.025, 0.0, true), 0.014, 0.004,
+				func(_q: Vector2) -> Color: return Color("#ff7b8a"), false)
+		18:
+			# ¡Wooo!: óvalo alto, gritando de emoción arriba de la ola.
+			var o := PackedVector2Array()
+			for j in 20:
+				var a := j * TAU / 20.0
+				o.append(Vector2(sin(a) * 0.085, -0.25 + cos(a) * 0.105))
+			_open_mouth(o, Color("#5a1620"))
+			var t := PackedVector2Array()
+			for j in 12:
+				var a := j * TAU / 12.0
+				t.append(Vector2(sin(a) * 0.05, -0.31 + cos(a) * 0.03))
+			_extruded(t, 0.014, 0.004, func(_q: Vector2) -> Color: return Color("#ff7b8a"), false)
 		11:
 			# Canchera: una línea que sube hacia la derecha, larga y segura.
 			_stroke(_face(0.03, -0.215, 0.012), -0.1, 0.14, 0.03, 0.8)
@@ -745,6 +776,29 @@ func _cute_eye(p: Vector3, side: float) -> void:
 	_piece(_make_tube(lid, widths), Vector3.ZERO, Vector3.ONE, BLACK, false)
 
 
+## Boca abierta: la forma `poly` sobre la cara, oscura y con contorno.
+func _open_mouth(poly: PackedVector2Array, color: Color) -> void:
+	_extruded(poly, 0.0, 0.012, func(_q: Vector2) -> Color: return color, true)
+
+
+## Forma de media luna (boca o encía): arriba casi recta en `top` (con la
+## curva `lift` en las puntas) y abajo un arco de alto `depth`, de ancho `half`
+## a cada lado. `round_top`: también redondeada arriba (lengua).
+func _arc_poly(half: float, top: float, depth: float, lift: float, round_top: bool = false) -> PackedVector2Array:
+	var poly := PackedVector2Array()
+	var n := 14
+	for j in n + 1:
+		var u := j / float(n)
+		poly.append(Vector2(lerpf(half, -half, u), top - depth * sin(u * PI)))
+	for j in range(1, n):
+		var u := j / float(n)
+		var y := top + lift * pow(absf(u * 2.0 - 1.0), 2.0)
+		if round_top:
+			y = top + depth * 0.6 * sin(u * PI)
+		poly.append(Vector2(lerpf(-half, half, u), y))
+	return poly
+
+
 ## Línea finita apoyada sobre la cara siguiendo `points` (x, y), que se afina
 ## en las puntas (arrugas y detalles dibujados).
 func _face_line(points: Array, width: float, color: Color, out: float = 0.012) -> void:
@@ -782,27 +836,32 @@ func _wrinkles(skin: Color) -> void:
 ## Pelo de científico: pelado arriba y mechones blancos despeinados que salen
 ## para todos lados por los costados y atrás (y un par de pelitos sueltos arriba).
 func _scientist_hair(hair: Color) -> void:
-	# Pelado arriba; a los costados y atrás, una nube de pelo bien esponjosa:
-	# bolitas grandes y, por fuera, otra capa de bolitas más chicas que hacen
-	# el borde de nube.
-	_piece(_sphere, Vector3(0.0, 0.14, -0.18), Vector3(0.6, 0.32, 0.44), hair)
+	# Pelado arriba; a los costados y atrás el pelo nace de la cabeza: una base
+	# pegada al cráneo y mechones mullidos que salen de ahí para afuera y un
+	# poco para arriba (despeinado y esponjoso, con las puntas redondas).
+	_piece(_sphere, Vector3(0.0, 0.12, -0.12), Vector3(0.53, 0.3, 0.45), hair)
 	var i := 0
-	for layer in 2:
-		for row in 4:
-			var y := -0.02 + row * 0.1
-			var n := (13 if layer == 0 else 17) - row * 2
-			for k in n:
-				var a := lerpf(-2.2, 2.2, k / float(n - 1)) + 0.11 * row + 0.09 * layer
-				var th := PI + a
-				var out := Vector3(sin(th), 0.0, cos(th))
-				var h := fposmod(sin(i * 12.9898) * 43758.5453, 1.0)
-				var side := absf(sin(th))
-				var r := (0.13 + 0.06 * h) if layer == 0 else (0.075 + 0.04 * h)
-				# A los costados sale bien para afuera (despeinado, con volumen).
-				var reach := 0.5 + 0.13 * side + 0.05 * h + (0.13 + 0.05 * side) * layer
-				var p := Vector3(out.x * reach, y + 0.04 * sin(i * 2.3), out.z * reach * 0.92 - 0.04)
-				_piece(_sphere, p, Vector3(r, r * 0.88, r), hair.darkened(0.07) if i % 4 == 1 else hair)
-				i += 1
+	for row in 4:
+		var y := -0.02 + row * 0.09
+		var n := 18 - row * 3
+		for k in n:
+			var a := lerpf(-2.2, 2.2, k / float(n - 1)) + 0.11 * row
+			var th := PI + a
+			var out := Vector3(sin(th), 0.0, cos(th))
+			var h := fposmod(sin(i * 12.9898) * 43758.5453, 1.0)
+			var side := absf(sin(th))
+			var root := Vector3(out.x * 0.47, y, out.z * 0.43 - 0.06)
+			var tangent := out.cross(Vector3.UP)
+			var dir := out + Vector3(0.0, 0.25 + 0.3 * row + 0.25 * h, 0.0) + tangent * (h - 0.5) * 0.6
+			var length := 0.14 + 0.08 * side + 0.1 * h
+			var d := dir.normalized()
+			# Mechón mullido: un óvalo alargado que nace en la cabeza y sale
+			# hacia afuera, con la punta redonda (no en punta).
+			var x := d.cross(Vector3.UP if absf(d.y) < 0.95 else Vector3.RIGHT).normalized()
+			var basis := Basis(x, d, x.cross(d))
+			_piece(_sphere, root + d * length * 0.55, Vector3(0.065 + 0.025 * h, length * 0.62, 0.06),
+				hair.darkened(0.07) if i % 4 == 1 else hair, true, basis)
+			i += 1
 
 
 
@@ -1103,7 +1162,7 @@ func _hat(style: int, tint: Color = Color("#ff9b1f")) -> void:
 			# color elegido, o dorada si el bombín es oscuro). La copa es media
 			# esfera: nada cuelga debajo del ala.
 			var band := tint.darkened(0.55) if tint.get_luminance() > 0.25 else Color("#c9a227")
-			var c := Vector3(0.0, 0.46, -0.04)
+			var c := Vector3(0.0, 0.42, -0.04)
 			_piece(_cyl, c, Vector3(0.5, 0.014, 0.46), tint, true, Basis(Vector3.RIGHT, -0.08))
 			_piece(_ring_thick, c + Vector3(0.0, 0.012, 0.0), Vector3(0.5, 0.06, 0.46), tint, true,
 				Basis(Vector3.RIGHT, -0.08))
