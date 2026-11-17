@@ -32,6 +32,11 @@ uniform vec4 ring_b = vec4(0.0);
 // Islas (x, z, radio): las olas grandes se apagan cerca de cada orilla.
 uniform vec3 islands[16];
 uniform int island_count = 0;
+// Tierra con forma (islas tropicales): cuánto quedan las olas grandes en
+// cada punto (1 mar abierto, 0 sobre la isla). land_rect = (x, z de la
+// esquina; ancho, largo); ancho 0 = sin máscara. Ver Water.set_land.
+uniform sampler2D land_mask : filter_linear, repeat_disable;
+uniform vec4 land_rect = vec4(0.0);
 
 // Para que el oleaje no forme un enrejado que se repite, cada onda se tuerce
 // (sus crestas se curvan) y crece y baja por zonas (series de olas), cada una
@@ -154,6 +159,12 @@ float island_fade(vec2 p) {
 		}
 		float d = distance(p, islands[i].xy);
 		fade *= smoothstep(islands[i].z + 4.0, islands[i].z + 28.0, d);
+	}
+	if (land_rect.z > 0.0) {
+		vec2 uv = (p - land_rect.xy) / land_rect.zw;
+		if (uv.x > 0.0 && uv.y > 0.0 && uv.x < 1.0 && uv.y < 1.0) {
+			fade *= textureLod(land_mask, uv, 0.0).r;
+		}
 	}
 	return fade;
 }

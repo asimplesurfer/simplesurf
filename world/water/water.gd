@@ -381,7 +381,7 @@ func drawn_depth(q: Vector3) -> float:
 	var j1 := ceili((p.y + reach + near) / step)
 	var limit := reach + near
 	# Lejos de toda isla el apagado de las olas es 1 en toda la zona.
-	_far_from_islands = true
+	_far_from_islands = not _near_land(p, limit)
 	for isl in islands:
 		if p.distance_to(Vector2(isl.x, isl.y)) - limit < isl.z + 28.0:
 			_far_from_islands = false
@@ -475,7 +475,134 @@ func _island_fade(p: Vector2) -> float:
 		var isl := islands[i]
 		var d := p.distance_to(Vector2(isl.x, isl.y))
 		fade *= smoothstep(isl.z + 4.0, isl.z + 28.0, d)
+	if _land_w > 0:
+		fade *= _land_at(p)
 	return fade
+
+
+## Tierra con forma (islas tropicales): una máscara de cuánto quedan las olas
+## grandes en cada punto (1 mar abierto, 0 sobre la isla, y en el medio igual
+## que con las islas redondas: de 4 a 28 m de la orilla). La usan la física
+## (_land_at) y el shader (land_mask), con el mismo filtro.
+const LAND_TEXEL := 2.5
+const LAND_MAX := 512
+var _land := PackedByteArray()
+var _land_w: int = 0
+var _land_h: int = 0
+var _land_lo := Vector2.ZERO
+var _land_texel: float = LAND_TEXEL
+
+
+## Pone la tierra (figuras cerradas, vistas desde arriba). Vacío = sin tierra.
+func set_land(polys: Array[PackedVector2Array]) -> void:
+	_land_w = 0
+	if polys.is_empty():
+		_material.set_shader_parameter("land_rect", Vector4.ZERO)
+		return
+	var lo := polys[0][0]
+	var hi := polys[0][0]
+	for poly in polys:
+		for q in poly:
+			lo = lo.min(q)
+			hi = hi.max(q)
+	var margin := 32.0
+	lo -= Vector2(margin, margin)
+	hi += Vector2(margin, margin)
+	var size := hi - lo
+	var texel := maxf(LAND_TEXEL, maxf(size.x, size.y) / LAND_MAX)
+	var w := int(ceil(size.x / texel))
+	var h := int(ceil(size.y / texel))
+	# Distancia a la tierra (en celdas): 0 adentro, después un barrido de ida y
+	# vuelta (distancia "chaflán", casi la real).
+	var far := 1e6
+	var dist := PackedFloat32Array()
+	dist.resize(w * h)
+	dist.fill(far)
+	for j in h:
+		var y := lo.y + (j + 0.5) * texel
+		var xs: Array[float] = []
+		for poly in polys:
+			var n := poly.size()
+			for k in n:
+				var a := poly[k]
+				var b := poly[(k + 1) % n]
+				if (a.y <= y) != (b.y <= y):
+					xs.append(a.x + (y - a.y) / (b.y - a.y) * (b.x - a.x))
+		xs.sort()
+		for k in range(0, xs.size() - 1, 2):
+			var i0 := maxi(int(ceil((xs[k] - lo.x) / texel - 0.5)), 0)
+			var i1 := mini(int(floor((xs[k + 1] - lo.x) / texel - 0.5)), w - 1)
+			for i in range(i0, i1 + 1):
+				dist[j * w + i] = 0.0
+	var diag := 1.4142
+	for j in h:
+		for i in w:
+			var v := dist[j * w + i]
+			if v == 0.0:
+				continue
+			if i > 0:
+				v = minf(v, dist[j * w + i - 1] + 1.0)
+			if j > 0:
+				v = minf(v, dist[(j - 1) * w + i] + 1.0)
+				if i > 0:
+					v = minf(v, dist[(j - 1) * w + i - 1] + diag)
+				if i < w - 1:
+					v = minf(v, dist[(j - 1) * w + i + 1] + diag)
+			dist[j * w + i] = v
+	for j in range(h - 1, -1, -1):
+		for i in range(w - 1, -1, -1):
+			var v := dist[j * w + i]
+			if v == 0.0:
+				continue
+			if i < w - 1:
+				v = minf(v, dist[j * w + i + 1] + 1.0)
+			if j < h - 1:
+				v = minf(v, dist[(j + 1) * w + i] + 1.0)
+				if i < w - 1:
+					v = minf(v, dist[(j + 1) * w + i + 1] + diag)
+				if i > 0:
+					v = minf(v, dist[(j + 1) * w + i - 1] + diag)
+			dist[j * w + i] = v
+	_land = PackedByteArray()
+	_land.resize(w * h)
+	for k in w * h:
+		# El borde de la celda de tierra está a media celda.
+		var meters := maxf(dist[k] - 0.5, 0.0) * texel if dist[k] > 0.0 else 0.0
+		_land[k] = roundi(smoothstep(4.0, 28.0, meters) * 255.0)
+	_land_w = w
+	_land_h = h
+	_land_lo = lo
+	_land_texel = texel
+	var img := Image.create_from_data(w, h, false, Image.FORMAT_L8, _land)
+	_material.set_shader_parameter("land_mask", ImageTexture.create_from_image(img))
+	_material.set_shader_parameter("land_rect", Vector4(lo.x, lo.y, w * texel, h * texel))
+
+
+## La máscara de tierra en p, con el mismo filtro lineal que la GPU.
+func _land_at(p: Vector2) -> float:
+	var u := (p.x - _land_lo.x) / _land_texel
+	var v := (p.y - _land_lo.y) / _land_texel
+	if u <= 0.0 or v <= 0.0 or u >= _land_w or v >= _land_h:
+		return 1.0
+	var fx := u - 0.5
+	var fy := v - 0.5
+	var x0 := clampi(int(floor(fx)), 0, _land_w - 1)
+	var y0 := clampi(int(floor(fy)), 0, _land_h - 1)
+	var x1 := mini(x0 + 1, _land_w - 1)
+	var y1 := mini(y0 + 1, _land_h - 1)
+	var tx := clampf(fx - floor(fx), 0.0, 1.0) if fx >= 0.0 else 0.0
+	var ty := clampf(fy - floor(fy), 0.0, 1.0) if fy >= 0.0 else 0.0
+	var a := lerpf(_land[y0 * _land_w + x0], _land[y0 * _land_w + x1], tx)
+	var b := lerpf(_land[y1 * _land_w + x0], _land[y1 * _land_w + x1], tx)
+	return lerpf(a, b, ty) / 255.0
+
+
+## true si p está a menos de `margin` de la máscara de tierra.
+func _near_land(p: Vector2, margin: float) -> bool:
+	if _land_w == 0:
+		return false
+	return p.x > _land_lo.x - margin and p.y > _land_lo.y - margin \
+		and p.x < _land_lo.x + _land_w * _land_texel + margin and p.y < _land_lo.y + _land_h * _land_texel + margin
 
 
 ## Pista (anillo): el agua de afuera se ve más oscura, para que se note el borde.

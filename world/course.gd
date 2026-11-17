@@ -102,6 +102,12 @@ func _ready() -> void:
 		for isl in islands:
 			fade.append(Vector3(isl.position.x, isl.position.z, isl.radius + 2.0))
 		_water.set_islands(fade)
+		# Las islas con forma (tropicales) también apagan las olas grandes.
+		var land: Array[PackedVector2Array] = []
+		for g in registered("ground"):
+			if g is TropicalIslandPiece and not (g as TropicalIslandPiece)._outline.is_empty():
+				land.append((g as TropicalIslandPiece)._outline)
+		_water.set_land(land)
 		if uses_path():
 			_water.set_track(Vector2.ZERO, 0.0, 0.0)
 			_water.set_track_path((track as PathTrack).points, half_width)
