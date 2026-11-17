@@ -38,8 +38,6 @@ var _outline := PackedVector2Array()
 var _lo := Vector2.ZERO
 var _hi := Vector2.ZERO
 var _grass: Array[PackedVector2Array] = []
-## Ancho de la franja pasto-arena en cada punto del borde del pasto.
-var _fades: Array[PackedFloat32Array] = []
 var _rng := RandomNumberGenerator.new()
 var _palms: int = 0
 ## Dónde hay público (las plantas y palmeras no se ponen encima).
@@ -80,26 +78,28 @@ func prepare(course: Course) -> void:
 	course.register("ground", self)
 
 
-## El pasto empieza a distinta distancia de la orilla según el tramo (y la
-## franja donde se mezcla con la arena también cambia), para que no quede una
-## línea pareja alrededor de toda la isla.
+## El pasto empieza a distinta distancia de la orilla según el tramo, para que
+## no quede una línea pareja alrededor de toda la isla. El borde corta de golpe
+## (como la arena mojada) pero no es liso: va mordido a cada metro.
 func _make_grass() -> void:
 	var noise := FastNoiseLite.new()
 	noise.seed = shape_seed
 	noise.frequency = 0.035
 	# Achicar una figura simple no deja agujeros: todo lo que sale es selva.
-	for g in Geometry2D.offset_polygon(_outline, -beach_width):
-		if g.size() < 3:
+	for g0 in Geometry2D.offset_polygon(_outline, -beach_width):
+		if g0.size() < 3:
 			continue
+		var g := _resample(g0, EDGE_STEP)
 		var normals := _normals(g)
-		var fades := PackedFloat32Array()
 		var pushes := PackedFloat32Array()
 		var along := 0.0
 		for i in g.size():
 			if i > 0:
 				along += g[i].distance_to(g[i - 1])
-			pushes.append(clampf(noise.get_noise_1d(along) * beach_width * 0.75, -beach_width * 0.6, beach_width * 0.5))
-			fades.append(FADE * (1.0 + 0.6 * noise.get_noise_1d(along + 500.0)))
+			var big := clampf(noise.get_noise_1d(along) * beach_width * 0.75, -beach_width * 0.6, beach_width * 0.5)
+			# Mordiscos chicos: ruido rápido más un salto al azar en cada punto.
+			var small := noise.get_noise_1d(along * 9.0 + 300.0) * EDGE_BITE + _rng.randf_range(-0.3, 0.3) * EDGE_BITE
+			pushes.append(big + small)
 		# Si al mover el borde la figura se cruza (no se puede dibujar), se
 		# mueve menos.
 		var moved := g
@@ -111,7 +111,19 @@ func _make_grass() -> void:
 				moved = tryp
 				break
 		_grass.append(moved)
-		_fades.append(fades)
+
+
+## La figura con puntos cada `step` metros como mucho.
+static func _resample(poly: PackedVector2Array, step: float) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	var n := poly.size()
+	for i in n:
+		var a := poly[i]
+		var b := poly[(i + 1) % n]
+		var parts := maxi(1, ceili(a.distance_to(b) / step))
+		for k in parts:
+			out.append(a.lerp(b, float(k) / parts))
+	return out
 
 
 ## Altura del suelo en un punto (-INF si ahí no hay isla).
@@ -123,7 +135,7 @@ func ground_y(p: Vector2) -> float:
 	var d := INF
 	for g in _grass:
 		d = minf(d, BezierShape.distance_to_edge(g, p))
-	return lerpf(GRASS_Y, SAND_Y, clampf(d / FADE, 0.0, 1.0))
+	return lerpf(GRASS_Y, SAND_Y, clampf(d / DROP, 0.0, 1.0))
 
 
 func build(course: Course) -> void:
@@ -219,35 +231,33 @@ func _sand_mesh() -> MeshInstance3D:
 	return mi
 
 
-## Pasto de la selva: un poco más alto que la arena. El borde no corta de
-## golpe: una franja de FADE metros baja hasta la arena y pasa del verde al
-## color de la arena (y encima van helechos).
-const FADE := 6.0
+## Pasto de la selva: un poco más alto que la arena. El borde corta de golpe,
+## sin degradé: un escaloncito de DROP metros, todo verde, y después arena.
+const DROP := 0.7
+## Cada cuánto hay un punto en el borde del pasto y cuánto se mete o sale.
+const EDGE_STEP := 1.1
+const EDGE_BITE := 1.4
 
 
 func _grass_mesh() -> MeshInstance3D:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var sandy := grass_color.lerp(sand_color, 0.55)
-	for gi in _grass.size():
-		var g := _grass[gi]
-		var fades := _fades[gi]
+	var side := grass_color.darkened(0.12)
+	for g in _grass:
 		var normals := _normals(g)
 		var n := g.size()
-		# Tres anillos: borde del pasto, mitad (pasto con arena) y arena. El
-		# ancho de la franja cambia en cada punto.
-		var rings := [[0.0, GRASS_Y, grass_color], [0.45, lerpf(GRASS_Y, SAND_Y, 0.6) + 0.03, sandy], [1.0, SAND_Y + 0.02, sand_color]]
-		for r in 2:
-			for i in n:
-				var j := (i + 1) % n
-				var a0: Vector2 = g[i] + normals[i] * rings[r][0] * fades[i]
-				var b0: Vector2 = g[j] + normals[j] * rings[r][0] * fades[j]
-				var a1: Vector2 = g[i] + normals[i] * rings[r + 1][0] * fades[i]
-				var b1: Vector2 = g[j] + normals[j] * rings[r + 1][0] * fades[j]
-				for v in [[a0, r], [b0, r], [b1, r + 1], [a0, r], [b1, r + 1], [a1, r + 1]]:
-					st.set_normal(Vector3.UP)
-					st.set_color(rings[v[1]][2])
-					st.add_vertex(Vector3(v[0].x, rings[v[1]][1], v[0].y))
+		for i in n:
+			var j := (i + 1) % n
+			var a0 := Vector3(g[i].x, GRASS_Y, g[i].y)
+			var b0 := Vector3(g[j].x, GRASS_Y, g[j].y)
+			var ai := g[i] + normals[i] * DROP
+			var bj := g[j] + normals[j] * DROP
+			var a1 := Vector3(ai.x, SAND_Y + 0.02, ai.y)
+			var b1 := Vector3(bj.x, SAND_Y + 0.02, bj.y)
+			for v in [a0, b0, b1, a0, b1, a1]:
+				st.set_normal(Vector3.UP)
+				st.set_color(side)
+				st.add_vertex(v)
 		for k in Geometry2D.triangulate_polygon(g):
 			st.set_normal(Vector3.UP)
 			st.set_color(grass_color)
@@ -260,6 +270,14 @@ func _grass_mesh() -> MeshInstance3D:
 	mi.name = "Grass"
 	mi.mesh = st.commit()
 	return mi
+
+
+## Cuánto adentro del pasto está `p` (0 si está en la arena).
+func _grass_depth(p: Vector2) -> float:
+	for g in _grass:
+		if Geometry2D.is_point_in_polygon(p, g):
+			return BezierShape.distance_to_edge(g, p)
+	return 0.0
 
 
 func _on_grass(p: Vector2) -> bool:
@@ -360,7 +378,7 @@ func _add_vegetation(root: Node3D) -> void:
 			_base_cover(ferns, bushes, bush_colors, p, ground, 3 if facing > 0.3 else 1)
 		x += spacing
 
-	# Borde del pasto: helechos y matas sobre la transición a la arena.
+	# Borde del pasto: helechos y matas justo adentro (en la arena no va nada).
 	for g in _grass:
 		var gn := _normals(g)
 		var along := 0.0
@@ -371,8 +389,7 @@ func _add_vegetation(root: Node3D) -> void:
 			along = 0.0
 			if _rng.randf() > 0.15 + 0.85 * _facing(g[i]):
 				continue
-			_cover_at(ferns, bushes, bush_colors, g[i] + gn[i] * _rng.randf_range(-2.0, 1.0), GRASS_Y, 1.0)
-			_cover_at(ferns, bushes, bush_colors, g[i] + gn[i] * _rng.randf_range(1.5, FADE * 0.8), lerpf(GRASS_Y, SAND_Y, 0.6), 0.7)
+			_cover_at(ferns, bushes, bush_colors, g[i] - gn[i] * _rng.randf_range(1.2, 3.0), GRASS_Y, 1.0)
 
 	# Suelo de la selva: helechos y arbustos de varios tamaños.
 	var bs := 6.5
@@ -671,12 +688,22 @@ func _cover_at(ferns: Array, bushes: Array[Transform3D], colors: Array[Color], p
 	var q := p + Vector2(_rng.randf_range(-0.6, 0.6), _rng.randf_range(-0.6, 0.6))
 	if not Geometry2D.is_point_in_polygon(q, _outline) or _near_crowd(q, 2.4):
 		return
+	# Helechos y arbustos solo en el pasto, y sin que las hojas lleguen a la
+	# arena: cuanto más grande, más adentro.
+	var depth := _grass_depth(q)
+	if depth <= 0.0:
+		return
+	ground = GRASS_Y
 	if _rng.randf() < 0.55:
-		var s := _rng.randf_range(0.6, 1.6) * size
+		var s := minf(_rng.randf_range(0.6, 1.6) * size, depth * 0.9)
+		if s < 0.45:
+			return
 		ferns[_rng.randi() % FERN_MODELS].append(_placed(q, ground + 0.05, Vector2.RIGHT.rotated(_rng.randf() * TAU), s))
 	else:
 		# Arbustos: de bajitos y anchos a altos y redondos.
-		var r := _rng.randf_range(0.45, 1.1) * size
+		var r := minf(_rng.randf_range(0.45, 1.1) * size, depth * 0.8)
+		if r < 0.35:
+			return
 		var tall := _rng.randf_range(0.7, 1.4)
 		var basis := Basis(Vector3.UP, _rng.randf() * TAU).scaled(Vector3(r, r * tall, r))
 		bushes.append(Transform3D(basis, Vector3(q.x, ground + r * tall * 0.35, q.y)))
