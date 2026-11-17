@@ -782,25 +782,27 @@ func _wrinkles(skin: Color) -> void:
 ## Pelo de científico: pelado arriba y mechones blancos despeinados que salen
 ## para todos lados por los costados y atrás (y un par de pelitos sueltos arriba).
 func _scientist_hair(hair: Color) -> void:
-	# Pelado arriba; a los costados y atrás, nubes de pelo esponjoso (bolitas
-	# de distinto tamaño que sobresalen), como algodón.
-	_piece(_sphere, Vector3(0.0, 0.12, -0.16), Vector3(0.55, 0.28, 0.4), hair)
+	# Pelado arriba; a los costados y atrás, una nube de pelo bien esponjosa:
+	# bolitas grandes y, por fuera, otra capa de bolitas más chicas que hacen
+	# el borde de nube.
+	_piece(_sphere, Vector3(0.0, 0.14, -0.18), Vector3(0.6, 0.32, 0.44), hair)
 	var i := 0
-	for row in 4:
-		var y := 0.0 + row * 0.09
-		var n := 13 - row * 2
-		for k in n:
-			var a := lerpf(-2.2, 2.2, k / float(n - 1)) + 0.1 * row
-			var th := PI + a
-			var out := Vector3(sin(th), 0.0, cos(th))
-			var h := fposmod(sin(i * 12.9898) * 43758.5453, 1.0)
-			var r := 0.085 + 0.045 * h
-			# Un poco más afuera a los costados (despeinado), pegado atrás.
-			var side := absf(sin(th))
-			var reach := 0.47 + 0.07 * side + 0.04 * h
-			var p := Vector3(out.x * reach, y + 0.03 * sin(i * 2.3), out.z * reach * 0.92 - 0.04)
-			_piece(_sphere, p, Vector3(r, r * 0.85, r), hair.darkened(0.07) if i % 4 == 1 else hair)
-			i += 1
+	for layer in 2:
+		for row in 4:
+			var y := -0.02 + row * 0.1
+			var n := (13 if layer == 0 else 17) - row * 2
+			for k in n:
+				var a := lerpf(-2.2, 2.2, k / float(n - 1)) + 0.11 * row + 0.09 * layer
+				var th := PI + a
+				var out := Vector3(sin(th), 0.0, cos(th))
+				var h := fposmod(sin(i * 12.9898) * 43758.5453, 1.0)
+				var side := absf(sin(th))
+				var r := (0.13 + 0.06 * h) if layer == 0 else (0.075 + 0.04 * h)
+				# A los costados sale bien para afuera (despeinado, con volumen).
+				var reach := 0.5 + 0.13 * side + 0.05 * h + (0.13 + 0.05 * side) * layer
+				var p := Vector3(out.x * reach, y + 0.04 * sin(i * 2.3), out.z * reach * 0.92 - 0.04)
+				_piece(_sphere, p, Vector3(r, r * 0.88, r), hair.darkened(0.07) if i % 4 == 1 else hair)
+				i += 1
 
 
 
