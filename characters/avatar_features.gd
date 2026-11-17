@@ -670,6 +670,37 @@ func _mouth(style: int) -> void:
 				_extruded(PackedVector2Array([Vector2(x - 0.03, -0.165), Vector2(x + 0.03, -0.165),
 					Vector2(x + 0.026, -0.21), Vector2(x - 0.026, -0.21)]), 0.014, 0.004,
 					func(_q: Vector2) -> Color: return WHITE, false)
+		15:
+			# Risa sin dientes: bien abierta y contenta, con encías rosadas arriba.
+			_open_mouth(_arc_poly(0.15, -0.165, 0.15, 0.012), Color("#5a1620"))
+			_extruded(_arc_poly(0.13, -0.168, 0.035, 0.0), 0.014, 0.004,
+				func(_q: Vector2) -> Color: return Color("#e86a7c"), false)
+			_extruded(_arc_poly(0.07, -0.27, 0.03, 0.0, true), 0.014, 0.004,
+				func(_q: Vector2) -> Color: return Color("#ff7b8a"), false)
+		16:
+			# Un diente: sonrisa ancha cerrada, con un solo diente que asoma.
+			_stroke(_face(0.0, -0.215, 0.012), -0.16, 0.16, 0.04, 0.0)
+			_extruded(PackedVector2Array([Vector2(0.02, -0.2), Vector2(0.07, -0.2), Vector2(0.065, -0.245),
+				Vector2(0.025, -0.245)]), 0.014, 0.006, func(_q: Vector2) -> Color: return WHITE, true)
+		17:
+			# Carcajada: media luna bien abierta con la fila de dientes de arriba.
+			_open_mouth(_arc_poly(0.17, -0.17, 0.13, 0.03), Color("#5a1620"))
+			_extruded(_arc_poly(0.145, -0.172, 0.03, 0.012), 0.014, 0.004,
+				func(_q: Vector2) -> Color: return WHITE, false)
+			_extruded(_arc_poly(0.07, -0.265, 0.025, 0.0, true), 0.014, 0.004,
+				func(_q: Vector2) -> Color: return Color("#ff7b8a"), false)
+		18:
+			# ¡Wooo!: óvalo alto, gritando de emoción arriba de la ola.
+			var o := PackedVector2Array()
+			for j in 20:
+				var a := j * TAU / 20.0
+				o.append(Vector2(sin(a) * 0.085, -0.25 + cos(a) * 0.105))
+			_open_mouth(o, Color("#5a1620"))
+			var t := PackedVector2Array()
+			for j in 12:
+				var a := j * TAU / 12.0
+				t.append(Vector2(sin(a) * 0.05, -0.31 + cos(a) * 0.03))
+			_extruded(t, 0.014, 0.004, func(_q: Vector2) -> Color: return Color("#ff7b8a"), false)
 		11:
 			# Canchera: una línea que sube hacia la derecha, larga y segura.
 			_stroke(_face(0.03, -0.215, 0.012), -0.1, 0.14, 0.03, 0.8)
@@ -743,6 +774,29 @@ func _cute_eye(p: Vector3, side: float) -> void:
 		lid.append(_face(q.x, q.y, 0.032))
 		widths.append(0.018 * sin(lerpf(0.04, 0.88, u) * PI) * smoothstep(0.0, 0.35, u) + 0.002)
 	_piece(_make_tube(lid, widths), Vector3.ZERO, Vector3.ONE, BLACK, false)
+
+
+## Boca abierta: la forma `poly` sobre la cara, oscura y con contorno.
+func _open_mouth(poly: PackedVector2Array, color: Color) -> void:
+	_extruded(poly, 0.0, 0.012, func(_q: Vector2) -> Color: return color, true)
+
+
+## Forma de media luna (boca o encía): arriba casi recta en `top` (con la
+## curva `lift` en las puntas) y abajo un arco de alto `depth`, de ancho `half`
+## a cada lado. `round_top`: también redondeada arriba (lengua).
+func _arc_poly(half: float, top: float, depth: float, lift: float, round_top: bool = false) -> PackedVector2Array:
+	var poly := PackedVector2Array()
+	var n := 14
+	for j in n + 1:
+		var u := j / float(n)
+		poly.append(Vector2(lerpf(half, -half, u), top - depth * sin(u * PI)))
+	for j in range(1, n):
+		var u := j / float(n)
+		var y := top + lift * pow(absf(u * 2.0 - 1.0), 2.0)
+		if round_top:
+			y = top + depth * 0.6 * sin(u * PI)
+		poly.append(Vector2(lerpf(-half, half, u), y))
+	return poly
 
 
 ## Línea finita apoyada sobre la cara siguiendo `points` (x, y), que se afina

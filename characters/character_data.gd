@@ -128,7 +128,8 @@ const NOSES := ["Ninguna", "Botón", "Narigón", "De payaso", "Larga", "Con prot
 const MOUTHS := [
 	"Ninguna", "Sonrisa", "De costado", "Abierta", "Dientes de conejo", "Mueca",
 	"Labios pintados", "Lengua afuera", "Silbando", "Sonrisota", "Sonrisa abierta",
-	"Canchera", "Sonrisa ancha", "Pícara", "Abuelo feliz",
+	"Canchera", "Sonrisa ancha", "Pícara", "Abuelo feliz", "Risa sin dientes", "Un diente", "Carcajada",
+	"¡Wooo!",
 ]
 const FACE_EXTRAS := [
 	"Nada", "Bigote", "Barba", "Uniceja", "Cejas gruesas", "Chivita", "Bigote y chivita", "Barba tupida",
