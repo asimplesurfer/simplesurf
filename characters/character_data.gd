@@ -80,7 +80,7 @@ const ACCENT_NAMES := [
 const SHORTS_TWO_COLORS := [1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
 const BOARD_TWO_COLORS := [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
 
-const HEAD_SHAPES := ["Normal", "Ancha", "Alargada", "Chata", "Redonda", "Ovalada", "Suave"]
+const HEAD_SHAPES := ["Normal", "Ancha", "Alargada", "Chata", "Redonda", "Ovalada", "Suave", "Cachetes"]
 ## Silueta: normal (la de la barra) o flaca (todo más finito, sin músculos).
 const BUILDS := ["Normal", "Flaca"]
 const SLIM := 1
@@ -95,11 +95,12 @@ const HEAD_SCALES := [
 	Vector3(1.0, 1.0, 1.0),
 	Vector3(0.96, 1.04, 0.98),
 	Vector3(1.0, 1.0, 1.0),
+	Vector3(1.0, 1.0, 1.0),
 ]
 const HAIR_STYLES := [
 	"Pelado", "Rapado", "Melena surfer", "Rulos", "Cresta", "Pinchos", "Moño", "Peluquín",
 	"Pelo largo", "Colita", "Dos colitas", "Carré", "Afro", "Rodetes", "Rastas", "Despeinado",
-	"Colita alta", "Melena ondulada",
+	"Colita alta", "Melena ondulada", "Científico",
 ]
 const HAIR_COLORS := [
 	Color("#f0c13a"),
@@ -127,11 +128,11 @@ const NOSES := ["Ninguna", "Botón", "Narigón", "De payaso", "Larga", "Con prot
 const MOUTHS := [
 	"Ninguna", "Sonrisa", "De costado", "Abierta", "Dientes de conejo", "Mueca",
 	"Labios pintados", "Lengua afuera", "Silbando", "Sonrisota", "Sonrisa abierta",
-	"Canchera", "Sonrisa ancha", "Pícara",
+	"Canchera", "Sonrisa ancha", "Pícara", "Abuelo feliz",
 ]
 const FACE_EXTRAS := [
 	"Nada", "Bigote", "Barba", "Uniceja", "Cejas gruesas", "Chivita", "Bigote y chivita", "Barba tupida",
-	"Bigotón", "Pecas",
+	"Bigotón", "Pecas", "Arrugas", "Arrugas y bigotón",
 ]
 const EARS := ["Sin orejas", "Normales", "Grandes", "Dumbo", "Con aritos"]
 const NECKLACES := [
@@ -142,10 +143,10 @@ const NECKLACES := [
 const HATS := [
 	"Nada", "Sombrero de paja", "Sombrero pirata", "Gorra de capitán", "Gorro de tiburón",
 	"Pañuelo", "Gorra", "Gorro de lana", "Corona de flores", "Gorro rasta", "Bandana rasta",
-	"Vincha hippie", "Vincha deportiva",
+	"Vincha hippie", "Vincha deportiva", "Galera",
 ]
 ## Sombreros a los que se les puede cambiar el color (el de paja, no).
-const HAT_COLORABLE := [5, 6, 7, 11, 12]
+const HAT_COLORABLE := [5, 6, 7, 11, 12, 13]
 ## Ropa de arriba (bikini y musculosa del color del short; la lycra tiene sus
 ## propios colores: el cuerpo y una franja).
 const LYCRA := 3

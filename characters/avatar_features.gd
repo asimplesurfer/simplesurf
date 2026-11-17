@@ -46,7 +46,7 @@ var _group: Node3D
 ## Transformación extra para las piezas (agrandar el sombrero sobre pelos grandes).
 var _extra_xf := Transform3D.IDENTITY
 ## Pelos voluminosos: el sombrero va más grande y más arriba (si no, lo tapan).
-const BIG_HAIR := [2, 3, 4, 5, 12, 13, 14, 15, 17]
+const BIG_HAIR := [2, 3, 4, 5, 12, 13, 14, 15, 17, 18]
 ## Melena ondulada (peinado 17).
 const WAVY_BOB := 17
 ## Cuánto se sube el sombrero con la melena ondulada (con otros pelos grandes, 0.07).
@@ -132,8 +132,19 @@ const HEAD_PROFILES := {
 }
 
 
+## Cachetes (de ardilla): la cara se ensancha abajo, cachetes inflados y
+## mentón redondo.
+const CHEEKS_PROFILE := [
+	[0.5, 0.167, 0.142], [0.4, 0.351, 0.299], [0.3, 0.437, 0.372], [0.2, 0.495, 0.425],
+	[0.1, 0.52, 0.448], [0.0, 0.545, 0.455], [-0.1, 0.56, 0.455], [-0.2, 0.55, 0.445],
+	[-0.3, 0.5, 0.415], [-0.4, 0.4, 0.36], [-0.5, 0.22, 0.26],
+]
+
+
 ## Perfil de la cara para la forma de cabeza `shape`.
 static func profile_for(shape: int) -> Array:
+	if shape == 7:
+		return CHEEKS_PROFILE
 	return HEAD_PROFILES.get(shape, SKULL_PROFILE)
 
 
@@ -177,7 +188,7 @@ func build_head(group: Node3D, hair_group: Node3D, data: CharacterData, skin: Co
 		_wavy_bob_top(hair)
 	_ears(data.get_option("ears"), skin)
 	_eyes(data.get_option("eyes"), data.get_option("glasses"), hair)
-	_extra(data.get_option("extra"), hair)
+	_extra(data.get_option("extra"), hair, skin)
 	_nose(data.get_option("nose"), skin)
 	_mouth(data.get_option("mouth"))
 	_glasses(data.get_option("glasses"))
@@ -601,6 +612,30 @@ func _mouth(style: int) -> void:
 			_piece(_sphere, m, Vector3(0.11, 0.012, 0.02), BLACK, false)
 			for side in [-1.0, 1.0]:
 				_piece(_box, m + Vector3(side * 0.031, -0.045, 0.0), Vector3(0.028, 0.042, 0.012), WHITE)
+		14:
+			# Abuelo feliz: boca bien abierta (gritando de alegría arriba de una
+			# ola), lengua y dos dientes arriba con un hueco en el medio.
+			var mouth := PackedVector2Array()
+			for j in 15:
+				var u := j / 14.0
+				mouth.append(Vector2(lerpf(-0.14, 0.14, u), -0.17 - 0.16 * sin(u * PI)))
+			mouth.reverse()
+			mouth.append(Vector2(-0.145, -0.16))
+			mouth.append(Vector2(0.0, -0.15))
+			mouth.append(Vector2(0.145, -0.16))
+			_extruded(mouth, 0.0, 0.012, func(_q: Vector2) -> Color: return Color("#5a1620"), true)
+			var tongue := PackedVector2Array()
+			for j in 9:
+				var u := j / 8.0
+				tongue.append(Vector2(lerpf(-0.08, 0.08, u), -0.3 - 0.035 * sin(u * PI)))
+			tongue.reverse()
+			tongue.append(Vector2(0.0, -0.26))
+			_extruded(tongue, 0.014, 0.004, func(_q: Vector2) -> Color: return Color("#ff7b8a"), false)
+			for side in [-1.0, 1.0]:
+				var x: float = side * 0.055
+				_extruded(PackedVector2Array([Vector2(x - 0.03, -0.165), Vector2(x + 0.03, -0.165),
+					Vector2(x + 0.026, -0.21), Vector2(x - 0.026, -0.21)]), 0.014, 0.004,
+					func(_q: Vector2) -> Color: return WHITE, false)
 		11:
 			# Canchera: una línea que sube hacia la derecha, larga y segura.
 			_stroke(_face(0.03, -0.215, 0.012), -0.1, 0.14, 0.03, 0.8)
@@ -676,6 +711,65 @@ func _cute_eye(p: Vector3, side: float) -> void:
 	_piece(_make_tube(lid, widths), Vector3.ZERO, Vector3.ONE, BLACK, false)
 
 
+## Línea finita apoyada sobre la cara siguiendo `points` (x, y), que se afina
+## en las puntas (arrugas y detalles dibujados).
+func _face_line(points: Array, width: float, color: Color, out: float = 0.012) -> void:
+	var path := []
+	var widths := []
+	for i in points.size():
+		var q: Vector2 = points[i]
+		path.append(_face(q.x, q.y, out))
+		widths.append(width * sin(lerpf(0.15, 0.85, i / float(points.size() - 1)) * PI))
+	_piece(_make_tube(path, widths), Vector3.ZERO, Vector3.ONE, color, false)
+
+
+## Arrugas de abuelo: tres en la frente, patas de gallo al costado de los ojos
+## y las líneas de la sonrisa (de la nariz a la boca).
+func _wrinkles(skin: Color) -> void:
+	var c := skin.darkened(0.32)
+	for k in 3:
+		var y := 0.3 + k * 0.065
+		var w := 0.24 - k * 0.04
+		var pts := []
+		for j in 7:
+			var u := j / 6.0
+			pts.append(Vector2(lerpf(-w, w, u), y + 0.018 * sin(u * PI)))
+		_face_line(pts, 0.011, c)
+	for side in [-1.0, 1.0]:
+		for k in 3:
+			var a := (k - 1) * 0.45
+			var start := Vector2(side * 0.36, 0.1)
+			var dir := Vector2(side * cos(a), sin(a))
+			_face_line([start, start + dir * 0.04, start + dir * 0.08], 0.009, c)
+		_face_line([Vector2(side * 0.11, -0.05), Vector2(side * 0.16, -0.11), Vector2(side * 0.18, -0.17),
+			Vector2(side * 0.18, -0.21)], 0.011, c)
+
+
+## Pelo de científico: pelado arriba y mechones blancos despeinados que salen
+## para todos lados por los costados y atrás (y un par de pelitos sueltos arriba).
+func _scientist_hair(hair: Color) -> void:
+	# Base por atrás y los costados (así no se ve cabeza entre los mechones).
+	_piece(_sphere, Vector3(0.0, 0.12, -0.16), Vector3(0.55, 0.28, 0.4), hair)
+	var i := 0
+	for row in 3:
+		var y := 0.06 + row * 0.12
+		var n := 9 - row
+		for k in n:
+			var a := lerpf(-2.1, 2.1, k / float(n - 1)) + 0.15 * row
+			var th := PI + a
+			var out := Vector3(sin(th), 0.0, cos(th))
+			var h := fposmod(sin(i * 12.9898) * 43758.5453, 1.0)
+			var root := Vector3(out.x * 0.5, y, out.z * 0.46 - 0.04)
+			var dir := out + Vector3(0.0, 0.35 + 0.5 * h + 0.3 * row, 0.0) + out.cross(Vector3.UP) * (h - 0.5) * 0.8
+			var bend := out.cross(Vector3.UP) * (1.0 if i % 2 == 0 else -1.0) + Vector3(0.0, 0.5, 0.0)
+			_lock_piece(root, dir, 0.2 + 0.14 * h, 0.17, bend, hair.darkened(0.08) if i % 3 == 0 else hair)
+			i += 1
+	# Dos pelitos sueltos arriba de la pelada.
+	for side in [-1.0, 1.0]:
+		_lock_piece(Vector3(side * 0.06, 0.5, -0.02), Vector3(side * 0.4, 1.0, 0.2), 0.14, 0.05,
+			Vector3(-side, 0.0, 0.0), hair)
+
+
 ## Trazo de boca de una línea, como de pincel: un tubo finito que sigue la
 ## misma curva que `_curve` (de `from` a `to`) y se afina en las puntas.
 func _stroke(center: Vector3, from: float, to: float, bend: float, tilt: float) -> void:
@@ -704,8 +798,12 @@ func _curve(center: Vector3, xs: Array, bend: float, tilt: float = 0.0) -> void:
 		_piece(_sphere, center + mid, Vector3(seg, 0.013, 0.02), BLACK, false, Basis(Vector3.BACK, ang))
 
 
-func _extra(style: int, hair: Color) -> void:
+func _extra(style: int, hair: Color, skin: Color = Color.WHITE) -> void:
 	match style:
+		10, 11:
+			_wrinkles(skin)
+			if style == 11:
+				_extra(8, hair, skin)
 		1:
 			for side in [-1.0, 1.0]:
 				_piece(_sphere, _face(side * 0.07, -0.13, 0.015), Vector3(0.1, 0.04, 0.045), hair, true,
@@ -850,6 +948,8 @@ func _hair(style: int, hair: Color) -> void:
 			_high_ponytail(hair)
 		17:
 			_wavy_bob(hair)
+		18:
+			_scientist_hair(hair)
 
 
 ## Anteojos oscuros: detrás no se ven los ojos.
@@ -961,6 +1061,15 @@ func _hat(style: int, tint: Color = Color("#ff9b1f")) -> void:
 					Vector3(0.045, 0.045, 0.02), Color("#ff8fd0"), true, Basis(Vector3.UP, 0.9))
 			_piece(_sphere, f + Basis(Vector3.UP, 0.9) * Vector3(0.0, 0.0, 0.015), Vector3.ONE * 0.03,
 				Color("#ffd23f"), false)
+		13:
+			# Galera: copa alta, ala fina y una cinta (más oscura que el color
+			# elegido, o dorada si la galera es oscura).
+			var band := tint.darkened(0.55) if tint.get_luminance() > 0.25 else Color("#c9a227")
+			# Ala: un poco más ancha a los costados que adelante.
+			_piece(_cyl, Vector3(0.0, 0.43, -0.03), Vector3(0.66, 0.018, 0.56), tint, true, Basis(Vector3.RIGHT, -0.06))
+			_piece(_cyl, Vector3(0.0, 0.72, -0.04), Vector3(0.38, 0.29, 0.36), tint, true)
+			_piece(_cyl, Vector3(0.0, 1.0, -0.04), Vector3(0.405, 0.012, 0.385), tint, true)
+			_piece(_cyl, Vector3(0.0, 0.52, -0.04), Vector3(0.39, 0.065, 0.37), band, true)
 		12:
 			# Vincha deportiva: banda gruesa de toalla con una raya blanca.
 			_piece(_cyl, Vector3(0.0, 0.3, -0.04), Vector3(0.53, 0.07, 0.5), tint, true,
