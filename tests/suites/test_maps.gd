@@ -277,7 +277,7 @@ func _test_tropical_island() -> void:
 	var d: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://world/maps/archipelago.json"))
 	d.pieces = [
 		{"type": "tropical_island", "shape": ISLAND_SHAPE},
-		{"type": "river", "path": [[238, -100], [228, -68], [222, -40], [196, -22], [178, -16]]},
+		{"type": "island_split", "path": [[170, -20], [290, -20]], "width": 14},
 	]
 	var keep: Array = []
 	for i in d.islands:
@@ -293,7 +293,10 @@ func _test_tropical_island() -> void:
 	await process_frame
 	var isl := course.get_node_or_null("TropicalIsland")
 	_check(isl != null and isl.get_node_or_null("Sand") != null and isl.get_node_or_null("Grass") != null, "tiene arena y pasto")
-	var palms := (course.pieces[0] as TropicalIslandPiece).palm_count()
+	var palms := 0
+	for p in course.pieces:
+		if p is TropicalIslandPiece:
+			palms += (p as TropicalIslandPiece).palm_count()
 	var draws := 0
 	for c in isl.get_children():
 		if c is MultiMeshInstance3D or c is MeshInstance3D:
@@ -303,28 +306,46 @@ func _test_tropical_island() -> void:
 		(isl.get_node("Ferns0") as MultiMeshInstance3D).cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,
 		"los helechos no hacen sombra"
 	)
-	# El río cruza la isla y no hay palmeras en su cauce.
-	var river := course.get_node_or_null("River")
-	_check(river != null and river.get_node_or_null("Water") != null, "un río dibujado cruza la isla")
+	# El corte parte la isla en dos islas, con mar en el medio (sin palmeras).
+	var parts: Array[TropicalIslandPiece] = []
+	for p in course.pieces:
+		if p is TropicalIslandPiece:
+			parts.append(p)
+	_check(parts.size() == 2 and course.get_node_or_null("TropicalIsland2") != null,
+		"el corte divide la isla en dos islas (%d)" % parts.size())
+	var in_channel := 0
+	for node in course.get_children():
+		if not String(node.name).begins_with("TropicalIsland"):
+			continue
+		for c in node.get_children():
+			if c is MultiMeshInstance3D and String(c.name).contains("Palms"):
+				var mm: MultiMesh = c.multimesh
+				for k in mm.instance_count:
+					var o := mm.get_instance_transform(k).origin
+					if absf(o.z + 20.0) < 7.0 and o.x > 180.0 and o.x < 280.0:
+						in_channel += 1
+	_check(in_channel == 0, "no hay palmeras en el mar del corte")
+	var covered := func(x: float, z: float) -> bool:
+		for p in parts:
+			if p.covers(x, z):
+				return true
+		return false
+	_check(not covered.call(225.0, -20.0) and covered.call(225.0, 10.0) and covered.call(225.0, -60.0),
+		"en el medio hay mar; a cada lado, isla")
 	var piece: TropicalIslandPiece = course.pieces[0]
-	var rp: RiverPiece = course.pieces[1]
-	var in_bed := 0
-	for c in isl.get_children():
-		if c is MultiMeshInstance3D and String(c.name).contains("Palms"):
-			var mm: MultiMesh = c.multimesh
-			for k in mm.instance_count:
-				var o := mm.get_instance_transform(k).origin
-				if rp.distance_to(Vector2(o.x, o.z)) < rp.width * 0.5 + 1.0:
-					in_bed += 1
-	_check(in_bed == 0, "no hay palmeras en el cauce del río")
-	_check(piece.ground_y(Vector2(225, 10)) > 0.5 and piece.ground_y(Vector2(0, 0)) == -INF, "la isla dice dónde hay tierra (para los ríos)")
+	_check(piece.ground_y(Vector2(0, 0)) == -INF, "la isla dice dónde hay tierra")
+	# Un corte que no llega a la isla no la cambia; uno que la tapa entera la borra.
+	var whole := IslandSplitPiece.cut(BezierShape.parse(ISLAND_SHAPE).polygon(4.0), [] as Array[MapPiece])
+	_check(whole.size() == 1, "sin cortes la isla queda entera")
+	var eat := MapPiece.create({"type": "island_split", "path": [[230, -140], [230, 100]], "width": 200})
+	_check(IslandSplitPiece.cut(whole[0], [eat] as Array[MapPiece]).is_empty(), "un corte que la tapa entera la borra")
 	race.skip_countdown()
 	await process_frame
 	var r: Rider = race.racers[0]
 	r.position = Vector3(225, r.position.y, 10)
 	await process_frame
 	await process_frame
-	_check(r.is_fallen() and not piece.covers(r.position.x, r.position.z), "subirse a la isla tira al surfista y lo deja en el agua")
+	_check(r.is_fallen() and not covered.call(r.position.x, r.position.z), "subirse a la isla tira al surfista y lo deja en el agua")
 	m.queue_free()
 	await process_frame
 	GameSettings.track_layout = GameSettings.TrackLayout.CLASSIC

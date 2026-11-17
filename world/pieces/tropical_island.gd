@@ -16,7 +16,7 @@ const REQUIRED := ["shape"]
 ## Contorno visto desde arriba: [[x, z], {"p": [x, z], "in": [..], "out": [..]}, ...].
 var shape: Array = []
 ## Ancho de la franja de arena antes de la selva (m).
-var beach_width: float = 12.0
+var beach_width: float = 5.0
 ## Palmeras cada 100 m² (más = más tupida).
 var palm_density: float = 1.2
 ## Piedras sobre la arena.
@@ -37,19 +37,33 @@ var _hi := Vector2.ZERO
 var _grass: Array[PackedVector2Array] = []
 ## Ancho de la franja pasto-arena en cada punto del borde del pasto.
 var _fades: Array[PackedFloat32Array] = []
-## Ríos que pueden cruzar la isla (no se pone vegetación en su cauce).
-var _rivers: Array = []
 var _rng := RandomNumberGenerator.new()
 var _palms: int = 0
+## true si un corte se comió la isla entera (no se arma nada).
+var _cut_away: bool = false
 
 
-## Antes de construir: la forma de la isla y dónde empieza el pasto. Se anota
-## como tierra (para los ríos) y mira qué ríos la cruzan.
+## Antes de construir: la forma de la isla y dónde empieza el pasto. Si algún
+## corte (IslandSplitPiece) la cruza, queda partida: esta pieza se queda con
+## una parte y agrega al mapa una isla igual para cada una de las otras.
 func prepare(course: Course) -> void:
-	var bez := BezierShape.parse(shape)
-	if not bez.is_valid():
-		return
-	_outline = bez.polygon(4.0)
+	if _outline.is_empty():
+		var bez := BezierShape.parse(shape)
+		if not bez.is_valid():
+			return
+		var parts := IslandSplitPiece.cut(bez.polygon(4.0), course.pieces)
+		if parts.is_empty():
+			# El corte se la comió entera: no queda isla.
+			_cut_away = true
+			return
+		_outline = parts[0]
+		for k in range(1, parts.size()):
+			var twin := TropicalIslandPiece.new()
+			twin.type = type
+			twin.apply(to_dict())
+			twin.shape_seed = shape_seed * 13 + k
+			twin._outline = parts[k]
+			course.pieces.append(twin)
 	_lo = _outline[0]
 	_hi = _outline[0]
 	for p in _outline:
@@ -94,7 +108,7 @@ func _make_grass() -> void:
 		_fades.append(fades)
 
 
-## Altura del suelo en un punto (-INF si ahí no hay isla). La usan los ríos.
+## Altura del suelo en un punto (-INF si ahí no hay isla).
 func ground_y(p: Vector2) -> float:
 	if _outline.is_empty() or not Geometry2D.is_point_in_polygon(p, _outline):
 		return -INF
@@ -108,9 +122,9 @@ func ground_y(p: Vector2) -> float:
 
 func build(course: Course) -> void:
 	if _outline.is_empty():
-		push_error("tropical_island: la figura necesita al menos 3 puntos")
+		if not _cut_away:
+			push_error("tropical_island: la figura necesita al menos 3 puntos")
 		return
-	_rivers = course.registered("river")
 	var root := Node3D.new()
 	root.name = "TropicalIsland"
 	course.add_child(root, true)
@@ -184,33 +198,12 @@ func _normals(poly: PackedVector2Array) -> PackedVector2Array:
 	return out
 
 
-## Arena: arriba plana y una playa en pendiente que entra al agua.
+## Arena: arriba plana y una playa en pendiente que entra al agua, con arena
+## mojada cerca del agua (ver BeachMesh).
 func _sand_mesh() -> MeshInstance3D:
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var normals := _normals(_outline)
-	var n := _outline.size()
-	for i in n:
-		var j := (i + 1) % n
-		var a := _outline[i]
-		var b := _outline[j]
-		var a2 := a + normals[i] * 9.0
-		var b2 := b + normals[j] * 9.0
-		var na := Vector3(normals[i].x * 0.4, 1.0, normals[i].y * 0.4).normalized()
-		var nb := Vector3(normals[j].x * 0.4, 1.0, normals[j].y * 0.4).normalized()
-		for v in [[a, SAND_Y, na], [b, SAND_Y, nb], [b2, -1.8, nb], [a, SAND_Y, na], [b2, -1.8, nb], [a2, -1.8, na]]:
-			st.set_normal(v[2])
-			st.add_vertex(Vector3(v[0].x, v[1], v[0].y))
-	var idx := Geometry2D.triangulate_polygon(_outline)
-	for k in idx:
-		st.set_normal(Vector3.UP)
-		st.add_vertex(Vector3(_outline[k].x, SAND_Y, _outline[k].y))
-	var mat := ToonMaterial.make(sand_color, 0.0)
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	st.set_material(mat)
 	var mi := MeshInstance3D.new()
 	mi.name = "Sand"
-	mi.mesh = st.commit()
+	mi.mesh = BeachMesh.build(_outline, _normals(_outline), SAND_Y, -1.8, 9.0, sand_color, shape_seed)
 	return mi
 
 
@@ -309,7 +302,7 @@ func _add_vegetation(root: Node3D, track: TrackSpace) -> void:
 			if not Geometry2D.is_point_in_polygon(p, _outline):
 				continue
 			var depth := BezierShape.distance_to_edge(_outline, p)
-			if depth < beach_width * 0.4 or _in_river(p, 3.0):
+			if depth < beach_width * 0.4:
 				continue
 			var facing := _facing(p)
 			if _rng.randf() > 0.2 + 0.8 * facing:
@@ -391,14 +384,6 @@ func _add_vegetation(root: Node3D, track: TrackSpace) -> void:
 	root.add_child(_multi("Stones", _stone_mesh(), stones, [], true))
 
 
-## true si `p` está en el cauce de algún río (más `margin` metros).
-func _in_river(p: Vector2, margin: float) -> bool:
-	for r in _rivers:
-		if r.distance_to(p) < r.width * 0.5 + RiverPiece.BANK + margin:
-			return true
-	return false
-
-
 func _lists(count: int) -> Array:
 	var out := []
 	for i in count:
@@ -449,7 +434,7 @@ func _base_cover(ferns: Array, bushes: Array[Transform3D], colors: Array[Color],
 ## Un helecho o un arbusto redondo, de tamaño variado (`size` lo agranda).
 func _cover_at(ferns: Array, bushes: Array[Transform3D], colors: Array[Color], p: Vector2, ground: float, size: float) -> void:
 	var q := p + Vector2(_rng.randf_range(-0.6, 0.6), _rng.randf_range(-0.6, 0.6))
-	if _in_river(q, 1.0):
+	if not Geometry2D.is_point_in_polygon(q, _outline):
 		return
 	if _rng.randf() < 0.55:
 		var s := _rng.randf_range(0.6, 1.6) * size

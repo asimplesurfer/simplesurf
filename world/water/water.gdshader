@@ -173,8 +173,9 @@ void fragment() {
 	float outside = 1.0;
 	if (track_band.w > 0.0) {
 		float d = distance(v_world.xz, track_band.xy);
-		float out_inner = 1.0 - smoothstep(track_band.z - 3.0, track_band.z - 0.5, d);
-		float out_outer = smoothstep(track_band.w + 0.5, track_band.w + 3.0, d);
+		// Degradado de TRACK_FADE metros entre el agua de la pista y la de afuera.
+		float out_inner = 1.0 - smoothstep(track_band.z - 16.0, track_band.z - 0.5, d);
+		float out_outer = smoothstep(track_band.w + 0.5, track_band.w + 16.0, d);
 		outside = max(out_inner, out_outer);
 		col = mix(col, outside_color, outside * outside_strength);
 	} else if (track_mask_rect.z > 0.0) {
@@ -183,7 +184,8 @@ void fragment() {
 		if (uv.x > 0.0 && uv.y > 0.0 && uv.x < 1.0 && uv.y < 1.0) {
 			inside = texture(track_mask, uv).r;
 		}
-		outside = 1.0 - smoothstep(0.25, 0.75, inside);
+		// La máscara ya trae el degradado (ver Water.set_track_path).
+		outside = 1.0 - smoothstep(0.0, 1.0, inside);
 		col = mix(col, outside_color, outside * outside_strength);
 	}
 

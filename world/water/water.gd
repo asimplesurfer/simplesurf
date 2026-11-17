@@ -43,7 +43,9 @@ const BIG_WAVE_MIN := 1.0
 ## devuelve la tormenta).
 var storm_colors: bool = false
 ## Resolución de la máscara de la pista con curvas (texeles del lado largo).
-const TRACK_MASK_SIZE := 256
+const TRACK_MASK_SIZE := 512
+## Metros en los que el agua de la pista pasa al color de afuera (degradado).
+const TRACK_FADE := 16.0
 ## Distancias (m) de los anillos planos de afuera del agua (hasta el horizonte).
 ## Llegan más allá de lo que ve la cámara (Horizon.VIEW_FAR), donde el agua ya
 ## es del color del horizonte (ver `haze` en el shader y horizon.gdshaderinc).
@@ -493,7 +495,7 @@ func set_track_path(points: PackedVector2Array, half_width: float) -> void:
 	for p in points:
 		lo = Vector2(minf(lo.x, p.x), minf(lo.y, p.y))
 		hi = Vector2(maxf(hi.x, p.x), maxf(hi.y, p.y))
-	var margin := half_width + 12.0
+	var margin := half_width + TRACK_FADE + 6.0
 	lo -= Vector2(margin, margin)
 	hi += Vector2(margin, margin)
 	var size := hi - lo
@@ -502,11 +504,26 @@ func set_track_path(points: PackedVector2Array, half_width: float) -> void:
 	var w := clampi(int(ceil(size.x / texel)), 8, res)
 	var h := clampi(int(ceil(size.y / texel)), 8, res)
 	var img := Image.create(w, h, false, Image.FORMAT_L8)
-	# Un disco por cada muestra del recorrido (se superponen: una banda).
-	var r := (half_width + 0.5) / texel
+	# Un disco por cada muestra del recorrido (se superponen: una banda). Afuera
+	# de la banda, el agua pasa de a poco al color de afuera: se dibujan bandas
+	# cada vez más angostas y más claras, de la más ancha (casi negra) a la de
+	# la pista (blanca); cada pasada tapa a la anterior, así queda el máximo.
+	var passes := 8
+	for k in range(passes, -1, -1):
+		var extra := TRACK_FADE * float(k) / passes
+		var value := 1.0 - float(k) / passes
+		_draw_band(img, points, lo, texel, half_width + 0.5 + extra, Color(value, value, value))
+	_material.set_shader_parameter("track_mask", ImageTexture.create_from_image(img))
+	_material.set_shader_parameter("track_mask_rect", Vector4(lo.x, lo.y, w * texel, h * texel))
+
+
+## Dibuja en la máscara un disco de radio `radius` (m) en cada muestra del recorrido.
+func _draw_band(img: Image, points: PackedVector2Array, lo: Vector2, texel: float, radius: float, color: Color) -> void:
+	var w := img.get_width()
+	var h := img.get_height()
+	var r := radius / texel
 	var r2 := r * r
 	var step := maxi(1, int(r * texel * 0.4 / 2.0))
-	var white := Color.WHITE
 	for i in range(0, points.size(), step):
 		var c := (points[i] - lo) / texel
 		for y in range(maxi(0, int(c.y - r)), mini(h, int(c.y + r) + 1)):
@@ -515,9 +532,7 @@ func set_track_path(points: PackedVector2Array, half_width: float) -> void:
 			var x0 := maxi(0, int(c.x - half + 0.5))
 			var x1 := mini(w - 1, int(c.x + half - 0.5))
 			if x1 >= x0:
-				img.fill_rect(Rect2i(x0, y, x1 - x0 + 1, 1), white)
-	_material.set_shader_parameter("track_mask", ImageTexture.create_from_image(img))
-	_material.set_shader_parameter("track_mask_rect", Vector4(lo.x, lo.y, w * texel, h * texel))
+				img.fill_rect(Rect2i(x0, y, x1 - x0 + 1, 1), color)
 
 
 func set_island(center: Vector2, radius: float) -> void:

@@ -77,10 +77,8 @@ func to_dict() -> Dictionary:
 ## otras necesitan saber y se anota en el registro de Course:
 ## - "ground": es tierra; tiene que tener ground_y(p: Vector2) -> float (la
 ##   altura del suelo en ese punto, o -INF si ahí no hay tierra).
-## - "river": es un río; tiene que tener distance_to(p: Vector2) -> float y
-##   la variable width.
-## Así un río funciona con cualquier isla que se anote como tierra, y una
-## isla deja libre el cauce de cualquier río.
+## Una pieza también puede mirar las otras en course.pieces (así una isla
+## tropical encuentra los cortes que la dividen) y sumar piezas nuevas ahí.
 func prepare(_course: Course) -> void:
 	pass
 
