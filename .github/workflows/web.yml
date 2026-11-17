@@ -51,6 +51,20 @@ jobs:
           fi
           grep -q "COMPILA OK" compile.log
 
+      # Los mapas de world/maps/ (se pueden subir desde la web de GitHub, ver
+      # world/maps/COMO_SUBIR_UN_MAPA.md). Si alguno tiene un error, no se
+      # publica y acá se ve qué está mal.
+      - name: Revisar los mapas
+        run: |
+          godot --headless --path . --script res://tools/validate_maps.gd 2>&1 | tee maps.log
+          if ! grep -q "MAPAS OK" maps.log; then
+            echo "### Hay mapas con errores: no se publicó" >> "$GITHUB_STEP_SUMMARY"
+            grep "::error" maps.log | sed 's/^::error title=\([^:]*\)::/- **\1**: /' >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "### Mapas" >> "$GITHUB_STEP_SUMMARY"
+          grep "mapa número" maps.log | sed 's/^ */- /' >> "$GITHUB_STEP_SUMMARY"
+
       - name: Número de build
         run: |
           sed -i "s/^const BUILD := 0$/const BUILD := ${{ github.run_number }}/" core/build_info.gd

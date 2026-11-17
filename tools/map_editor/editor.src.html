@@ -143,6 +143,7 @@ dialog::backdrop { background: rgba(5, 15, 20, 0.5); }
     <button class="btn" id="redoBtn" title="Rehacer (Ctrl+Shift+Z)">Rehacer</button>
     <button class="btn" id="importBtn">Importar</button>
     <button class="btn" id="exportBtn">Ver JSON</button>
+    <button class="btn" id="downloadBtn" title="Baja el archivo del mapa para subirlo a world/maps/ en GitHub">Descargar mapa</button>
     <button class="btn primary" id="saveBtn" title="Lo deja guardado para que Claude lo agregue al juego">Guardar para el juego</button>
   </div>
 </header>
@@ -1460,18 +1461,26 @@ $("jsonCopy").onclick = async () => {
   try { await navigator.clipboard.writeText(ta.value); toast("JSON copiado."); }
   catch { ta.focus(); ta.select(); toast("Seleccionado: copialo con Ctrl+C."); }
 };
-$("jsonDownload").onclick = async () => {
+$("downloadBtn").onclick = async () => {
+  if (drawing) finishDrawing();
+  const errs = review().out.filter((r) => r[0] === "bad");
+  if (errs.length) { toast("Primero arreglá los errores de la revisión (si no, GitHub no lo publica)."); return; }
+  await downloadMap();
+};
+$("jsonDownload").onclick = () => downloadMap();
+async function downloadMap() {
   const d = toJSON(map);
   try {
     const dl = await window.claude?.use?.("downloads");
     if (!dl) throw { code: "unavailable" };
     await dl.save({ filename: `${d.id}.json`, data: prettyJSON(d) + "\n" });
-    toast("Archivo listo.");
+    toast(`Listo: ${d.id}.json. Subilo a world/maps/ en GitHub (ver COMO_SUBIR_UN_MAPA.md).`);
   } catch (err) {
     if (err?.code === "declined") return;
-    toast("Acá no se puede descargar: usá Copiar.");
+    showJSON();
+    toast("Acá no se puede descargar: copiá el JSON y guardalo como " + d.id + ".json.");
   }
-};
+}
 
 async function saveForGame() {
   const errs = review().out.filter((r) => r[0] === "bad");
