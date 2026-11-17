@@ -86,7 +86,7 @@ pieza se puede repetir todas las veces que haga falta.
 | `rock_arch` | Arco de roca de paisaje, se pasa por debajo | `x`, `z`; `angle` (grados), `span`, `height`, `shape_seed`, `stone_color`, `moss_color` |
 | `shipwreck` | Barco hundido de paisaje | `x`, `z`; `angle` (grados), `size` |
 | `waterfall` | Cascada que se atraviesa: moja la pantalla y frena un poco | `x`, `z`; `angle` (grados), `width`, `height`, `color`, `drag` |
-| `tropical_island` | Isla tropical dibujada como figura: arena, selva, palmeras, helechos y arbustos. Se choca | `shape`; `beach_width`, `palm_density`, `rocks`, `sand_color`, `grass_color`, `leaf_color`, `shape_seed` |
+| `tropical_island` | Isla tropical dibujada como figura: arena, selva, palmeras, helechos y arbustos. Se choca | `shape`; `beach_width`, `palm_density`, `rocks`, `crowd`, `sand_color`, `grass_color`, `leaf_color`, `shape_seed` |
 | `island_split` | Dividir isla: línea abierta que parte en dos (o más) las islas tropicales que cruza, con mar en el medio | `path`; `width` |
 | `rock_formation` | Roca o cueva dibujada como figura (ver abajo) | `shape`; `height`, `ceiling`, `opening`, `opening_width`, `skylights`, `stone_low`, `stone_high`, `grass_color`, `moss_color`, `glow_color`, `darkness`, `adapt_time`, `shape_seed` |
 
@@ -135,7 +135,9 @@ Para cambiar el clima de una cueva (de hielo, volcánica...) se usan sus colores
 La isla tropical se dibuja como figura cerrada. Toda la figura es arena; más
 adentro (a `beach_width` de la orilla, un poco irregular) empieza la selva.
 Del lado que da a la pista la vegetación va tupida; atrás, más rala (pesa
-menos y casi no se ve).
+menos y casi no se ve). En la orilla que mira a la pista hay público (gente
+alentando, sillas, reposeras, toallas, sombrillas y banderas): `crowd` dice
+cuánto (1 normal, 0 nadie, 2 el doble).
 
 Para partir una isla en dos se dibuja un corte (`island_split`): una línea
 abierta que cruce la isla de mar a mar. Cada isla tropical que cruza queda

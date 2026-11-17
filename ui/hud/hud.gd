@@ -76,6 +76,11 @@ var _message_time: float = 0.0
 ## Contador de vueltas del truco mientras está en el aire (x1, x2...).
 var _trick_label: Label
 var _trick_pop: float = 0.0
+## Modo libre: manteniendo la coma (,) se ve el contador de trucos subiendo
+## (x1, x2, x3...) para evaluar su tamaño, sus colores y la fuente.
+var _preview_spins: int = 0
+var _preview_time: float = 0.0
+const PREVIEW_STEP := 0.6
 ## Modo libre: nivel de las olas (barritas).
 var _waves_box: HBoxContainer
 var _wave_bars: Array[ColorRect] = []
@@ -187,6 +192,20 @@ func _on_live_spins(spins: int) -> void:
 	_trick_pop = 1.0
 
 
+## Modo libre: mientras se mantiene la coma, el contador sube solo (x1, x2,
+## x3...) cada PREVIEW_STEP segundos; al soltarla se va.
+func _update_trick_preview(delta: float) -> void:
+	if not free_ride or not Input.is_physical_key_pressed(KEY_COMMA):
+		_preview_spins = 0
+		_preview_time = 0.0
+		return
+	_preview_time += delta
+	var spins := 1 + int(_preview_time / PREVIEW_STEP)
+	if spins != _preview_spins:
+		_preview_spins = spins
+		_on_live_spins(spins)
+
+
 static func trick_color(spins: int) -> Color:
 	return TRICK_COLORS[clampi(spins - 1, 0, TRICK_COLORS.size() - 1)]
 
@@ -249,7 +268,8 @@ func _process(delta: float) -> void:
 	_name_label.text = rider.display_name
 
 	# Contador del truco: visible mientras gira en el aire; late al sumar una vuelta.
-	_trick_label.visible = rider.live_spins > 0 and not rider.grounded
+	_update_trick_preview(delta)
+	_trick_label.visible = (rider.live_spins > 0 and not rider.grounded) or _preview_spins > 0
 	_trick_pop = move_toward(_trick_pop, 0.0, delta * 4.0)
 	_trick_label.pivot_offset = _trick_label.size * 0.5
 	_trick_label.scale = Vector2.ONE * (1.0 + 0.45 * _trick_pop * _trick_pop)
@@ -449,7 +469,7 @@ func _update_help() -> void:
 			+ "Frenar: S / stick atrás   ·   Turbo: E o botón derecho   ·   Mirar atrás: Q o gatillo izquierdo\n"
 			+ "Olas: X sube · Z baja (mando: RB / LB)   ·   Tormenta: T (mando: Select)\n"
 			+ "F: totalmente libre (se atraviesan las boyas y se vuela: ESPACIO sube, SHIFT baja)\n"
-			+ "G: ver los trucos uno por uno (cámara lenta)\n"
+			+ "G: ver los trucos uno por uno (cámara lenta)   ·   , (mantener): ver el contador de trucos\n"
 			+ "Esc / Start: pausa (volumen)   ·   C: menú   ·   H: ocultar ayuda"
 		)
 		return
@@ -462,7 +482,7 @@ func _update_help() -> void:
 			+ "Olas: X sube · Z baja (mando: RB / LB)\n"
 			+ "Tormenta: T (mando: Select)\n"
 			+ "Circuitos a lo lejos: slalom (rojo), círculos (celeste), géiseres (naranja)\n"
-			+ "G: ver los trucos uno por uno (cámara lenta)\n"
+			+ "G: ver los trucos uno por uno (cámara lenta)   ·   , (mantener): ver el contador de trucos\n"
 			+ "Esc / Start: pausa (volumen)   ·   C: menú   ·   H: ocultar ayuda"
 		)
 		return

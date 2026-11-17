@@ -117,7 +117,7 @@ func _ready() -> void:
 		InputSetup.ensure_player_actions(i)
 	# En el menú cada uno se une con su dispositivo; hasta entonces se reparte solo.
 	InputSetup.clear_assignments()
-	InputSetup.apply_keyboard_layout(GameSettings.player_count)
+	InputSetup.apply_player_count(GameSettings.player_count)
 	# En el navegador el mando "aparece" recién al tocar un botón (a veces ya en
 	# el menú): se reasignan los mandos apenas se conecta o desconecta uno.
 	Input.joy_connection_changed.connect(_on_joy_connection_changed)

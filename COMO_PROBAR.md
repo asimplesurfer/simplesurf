@@ -33,24 +33,18 @@ Ojo: ese zip no funciona con doble clic en `index.html`, necesita un servidor we
 
 ## Controles
 
-| Acción | J1 teclado | J2 teclado (con 2 jugadores) | Mando |
-|---|---|---|---|
-| Frenar (automático) · acelerar/frenar (manual) | S · W / S | ↓ · ↑ / ↓ | Stick o cruceta |
-| Girar | A / D | ← / → | Stick o cruceta |
-| Saltar · truco (en el aire, mantener) | Espacio | Enter | Botón de abajo (A / ✕) |
-| Derrapar (mantener) | Shift | . | Botón izquierdo (X / □) o RB |
-| Turbo (tocar: una ráfaga) | E | - | Botón derecho (B / ○) |
-| Levantarse (spamear) | Espacio | Enter | Botón de abajo |
-| Caerse (para probar) | F | Retroceso | Botón de arriba (Y / △) |
-| Mirar atrás (mantener) | Q | , | Gatillo izquierdo (LT / L2) |
+| Acción | Teclado (una sola persona) | Mando |
+|---|---|---|
+| Frenar (automático) · acelerar/frenar (manual) | S · W / S (o flechas) | Stick o cruceta |
+| Girar | A / D (o flechas) | Stick o cruceta |
+| Saltar · truco (en el aire, mantener) | Espacio | Botón de abajo (A / ✕) |
+| Derrapar (mantener) | S | Botón izquierdo (X / □) o RB |
+| Turbo (tocar: una ráfaga) | E | Botón derecho (B / ○) |
+| Levantarse (spamear) | Espacio | Botón de abajo |
+| Mirar atrás (mantener) | Q | Gatillo izquierdo (LT / L2) |
 
-Con 1 jugador, J1 también puede usar las flechas.
-
-**2 jugadores en la misma compu:**
-
-- Sin mandos: J1 usa WASD y J2 las flechas (tabla de arriba).
-- Teclado + 1 mando: J1 juega con el teclado (todas las teclas, WASD o flechas) y J2 con el mando.
-- 2 mandos: uno para cada jugador (J1 puede usar también WASD y J2 las flechas).
+El teclado es de una sola persona. Para jugar de a dos o más, los demás usan
+mando (por ejemplo: J1 con el teclado y J2 con un mando, o un mando cada uno).
 
 | Tecla | Qué hace |
 |---|---|

@@ -136,7 +136,7 @@ func _setup_input() -> void:
 		if slot.kind == RacerSlot.Kind.HUMAN:
 			InputSetup.ensure_player_actions(slot.player_index)
 			humans_count += 1
-	InputSetup.apply_keyboard_layout(humans_count)
+	InputSetup.apply_player_count(humans_count)
 
 
 ## La misma partida otra vez, con la misma configuración (reemplaza su propia
