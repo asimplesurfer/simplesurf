@@ -45,17 +45,16 @@ func _ready() -> void:
 	_tune_shadows(humans.size())
 	for i in humans.size():
 		var rider := humans[i]
-		var container := SubViewportContainer.new()
+		# A la resolución real de la pantalla y con antialiasing (ver SharpView).
+		var container := SharpView.new()
 		container.name = "View%d" % (i + 1)
-		container.stretch = true
 		container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		container.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		box.add_child(container)
 
-		var vp := SubViewport.new()
+		var vp := container.viewport
 		vp.audio_listener_enable_3d = i == 0
-		container.add_child(vp)
 		views.append(vp)
 
 		var cam := ChaseCamera.new()

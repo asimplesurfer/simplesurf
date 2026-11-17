@@ -49,7 +49,7 @@ var preset: int = -1
 var compact: bool = false
 var thumbs: ThumbRenderer
 
-var _view: SubViewportContainer
+var _view: SharpView
 var _avatar: Avatar
 var _pivot: Node3D
 var _board: Node3D
@@ -97,17 +97,15 @@ func _build() -> void:
 	box.add_child(_title)
 
 	# Vista previa.
-	var view := SubViewportContainer.new()
+	var view := SharpView.new()
 	_view = view
-	view.stretch = true
 	view.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	view.custom_minimum_size = Vector2(160.0, 150.0)
 	view.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(view)
-	var vp := SubViewport.new()
+	var vp := view.viewport
 	vp.own_world_3d = true
 	vp.transparent_bg = true
-	view.add_child(vp)
 	_pivot = Node3D.new()
 	vp.add_child(_pivot)
 	_avatar = Avatar.new()
