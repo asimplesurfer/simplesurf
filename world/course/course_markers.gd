@@ -42,11 +42,18 @@ func build(p_track: TrackSpace, p_half_width: float, water: Water) -> void:
 func _process(_delta: float) -> void:
 	# Boyas y corcheras flotan con el agua. Solo las que están cerca de algún
 	# corredor (las lejanas casi no se ven y calcular todas es caro).
+	# Solo alrededor de quien tiene pantalla (los bots lejos nadie los ve);
+	# sin pantallas (tests), alrededor de todos.
 	var near: Array[Vector2] = []
+	var all_near: Array[Vector2] = []
 	for node in get_tree().get_nodes_in_group("riders"):
-		var r := node as Node3D
+		var r := node as Rider
 		if r:
-			near.append(Vector2(r.position.x, r.position.z))
+			all_near.append(Vector2(r.position.x, r.position.z))
+			if r.has_view:
+				near.append(Vector2(r.position.x, r.position.z))
+	if near.is_empty():
+		near = all_near
 	for b in _buoys:
 		if _is_near(near, b.position.x, b.position.z):
 			b.position.y = _water_height(b.position.x, b.position.z)

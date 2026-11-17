@@ -426,7 +426,8 @@ func _test_archipelago() -> void:
 		if race.state == RaceManager.State.FINISHED:
 			finished = true
 			break
-		if race.state == RaceManager.State.RACING and not race.finished(lead):
+		# (Los primeros segundos de la largada son de calma a propósito.)
+		if race.state == RaceManager.State.RACING and not race.finished(lead) and race.race_time > WaveManager.START_CALM + 1.0:
 			racing_time += 1.0 / FPS
 			if waves.has_wave_ahead(lead):
 				gap = 0.0

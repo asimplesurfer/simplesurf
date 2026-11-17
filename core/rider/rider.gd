@@ -119,6 +119,10 @@ const BUMP_RADIUS := 1.1
 ## Del empujón: cuánto se lleva el chocado y cuánto el que choca (casi nada).
 const BUMP_VICTIM := 1.15
 const BUMP_HITTER := 0.12
+## Tabla a menos de esto (m) del agua: todavía la está tocando (sin trucos).
+const BODY_IN_WATER := 0.12
+## Paso (s) con que se sigue el vuelo para prever el choque con el agua.
+const LAND_PREDICT_STEP := 0.04
 ## Desde esta velocidad de caída (m/s) el aterrizaje es "fuerte".
 const HARD_LAND_SPEED := 11.0
 ## El empujón se apaga a este ritmo (m/s²).
@@ -567,7 +571,8 @@ func _check_wave_punch() -> void:
 		_face_in_wave = false
 		return
 	var face := visual.face_position()
-	var inside := water.face_in_wave(face) and water.big_wave_near(face)
+	# Primero lo barato (¿hay una ola grande cerca?); lo caro solo si hay.
+	var inside := water.big_wave_near(face) and water.face_in_wave(face)
 	# Cada vez que la cara entra al agua (un mínimo de tiempo entre una y otra
 	# para que el borde de la superficie no lo dispare a cada cuadro).
 	if inside and not _face_in_wave and _punch_cooldown <= 0.0:
@@ -619,6 +624,30 @@ func crest_soon() -> bool:
 func time_to_land() -> float:
 	var above := maxf(position.y - water_height(), 0.0)
 	return (vertical_speed + sqrt(vertical_speed * vertical_speed + 2.0 * stats.gravity * above)) / stats.gravity
+
+
+## Segundos hasta tocar el agua mirando el agua de verdad: sigue el vuelo
+## (velocidad y caída de ahora) contra el agua que se mueve (las olas avanzan:
+## una que sube adelante o viene detrás lo alcanza antes). Como mucho `max_t`.
+## 0 si ya está tocando el agua.
+func time_to_land_ahead(max_t: float = 3.0) -> float:
+	if water == null:
+		return time_to_land()
+	if position.y - water_height() < BODY_IN_WATER:
+		return 0.0
+	var dt := LAND_PREDICT_STEP
+	var y := position.y
+	var vy := vertical_speed
+	var f := forward() * speed
+	var t := 0.0
+	while t < max_t:
+		t += dt
+		vy -= stats.gravity * dt
+		y += vy * dt
+		var p := position + f * t
+		if y <= water.height_ahead(p.x, p.z, t) + BODY_IN_WATER:
+			return t
+	return max_t
 
 
 ## Modo olas: saltito en agua plana (no alcanza para un truco).
