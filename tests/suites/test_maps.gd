@@ -374,6 +374,14 @@ func _test_tropical_island() -> void:
 			spots += 1
 			if BezierShape.distance_to_edge(p._outline, spot) > TropicalIslandPiece.CROWD_DEPTH + 1.0:
 				far_from_shore += 1
+	# Las olas grandes no pasan por encima de las islas tropicales: se apagan
+	# sobre la isla y cerca de la orilla, como con las islas redondas.
+	var water := m.get_node("Water") as Water
+	var on_isle := water._island_fade(Vector2(225, -60))
+	var shore := water._island_fade(Vector2(255, -60))
+	var open_sea := water._island_fade(Vector2(320, -20))
+	_check(on_isle < 0.01 and shore < 0.3 and open_sea > 0.99,
+		"las olas grandes se apagan sobre las islas tropicales (isla %.2f, orilla %.2f, mar %.2f)" % [on_isle, shore, open_sea])
 	# Guirnalda entre las dos mitades: cada cable sale atado a una palmera de
 	# una isla y llega a una palmera de la otra, sin cruzarse.
 	var ls: LightStringPiece = null
