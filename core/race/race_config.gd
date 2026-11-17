@@ -15,6 +15,7 @@ enum Mode { RACE, DEMO, SANDBOX, TIME_TRIAL, EXPLORE }
 @export var mode: Mode = Mode.RACE
 @export var layout: GameSettings.TrackLayout = GameSettings.TrackLayout.ARCHIPELAGO
 @export var weather: GameSettings.Weather = GameSettings.Weather.SUNNY
+@export var time_of_day: GameSettings.TimeOfDay = GameSettings.TimeOfDay.DAY
 @export var laps: int = 5
 @export var slots: Array[RacerSlot] = []
 
@@ -23,6 +24,7 @@ enum Mode { RACE, DEMO, SANDBOX, TIME_TRIAL, EXPLORE }
 func _init() -> void:
 	layout = GameSettings.track_layout
 	weather = GameSettings.weather
+	time_of_day = GameSettings.time_of_day
 
 
 ## `player_count` humanos (con sus personajes guardados) y `bot_count` bots.
@@ -30,6 +32,7 @@ static func create(player_count: int, bot_count: int, bot_level: int) -> RaceCon
 	var config := RaceConfig.new()
 	config.layout = GameSettings.track_layout
 	config.weather = GameSettings.weather
+	config.time_of_day = GameSettings.time_of_day
 	config.laps = GameSettings.laps_for(config.layout)
 	for i in player_count:
 		var slot := RacerSlot.new()
@@ -107,6 +110,7 @@ static func demo() -> RaceConfig:
 	config.mode = Mode.DEMO
 	config.layout = GameSettings.DEMO_LAYOUT
 	config.weather = GameSettings.DEMO_WEATHER
+	config.time_of_day = GameSettings.TimeOfDay.DAY
 	config.laps = GameSettings.laps_for(config.layout)
 	return config
 

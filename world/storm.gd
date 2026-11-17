@@ -80,7 +80,7 @@ func _ready() -> void:
 		_env = world_env.environment.duplicate() as Environment
 		_env.ambient_light_color = Color(0.62, 0.66, 0.74)
 		_env.ambient_light_energy = 0.5
-		_env.fog_light_color = Color(0.42, 0.46, 0.52)
+		_env.fog_light_color = Color(0.42, 0.46, 0.52) * lerpf(1.0, 0.3, DayTime.darkness(self))
 		_env.fog_density = 0.0065
 		if _env.sky:
 			_env.sky = _env.sky.duplicate() as Sky
@@ -94,7 +94,7 @@ func _ready() -> void:
 	if _sun:
 		_orig_sun_energy = _sun.light_energy
 		_orig_sun_color = _sun.light_color
-		_sun.light_energy = 0.45
+		_sun.light_energy = 0.45 * lerpf(1.0, 0.6, DayTime.darkness(self))
 		_sun.light_color = Color(0.72, 0.78, 0.9)
 		_base_sun = _sun.light_energy
 	var water := main.get_node_or_null("Water") as Water
@@ -234,8 +234,13 @@ func _paint_sky() -> void:
 		"cloud_coverage": 0.86,
 		"cloud_speed": 0.016,
 	}
+	# De noche (o al atardecer) la tormenta es más oscura (ver DayTime).
+	var dim := lerpf(1.0, 0.3, DayTime.darkness(self))
 	for k in p:
-		_sky_mat.set_shader_parameter(k, p[k])
+		var v: Variant = p[k]
+		if v is Color:
+			v = Color((v as Color).r * dim, (v as Color).g * dim, (v as Color).b * dim)
+		_sky_mat.set_shader_parameter(k, v)
 
 
 func _roughen(water: Water) -> void:

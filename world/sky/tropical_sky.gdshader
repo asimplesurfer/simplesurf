@@ -23,6 +23,10 @@ uniform float bolt_az = 0.0;
 uniform float bolt_seed = 0.0;
 uniform float bolt_strength = 0.0;
 uniform vec3 bolt_color : source_color = vec3(0.92, 0.95, 1.0);
+// Noche: estrellas (0 = de día) y luna en lugar de sol (disco frío, con
+// sombra de cuarto creciente y sin halo cálido).
+uniform float stars = 0.0;
+uniform float moon = 0.0;
 
 float hash(vec2 p) {
 	p = fract(p * vec2(123.34, 456.21));
@@ -89,9 +93,23 @@ void sky() {
 	float glow = exp(-t * 10.0) * (0.25 + 0.75 * toward_sun * toward_sun);
 	col = mix(col, glow_color, glow * 0.4);
 
-	// Sol: halo suave.
+	// Estrellas: puntitos que titilan, más arriba más (la bruma tapa las bajas).
+	if (stars > 0.0 && y > 0.0) {
+		vec2 g = vec2(atan(d.x, d.z) * 95.0, asin(clamp(y, 0.0, 1.0)) * 95.0);
+		vec2 cell = floor(g);
+		float h = hash(cell);
+		if (h > 0.985) {
+			vec2 at = cell + 0.5 + (vec2(hash(cell + 3.1), hash(cell + 7.7)) - 0.5) * 0.6;
+			float dist = length(g - at);
+			float tw = 0.65 + 0.35 * sin(TIME * (1.5 + h * 4.0) + h * 40.0);
+			float size = 0.12 + 0.18 * hash(cell + 11.0);
+			col += vec3(0.9, 0.93, 1.0) * stars * tw * smoothstep(size, 0.0, dist) * smoothstep(0.02, 0.25, y);
+		}
+	}
+
+	// Sol: halo suave (de noche, la luna: halo frío y chico).
 	float sdot = max(dot(d, sd), 0.0);
-	col += sun_color * (pow(sdot, 90.0) * 0.6 + pow(sdot, 10.0) * 0.12);
+	col += sun_color * (pow(sdot, 90.0) * 0.6 + pow(sdot, 10.0) * 0.12) * (1.0 - 0.6 * moon);
 
 	// Nubes: proyectadas sobre un "techo" plano, más chicas hacia el horizonte.
 	if (y > 0.0) {
@@ -113,8 +131,15 @@ void sky() {
 		col = mix(col, c, density * smoothstep(0.0, 0.04, y));
 	}
 
-	// Disco del sol (encima de las nubes, como en un dibujo).
-	col = mix(col, sun_color * 1.25, smoothstep(0.9991, 0.9995, sdot));
+	// Disco del sol (encima de las nubes, como en un dibujo). La luna, con una
+	// sombra de cuarto creciente (un disco corrido que la tapa).
+	float disc = smoothstep(0.9991, 0.9995, sdot);
+	if (moon > 0.0) {
+		vec3 side = normalize(cross(sd, vec3(0.0, 1.0, 0.0)));
+		float bite = smoothstep(0.9991, 0.9995, max(dot(d, normalize(sd + side * 0.022)), 0.0));
+		disc *= 1.0 - bite * 0.85 * moon;
+	}
+	col = mix(col, sun_color * 1.25, disc);
 
 	float az = atan(d.x, d.z);
 

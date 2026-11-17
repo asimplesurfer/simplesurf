@@ -339,6 +339,8 @@ func _build_setup() -> void:
 		set_track_layout)
 	_setup_row(box, "Clima", _capitalized(GameSettings.WEATHER_NAMES), GameSettings.weather,
 		func(i: int) -> void: GameSettings.weather = i as GameSettings.Weather)
+	_setup_row(box, "Hora", _capitalized(GameSettings.TIME_NAMES), GameSettings.time_of_day,
+		func(i: int) -> void: GameSettings.time_of_day = i as GameSettings.TimeOfDay)
 	_setup_row(box, "Música", GameSettings.music_names(), GameSettings.music_choice, set_music)
 	if GameSettings.player_count == 2:
 		_setup_row(box, "Pantalla", ["Lado a lado", "Arriba y abajo"], 0 if GameSettings.split_vertical else 1,

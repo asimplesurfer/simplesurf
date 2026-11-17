@@ -283,11 +283,19 @@ const FERN_MODELS := 3
 
 func _add_vegetation(root: Node3D) -> void:
 	var tall_models: Array[Mesh] = []
+	var tall_shape: Array[Vector2] = []
 	for i in TALL_MODELS:
-		tall_models.append(PalmMesh.build(shape_seed * 31 + i, _rng.randf_range(8.5, 12.5), lerpf(0.3, 0.95, float(i) / (TALL_MODELS - 1))))
+		var h := _rng.randf_range(8.5, 12.5)
+		var lean := lerpf(0.3, 0.95, float(i) / (TALL_MODELS - 1))
+		tall_shape.append(Vector2(h, lean))
+		tall_models.append(PalmMesh.build(shape_seed * 31 + i, h, lean))
 	var mid_models: Array[Mesh] = []
+	var mid_shape: Array[Vector2] = []
 	for i in MID_MODELS:
-		mid_models.append(PalmMesh.build(shape_seed * 37 + i, _rng.randf_range(7.0, 10.0), _rng.randf_range(0.0, 0.3), 0.5))
+		var h := _rng.randf_range(7.0, 10.0)
+		var lean := _rng.randf_range(0.0, 0.3)
+		mid_shape.append(Vector2(h, lean))
+		mid_models.append(PalmMesh.build(shape_seed * 37 + i, h, lean, 0.5))
 	var young_models: Array[Mesh] = []
 	for i in YOUNG_MODELS:
 		young_models.append(PalmMesh.build(shape_seed * 43 + i, _rng.randf_range(3.5, 5.5), _rng.randf_range(0.1, 0.5), 0.5))
@@ -326,18 +334,27 @@ func _add_vegetation(root: Node3D) -> void:
 			if depth < beach_width + 6.0:
 				# Orilla: altas inclinadas hacia el mar, y algunas chicas.
 				if roll < 0.7:
-					tall[_rng.randi() % TALL_MODELS].append(_placed(p, ground, out.rotated(_rng.randf_range(-0.6, 0.6)), size))
+					var k := _rng.randi() % TALL_MODELS
+					var xf := _placed(p, ground, out.rotated(_rng.randf_range(-0.6, 0.6)), size)
+					tall[k].append(xf)
+					_add_tie(tall_shape[k], xf)
 				else:
 					young[_rng.randi() % YOUNG_MODELS].append(_placed(p, ground, out.rotated(_rng.randf_range(-1.0, 1.0)), size))
 			else:
 				# Adentro: medianas casi derechas, chicas y alguna alta.
 				var dir := Vector2.RIGHT.rotated(_rng.randf() * TAU)
 				if roll < 0.55:
-					mid[_rng.randi() % MID_MODELS].append(_placed(p, ground, dir, size))
+					var k := _rng.randi() % MID_MODELS
+					var xf := _placed(p, ground, dir, size)
+					mid[k].append(xf)
+					_add_tie(mid_shape[k], xf)
 				elif roll < 0.85:
 					young[_rng.randi() % YOUNG_MODELS].append(_placed(p, ground, dir, size))
 				else:
-					tall[_rng.randi() % TALL_MODELS].append(_placed(p, ground, dir, size))
+					var k := _rng.randi() % TALL_MODELS
+					var xf := _placed(p, ground, dir, size)
+					tall[k].append(xf)
+					_add_tie(tall_shape[k], xf)
 			_palms += 1
 			# Que no se vea de dónde sale el tronco (atrás alcanza con menos).
 			_base_cover(ferns, bushes, bush_colors, p, ground, 3 if facing > 0.3 else 1)
@@ -671,6 +688,32 @@ func _cover_at(ferns: Array, bushes: Array[Transform3D], colors: Array[Color], p
 func _placed(p: Vector2, ground: float, dir: Vector2, size: float) -> Transform3D:
 	var basis := Basis(Vector3.UP, atan2(-dir.y, dir.x)).scaled(Vector3.ONE * size)
 	return Transform3D(basis, Vector3(p.x, ground - 0.25, p.y))
+
+
+## Dónde se puede atar algo (una guirnalda) a cada palmera alta: un poco
+## abajo de la copa. Cada uno: [punto, radio del tronco ahí, dirección del
+## tronco] (en el mundo). Ver LightStringPiece.
+var palm_ties: Array = []
+
+
+## Anota el punto de atado de una palmera de alto y caída `shape` (como en
+## PalmMesh.build) puesta con `xf`.
+func _add_tie(shape: Vector2, xf: Transform3D) -> void:
+	var reach := shape.x * sin(shape.y)
+	var rise := shape.x * cos(shape.y * 0.6)
+	var p1 := Vector3(reach * 0.62, rise * 0.42, 0.0)
+	var p2 := Vector3(reach, rise, 0.0)
+	var t := TIE_AT
+	var c := PalmMesh._bezier(Vector3.ZERO, p1, p2, t)
+	var tangent := (PalmMesh._bezier(Vector3.ZERO, p1, p2, t + 0.02) - PalmMesh._bezier(Vector3.ZERO, p1, p2, t - 0.02))
+	# Radio del tronco ahí (como en PalmMesh._trunk).
+	var r := lerpf(0.42, 0.27, t) + 0.22 * pow(1.0 - t, 6.0)
+	var size := xf.basis.get_scale().x
+	palm_ties.append([xf * c, r * size, (xf.basis * tangent).normalized()])
+
+
+## A qué altura del tronco se ata (0 la base, 1 la copa).
+const TIE_AT := 0.86
 
 
 ## Cuántas palmeras tiene la isla.
