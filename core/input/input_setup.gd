@@ -60,46 +60,20 @@ const BUTTON_ROLES := {
 	"storm": ["select"],
 }
 
-## Teclado según cuántos juegan. Con 1 jugador, J1 usa todo; con 2, se reparte.
-const KEYBOARD_1P := {
-	0: {
-		"left": [KEY_A, KEY_LEFT],
-		"right": [KEY_D, KEY_RIGHT],
-		"up": [KEY_W, KEY_UP],
-		"down": [KEY_S, KEY_DOWN],
-		"a": [KEY_SPACE, KEY_J],
-		"drift": [KEY_S, KEY_DOWN],
-		"b": [KEY_E, KEY_K],
-		"look_back": [KEY_Q],
-		"waves_up": [KEY_X],
-		"waves_down": [KEY_Z],
-		"storm": [KEY_T],
-	},
-}
-const KEYBOARD_2P := {
-	0: {
-		"left": [KEY_A],
-		"right": [KEY_D],
-		"up": [KEY_W],
-		"down": [KEY_S],
-		"a": [KEY_SPACE],
-		"drift": [KEY_S],
-		"b": [KEY_E],
-		"look_back": [KEY_Q],
-		"waves_up": [KEY_X],
-		"waves_down": [KEY_Z],
-		"storm": [KEY_T],
-	},
-	1: {
-		"left": [KEY_LEFT],
-		"right": [KEY_RIGHT],
-		"up": [KEY_UP],
-		"down": [KEY_DOWN],
-		"a": [KEY_ENTER, KEY_KP_0],
-		"drift": [KEY_DOWN],
-		"b": [KEY_SLASH, KEY_KP_2],
-		"look_back": [KEY_COMMA],
-	},
+## Teclado: lo usa una sola persona (J1), con todas las teclas. Los demás
+## juegan con mando.
+const KEYBOARD_KEYS := {
+	"left": [KEY_A, KEY_LEFT],
+	"right": [KEY_D, KEY_RIGHT],
+	"up": [KEY_W, KEY_UP],
+	"down": [KEY_S, KEY_DOWN],
+	"a": [KEY_SPACE, KEY_J],
+	"drift": [KEY_S, KEY_DOWN],
+	"b": [KEY_E, KEY_K],
+	"look_back": [KEY_Q],
+	"waves_up": [KEY_X],
+	"waves_down": [KEY_Z],
+	"storm": [KEY_T],
 }
 
 ## Hasta cuántas personas pueden jugar a la vez.
@@ -113,7 +87,7 @@ static var _devices: Dictionary = {}
 ## mando): jugador -> dispositivo (KEYBOARD o el id del mando). Vacío = se
 ## reparte solo (por orden de conexión, como antes).
 static var _assigned: Dictionary = {}
-## Cuántas personas juegan (lo fija apply_keyboard_layout).
+## Cuántas personas juegan (lo fija apply_player_count).
 static var _player_count: int = 1
 
 
@@ -188,7 +162,7 @@ static func _apply_assigned() -> void:
 		var device := assigned_device(player)
 		if InputMap.has_action(prefix(player) + "a"):
 			set_player_device(player, device if device >= 0 else -1)
-		_set_keys(player, KEYBOARD_1P[0] if device == KEYBOARD else {})
+		_set_keys(player, KEYBOARD_KEYS if device == KEYBOARD else {})
 
 
 ## true si juegan dos y hay un solo mando: J1 teclado, J2 mando.
@@ -233,9 +207,9 @@ static func set_player_device(player_index: int, device: int) -> void:
 	set_pad_layout(player_index, _layouts.get(player_index, PadLayout.STANDARD))
 
 
-## Reparte el teclado según la cantidad de jugadores (borra y vuelve a poner las
-## teclas) y reasigna los mandos (con teclado + un mando, el mando pasa a J2).
-static func apply_keyboard_layout(player_count: int) -> void:
+## Fija cuántas personas juegan y reasigna mandos y teclas (con teclado + un
+## mando, el mando pasa a J2).
+static func apply_player_count(player_count: int) -> void:
 	_player_count = player_count
 	if InputMap.has_action(prefix(0) + "a") or not _assigned.is_empty():
 		# Refresca mandos y teclas juntos (llama a _apply_keys).
@@ -244,14 +218,10 @@ static func apply_keyboard_layout(player_count: int) -> void:
 		_apply_keys(Input.get_connected_joypads().size())
 
 
-## Pone las teclas de cada jugador. Con 2 jugadores y un mando, todo el teclado
-## es de J1 (el mando es de J2); con 2 jugadores sin mando, se reparte.
-static func _apply_keys(pad_count: int) -> void:
-	var layout: Dictionary = KEYBOARD_1P
-	if _player_count >= 2 and not keyboard_and_pad_mode(pad_count):
-		layout = KEYBOARD_2P
+## Pone las teclas: todo el teclado es de J1 (los demás juegan con mando).
+static func _apply_keys(_pad_count: int) -> void:
 	for player in MAX_PLAYERS:
-		_set_keys(player, layout.get(player, {}))
+		_set_keys(player, KEYBOARD_KEYS if player == 0 else {})
 
 
 ## Cambia las teclas del jugador por `keys` (acción -> teclas).

@@ -195,8 +195,7 @@ func _on_live_spins(spins: int) -> void:
 ## Modo libre: mientras se mantiene la coma, el contador sube solo (x1, x2,
 ## x3...) cada PREVIEW_STEP segundos; al soltarla se va.
 func _update_trick_preview(delta: float) -> void:
-	# Con dos jugadores en el teclado, la coma es "mirar atrás" del J2.
-	if not free_ride or GameSettings.player_count > 1 or not Input.is_physical_key_pressed(KEY_COMMA):
+	if not free_ride or not Input.is_physical_key_pressed(KEY_COMMA):
 		_preview_spins = 0
 		_preview_time = 0.0
 		return

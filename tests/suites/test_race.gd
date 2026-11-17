@@ -1179,8 +1179,8 @@ func _test_split_screen() -> void:
 	var m1 := split.cameras[1].cull_mask
 	_check(m0 & bit0 and not m0 & bit1, "cámara 1 ve solo su agua")
 	_check(m1 & bit1 and not m1 & bit0, "cámara 2 ve solo su agua")
-	_check(_has_key(&"p2_left", KEY_LEFT), "J2 usa las flechas")
-	_check(not _has_key(&"p1_left", KEY_LEFT), "J1 ya no usa las flechas")
+	_check(not _has_key(&"p2_left", KEY_LEFT) and _has_key(&"p1_left", KEY_LEFT),
+		"el teclado no se comparte: es todo de J1 (J2 juega con mando)")
 	var p0 := race.racers[0].position
 	var p1 := race.racers[1].position
 	_check(p0.distance_to(p1) > 4.0, "largan uno al lado del otro")

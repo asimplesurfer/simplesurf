@@ -15,20 +15,18 @@ func run() -> void:
 	_test_keyboard_layouts()
 
 
-## Teclas según cuántos juegan y cuántos mandos hay (sin mandos conectados en
-## los tests, así que se prueba _apply_keys con la cantidad de mandos a mano).
+## El teclado es de una sola persona (J1) con todas las teclas; los demás
+## juegan con mando (sin mandos conectados en los tests, se prueba _apply_keys
+## con la cantidad de mandos a mano).
 func _test_keyboard_layouts() -> void:
 	InputSetup.ensure_player_actions(1)
-	InputSetup.apply_keyboard_layout(2)
+	InputSetup.apply_player_count(2)
 	InputSetup._apply_keys(0)
-	_check(_has_key(&"p1_left", KEY_A) and not _has_key(&"p1_left", KEY_LEFT), "2 jugadores sin mando: J1 usa WASD")
-	_check(_has_key(&"p2_left", KEY_LEFT), "2 jugadores sin mando: J2 usa las flechas")
-	_check(InputSetup.keyboard_and_pad_mode(1), "2 jugadores con 1 mando: teclado + mando")
-	InputSetup._apply_keys(1)
-	_check(_has_key(&"p1_left", KEY_A) and _has_key(&"p1_left", KEY_LEFT), "teclado + mando: J1 usa todo el teclado")
-	_check(not _has_key(&"p2_left", KEY_LEFT) and not _has_key(&"p2_a", KEY_ENTER), "teclado + mando: J2 no usa teclas (juega con el mando)")
+	_check(_has_key(&"p1_left", KEY_A) and _has_key(&"p1_left", KEY_LEFT), "2 jugadores: J1 usa todo el teclado")
+	_check(not _has_key(&"p2_left", KEY_LEFT) and not _has_key(&"p2_a", KEY_ENTER), "el teclado no se comparte: J2 no usa teclas")
+	_check(InputSetup.keyboard_and_pad_mode(1), "2 jugadores con 1 mando: J1 teclado y J2 mando")
 	_check(not InputSetup.keyboard_and_pad_mode(2), "2 jugadores con 2 mandos: uno cada uno")
-	InputSetup.apply_keyboard_layout(1)
+	InputSetup.apply_player_count(1)
 	_check(not InputSetup.keyboard_and_pad_mode(1), "1 jugador con 1 mando: J1 usa mando y teclado")
 	_check(_has_key(&"p1_left", KEY_LEFT), "1 jugador: J1 usa también las flechas")
 
