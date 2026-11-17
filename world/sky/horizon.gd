@@ -120,6 +120,10 @@ func _sync_colors() -> void:
 		var wm := _water.shader_material()
 		wm.set_shader_parameter("far_sea_color", _param(_sky_mat, "ocean_color"))
 		wm.set_shader_parameter("fog_tint", _env.fog_light_color)
+		# Hacia dónde está el sol y cuánto brilla (con tormenta, nada).
+		if _sun:
+			wm.set_shader_parameter("sun_dir", _sun.global_transform.basis.z)
+			wm.set_shader_parameter("sun_glitter", clampf((_sun.light_energy - 0.55) * 2.5, 0.0, 1.0))
 		wm.set_shader_parameter("fog_density", _env.fog_density if _env.fog_enabled else 0.0)
 	_ring_mat.set_shader_parameter("far_sea_color", _param(_sky_mat, "ocean_color"))
 	# La niebla de los objetos es la de siempre (su color ya es el del
