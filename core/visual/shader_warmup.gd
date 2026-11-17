@@ -5,11 +5,16 @@ extends Node
 ## se dibuja: los efectos que todavía no se ven (espuma del derrape, turbo,
 ## salpicones, partículas) trababan el juego la primera vez que aparecían.
 ##
-## Dibuja una vez cada material de la escena, chiquito y delante de cada cámara
-## (no se llega a ver), y las partículas emitiendo un instante. Después se borra.
+## Dibuja una vez cada material de la escena delante de cada cámara, todos en
+## el mismo punto y tan chiquitos que ocupan menos de un píxel (antes se veía
+## una columna de cuadraditos de colores al arrancar), y las partículas
+## emitiendo un instante. Después se borra. Para compilar un shader alcanza
+## con que se mande a dibujar, aunque no pinte ningún píxel.
 
 ## Cuadros que espera antes de empezar (que la escena termine de armarse).
 const START_DELAY_FRAMES := 3
+## Tamaño de lo que se dibuja (m, a 1 m de la cámara): menos de un píxel.
+const WARM_SIZE := 0.00002
 ## Cuánto quedan dibujados (s).
 const HOLD_TIME := 0.8
 
@@ -65,7 +70,7 @@ func _warm() -> void:
 			particles.append(gi as GPUParticles3D)
 	var cameras := root.find_children("*", "Camera3D", true, false)
 	var quad := QuadMesh.new()
-	quad.size = Vector2(0.01, 0.01)
+	quad.size = Vector2(WARM_SIZE, WARM_SIZE)
 	for cam in cameras:
 		var holder := Node3D.new()
 		holder.name = "Warmup"
@@ -78,7 +83,7 @@ func _warm() -> void:
 			mi.mesh = quad
 			mi.material_override = mat
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			mi.position = Vector3((i % 10) * 0.012 - 0.06, (i / 10) * 0.012 - 0.06, 0.0)
+			mi.position = Vector3.ZERO
 			holder.add_child(mi)
 			i += 1
 		# Partículas: una copia que emite un instante (su shader de proceso
@@ -86,7 +91,7 @@ func _warm() -> void:
 		for p in particles:
 			var copy := p.duplicate() as GPUParticles3D
 			copy.position = Vector3.ZERO
-			copy.scale = Vector3.ONE * 0.01
+			copy.scale = Vector3.ONE * WARM_SIZE
 			copy.emitting = true
 			copy.visible = true
 			holder.add_child(copy)

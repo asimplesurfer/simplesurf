@@ -91,6 +91,30 @@ func _test_bot_styles() -> void:
 	custom.apply_preset(0)
 	custom.hair_index = 3
 	_check(RaceConfig.style_of(custom) == -1, "un personaje armado a gusto no cuenta como estilo")
+	# Un estilo con otros colores sigue siendo ese estilo (los bots no lo usan).
+	var tweaked := CharacterData.new()
+	tweaked.apply_preset(1)
+	RaceConfig.recolor(tweaked, rng)
+	_check(RaceConfig.style_of(tweaked) == 1, "el estilo con otros colores se reconoce (los bots no lo eligen)")
+	# Dos personas con estilos y más bots que estilos libres: ningún bot es
+	# igual a una persona ni a otro bot (los que repiten estilo cambian colores).
+	var saved: Dictionary = GameSettings.characters.duplicate()
+	for k in 2:
+		var c := CharacterData.new()
+		c.apply_preset(k)
+		GameSettings.characters[k] = c
+	var identical := 0
+	for t in 10:
+		var config := RaceConfig.create(2, 3, 1)
+		var dicts: Array = []
+		for slot in config.slots:
+			dicts.append((slot as RacerSlot).character.to_dict())
+		for i in dicts.size():
+			for j in range(i + 1, dicts.size()):
+				if dicts[i] == dicts[j]:
+					identical += 1
+	GameSettings.characters = saved
+	_check(identical == 0, "con 2 personas y 3 bots, nadie sale igual a otro (%d iguales)" % identical)
 
 
 func _test_bot_race() -> void:

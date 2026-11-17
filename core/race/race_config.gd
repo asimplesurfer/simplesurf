@@ -44,14 +44,26 @@ static func create(player_count: int, bot_count: int, bot_level: int) -> RaceCon
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
 	var styles := bot_styles(config.slots, bot_count, rng)
+	# Estilos que ya tiene alguien: si un bot tiene que repetir uno (hay más
+	# corredores que estilos), lo repite con otros colores (nunca igual a una
+	# persona ni a otro bot).
+	var used := {}
+	for slot in config.slots:
+		var st := style_of((slot as RacerSlot).character)
+		if st >= 0:
+			used[st] = true
 	for i in bot_count:
 		var slot := RacerSlot.new()
 		slot.kind = RacerSlot.Kind.BOT
 		slot.player_index = -1
 		slot.display_name = "Bot %d" % (i + 1)
-		if i < styles.size():
+		var style := styles[i % styles.size()] if not styles.is_empty() else -1
+		if style >= 0:
 			slot.character = CharacterData.new()
-			slot.character.apply_preset(styles[i])
+			slot.character.apply_preset(style)
+			if used.has(style):
+				recolor(slot.character, rng)
+			used[style] = true
 		else:
 			slot.character = CharacterData.random(rng)
 		slot.difficulty = AIDifficulty.preset(bot_level)
@@ -81,17 +93,51 @@ static func bot_styles(humans: Array, count: int, rng: RandomNumberGenerator) ->
 	return free.slice(0, mini(count, free.size()))
 
 
-## Qué estilo armado es el personaje (-1 si está armado a gusto).
+## Lo que hace reconocible un estilo (la forma, no los colores): un estilo
+## con otros colores o algún detalle cambiado sigue siendo ese estilo.
+const STYLE_KEYS := ["hair", "hat", "glasses", "head", "top", "bottom", "neck", "extra", "shorts_pattern",
+	"board_design"]
+## Cuántas de esas tienen que coincidir (además del pelo).
+const STYLE_MATCH := 7
+
+
+## Qué estilo armado es el personaje (-1 si está armado a gusto): el mismo,
+## o uno que se le parece mucho (mismo pelo y casi todo lo demás igual; por
+## ejemplo, el Rasta con el short de otro color).
 static func style_of(character: CharacterData) -> int:
 	if character == null:
 		return -1
 	var mine := character.to_dict()
+	var best := -1
+	var best_score := 0
 	for i in CharacterData.PRESET_NAMES.size():
 		var p := CharacterData.new()
 		p.apply_preset(i)
-		if p.to_dict() == mine:
+		var theirs := p.to_dict()
+		if theirs == mine:
 			return i
-	return -1
+		if theirs.get("hair") != mine.get("hair"):
+			continue
+		var score := 0
+		for k in STYLE_KEYS:
+			if theirs.get(k) == mine.get(k):
+				score += 1
+		if score >= STYLE_MATCH and score > best_score:
+			best = i
+			best_score = score
+	return best
+
+
+## Otros colores (pelo, ropa, tabla) para un estilo repetido.
+static func recolor(c: CharacterData, rng: RandomNumberGenerator) -> void:
+	for key in ["hair_color", "shorts", "shorts_pattern_color", "top_color", "hat_color", "board",
+			"board_design_color"]:
+		if not CharacterData.FIELDS.has(key):
+			continue
+		var field: Array = CharacterData.FIELDS[key]
+		var count: int = (field[1] as Array).size()
+		var now: int = c.get(field[0])
+		c.set(field[0], (now + rng.randi_range(1, maxi(count - 1, 1))) % count)
 
 
 static func _shuffle(list: Array[int], rng: RandomNumberGenerator) -> void:
