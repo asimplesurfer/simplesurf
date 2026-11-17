@@ -10,6 +10,7 @@ func run() -> void:
 	await _test_cave()
 	await _test_cave_map()
 	await _test_tropical_island()
+	await _test_night()
 	await _test_archipelago()
 	await _test_atoll()
 
@@ -269,6 +270,39 @@ func _test_cave_map() -> void:
 const ISLAND_SHAPE := [[200, -110], [232, -128], [256, -95], [246, -45], [264, 5], [252, 60], [216, 90], [194, 55], [212, 5], [194, -52]]
 
 
+## De noche: cielo oscuro con estrellas y luna, luz tenue y las guirnaldas
+## prendidas (con su halo de luz).
+func _test_night() -> void:
+	print("De noche:")
+	var saved := GameSettings.time_of_day
+	GameSettings.time_of_day = GameSettings.TimeOfDay.NIGHT
+	GameSettings.track_layout = GameSettings.TrackLayout.ARCHIPELAGO
+	var d: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://world/maps/archipelago.json"))
+	d.pieces = [
+		{"type": "tropical_island", "shape": ISLAND_SHAPE},
+		{"type": "island_split", "path": [[170, -20], [290, -20]], "width": 14},
+		{"type": "light_string", "a": [225, -60], "b": [225, 10], "lines": 2, "style": "fria"},
+	]
+	var m: Node = load("res://main.tscn").instantiate()
+	(m.get_node("Course") as Course).map = TrackMap.from_dict(d)
+	root.add_child(m)
+	await process_frame
+	await process_frame
+	var env := (m.get_node("WorldEnvironment") as WorldEnvironment).environment
+	var sky := env.sky.sky_material as ShaderMaterial
+	var sun := m.get_node("Sun") as DirectionalLight3D
+	_check(float(sky.get_shader_parameter("stars")) > 0.5 and float(sky.get_shader_parameter("moon")) > 0.5
+		and sun.light_energy < 0.6 and env.fog_light_color.v < 0.3, "cielo oscuro con estrellas y luna, luz tenue")
+	var lights := m.find_child("LightString", true, false)
+	var glow := lights.get_node_or_null("Glow") if lights else null
+	_check(glow != null and float((glow as MultiMeshInstance3D).material_override.get_shader_parameter("strength")) > 0.3,
+		"las guirnaldas están prendidas (con halo de luz)")
+	m.queue_free()
+	await process_frame
+	GameSettings.time_of_day = saved
+	GameSettings.track_layout = GameSettings.TrackLayout.CLASSIC
+
+
 ## Una isla tropical dibujada: arena, selva y palmeras (todo en pocas
 ## MultiMesh) y se choca como una isla.
 func _test_tropical_island() -> void:
@@ -278,6 +312,7 @@ func _test_tropical_island() -> void:
 	d.pieces = [
 		{"type": "tropical_island", "shape": ISLAND_SHAPE},
 		{"type": "island_split", "path": [[170, -20], [290, -20]], "width": 14},
+		{"type": "light_string", "a": [225, -60], "b": [225, 10], "lines": 4, "style": "navidad"},
 	]
 	var keep: Array = []
 	for i in d.islands:
@@ -339,6 +374,33 @@ func _test_tropical_island() -> void:
 			spots += 1
 			if BezierShape.distance_to_edge(p._outline, spot) > TropicalIslandPiece.CROWD_DEPTH + 1.0:
 				far_from_shore += 1
+	# Guirnalda entre las dos mitades: cada cable sale atado a una palmera de
+	# una isla y llega a una palmera de la otra, sin cruzarse.
+	var ls: LightStringPiece = null
+	for p in course.pieces:
+		if p is LightStringPiece:
+			ls = p
+	var tied := 0
+	for cab in ls.cables if ls else []:
+		var ok_a := false
+		var ok_b := false
+		for t in ls.island_a.palm_ties:
+			ok_a = ok_a or (t[0] as Vector3).distance_to(cab[0]) < 1.5
+		for t in ls.island_b.palm_ties:
+			ok_b = ok_b or (t[0] as Vector3).distance_to(cab[1]) < 1.5
+		if ok_a and ok_b and (cab[0] as Vector3).y > 4.0 and (cab[1] as Vector3).y > 4.0:
+			tied += 1
+	var side := Vector2(1, 0)
+	var ordered := true
+	if ls:
+		for k in range(1, ls.cables.size()):
+			var prev: Array = ls.cables[k - 1]
+			var cur: Array = ls.cables[k]
+			if (cur[0].x - prev[0].x) * (cur[1].x - prev[1].x) < -0.01:
+				ordered = false
+	_check(ls != null and ls.island_a != ls.island_b and ls.cables.size() == 4 and tied == 4 and ordered
+		and course.get_node_or_null("LightString") != null,
+		"guirnalda: 4 cables atados de palmera a palmera entre las dos islas, sin cruzarse (%d atados)" % tied)
 	# Puntos de fiesta: uno por isla como mucho; la gente se entera de dónde
 	# están los surfistas (para entusiasmarse cuando pasan cerca).
 	var director := course.get_node_or_null("CrowdDirector") as CrowdDirector

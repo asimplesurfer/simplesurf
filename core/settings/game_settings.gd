@@ -19,6 +19,9 @@ enum TrackLayout { CLASSIC, ARCHIPELAGO, ATOLL }
 ## Clima: sol o tormenta eléctrica (cielo gris, rayos, mar picado).
 enum Weather { SUNNY, STORM }
 const WEATHER_NAMES := ["soleado", "tormenta"]
+## Hora del día de la partida: cambia el cielo, la luz y el mar (ver DayTime).
+enum TimeOfDay { DAY, SUNSET, NIGHT }
+const TIME_NAMES := ["día", "atardecer", "noche"]
 
 const PATH := "user://settings.cfg"
 const JUMP_MODE_NAMES := ["mantener para cargar", "tocar para saltar"]
@@ -32,6 +35,7 @@ static var jump_style: JumpStyle = JumpStyle.WAVES
 static var wave_mode: WaveMode = WaveMode.SURGES
 static var track_layout: TrackLayout = TrackLayout.ARCHIPELAGO
 static var weather: Weather = Weather.SUNNY
+static var time_of_day: TimeOfDay = TimeOfDay.DAY
 ## Cuántas personas juegan (pantalla dividida). Se cambia con las teclas 1 / 2.
 static var player_count: int = 1
 ## Pantalla dividida: true = un jugador a cada lado; false = uno arriba del otro.
@@ -77,6 +81,7 @@ static func load_settings() -> void:
 			int(cfg.get_value("gameplay", "track_layout", TrackLayout.ARCHIPELAGO)), 0, TrackMap.count() - 1
 		) as TrackLayout
 		weather = clampi(int(cfg.get_value("gameplay", "weather", Weather.SUNNY)), 0, WEATHER_NAMES.size() - 1) as Weather
+		time_of_day = clampi(int(cfg.get_value("gameplay", "time_of_day", TimeOfDay.DAY)), 0, TIME_NAMES.size() - 1) as TimeOfDay
 		wave_mode = clampi(int(cfg.get_value("gameplay", "wave_mode", WaveMode.SURGES)), 0, 1) as WaveMode
 		bot_count = clampi(int(cfg.get_value("gameplay", "bot_count", 1)), 0, 3)
 		bot_level = clampi(int(cfg.get_value("gameplay", "bot_level", 1)), 0, AIDifficulty.NAMES.size() - 1)
@@ -102,6 +107,7 @@ static func save_settings() -> void:
 	cfg.set_value("gameplay", "wave_mode", wave_mode)
 	cfg.set_value("gameplay", "track_layout", track_layout)
 	cfg.set_value("gameplay", "weather", weather)
+	cfg.set_value("gameplay", "time_of_day", time_of_day)
 	cfg.set_value("gameplay", "bot_count", bot_count)
 	cfg.set_value("gameplay", "bot_level", bot_level)
 	cfg.set_value("audio", "music", music_choice)

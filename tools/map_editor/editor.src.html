@@ -158,6 +158,7 @@ dialog::backdrop { background: rgba(5, 15, 20, 0.5); }
     <button class="tool" data-tool="start" title="Meta: una recta con la largada (M)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M6 21V4"/><path d="M6 4h12l-2 4 2 4H6"/><path d="M10 4v8M14 4v8" stroke-dasharray="2 2"/></svg><span class="key">M</span></button>
     <button class="tool" data-tool="tropical_island" title="Isla tropical: dibujá la figura (T)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 18c3-3 6-2 9-3s6-3 9-1"/><path d="M8 15V9m0 0c-2-2-4-1.5-5 0m5 0c1.5-2 3.5-2 5-.5M15 14V8m0 0c-1.5-1.8-3.5-1.5-4.5 0m4.5 0c1.5-2 3.5-1.8 4.5-.2" stroke-linecap="round"/></svg><span class="key">T</span></button>
     <button class="tool" data-tool="island_split" title="Dividir isla: dibujá una línea que cruce una isla tropical y queda partida en dos, con mar en el medio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 9c2-4 5-5 7-4v14c-3 1-6 0-7-4z"/><path d="M14 5c2-1 5 0 7 4v6c-1 4-4 5-7 4z"/><path d="M12 2v20" stroke-dasharray="2 2"/></svg></button>
+    <button class="tool" data-tool="light_string" title="Guirnalda de luces: tocá una isla tropical y después otra (de noche se prenden)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 6c5 6 13 6 18 0"/><circle cx="7" cy="10" r="1.6" fill="currentColor"/><circle cx="12" cy="11.5" r="1.6" fill="currentColor"/><circle cx="17" cy="10" r="1.6" fill="currentColor"/><path d="M3 4v16M21 4v16"/></svg></button>
     <button class="tool" data-tool="island" title="Isla (I)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="16" rx="8" ry="3.5"/><path d="M12 15V8m0 0c-2-2-4-2-5-1m5 1c2-2 4-2 5-1m-5 1c-1-2-1-3.5 0-4.5"/></svg><span class="key">I</span></button>
     <hr>
     <button class="tool" data-tool="geyser" title="Géiser (G)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><ellipse cx="12" cy="19" rx="6" ry="2"/><path d="M12 17V6m-3 4l3-4 3 4M8 13c-1-2 0-4 1-5m7 5c1-2 0-4-1-5"/></svg><span class="key">G</span></button>
@@ -237,6 +238,9 @@ const PIECES = {
     ["sand_color", "Arena", "color", "#f2d8a0"],
     ["grass_color", "Pasto", "color", "#3f7f2c"], ["leaf_color", "Hojas", "color", "#2f8f2c"], ["shape_seed", "Semilla", "int", 1] ] },
   island_split: { name: "Dividir isla", params: [["width", "Ancho del mar en el medio (m)", "num", 14]] },
+  light_string: { name: "Guirnalda de luces", params: [
+    ["lines", "Cables (1 a 20)", "int", 3],
+    ["style", "Luces", "choice", "calida", [["calida", "Cálidas"], ["fria", "Frías"], ["navidad", "Navideñas"]]] ] },
   rock_formation: { name: "Roca / cueva", params: [
     ["height", "Alto de la roca (m)", "num", 34], ["ceiling", "Altura del techo (m)", "num", 12],
     ["opening", "Arco abajo (si no toca la pista)", "bool", false], ["opening_width", "Ancho del arco (m)", "num", 16],
@@ -321,6 +325,7 @@ function toJSON(m) {
       if (p[k] !== undefined && (p[k] !== def || (REQUIRED[p.type] || []).includes(k))) o[k] = typeof p[k] === "number" ? r(p[k]) : p[k];
     }
     if (p.type === "rock_formation" && p.skylights?.length) o.skylights = p.skylights.map((s) => [r(s[0]), r(s[1])]);
+    if (p.type === "light_string" && p.a && p.b) { o.a = [r(p.a[0]), r(p.a[1])]; o.b = [r(p.b[0]), r(p.b[1])]; }
     // Parámetros que el editor no conoce: se dejan como estaban.
     for (const k in p) if (!(k in o) && !["shape", "path", "skylights"].includes(k) && !(PIECES[p.type]?.params || []).some((q) => q[0] === k)) o[k] = p[k];
     return o;
@@ -579,8 +584,14 @@ function draw() {
   map.pieces.forEach((p, i) => {
     const on = sel?.kind === "piece" && sel.i === i;
     if (p.type === "rock_formation") drawRock(p, shapes[i], line, C, on);
+    else if (p.type === "light_string") drawLights(p, C, on);
     else if (!DRAWN[p.type]) drawPiece(p, C, on);
   });
+  if (pendingLights) {
+    const q = toScreen(pendingLights.a);
+    ctx.beginPath(); ctx.arc(q[0], q[1], 7, 0, Math.PI * 2); ctx.fillStyle = "#ffd36b"; ctx.fill();
+    ctx.strokeStyle = "#000"; ctx.lineWidth = 1.5; ctx.stroke();
+  }
 
   // Puntos y manijas de la pista.
   const editingPath = tool === "track" || sel?.kind === "path" || drawing?.kind === "path";
@@ -755,6 +766,39 @@ function drawIsle(p, poly, C, on) {
 }
 // Corte que divide islas: una franja de mar (del color del agua de afuera)
 // por encima de las islas que cruza, con su línea punteada.
+// Guirnalda de luces: los cables (uno al lado del otro, como quedan en el
+// juego) con sus focos del color elegido, y las dos puntas.
+const LIGHT_COLORS = { calida: ["#ffb85c"], fria: ["#b8dcff"], navidad: ["#ff2b24", "#33f24d", "#4073ff", "#ffd12e", "#ff66d9"] };
+function drawLights(p, C, on) {
+  if (!p.a || !p.b) return;
+  const n = Math.max(1, Math.min(20, p.lines ?? 3));
+  const d = sub(p.b, p.a), L = len(d) || 1, side = [-d[1] / L, d[0] / L];
+  const cols = LIGHT_COLORS[p.style] || LIGHT_COLORS.calida;
+  const gap = Math.max(0.8, 6 / cam.zoom / Math.max(1, n / 4));
+  for (let k = 0; k < n; k++) {
+    const off = (k - (n - 1) / 2) * Math.min(1.2, 14 / n);
+    const a = add(p.a, mul(side, off)), b = add(p.b, mul(side, off));
+    const sa = toScreen(a), sb = toScreen(b);
+    ctx.beginPath(); ctx.moveTo(sa[0], sa[1]); ctx.lineTo(sb[0], sb[1]);
+    ctx.strokeStyle = on ? C.sel : "rgba(30,24,20,0.9)"; ctx.lineWidth = on ? 1.6 : 1; ctx.stroke();
+    const count = Math.floor(L / gap);
+    for (let j = 1; j < count; j++) {
+      const q = toScreen(add(a, mul(d, j / count)));
+      ctx.beginPath(); ctx.arc(q[0], q[1], 2.2, 0, Math.PI * 2); ctx.fillStyle = cols[(k * 2 + j) % cols.length]; ctx.fill();
+    }
+  }
+  for (const end of [p.a, p.b]) {
+    const q = toScreen(end);
+    ctx.beginPath(); ctx.arc(q[0], q[1], 6, 0, Math.PI * 2); ctx.fillStyle = "#fff"; ctx.fill();
+    ctx.strokeStyle = on ? C.sel : "#000"; ctx.lineWidth = 2; ctx.stroke();
+  }
+}
+let pendingLights = null;
+function tropicalAt(w) {
+  const { shapes } = computed();
+  for (let i = map.pieces.length - 1; i >= 0; i--) if (map.pieces[i].type === "tropical_island" && shapes[i]?.length >= 3 && pointInPoly(w, shapes[i])) return i;
+  return -1;
+}
 function drawSplit(p, line, C, on) {
   if (!line || line.length < 2) return;
   pathLine(line, false); ctx.lineJoin = "round"; ctx.lineCap = "round";
@@ -867,6 +911,14 @@ function hitTest(s) {
       if (dist(toScreen([p.x + Math.cos(a) * span, p.z - Math.sin(a) * span]), s) < 9) return { kind: "piece", i: sel.i, rotate: true };
     }
   }
+  // Puntas de las guirnaldas y sus cables.
+  for (let i = map.pieces.length - 1; i >= 0; i--) {
+    const p = map.pieces[i];
+    if (p.type !== "light_string" || !p.a || !p.b) continue;
+    if (dist(toScreen(p.a), s) < 9) return { kind: "piece", i, end: "a" };
+    if (dist(toScreen(p.b), s) < 9) return { kind: "piece", i, end: "b" };
+    if (distToLine(w, [p.a, p.b], false) < Math.max(3, 8 / cam.zoom)) return { kind: "piece", i };
+  }
   // Piezas chicas arriba de todo, después islas, rocas y la pista.
   for (let i = map.pieces.length - 1; i >= 0; i--) {
     const p = map.pieces[i];
@@ -901,6 +953,16 @@ function onDown(e) {
     placeStart(w); return;
   }
   if (tool === "track" || tool === "rock" || tool === "tropical_island" || tool === "island_split") return penDown(s, w, e);
+  if (tool === "light_string") {
+    const isle = tropicalAt(w);
+    if (isle < 0) { toast("Tocá adentro de una isla tropical."); return; }
+    if (!pendingLights) { pendingLights = { a: w, i: isle }; toast("Ahora tocá la otra isla."); draw(); return; }
+    if (isle === pendingLights.i) { toast("La otra punta tiene que ir en otra isla."); return; }
+    map.pieces.push({ type: "light_string", a: pendingLights.a, b: w, lines: 3, style: "calida" });
+    pendingLights = null;
+    sel = { kind: "piece", i: map.pieces.length - 1 };
+    commit(); setTool("select"); return;
+  }
   if (["island", "geyser", "volcano", "rock_arch", "shipwreck", "waterfall"].includes(tool)) {
     if (tool === "island") { map.islands.push({ x: w[0], z: w[1], radius: 20, lighthouse: false, seed: Math.floor(Math.random() * 99999) + 1 }); sel = { kind: "island", i: map.islands.length - 1 }; }
     else {
@@ -924,7 +986,8 @@ function onDown(e) {
     drag = { kind: "node", nodes, node: hit.node, handle: hit.handle, start: w, orig: JSON.parse(JSON.stringify(nodes[hit.node])), alt: e.altKey, moved: false };
   } else if (hit.sky !== undefined) {
     drag = { kind: "sky", p: map.pieces[hit.i], k: hit.sky, moved: false };
-  } else if (hit.resize) drag = { kind: "resize", target: hit.kind === "island" ? map.islands[hit.i] : map.pieces[hit.i], moved: false };
+  } else if (hit.end) drag = { kind: "lsend", p: map.pieces[hit.i], end: hit.end, moved: false };
+  else if (hit.resize) drag = { kind: "resize", target: hit.kind === "island" ? map.islands[hit.i] : map.pieces[hit.i], moved: false };
   else if (hit.rotate) drag = { kind: "rotate", target: map.pieces[hit.i], moved: false };
   else {
     const target = hit.kind === "island" ? map.islands[hit.i] : map.pieces[hit.i];
@@ -1038,6 +1101,7 @@ function onMove(e) {
     invalidate(); return;
   }
   if (drag.kind === "sky") { drag.p.skylights[drag.k] = w; invalidate(); return; }
+  if (drag.kind === "lsend") { drag.p[drag.end] = w; invalidate(); return; }
   if (drag.kind === "move") {
     const t = sel.kind === "island" ? map.islands[sel.i] : map.pieces[sel.i];
     const d = sub(w, drag.start);
@@ -1046,6 +1110,7 @@ function onMove(e) {
       t[key] = drag.orig[key].map((n) => ({ ...n, p: add(n.p, d) }));
       if (t.skylights) t.skylights = (drag.orig.skylights || []).map((k) => add(k, d));
     }
+    else if (t.type === "light_string") { t.a = add(drag.orig.a, d); t.b = add(drag.orig.b, d); }
     else { t.x = drag.orig.x + d[0]; t.z = drag.orig.z + d[1]; }
     invalidate(); refreshFieldsValues(); return;
   }
@@ -1121,6 +1186,7 @@ const HINTS = {
   rock: "Dibujá la figura de la roca igual que la pista y cerrala tocando el primer punto. Si tapa la pista es una cueva; si no, una roca de paisaje.",
   start: "Tocá la pista para poner ahí la recta de la meta (40 m antes y 60 m después). Arrastrá sus puntas para alargarla o girarla.",
   tropical_island: "Dibujá la figura de la isla tropical como la pista (clic: punto, arrastrar: curva) y cerrala tocando el primer punto. Puede tener cualquier forma.",
+  light_string: "Tocá una isla tropical y después la otra: la guirnalda va de palmeras de una a palmeras de la otra (de noche se prenden).",
   island_split: "Dibujá una línea que cruce una isla tropical de mar a mar (clic: punto, arrastrar: curva). Enter o doble clic para terminar: la isla queda partida en dos.",
   island: "Clic para poner una isla. Después arrastrá el cuadradito del borde para cambiar el tamaño.",
   geyser: "Clic para poner un géiser (mejor sobre la pista).",
@@ -1141,6 +1207,7 @@ function setHint() {
 }
 function setTool(t) {
   if (drawing && t !== tool) cancelDrawing();
+  if (t !== "light_string") pendingLights = null;
   tool = t;
   document.querySelectorAll(".tool").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.tool === t)));
   cv.style.cursor = t === "pan" ? "grab" : t === "select" ? "default" : "crosshair";
@@ -1210,13 +1277,17 @@ function field(label, kind, value, onChange, opts = {}) {
   const wrap = document.createElement("div"); wrap.className = "field";
   const id = "f_" + (opts.id || label).replace(/[^a-z0-9]/gi, "_");
   const l = document.createElement("label"); l.textContent = label; l.htmlFor = id;
-  const inp = document.createElement("input"); inp.id = id;
-  if (kind === "bool") { inp.type = "checkbox"; inp.checked = !!value; }
+  const inp = document.createElement(kind === "choice" ? "select" : "input"); inp.id = id;
+  if (kind === "choice") {
+    for (const [v, text] of opts.choices || []) { const o = document.createElement("option"); o.value = v; o.textContent = text; inp.append(o); }
+    inp.value = value;
+  }
+  else if (kind === "bool") { inp.type = "checkbox"; inp.checked = !!value; }
   else if (kind === "color") { inp.type = "color"; inp.value = (value || "#000000").slice(0, 7); }
   else if (kind === "text") { inp.type = "text"; inp.value = value ?? ""; }
   else { inp.type = "number"; inp.step = kind === "int" ? "1" : "any"; inp.value = value ?? ""; }
   inp.addEventListener("change", () => {
-    let v = kind === "bool" ? inp.checked : kind === "color" || kind === "text" ? inp.value : Number(inp.value);
+    let v = kind === "bool" ? inp.checked : kind === "color" || kind === "text" || kind === "choice" ? inp.value : Number(inp.value);
     if ((kind === "num" || kind === "int") && !Number.isFinite(v)) return;
     if (kind === "int") v = Math.round(v);
     onChange(v); commit(); refreshPanel();
@@ -1284,8 +1355,10 @@ function refreshPanel() {
       box.append(field("x (m)", "num", round(p.x), (v) => (p.x = v), { bind: "x" }));
       box.append(field("z (m)", "num", round(p.z), (v) => (p.z = v), { bind: "z" }));
     }
-    for (const [k, label, kind, d] of def?.params || []) {
-      box.append(field(label, kind, p[k] ?? d, (v) => (p[k] = v), { id: k, bind: k }));
+    for (const [k, label, kind, d, choices] of def?.params || []) {
+      let set = (v) => (p[k] = v);
+      if (p.type === "light_string" && k === "lines") set = (v) => (p[k] = Math.max(1, Math.min(20, v)));
+      box.append(field(label, kind, p[k] ?? d, set, { id: k, bind: k, choices }));
     }
     if (p.type === "rock_formation") {
       const { line, shapes } = computed();
@@ -1301,6 +1374,7 @@ function refreshPanel() {
       box.append(row);
     }
     if (p.type === "tropical_island") box.append(note("Arena en toda la figura y selva adentro. Del lado que da a la pista va más tupida; atrás, más rala. Se choca como una isla."));
+    if (p.type === "light_string") box.append(note("Cada cable sale atado a una palmera alta cerca de una punta y llega a otra cerca de la otra punta. De día se ven los focos de color; de noche (o al atardecer) se prenden. Arrastrá las puntas para moverlas."));
     if (p.type === "island_split") box.append(note("Cada isla tropical que la línea cruza de lado a lado queda partida en islas separadas, con mar en el medio. Si entra desde el mar sin cruzarla, le hace una bahía."));
     if (DRAWN[p.type] && s.node >= 0) {
       const row = document.createElement("div"); row.className = "row";
@@ -1346,6 +1420,13 @@ function review() {
       if (p.type === "geyser" && distToLine([p.x, p.z], line) > map.half_width - 2) out.push(["warn", "Hay un géiser fuera de la pista: nadie va a pasar por arriba."]);
       if (p.type === "tropical_island" && shapes[i]?.length >= 3 && rockTouchesTrack(shapes[i], line))
         out.push(["bad", "Una isla tropical pisa la pista."]);
+      if (p.type === "light_string" && p.a && p.b) {
+        const isles = map.pieces.map((q, k) => (q.type === "tropical_island" ? shapes[k] : null));
+        const ia = isles.findIndex((q) => q && q.length >= 3 && pointInPoly(p.a, q));
+        const ib = isles.findIndex((q) => q && q.length >= 3 && pointInPoly(p.b, q));
+        if (ia < 0 || ib < 0) out.push(["bad", "Una guirnalda tiene una punta fuera de una isla tropical."]);
+        else if (ia === ib) out.push(["bad", "Una guirnalda tiene las dos puntas en la misma isla."]);
+      }
       if (p.type === "island_split" && shapes[i]?.length >= 2) {
         const isles = map.pieces.map((q, k) => (q.type === "tropical_island" ? shapes[k] : null)).filter((q) => q && q.length >= 3);
         if (!shapes[i].some((pt) => isles.some((poly) => pointInPoly(pt, poly)))) out.push(["warn", "Hay un corte que no pasa por ninguna isla tropical: no divide nada."]);

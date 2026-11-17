@@ -23,6 +23,7 @@ func default_config() -> RaceConfig:
 func config_for_players() -> RaceConfig:
 	var c := RaceConfig.sandbox()
 	c.weather = config.weather
+	c.time_of_day = config.time_of_day
 	return c
 
 
@@ -45,6 +46,7 @@ func _ready() -> void:
 		# Mar abierto: solo olas que aparecen (la ola constante es de la isla).
 		waves.set_mode(GameSettings.WaveMode.SURGES)
 	set_wave_level(GameSettings.sandbox_wave_level, true)
+	DayTime.apply(get_parent(), config.time_of_day)
 	set_storm(config.weather == GameSettings.Weather.STORM)
 
 

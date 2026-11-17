@@ -42,6 +42,8 @@ var pieces: Array[MapPiece] = []
 var _registry: Dictionary = {}
 ## -1: el clima elegido en el menú (GameSettings.weather).
 @export var weather: int = -1
+## -1: la hora elegida en el menú (GameSettings.time_of_day; ver DayTime).
+@export var time_of_day: int = -1
 ## La tormenta, si hay.
 var storm: Storm = null
 
@@ -61,6 +63,11 @@ func _ready() -> void:
 	if layout < 0:
 		layout = _session_config().layout
 	_water = GameSession.find_in_scene(self, "water") as Water
+	# La hora va primero: las piezas (las guirnaldas) miran si es de noche.
+	if time_of_day < 0:
+		time_of_day = _session_config().time_of_day
+	if get_parent() and get_parent().get_node_or_null("WorldEnvironment"):
+		DayTime.apply(get_parent(), time_of_day)
 
 	# Un mapa ya puesto antes de entrar (tests, probar un mapa nuevo) se usa tal cual.
 	if map == null:

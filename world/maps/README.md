@@ -87,6 +87,7 @@ pieza se puede repetir todas las veces que haga falta.
 | `shipwreck` | Barco hundido de paisaje | `x`, `z`; `angle` (grados), `size` |
 | `waterfall` | Cascada que se atraviesa: moja la pantalla y frena un poco | `x`, `z`; `angle` (grados), `width`, `height`, `color`, `drag` |
 | `tropical_island` | Isla tropical dibujada como figura: arena, selva, palmeras, helechos y arbustos. Se choca | `shape`; `beach_width`, `palm_density`, `rocks`, `crowd`, `sand_color`, `grass_color`, `leaf_color`, `shape_seed` |
+| `light_string` | Guirnalda de luces entre dos islas tropicales: cables atados a palmeras de cada una, con focos que se prenden de noche (y al atardecer) | `a`, `b` (un punto en cada isla); `lines` (1 a 20), `style` (`"calida"`, `"fria"` o `"navidad"`) |
 | `island_split` | Dividir isla: línea abierta que parte en dos (o más) las islas tropicales que cruza, con mar en el medio | `path`; `width` |
 | `rock_formation` | Roca o cueva dibujada como figura (ver abajo) | `shape`; `height`, `ceiling`, `opening`, `opening_width`, `skylights`, `stone_low`, `stone_high`, `grass_color`, `moss_color`, `glow_color`, `darkness`, `adapt_time`, `shape_seed` |
 
