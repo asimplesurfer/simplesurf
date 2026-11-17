@@ -266,39 +266,15 @@ func build_chest(group: Node3D, data: CharacterData, radii: Vector3, neck_scale 
 	_commit()
 
 
-## Altura y fondo del moño del short (en radios de la cadera).
-const TIE_HEIGHT := 0.75
-const TIE_DEPTH := 1.0
 ## Cadera: el estampado del short ya no se arma con piezas (se pinta en la
 ## tela, ver shorts_pattern.gdshader); queda el grupo por si se agrega algo.
 func build_hips(group: Node3D, data: CharacterData, radii: Vector3) -> void:
 	_begin(group)
-	var tie := data.get_option("shorts_tie")
-	if tie > 0:
-		var color := WHITE
-		if tie == 2:
-			color = BLACK
-		elif tie == 3:
-			color = data.accent("shorts_pattern_color")
-		_shorts_tie(radii, color)
 	if data.get_option("bottom") == CharacterData.BIKINI:
 		# Ribete de la bombacha del bikini, en la cintura.
 		_piece(_cyl, Vector3(0.0, radii.y * BIKINI_TRIM_Y, 0.0), Vector3(radii.x * 1.0, 0.03, radii.z * 1.04),
 			data.accent("trim_color"), true)
 	_commit()
-
-
-## Cordón del short: un moño adelante, arriba, con las dos puntas colgando.
-func _shorts_tie(radii: Vector3, color: Color) -> void:
-	var c := Vector3(0.0, radii.y * TIE_HEIGHT, radii.z * TIE_DEPTH)
-	_piece(_sphere, c, Vector3(0.022, 0.022, 0.016), color, true)
-	for side in [-1.0, 1.0]:
-		# Las dos orejas del moño.
-		_piece(_sphere, c + Vector3(side * 0.04, 0.005, 0.0), Vector3(0.04, 0.02, 0.012), color, true,
-			Basis(Vector3.BACK, side * 0.25))
-		# Las puntas, cayendo un poco abiertas.
-		_piece(_sphere, c + Vector3(side * 0.022, -0.065, 0.006), Vector3(0.012, 0.06, 0.01), color, true,
-			Basis(Vector3.BACK, side * 0.22))
 
 
 # ---------------------------------------------------------------- cabeza

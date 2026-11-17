@@ -157,7 +157,7 @@ dialog::backdrop { background: rgba(5, 15, 20, 0.5); }
     <button class="tool" data-tool="rock" title="Roca o cueva: dibujá la figura (R)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 19l3-8 4-3 3 2 3-5 5 14z"/><path d="M9 19c0-3 1.5-5 3-5s3 2 3 5" /></svg><span class="key">R</span></button>
     <button class="tool" data-tool="start" title="Meta: una recta con la largada (M)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M6 21V4"/><path d="M6 4h12l-2 4 2 4H6"/><path d="M10 4v8M14 4v8" stroke-dasharray="2 2"/></svg><span class="key">M</span></button>
     <button class="tool" data-tool="tropical_island" title="Isla tropical: dibujá la figura (T)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 18c3-3 6-2 9-3s6-3 9-1"/><path d="M8 15V9m0 0c-2-2-4-1.5-5 0m5 0c1.5-2 3.5-2 5-.5M15 14V8m0 0c-1.5-1.8-3.5-1.5-4.5 0m4.5 0c1.5-2 3.5-1.8 4.5-.2" stroke-linecap="round"/></svg><span class="key">T</span></button>
-    <button class="tool" data-tool="river" title="Río: dibujá el camino del agua, de la naciente al mar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 3c3 3-2 6 1 9s-2 6 1 9"/><path d="M12 3c3 3-2 6 1 9s-2 6 1 9"/></svg></button>
+    <button class="tool" data-tool="island_split" title="Dividir isla: dibujá una línea que cruce una isla tropical y queda partida en dos, con mar en el medio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 9c2-4 5-5 7-4v14c-3 1-6 0-7-4z"/><path d="M14 5c2-1 5 0 7 4v6c-1 4-4 5-7 4z"/><path d="M12 2v20" stroke-dasharray="2 2"/></svg></button>
     <button class="tool" data-tool="island" title="Isla (I)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="16" rx="8" ry="3.5"/><path d="M12 15V8m0 0c-2-2-4-2-5-1m5 1c2-2 4-2 5-1m-5 1c-1-2-1-3.5 0-4.5"/></svg><span class="key">I</span></button>
     <hr>
     <button class="tool" data-tool="geyser" title="Géiser (G)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><ellipse cx="12" cy="19" rx="6" ry="2"/><path d="M12 17V6m-3 4l3-4 3 4M8 13c-1-2 0-4 1-5m7 5c1-2 0-4-1-5"/></svg><span class="key">G</span></button>
@@ -232,12 +232,10 @@ const PIECES = {
     ["angle", "Ángulo (°)", "num", 0], ["width", "Ancho (m)", "num", 50], ["height", "Altura (m)", "num", 34],
     ["color", "Agua", "color", "#bdf3ff"], ["drag", "Cuánto frena (0–1)", "num", 0.12] ] },
   tropical_island: { name: "Isla tropical", params: [
-    ["beach_width", "Ancho de la playa (m)", "num", 12], ["palm_density", "Palmeras (cada 100 m²)", "num", 1.2],
+    ["beach_width", "Ancho de la playa (m)", "num", 5], ["palm_density", "Palmeras (cada 100 m²)", "num", 1.2],
     ["rocks", "Piedras en la arena", "int", 3], ["sand_color", "Arena", "color", "#f2d8a0"],
     ["grass_color", "Pasto", "color", "#3f7f2c"], ["leaf_color", "Hojas", "color", "#2f8f2c"], ["shape_seed", "Semilla", "int", 1] ] },
-  river: { name: "Río", params: [
-    ["width", "Ancho (m)", "num", 9], ["color", "Agua", "color", "#47c9d6"], ["deep_color", "Agua honda", "color", "#1f7f9a"],
-    ["flow_speed", "Velocidad del agua", "num", 1] ] },
+  island_split: { name: "Dividir isla", params: [["width", "Ancho del mar en el medio (m)", "num", 14]] },
   rock_formation: { name: "Roca / cueva", params: [
     ["height", "Alto de la roca (m)", "num", 34], ["ceiling", "Altura del techo (m)", "num", 12],
     ["opening", "Arco abajo (si no toca la pista)", "bool", false], ["opening_width", "Ancho del arco (m)", "num", 16],
@@ -248,11 +246,11 @@ const PIECES = {
 };
 const GEYSER_RADIUS = 4;
 // Piezas que se dibujan con puntos y manijas: dónde guardan los puntos y si la
-// figura es cerrada (roca, isla) o un camino abierto (río).
+// figura es cerrada (roca, isla) o un camino abierto (corte que divide islas).
 const DRAWN = {
   rock_formation: { key: "shape", closed: true, tool: "rock", label: "una roca" },
   tropical_island: { key: "shape", closed: true, tool: "tropical_island", label: "una isla" },
-  river: { key: "path", closed: false, tool: "river", label: "un río" },
+  island_split: { key: "path", closed: false, tool: "island_split", label: "un corte" },
 };
 const nodesOf = (p) => p[DRAWN[p.type].key];
 const isClosed = (p) => DRAWN[p.type]?.closed !== false;
@@ -576,7 +574,7 @@ function draw() {
 
   // Piezas (las rocas, semitransparentes, encima de la pista).
   map.pieces.forEach((p, i) => { if (p.type === "tropical_island") drawIsle(p, shapes[i], C, sel?.kind === "piece" && sel.i === i); });
-  map.pieces.forEach((p, i) => { if (p.type === "river") drawRiver(p, shapes[i], C, sel?.kind === "piece" && sel.i === i); });
+  map.pieces.forEach((p, i) => { if (p.type === "island_split") drawSplit(p, shapes[i], C, sel?.kind === "piece" && sel.i === i); });
   map.pieces.forEach((p, i) => {
     const on = sel?.kind === "piece" && sel.i === i;
     if (p.type === "rock_formation") drawRock(p, shapes[i], line, C, on);
@@ -748,22 +746,19 @@ function drawIsle(p, poly, C, on) {
   ctx.save(); pathLine(poly, true); ctx.clip();
   ctx.fillStyle = p.grass_color || "#3f7f2c"; ctx.fill();
   pathLine(poly, true); ctx.strokeStyle = p.sand_color || "#f2d8a0"; ctx.lineJoin = "round";
-  ctx.lineWidth = 2 * (p.beach_width ?? 12) * cam.zoom; ctx.stroke();
+  ctx.lineWidth = 2 * (p.beach_width ?? 5) * cam.zoom; ctx.stroke();
   ctx.restore();
   pathLine(poly, true); ctx.strokeStyle = on ? C.sel : "rgba(255,255,255,0.7)"; ctx.lineWidth = on ? 2.2 : 1.2; ctx.stroke();
   const c = toScreen(centroid(poly));
   ctx.font = "600 12px Outfit, sans-serif"; ctx.textAlign = "center"; ctx.fillStyle = "#fff"; ctx.fillText("isla tropical", c[0], c[1]); ctx.textAlign = "start";
 }
-function drawRiver(p, line, C, on) {
+// Corte que divide islas: una franja de mar (del color del agua de afuera)
+// por encima de las islas que cruza, con su línea punteada.
+function drawSplit(p, line, C, on) {
   if (!line || line.length < 2) return;
   pathLine(line, false); ctx.lineJoin = "round"; ctx.lineCap = "round";
-  ctx.strokeStyle = "#d9bd84"; ctx.lineWidth = ((p.width ?? 9) + 5) * cam.zoom; ctx.stroke();
-  ctx.strokeStyle = p.color || "#47c9d6"; ctx.lineWidth = Math.max(2, (p.width ?? 9) * cam.zoom); ctx.stroke();
-  if (on) { ctx.strokeStyle = C.sel; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.stroke(); ctx.setLineDash([]); }
-  // Flechita: para dónde corre el agua.
-  const a = line[line.length - 2], b = line[line.length - 1], s = toScreen(b), d = sub(b, a);
-  ctx.save(); ctx.translate(s[0], s[1]); ctx.rotate(Math.atan2(d[1], d[0])); ctx.fillStyle = "#fff";
-  ctx.beginPath(); ctx.moveTo(7, 0); ctx.lineTo(-4, -5); ctx.lineTo(-4, 5); ctx.closePath(); ctx.fill(); ctx.restore();
+  ctx.strokeStyle = C.out; ctx.lineWidth = Math.max(2, (p.width ?? 14) * cam.zoom); ctx.stroke();
+  ctx.strokeStyle = on ? C.sel : "rgba(255,255,255,0.75)"; ctx.lineWidth = on ? 2 : 1.2; ctx.setLineDash([6, 5]); ctx.stroke(); ctx.setLineDash([]);
 }
 function rockTouchesTrack(poly, line) {
   for (let i = 0; i < line.length; i += 3) if (pointInPoly(line[i], poly) || distToLine(line[i], poly) < map.half_width + 4) return true;
@@ -885,9 +880,9 @@ function hitTest(s) {
   const { shapes, line } = computed();
   for (let i = map.pieces.length - 1; i >= 0; i--) {
     const p = map.pieces[i];
-    if (p.type === "river" && shapes[i]?.length >= 2 && distToLine(w, shapes[i], false) < Math.max((p.width ?? 9) / 2 + 2, 8 / cam.zoom)) return { kind: "piece", i };
+    if (p.type === "island_split" && shapes[i]?.length >= 2 && distToLine(w, shapes[i], false) < Math.max((p.width ?? 14) / 2 + 2, 8 / cam.zoom)) return { kind: "piece", i };
   }
-  for (let i = map.pieces.length - 1; i >= 0; i--) if (shapes[i] && map.pieces[i].type !== "river" && pointInPoly(w, shapes[i])) return { kind: "piece", i };
+  for (let i = map.pieces.length - 1; i >= 0; i--) if (shapes[i] && map.pieces[i].type !== "island_split" && pointInPoly(w, shapes[i])) return { kind: "piece", i };
   if (line.length > 2 && distToLine(w, line) < map.half_width) return { kind: "path" };
   return null;
 }
@@ -904,7 +899,7 @@ function onDown(e) {
     if (hit?.kind === "start") { sel = { kind: "start" }; refreshPanel(); drag = { kind: "start", part: hit.part, start: w, orig: { ...map.start }, moved: false }; draw(); return; }
     placeStart(w); return;
   }
-  if (tool === "track" || tool === "rock" || tool === "tropical_island" || tool === "river") return penDown(s, w, e);
+  if (tool === "track" || tool === "rock" || tool === "tropical_island" || tool === "island_split") return penDown(s, w, e);
   if (["island", "geyser", "volcano", "rock_arch", "shipwreck", "waterfall"].includes(tool)) {
     if (tool === "island") { map.islands.push({ x: w[0], z: w[1], radius: 20, lighthouse: false, seed: Math.floor(Math.random() * 99999) + 1 }); sel = { kind: "island", i: map.islands.length - 1 }; }
     else {
@@ -956,7 +951,7 @@ function penDown(s, w, e) {
     }
   }
   const nodes = drawing.kind === "path" ? map.path : nodesOf(drawing.piece);
-  // Tocar el primer punto cierra la figura (un río se termina con Enter o doble clic).
+  // Tocar el primer punto cierra la figura (un corte se termina con Enter o doble clic).
   const closedShape = drawing.kind === "path" || isClosed(drawing.piece);
   if (closedShape && nodes.length >= 3 && dist(toScreen(nodes[0].p), s) < 10) { finishDrawing(); return; }
   nodes.push({ p: w, in: [0, 0], out: [0, 0] });
@@ -1125,7 +1120,7 @@ const HINTS = {
   rock: "Dibujá la figura de la roca igual que la pista y cerrala tocando el primer punto. Si tapa la pista es una cueva; si no, una roca de paisaje.",
   start: "Tocá la pista para poner ahí la recta de la meta (40 m antes y 60 m después). Arrastrá sus puntas para alargarla o girarla.",
   tropical_island: "Dibujá la figura de la isla tropical como la pista (clic: punto, arrastrar: curva) y cerrala tocando el primer punto. Puede tener cualquier forma.",
-  river: "Dibujá el río desde la naciente hasta el mar (clic: punto, arrastrar: curva). Enter o doble clic para terminar.",
+  island_split: "Dibujá una línea que cruce una isla tropical de mar a mar (clic: punto, arrastrar: curva). Enter o doble clic para terminar: la isla queda partida en dos.",
   island: "Clic para poner una isla. Después arrastrá el cuadradito del borde para cambiar el tamaño.",
   geyser: "Clic para poner un géiser (mejor sobre la pista).",
   volcano: "Clic para poner una isla volcán.",
@@ -1305,7 +1300,7 @@ function refreshPanel() {
       box.append(row);
     }
     if (p.type === "tropical_island") box.append(note("Arena en toda la figura y selva adentro. Del lado que da a la pista va más tupida; atrás, más rala. Se choca como una isla."));
-    if (p.type === "river") box.append(note("El agua corre del primer punto al último y desemboca en el mar. Pasa por arriba de las islas tropicales (que dejan libre el cauce)."));
+    if (p.type === "island_split") box.append(note("Cada isla tropical que la línea cruza de lado a lado queda partida en islas separadas, con mar en el medio. Si entra desde el mar sin cruzarla, le hace una bahía."));
     if (DRAWN[p.type] && s.node >= 0) {
       const row = document.createElement("div"); row.className = "row";
       const n = nodesOf(p)[s.node];
@@ -1350,9 +1345,9 @@ function review() {
       if (p.type === "geyser" && distToLine([p.x, p.z], line) > map.half_width - 2) out.push(["warn", "Hay un géiser fuera de la pista: nadie va a pasar por arriba."]);
       if (p.type === "tropical_island" && shapes[i]?.length >= 3 && rockTouchesTrack(shapes[i], line))
         out.push(["bad", "Una isla tropical pisa la pista."]);
-      if (p.type === "river" && shapes[i]?.length >= 2) {
+      if (p.type === "island_split" && shapes[i]?.length >= 2) {
         const isles = map.pieces.map((q, k) => (q.type === "tropical_island" ? shapes[k] : null)).filter((q) => q && q.length >= 3);
-        if (!shapes[i].some((pt) => isles.some((poly) => pointInPoly(pt, poly)))) out.push(["warn", "Hay un río que no pasa por ninguna isla tropical: no se va a ver."]);
+        if (!shapes[i].some((pt) => isles.some((poly) => pointInPoly(pt, poly)))) out.push(["warn", "Hay un corte que no pasa por ninguna isla tropical: no divide nada."]);
       }
       if (p.type === "rock_formation" && shapes[i]?.length >= 3 && rockTouchesTrack(shapes[i], line) && (p.ceiling ?? 12) < 7)
         out.push(["warn", "Una cueva tiene el techo muy bajo (menos de 7 m): la cámara puede quedar dentro de la roca."]);

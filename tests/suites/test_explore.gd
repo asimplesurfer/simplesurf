@@ -30,7 +30,35 @@ func _test_menu_choice() -> void:
 		GameSettings.track_layout = GameSettings.TrackLayout.ARCHIPELAGO
 		menu.set_track_layout(want)
 		_check(GameSettings.track_layout == want, "elegir el mapa %d en el menú deja ese mapa" % want)
+	# Con flechas o mando: el mapa con el foco es el que se juega; pasar por
+	# otras filas no cambia nada.
+	GameSettings.track_layout = GameSettings.TrackLayout.ARCHIPELAGO
+	var level := GameSettings.bot_level
+	menu.go_setup()
+	await process_frame
+	await process_frame
+	var tiles: Array[Button] = []
+	var level_tiles: Array[Button] = []
+	for row in menu.find_children("*", "HBoxContainer", true, false):
+		var l := row.get_child(0) as Label
+		if l and l.text in ["Mapa", "Dificultad"]:
+			for c in row.get_children():
+				if c is Button:
+					(tiles if l.text == "Mapa" else level_tiles).append(c)
+	level_tiles[(level + 1) % level_tiles.size()].grab_focus()
+	await process_frame
+	_check(GameSettings.bot_level == level, "llegar a otra fila no cambia lo elegido ahí")
+	tiles[0].grab_focus()
+	await process_frame
+	await process_frame
+	_check(menu.get_viewport().gui_get_focus_owner() == tiles[1] and GameSettings.track_layout == 1,
+		"al llegar a la fila de mapas, el foco cae en el mapa elegido")
+	tiles[2].grab_focus()
+	await process_frame
+	menu.start_race()
+	_check(GameSettings.track_layout == 2 and menu.started_config.layout == 2, "mover el foco a otro mapa lo elige y se juega ese")
 	GameSettings.track_layout = saved_layout
+	GameSettings.bot_level = level
 	menu.queue_free()
 	await process_frame
 

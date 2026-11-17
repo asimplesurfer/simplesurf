@@ -38,7 +38,7 @@ var rocks: Array[Rock] = []
 ## Las piezas del mapa (armadas para esta carrera).
 var pieces: Array[MapPiece] = []
 ## Registro de las piezas: cada una se anota con un tipo para que las otras la
-## encuentren (por ejemplo "ground": las que son tierra; "river": los ríos).
+## encuentren (por ejemplo "ground": las que son tierra).
 var _registry: Dictionary = {}
 ## -1: el clima elegido en el menú (GameSettings.weather).
 @export var weather: int = -1
@@ -76,10 +76,14 @@ func _ready() -> void:
 	# (el volcán) queda primera, y el agua alrededor de las primeras islas se
 	# dibuja con más detalle.
 	pieces = map.make_pieces()
-	# Primero todas se preparan (y se anotan: "soy tierra", "soy un río"...),
-	# después se construyen: así cada una puede tener en cuenta a las demás.
-	for piece in pieces:
-		piece.prepare(self)
+	# Primero todas se preparan (y se anotan: "soy tierra"...), después se
+	# construyen: así cada una puede tener en cuenta a las demás. Al prepararse
+	# una pieza puede sumar otras (una isla partida en dos por un corte): esas
+	# también se preparan.
+	var k := 0
+	while k < pieces.size():
+		pieces[k].prepare(self)
+		k += 1
 	for piece in pieces:
 		piece.build(self)
 	for i in map.islands.size():

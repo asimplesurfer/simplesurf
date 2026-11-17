@@ -19,15 +19,36 @@ const LEAVES := Color(0.25, 0.65, 0.3)
 func _ready() -> void:
 	add_to_group("island")
 
-	# Playa: un cono truncado que entra en el agua.
-	var beach_mesh := CylinderMesh.new()
-	beach_mesh.top_radius = radius
-	beach_mesh.bottom_radius = radius + 12.0
-	beach_mesh.height = 4.0
-	beach_mesh.radial_segments = 48
-	beach_mesh.material = ToonMaterial.make(SAND, 0.0)
-	_add_mesh(beach_mesh, Vector3(0.0, -1.4, 0.0))
+	_build_beach()
 	_build_top()
+
+
+## Playa: arena plana arriba y una pendiente suave que entra en el agua, con
+## arena mojada cerca del agua (ver BeachMesh). El borde no es un círculo
+## perfecto: se mueve un poco para adentro y para afuera.
+func _build_beach() -> void:
+	var noise := FastNoiseLite.new()
+	noise.seed = island_seed
+	noise.frequency = 0.9
+	var segments := clampi(int(radius * 1.6), 48, 128)
+	var outline := PackedVector2Array()
+	var normals := PackedVector2Array()
+	for i in segments:
+		var a := TAU * i / segments
+		var dir := Vector2(cos(a), sin(a))
+		# Ruido sobre el círculo (sin corte donde se cierra la vuelta).
+		var wobble := noise.get_noise_2d(dir.x * 1.5, dir.y * 1.5)
+		outline.append(dir * radius * (1.0 + 0.035 * wobble))
+		normals.append(dir)
+	var mesh := BeachMesh.build(outline, normals, BEACH_TOP, BEACH_BOTTOM, BEACH_WIDTH, SAND, island_seed)
+	var mi := _add_mesh(mesh, Vector3.ZERO)
+	mi.name = "Beach"
+
+
+## Altura de la arena de arriba, hasta dónde baja la playa y en cuántos metros.
+const BEACH_TOP := 0.6
+const BEACH_BOTTOM := -3.4
+const BEACH_WIDTH := 12.0
 
 
 ## Lo de arriba de la playa: loma verde, palmeras y faro.

@@ -41,8 +41,6 @@ const SHORTS_PATTERNS := [
 ## Abajo: short (con piernas) o bikini (solo la cadera, con ribete).
 const BOTTOMS := ["Short", "Bikini"]
 const BIKINI := 1
-## Cordón del short (atado con moño adelante).
-const SHORTS_TIES := ["Sin cordón", "Cordón blanco", "Cordón negro", "Cordón del estampado"]
 const BOARD_COLORS := [
 	Color("#fff1c9"),
 	Color(1.0, 0.86, 0.3),
@@ -166,12 +164,12 @@ const PRESETS := [
 	{"board": 2, "board_design": 5, "board_design_color": 0, "board_design_color2": 1, "bottom": 0, "build": 0,
 		"ears": 0, "extra": 0, "eyes": 0, "glasses": 13, "hair": 15, "hair_color": 1, "hat": 0, "hat_color": 1,
 		"head": 0, "mouth": 13, "neck": 10, "nose": 5, "shorts": 1, "shorts_pattern": 14, "shorts_pattern_color": 9,
-		"shorts_pattern_color2": 2, "shorts_tie": 0, "skin": 1, "top": 0, "top_color": 4, "top_color2": 2,
+		"shorts_pattern_color2": 2, "skin": 1, "top": 0, "top_color": 4, "top_color2": 2,
 		"trim_color": 0, "weight": 0.0},
 	{"board": 6, "board_design": 4, "board_design_color": 2, "board_design_color2": 5, "bottom": 1, "build": 1,
 		"ears": 0, "extra": 9, "eyes": 11, "glasses": 0, "hair": 17, "hair_color": 3, "hat": 1, "hat_color": 1,
 		"head": 6, "mouth": 0, "neck": 0, "nose": 1, "shorts": 8, "shorts_pattern": 14, "shorts_pattern_color": 0,
-		"shorts_pattern_color2": 2, "shorts_tie": 0, "skin": 0, "top": 1, "top_color": 4, "top_color2": 2,
+		"shorts_pattern_color2": 2, "skin": 0, "top": 1, "top_color": 4, "top_color2": 2,
 		"trim_color": 0, "weight": 0.1},
 ]
 
@@ -203,7 +201,6 @@ const PRESETS := [
 @export var shorts_pattern_color2_index: int = 2
 @export var board_design_color_index: int = 0
 @export var board_design_color2_index: int = 4
-@export var shorts_tie_index: int = 0
 @export var bottom_index: int = 0
 @export var build_index: int = 0
 @export var trim_color_index: int = 0
@@ -235,7 +232,6 @@ const FIELDS := {
 	"shorts_pattern": ["shorts_pattern_index", SHORTS_PATTERNS],
 	"shorts_pattern_color": ["shorts_pattern_color_index", ACCENT_NAMES],
 	"shorts_pattern_color2": ["shorts_pattern_color2_index", ACCENT_NAMES],
-	"shorts_tie": ["shorts_tie_index", SHORTS_TIES],
 	"bottom": ["bottom_index", BOTTOMS],
 	"trim_color": ["trim_color_index", ACCENT_NAMES],
 	"board": ["board_index", BOARD_NAMES],

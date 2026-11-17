@@ -195,10 +195,11 @@ func _test_customization() -> void:
 		and red_style.option_name("head") == "Suave", "estilo Pelirroja: melena, sombrero de paja y cabeza suave")
 	_check(CharacterData.MOUTHS.has("Canchera") and CharacterData.MOUTHS.has("Sonrisa ancha")
 		and CharacterData.MOUTHS.has("Pícara"), "sonrisas confiadas de una línea")
-	# Piezas del despeinado (pelo, anteojos, cuellito y cordón del short).
+	# Piezas del despeinado (pelo, anteojos y cuellito). Un personaje guardado
+	# con el cordón del short (que ya no está) se sigue leyendo.
 	var shaggy := CharacterData.from_dict({"hair": 15, "glasses": 13, "neck": 9, "shorts_tie": 1})
 	_check(shaggy.option_name("hair") == "Despeinado" and shaggy.option_name("glasses") == "Envolventes"
-		and shaggy.option_name("shorts_tie") == "Cordón blanco", "despeinado: pelo, anteojos y cordón")
+		and not CharacterData.FIELDS.has("shorts_tie"), "despeinado: pelo y anteojos (y ya no hay cordón)")
 	var red := CharacterData.from_dict({"weight": 0.3, "build": 1, "hair": 17, "eyes": 11, "neck": 10,
 		"hat": 1, "top": 1, "bottom": 1, "shorts": 8, "shorts_pattern": 2, "shorts_pattern_color": 10})
 	_check(red.option_name("hair") == "Melena ondulada" and red.option_name("bottom") == "Bikini"
@@ -240,11 +241,11 @@ func _test_customization() -> void:
 	feats.build_chest(groups.chest, shaggy, SurferKit.CHEST_RADII)
 	feats.build_hips(groups.hips, shaggy, SurferKit.HIPS_RADII)
 	_check(int(groups.hair.get_meta("pieces", 0)) >= 10, "despeinado: cáscara, mechones y flequillo")
-	_check(int(groups.hips.get_meta("pieces", 0)) >= 5, "el cordón del short se arma (moño y puntas)")
 	var plain := CharacterData.new()
 	var plain_hips := Node3D.new()
 	feats.build_hips(plain_hips, plain, SurferKit.HIPS_RADII)
-	_check(int(plain_hips.get_meta("pieces", 0)) == 0, "sin cordón no se arma nada en el short")
+	_check(int(groups.hips.get_meta("pieces", 0)) == 0 and int(plain_hips.get_meta("pieces", 0)) == 0,
+		"el short no tiene cordón")
 	for g in groups.values():
 		(g as Node3D).free()
 	plain_hips.free()

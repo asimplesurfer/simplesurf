@@ -61,7 +61,6 @@ const CATEGORIES := {
 		["Estampado", "option", "shorts_pattern", ThumbRenderer.Frame.HIPS],
 		["Color del estampado", "color", "shorts_pattern_color", 0],
 		["Segundo color", "color", "shorts_pattern_color2", 0],
-		["Cordón", "option", "shorts_tie", ThumbRenderer.Frame.HIPS],
 		["Ribete del bikini", "color", "trim_color", 0],
 	],
 	"Tabla": [
@@ -108,6 +107,8 @@ var _thumbs: ThumbRenderer
 var _count_label: Label
 ## Stick ya movido (hay que soltarlo para el próximo paso): "device:eje" -> true.
 var _stick_armed: Dictionary = {}
+## Fila de opciones que tiene el foco (null: el foco está en otro lado).
+var _focus_row: Control = null
 
 
 func _ready() -> void:
@@ -364,6 +365,10 @@ func _build_setup() -> void:
 	go.custom_minimum_size = Vector2(220.0, 52.0)
 	go.pressed.connect(start_race)
 	bar.add_child(go)
+	for b in bar.get_children():
+		if b is Button:
+			(b as Button).focus_entered.connect(func() -> void: _focus_row = null)
+	_focus_row = null
 	first.grab_focus.call_deferred()
 
 
@@ -385,21 +390,38 @@ func _setup_row(parent: Control, title: String, names: Array, selected: int, on_
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	row.add_child(l)
 	var buttons: Array[Button] = []
+	var pick := func(index: int) -> void:
+		if buttons[index].get_meta("selected", false):
+			return
+		on_pick.call(index)
+		for k in buttons.size():
+			if is_instance_valid(buttons[k]):
+				_style_tile(buttons[k], k == index)
+		GameSettings.save_settings()
 	for i in names.size():
 		var b := _button(names[i], 18)
 		b.custom_minimum_size = Vector2(150.0, 54.0)
 		_style_tile(b, i == selected)
 		var index := i
 		b.pressed.connect(func() -> void:
-			on_pick.call(index)
+			pick.call(index)
+			_focus_row = row
+		)
+		# Con flechas o mando, lo que tiene el foco es lo elegido: moverse de
+		# costado dentro de la fila ya elige; al llegar desde otra fila, el foco
+		# cae en la opción elegida (no cambia nada al pasar por arriba).
+		b.focus_entered.connect(func() -> void:
+			if _focus_row == row:
+				pick.call(index)
+				return
+			_focus_row = row
 			for k in buttons.size():
-				if is_instance_valid(buttons[k]):
-					_style_tile(buttons[k], k == index)
-			GameSettings.save_settings()
+				if k != index and buttons[k].get_meta("selected", false):
+					buttons[k].grab_focus.call_deferred()
 		)
 		row.add_child(b)
 		buttons.append(b)
-	return buttons[0]
+	return buttons[maxi(selected, 0)] if selected < buttons.size() else buttons[0]
 
 
 ## Música: una canción en bucle o aleatoria (suena enseguida, para escucharla).
