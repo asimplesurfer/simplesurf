@@ -1,5 +1,7 @@
 # Mapas
 
+> **Para subir un mapa desde el editor sin tocar código: ver [COMO_SUBIR_UN_MAPA.md](COMO_SUBIR_UN_MAPA.md).**
+
 Cada mapa es un archivo `.json` en esta carpeta. **Agregar un mapa = agregar un
 archivo**: el juego lee la carpeta y lo muestra en el menú. No hay que tocar
 código, salvo que el mapa necesite una pieza que todavía no existe.

@@ -48,15 +48,22 @@ static var _all: Array[TrackMap] = []
 
 
 ## Todos los mapas de la carpeta, en orden. Se leen una sola vez.
+## Un mapa con errores no se carga (así un archivo mal subido nunca rompe el
+## juego); el aviso queda en la consola. Antes de publicar, GitHub revisa los
+## mapas (tools/validate_maps.gd) y no publica si alguno está mal.
 static func all() -> Array[TrackMap]:
 	if _all.is_empty():
+		var orders := {}
 		for file in _list_files():
 			var errors := PackedStringArray()
 			var m := load_file(FOLDER + file, errors)
+			if m != null and orders.has(m.order):
+				errors.append("el número de mapa %d ya lo usa %s" % [m.order, orders[m.order]])
 			if m == null or not errors.is_empty():
-				push_error("Mapa %s: %s" % [file, "; ".join(errors)])
-			if m != null:
-				_all.append(m)
+				push_error("Mapa %s (no se carga): %s" % [file, "; ".join(errors)])
+				continue
+			orders[m.order] = file
+			_all.append(m)
 		_all.sort_custom(func(a: TrackMap, b: TrackMap) -> bool:
 			return a.order < b.order if a.order != b.order else a.id < b.id)
 	return _all
@@ -112,8 +119,10 @@ static func load_file(file_path: String, errors: PackedStringArray = PackedStrin
 		errors.append("%s no es un JSON válido" % file_path)
 		return null
 	var m := from_dict(data, errors)
-	if m.id.is_empty():
-		m.id = file_path.get_file().get_basename()
+	# El nombre del archivo manda (así renombrar el archivo no rompe nada).
+	m.id = file_path.get_file().get_basename()
+	if m.name.is_empty():
+		m.name = m.id
 	return m
 
 
