@@ -232,6 +232,21 @@ func height_at(x: float, z: float) -> float:
 	return waves.height_at(x, z, time) + swell_height_at(x, z)
 
 
+## Altura del agua en (x, z) dentro de `dt` segundos: el mar de fondo en ese
+## momento y las olas grandes corridas lo que avanzan (aproximado: sin contar
+## cuánto crecen). Para prever si algo se va a chocar con el agua.
+func height_ahead(x: float, z: float, dt: float) -> float:
+	var p := Vector2(x, z)
+	var h := 0.0
+	for s in swells:
+		h += s.height_at(p - s.direction * s.speed * dt)
+	if ring_wave:
+		h += ring_wave.height_at(p)
+	if h != 0.0:
+		h *= _island_fade(p)
+	return waves.height_at(x, z, time + dt) + h
+
+
 ## Altura que aportan solo las olas grandes (para saber si está sobre una).
 func swell_height_at(x: float, z: float) -> float:
 	var p := Vector2(x, z)

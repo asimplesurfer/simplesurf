@@ -53,6 +53,9 @@ func _ready() -> void:
 	course = get_node(course_path) as Course
 	_setup_input()
 	_spawn_racers()
+	# La línea de carrera de los bots se calcula ahora (al cargar), no al largar.
+	if course and course.track:
+		RacingLine.for_track(course.track, course.half_width - 3.0)
 	_countdown = countdown_time
 	if config.is_time_trial():
 		time_trial = TimeTrial.new()

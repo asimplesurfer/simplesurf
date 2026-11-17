@@ -70,6 +70,7 @@ func run() -> void:
 	await _test_bumps()
 	await _test_swells()
 	await _test_wave_jump()
+	await _test_trick_guard()
 	await _test_constant_wave()
 	await _test_course()
 	await _test_turbo_and_wrong_way()
@@ -608,6 +609,59 @@ func _test_swells() -> void:
 	w.retire()
 	await _wait(w.fade_time + 0.2)
 	_check(_water.swells.is_empty(), "una ola retirada se desvanece y desaparece")
+
+
+## Trucos: si el agua lo va a alcanzar antes de terminar el truco (una ola que
+## viene encima), ni empieza. Olas nuevas: separadas entre sí.
+func _test_trick_guard() -> void:
+	print("Trucos que no llegan:")
+	_water.clear_swells()
+	_teleport(Vector3(3000.0, 0.0, 900.0))
+	await process_frame
+	# En el aire, subiendo poquito; con agua quieta tendría tiempo de un truco.
+	_rider.state_machine.transition_to(&"airborne")
+	_rider.can_trick = true
+	_rider.position.y = _water_height_here() + 1.2
+	_rider.vertical_speed = 3.0
+	_rider.speed = 13.0
+	var flat := _rider.time_to_land()
+	# Una ola grande justo adelante, viniendo hacia él.
+	var s := Swell.new()
+	var f := _rider.forward()
+	s.center = Vector2(_rider.position.x + f.x * 14.0, _rider.position.z + f.z * 14.0)
+	s.direction = -Vector2(f.x, f.z)
+	s.speed = 6.0
+	s.max_amplitude = 4.0
+	s.amplitude = 4.0
+	s.width = 7.0
+	s.half_length = 30.0
+	s.age = 3.0
+	s.grow_time = 0.1
+	s.lifetime = 30.0
+	_water.add_swell(s)
+	var ahead := _rider.time_to_land_ahead()
+	_check(ahead > 0.05 and ahead < flat - 0.1, "prevé que la ola lo alcanza antes (%.2f s contra %.2f s con agua quieta)" % [ahead, flat])
+	_set_action(&"p1_a", true)
+	var started := false
+	for i in 12:
+		await process_frame
+		if _rider.trick_angle > 0.0:
+			started = true
+	_set_action(&"p1_a", false)
+	_check(not started, "con la ola encima no deja empezar el truco")
+	await _wait_until_state(&"riding", 3.0)
+	_water.clear_swells()
+	# Olas nuevas separadas: una al lado de otra no entra; lejos, sí.
+	var a := Swell.new()
+	a.center = Vector2(5000.0, 5000.0)
+	a.lifetime = 30.0
+	_water.add_swell(a)
+	var near := Swell.new()
+	near.center = Vector2(5010.0, 5000.0)
+	var far := Swell.new()
+	far.center = Vector2(5060.0, 5000.0)
+	_check(not _waves._spaced(near) and _waves._spaced(far), "una ola nueva no nace pegada a otra")
+	_water.clear_swells()
 
 
 func _test_wave_jump() -> void:

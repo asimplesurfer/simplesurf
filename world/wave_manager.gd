@@ -135,11 +135,27 @@ func _physics_process(delta: float) -> void:
 	if fixed_waves:
 		_update_fixed()
 		return
-	# Nunca un rato largo sin olas: cada jugador tiene que tener una viniendo.
+	# Recién largada: unos segundos de calma (si no, al estar todos juntos les
+	# llegan varias olas seguidas antes de poder verlas).
+	var race := GameSession.find_in_scene(self, "race_manager") as RaceManager
+	if race and (race.state == RaceManager.State.COUNTDOWN or race.race_time < START_CALM):
+		return
+	# Nunca un rato largo sin olas: cada grupo de corredores (los que van a
+	# menos de GROUP_DISTANCE entre sí) tiene que tener una viniendo. Los que
+	# van juntos comparten las olas (no una por cada uno).
 	_ensure_timer -= delta
 	if _ensure_timer <= 0.0:
 		_ensure_timer = ensure_interval
+		var served: Array[Rider] = []
 		for target in _targets():
+			var grouped := false
+			for other in served:
+				if other.global_position.distance_to(target.global_position) < GROUP_DISTANCE:
+					grouped = true
+					break
+			if grouped:
+				continue
+			served.append(target)
 			if not has_wave_ahead(target):
 				_free_slot()
 				if _water.can_add_swell():
@@ -330,6 +346,25 @@ func _free_slot() -> void:
 		worst_seen.retire()
 
 
+## Corredores a menos de esto (m) comparten las olas.
+const GROUP_DISTANCE := 35.0
+## Distancia mínima (m) entre una ola nueva y las que ya hay: siempre se llega a
+## ver la siguiente antes de que llegue.
+const MIN_WAVE_GAP := 30.0
+## Segundos de calma (sin olas grandes nuevas) al largar.
+const START_CALM := 3.0
+
+
+## true si la ola nueva queda lejos de las que ya hay.
+func _spaced(s: Swell) -> bool:
+	for other in _water.swells:
+		if other.lifetime - other.age < other.fade_time:
+			continue
+		if other.center.distance_to(s.center) < MIN_WAVE_GAP:
+			return false
+	return true
+
+
 ## Ola de frente, probando a varias distancias (puede caer cerca de una isla).
 func _make_incoming_retry(target: Rider) -> Swell:
 	var player := Vector2(target.global_position.x, target.global_position.z)
@@ -385,7 +420,7 @@ func make_swell() -> Swell:
 		s.lifetime = _rng.randf_range(22.0, 32.0)
 		s.grow_time = 3.0
 		s.fade_time = 4.0
-		if is_clear_of(s, player) and _far_from_island(s):
+		if is_clear_of(s, player) and _far_from_island(s) and _spaced(s):
 			return s
 	return null
 
@@ -418,7 +453,7 @@ func _make_incoming(target: Rider, player: Vector2) -> Swell:
 	# Crece mientras se acerca (se ve venir) y rompe más o menos cuando llega.
 	s.grow_time = 2.5
 	s.fade_time = 4.0
-	if is_clear_of(s, player) and _far_from_island(s):
+	if is_clear_of(s, player) and _far_from_island(s) and _spaced(s):
 		return s
 	return null
 

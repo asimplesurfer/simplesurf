@@ -56,7 +56,13 @@ func update(delta: float, input: RiderInput) -> void:
 	# agua (si no, ni empieza: así no te caés por algo imposible). Los largos
 	# salen en los saltos grandes. En el saltito no se puede.
 	var unit_time := TAU / stats.trick_spin_speed
-	var fit_units := int(floor((rider.time_to_land() - 0.08) / unit_time))
+	# Mirando el agua de verdad (una ola que sube adelante o viene detrás lo
+	# alcanza antes): si te chocaría a mitad del truco, ni empieza. Tocando el
+	# agua, tampoco. (Ya girando, sigue: el riesgo de seguir es del jugador.)
+	var land_t := rider.time_to_land()
+	if rider.trick_angle <= 0.0 and input.trick and rider.can_trick:
+		land_t = minf(land_t, rider.time_to_land_ahead(unit_time * 3.0 + 0.5))
+	var fit_units := int(floor((land_t - 0.08) / unit_time))
 	if rider.trick_angle <= 0.0 and fit_units < 1:
 		_hold_time = 0.0
 	elif input.trick and rider.can_trick:
