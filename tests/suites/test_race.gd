@@ -776,6 +776,7 @@ func _test_constant_wave() -> void:
 	)
 	var inside := lat > 0.0 and lat < track.half_width
 	_check(inside, "la cresta está dentro de la pista, del lado de afuera (%.1f m)" % lat)
+	_check(_water.ring_wave.max_amplitude >= 6.0, "la ola constante es grande (%.1f m)" % _water.ring_wave.max_amplitude)
 
 	_waves.enabled = true
 	await _wait(3.0)

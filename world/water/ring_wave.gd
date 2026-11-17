@@ -17,9 +17,9 @@ var center: Vector2 = Vector2.ZERO
 ## Radio de la línea de la cresta (m).
 var radius: float = 94.0
 ## Ancho de la loma (m). Más chico = más empinada.
-var width: float = 5.0
+var width: float = 6.0
 ## Altura de los picos (m).
-var max_amplitude: float = 4.5
+var max_amplitude: float = 6.5
 ## Altura de la cresta entre picos, como fracción de la de los picos.
 var base: float = 0.4
 ## Cantidad de picos en la vuelta.
