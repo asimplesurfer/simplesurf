@@ -16,7 +16,17 @@ const FIXED := 0.0
 const SKIN := 0.25
 const OWN := 0.5
 const ACCENT := 0.75
+const HAIR := 0.875
 const WHITE := 1.0
+
+## Tonos de piel y colores de pelo de la gente (los naturales de los
+## personajes jugables). Cada persona saca uno de cada lista (ver el shader).
+const SKIN_TONES := [
+	Color("#f3d0b0"), Color("#f8e0cc"), Color("#e0ac80"), Color("#b97b45"), Color("#8a5a3b"), Color("#5c3a24"),
+]
+const HAIR_TONES := [
+	Color("#f0c13a"), Color("#7a4a24"), Color("#222222"), Color("#d2552b"), Color("#e8e8e8"), Color("#9a521c"),
+]
 
 ## Colores fijos (pelo, caños, paja, ojos...). Van al shader como una lista
 ## (fixed_colors) y cada vértice dice cuál usa: el color de vértice no llega
@@ -25,7 +35,6 @@ const FIXED_COLORS := [
 	Color("2b1d14"), Color("5a3a22"), Color("c99a4b"), Color("111111"),
 	Color("c8c8cc"), Color("d9b56a"), Color("f2efe6"), Color("1a1a1a"), Color("7a2e26"),
 ]
-const HAIR_COLORS := [Color("2b1d14"), Color("5a3a22"), Color("c99a4b"), Color("111111")]
 const FRAME := Color("c8c8cc")
 const STRAW := Color("d9b56a")
 const POLE := Color("f2efe6")
@@ -33,8 +42,8 @@ const EYES := Color("1a1a1a")
 
 ## Modelos de gente parada y sentada (pocos: cada uno es una llamada de
 ## dibujo por isla; el color de cada persona sale del shader).
-const STANDING := 3
-const SITTING := 2
+const STANDING := 5
+const SITTING := 3
 
 ## Hasta dónde se ve el público (m): más lejos son puntitos y pesan mucho.
 const VISIBLE_UP_TO := 200.0
@@ -53,11 +62,12 @@ static var _k: float = SIZE
 ## Las mallas (se arman una sola vez).
 static func models() -> Dictionary:
 	if _models.is_empty():
-		# Parados: pelo, gorra o sombrero. Sentados: pelo o sombrero.
+		# Parados: pelo corto, pelo largo, gorra, sombrero o rodete. Sentados:
+		# pelo corto, pelo largo o sombrero.
 		for i in STANDING:
-			_models["stand%d" % i] = _person([1, 2, 3][i], false)
+			_models["stand%d" % i] = _person([0, 1, 2, 3, 4][i], false)
 		for i in SITTING:
-			_models["sit%d" % i] = _person([0, 3][i], true)
+			_models["sit%d" % i] = _person([0, 1, 3][i], true)
 		_models["chair"] = _chair()
 		_models["lounger"] = _lounger()
 		_models["umbrella"] = _umbrella()
@@ -90,6 +100,8 @@ static func multimesh(node_name: String, model: String, items: Array[Transform3D
 	for c in FIXED_COLORS:
 		palette.append(Vector3(c.r, c.g, c.b))
 	mat.set_shader_parameter("fixed_colors", palette)
+	mat.set_shader_parameter("skin_tones", _vec3s(SKIN_TONES))
+	mat.set_shader_parameter("hair_tones", _vec3s(HAIR_TONES))
 	var mmi := MultiMeshInstance3D.new()
 	mmi.name = node_name
 	mmi.multimesh = mm
@@ -105,17 +117,24 @@ static func multimesh(node_name: String, model: String, items: Array[Transform3D
 	return mmi
 
 
+static func _vec3s(colors: Array) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	for c in colors:
+		out.append(Vector3(c.r, c.g, c.b))
+	return out
+
+
 # ---------------------------------------------------------------- modelos
 
 ## Una persona con la misma estructura que los personajes jugables, pero más
 ## simple: cabeza grande de huevo con ojos de punto (sin boca), pecho y short redondeados,
 ## piernas cortas, pies redondos y las manos sueltas (sin brazos), arriba para
-## alentar. variant: 0-1 pelo, 2 gorra, 3 sombrero de paja. Se arma con las
+## alentar. variant: 0 pelo corto, 1 pelo largo, 2 gorra, 3 sombrero de
+## paja, 4 rodete. El color del pelo y de la piel es de cada persona. Se arma con las
 ## medidas del personaje jugable y se achica a PERSON_SCALE.
 static func _person(variant: int, sitting: bool) -> ArrayMesh:
 	var st := _begin()
 	_k = PERSON_SCALE * SIZE
-	var hair: Color = HAIR_COLORS[variant % HAIR_COLORS.size()]
 	var torso := Vector3(0.0, 1.24, 0.0)
 	var head := Vector3(0.0, 2.08, 0.02)
 	if sitting:
@@ -148,7 +167,13 @@ static func _person(variant: int, sitting: bool) -> ArrayMesh:
 			_cylinder(st, 0.72, 0.72, 0.04, head + Vector3(0.0, 0.34, 0.0), FIXED, STRAW)
 			_cylinder(st, 0.34, 0.42, 0.28, head + Vector3(0.0, 0.48, 0.0), FIXED, STRAW)
 		_:
-			_ellipsoid(st, Vector3(0.53, 0.4, 0.5), head + Vector3(0.0, 0.22, -0.06), FIXED, hair, 0, 2)
+			_ellipsoid(st, Vector3(0.53, 0.4, 0.5), head + Vector3(0.0, 0.22, -0.06), HAIR, Color.WHITE, 0, 2)
+			if variant == 1:
+				# Pelo largo: cae por atrás hasta los hombros.
+				_ellipsoid(st, Vector3(0.5, 0.55, 0.26), head + Vector3(0.0, -0.15, -0.28), HAIR, Color.WHITE, 0, 1)
+			elif variant == 4:
+				# Rodete arriba.
+				_ellipsoid(st, Vector3(0.2, 0.18, 0.2), head + Vector3(0.0, 0.62, -0.12), HAIR)
 	# Manos sueltas, en alto para alentar (se mueven en el shader).
 	for side in [-1.0, 1.0]:
 		var hand := 1 if side < 0.0 else 2

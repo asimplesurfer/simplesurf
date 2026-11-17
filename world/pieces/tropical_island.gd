@@ -414,13 +414,13 @@ func _tints(count: int) -> Array[Color]:
 ## Público: en la arena que da a la pista hay grupos de gente alentando
 ## (parados, algunos saltando), sillas playeras con gente sentada, reposeras,
 ## sombrillas y banderas, como en una competencia que todas las islas vienen a
-## ver. Se reparte por tramos de la orilla: unos con mucha gente y otros con
-## poca (no es una fila pareja). Todo en pocas MultiMesh (ver BeachCrowd).
+## ver. Se reparte parejo por tramos de la orilla, con grupos chicos y
+## separados. Todo en pocas MultiMesh (ver BeachCrowd).
 const CROWD_REACH := 75.0
 const CROWD_SLOT := 4.5
 ## Lugar que ocupa cada cosa del público (radio en m): no se pone nada encima
 ## de otra cosa (la gente no se choca entre sí). Los sentados van en su silla.
-const CROWD_ROOM := {"stand": 0.55, "chair": 0.55, "lounger": 0.6, "towel": 0.65, "umbrella": 0.25, "flag": 0.25}
+const CROWD_ROOM := {"stand": 0.75, "chair": 0.6, "lounger": 0.65, "towel": 0.7, "umbrella": 0.25, "flag": 0.3}
 ## Hasta cuántos metros de la orilla se pone el público (en la arena, cerca
 ## del agua: no en el medio de la isla ni entre las plantas).
 const CROWD_DEPTH := 2.3
@@ -432,9 +432,6 @@ func _plan_crowd(course: Course) -> Dictionary:
 		return lists
 	var rng := RandomNumberGenerator.new()
 	rng.seed = shape_seed * 97 + 5
-	var noise := FastNoiseLite.new()
-	noise.seed = shape_seed + 11
-	noise.frequency = 0.03
 	var normals := _normals(_outline)
 	var n := _outline.size()
 	var along := 0.0
@@ -453,9 +450,10 @@ func _plan_crowd(course: Course) -> Dictionary:
 			# Solo en la playa que mira a la pista (no en la de atrás de la isla).
 			if nrm.dot((track_q - q).normalized()) < 0.35:
 				near = 0.0
-			var busy := clampf(noise.get_noise_1d(next_slot) * 0.9 + 0.55, 0.0, 1.0)
-			if near > 0.0 and rng.randf() < (0.25 + 0.45 * near) * (0.35 + 0.65 * busy) * minf(crowd, 1.0):
-				_crowd_slot(lists, rng, q, nrm, track_q, deep, crowd * (0.5 + 0.5 * busy))
+			# Parejo en toda la playa que da a la pista (sin tramos llenos y
+			# tramos vacíos).
+			if near > 0.0 and rng.randf() < 0.6 * minf(crowd, 1.0):
+				_crowd_slot(lists, rng, q, nrm, track_q, deep, crowd)
 			next_slot += CROWD_SLOT * rng.randf_range(0.8, 1.25)
 		along += seg
 	return lists
@@ -469,10 +467,10 @@ func _crowd_slot(lists: Dictionary, rng: RandomNumberGenerator, q: Vector2, out:
 	var roll := rng.randf()
 	if roll < 0.55:
 		# Gente parada en la orilla, en una o dos filas.
-		var count := clampi(int(round(rng.randf_range(1.0, 3.0) * amount)), 1, 4)
+		var count := clampi(int(round(rng.randf_range(1.0, 2.6) * amount)), 1, 4)
 		for k in count:
 			var row := 0.85 if k % 2 == 0 else 1.6
-			var p := q - out * (row + rng.randf_range(-0.15, 0.15)) + side * rng.randf_range(-1.4, 1.4)
+			var p := q - out * (row + rng.randf_range(-0.15, 0.15)) + side * rng.randf_range(-1.9, 1.9)
 			_crowd_put(lists, rng, "stand%d" % (rng.randi() % BeachCrowd.STANDING), p, track_q, 0.35)
 	elif roll < 0.68:
 		# Toallas en la arena (una o dos, a veces con alguien parado al lado).
