@@ -143,8 +143,7 @@ func build(course: Course) -> void:
 	_add_vegetation(root)
 	for key in crowd_lists:
 		var list: Array = crowd_lists[key]
-		var jump := 1.0 if String(key).begins_with("stand") else 0.0
-		root.add_child(BeachCrowd.multimesh("Crowd_" + key, key, list[0], list[1], jump))
+		root.add_child(BeachCrowd.multimesh("Crowd_" + key, key, list[0], list[1]))
 
 
 ## true si (x, z) está sobre la isla (con la playa que entra al agua).
@@ -411,19 +410,35 @@ func _tints(count: int) -> Array[Color]:
 	return out
 
 
-## Público: en la arena que da a la pista hay grupos de gente alentando
-## (parados, algunos saltando), sillas playeras con gente sentada, reposeras,
-## sombrillas y banderas, como en una competencia que todas las islas vienen a
-## ver. Se reparte parejo por tramos de la orilla, con grupos chicos y
-## separados. Todo en pocas MultiMesh (ver BeachCrowd).
+## Público: como en las competencias de verdad, la gente se junta en puntos de
+## fiesta (uno o dos por isla, donde la pista pasa más cerca): una carpa,
+## gente apretada en la orilla alentando, banderas y sillas. El resto de la
+## playa que da a la pista está tranquila: alguno tirado en una toalla o
+## sentado bajo una sombrilla. Todo con su sombra en la arena y en pocas
+## MultiMesh (ver BeachCrowd). Cada punto de fiesta se anota en CrowdDirector
+## (para el murmullo y el festejo).
 const CROWD_REACH := 75.0
-const CROWD_SLOT := 4.5
+## Un punto de fiesta va donde la pista pasa a menos de esto del borde (m),
+## uno por isla como mucho y a PARTY_GAP (m) de cualquier otro del mapa (así
+## hay unos pocos, bien repartidos).
+const PARTY_REACH := 30.0
+const PARTY_GAP := 160.0
+## Ancho de orilla que ocupa un punto de fiesta (m, para cada lado).
+const PARTY_HALF := 8.5
 ## Lugar que ocupa cada cosa del público (radio en m): no se pone nada encima
-## de otra cosa (la gente no se choca entre sí). Los sentados van en su silla.
-const CROWD_ROOM := {"stand": 0.75, "chair": 0.6, "lounger": 0.65, "towel": 0.7, "umbrella": 0.25, "flag": 0.3}
+## de otra cosa (la gente no se choca entre sí). Los sentados van en su silla
+## y los acostados en su toalla.
+const CROWD_ROOM := {"stand": 0.62, "chair": 0.6, "lounger": 0.65, "towel": 0.7, "umbrella": 0.25, "flag": 0.3,
+	"tent": 2.4}
 ## Hasta cuántos metros de la orilla se pone el público (en la arena, cerca
 ## del agua: no en el medio de la isla ni entre las plantas).
 const CROWD_DEPTH := 2.3
+## Tamaño de la sombra de cada cosa (m, ancho y largo).
+const SHADOW_SIZE := {"stand": Vector2(1.0, 1.0), "sit": Vector2(1.1, 1.2), "chair": Vector2(0.9, 0.9),
+	"lie": Vector2(1.1, 2.3), "lounger": Vector2(0.9, 2.4), "umbrella": Vector2(3.0, 3.0), "tent": Vector2(5.0, 4.0)}
+
+## Puntos de fiesta de esta isla (para los tests).
+var party_spots := PackedVector2Array()
 
 
 func _plan_crowd(course: Course) -> Dictionary:
@@ -432,89 +447,130 @@ func _plan_crowd(course: Course) -> Dictionary:
 		return lists
 	var rng := RandomNumberGenerator.new()
 	rng.seed = shape_seed * 97 + 5
+	# Orilla que mira a la pista, cada 2 m: [punto, hacia el mar, pista, distancia, recorrido].
+	var shore: Array = []
 	var normals := _normals(_outline)
 	var n := _outline.size()
 	var along := 0.0
-	var next_slot := rng.randf_range(0.0, CROWD_SLOT)
-	var deep := CROWD_DEPTH
+	var next := 0.0
 	for i in n:
 		var a := _outline[i]
 		var b := _outline[(i + 1) % n]
 		var seg := a.distance_to(b)
-		while next_slot < along + seg:
-			var q := a.lerp(b, (next_slot - along) / maxf(seg, 0.001))
-			var nrm := normals[i].lerp(normals[(i + 1) % n], (next_slot - along) / maxf(seg, 0.001)).normalized()
+		while next < along + seg:
+			var k := (next - along) / maxf(seg, 0.001)
+			var q := a.lerp(b, k)
+			var nrm := normals[i].lerp(normals[(i + 1) % n], k).normalized()
 			var track_q := _nearest_track(q)
-			# Más gente donde la pista pasa cerca; tramos con mucha y con poca.
-			var near := 1.0 - clampf((q.distance_to(track_q) - course.half_width) / CROWD_REACH, 0.0, 1.0)
-			# Solo en la playa que mira a la pista (no en la de atrás de la isla).
-			if nrm.dot((track_q - q).normalized()) < 0.35:
-				near = 0.0
-			# Parejo en toda la playa que da a la pista (sin tramos llenos y
-			# tramos vacíos).
-			if near > 0.0 and rng.randf() < 0.6 * minf(crowd, 1.0):
-				_crowd_slot(lists, rng, q, nrm, track_q, deep, crowd)
-			next_slot += CROWD_SLOT * rng.randf_range(0.8, 1.25)
+			var d := q.distance_to(track_q) - course.half_width
+			if d < CROWD_REACH and nrm.dot((track_q - q).normalized()) >= 0.35:
+				shore.append([q, nrm, track_q, d, next])
+			next += 2.0
 		along += seg
+	if shore.is_empty():
+		return lists
+	var perimeter := along
+	# Puntos de fiesta: donde la pista pasa más cerca (uno o dos por isla).
+	var by_distance := shore.duplicate()
+	by_distance.sort_custom(func(x: Array, y: Array) -> bool: return x[3] < y[3])
+	var parties: Array = []
+	var director := CrowdDirector.of(course)
+	for cand in by_distance:
+		if cand[3] > PARTY_REACH:
+			break
+		var q: Vector2 = cand[0]
+		if not director.near_spot(Vector3(q.x, 0.0, q.y), PARTY_GAP):
+			parties.append(cand)
+			break
+	for p in parties:
+		_party(lists, rng, p[0], p[1], p[2])
+		party_spots.append(p[0])
+		director.add_spot(Vector3(p[0].x, SAND_Y, p[0].y))
+	# El resto de la playa: tranquilo, alguno cada tanto.
+	var last := -INF
+	for s in shore:
+		if float(s[4]) - last < 7.0:
+			continue
+		var near_party := false
+		for p in parties:
+			var gap := absf(float(s[4]) - float(p[4]))
+			if minf(gap, perimeter - gap) < PARTY_HALF + 6.0:
+				near_party = true
+		if near_party or rng.randf() > 0.22 * minf(crowd, 1.5):
+			continue
+		last = float(s[4])
+		_calm(lists, rng, s[0], s[1], s[2])
 	return lists
 
 
-## Un tramo de playa: un grupo de gente, sillas con sombrilla, reposeras o
-## una bandera. `q` es el punto de la orilla, `out` hacia el mar.
-func _crowd_slot(lists: Dictionary, rng: RandomNumberGenerator, q: Vector2, out: Vector2, track_q: Vector2,
-		deep: float, amount: float) -> void:
+## Un punto de fiesta: carpa atrás, dos o tres filas de gente apretada en la
+## orilla (de colores que combinan), banderas en las puntas y unas sillas.
+func _party(lists: Dictionary, rng: RandomNumberGenerator, q: Vector2, out: Vector2, track_q: Vector2) -> void:
+	var side := Vector2(-out.y, out.x)
+	var hue := rng.randf()
+	_crowd_put(lists, rng, "tent", q - out * 4.2, track_q, 0.05, false, INF, hue, true)
+	var x := -PARTY_HALF
+	while x <= PARTY_HALF:
+		for row in [0.9, 1.75, 2.6]:
+			if row > 2.0 and absf(x) > 3.5:
+				continue
+			if rng.randf() < 0.85 * minf(crowd, 1.0):
+				var p := q - out * (float(row) + rng.randf_range(-0.12, 0.12)) + side * (x + rng.randf_range(-0.25, 0.25))
+				_crowd_put(lists, rng, "stand%d" % (rng.randi() % BeachCrowd.STANDING), p, track_q, 0.3, false, INF,
+					hue)
+		x += 1.3
+	for end in [-1.0, 1.0]:
+		_crowd_put(lists, rng, "flag", q - out * 1.2 + side * end * (PARTY_HALF + 1.2), track_q, 0.0, true, INF,
+			hue + 0.5)
+	# Unas sillas con gente sentada a un costado, bajo una sombrilla.
+	var c := q - out * 1.3 + side * (PARTY_HALF + 3.2) * (1.0 if rng.randf() < 0.5 else -1.0)
+	_crowd_put(lists, rng, "umbrella", c - out * 0.8, track_q, 0.0, true, INF, hue)
+	for k in [-0.88, 0.88]:
+		var p := c + side * float(k)
+		if _crowd_put(lists, rng, "chair", p, track_q, 0.25, false, INF, hue):
+			_crowd_put(lists, rng, "sit%d" % (rng.randi() % BeachCrowd.SITTING), p, track_q, 0.0, false, _last_yaw, hue)
+
+
+## Un rincón tranquilo de la playa: alguien tomando sol en su toalla (a veces
+## con sombrilla), dos sillas bajo una sombrilla o dos reposeras.
+func _calm(lists: Dictionary, rng: RandomNumberGenerator, q: Vector2, out: Vector2, track_q: Vector2) -> void:
 	var side := Vector2(-out.y, out.x)
 	var roll := rng.randf()
-	if roll < 0.55:
-		# Gente parada en la orilla, en una o dos filas.
-		var count := clampi(int(round(rng.randf_range(1.0, 2.6) * amount)), 1, 4)
-		for k in count:
-			var row := 0.85 if k % 2 == 0 else 1.6
-			var p := q - out * (row + rng.randf_range(-0.15, 0.15)) + side * rng.randf_range(-1.9, 1.9)
-			_crowd_put(lists, rng, "stand%d" % (rng.randi() % BeachCrowd.STANDING), p, track_q, 0.35)
-	elif roll < 0.68:
-		# Toallas en la arena (una o dos, a veces con alguien parado al lado).
-		for k in rng.randi_range(1, 2):
-			var p := q - out * rng.randf_range(1.0, 1.7) + side * rng.randf_range(-1.1, 1.1)
-			_crowd_put(lists, rng, "towel", p, track_q, 0.5)
-		if rng.randf() < 0.5:
-			_crowd_put(lists, rng, "stand%d" % (rng.randi() % BeachCrowd.STANDING), q - out * 0.8 + side * 1.3,
-				track_q, 0.3)
-	elif roll < 0.84:
-		# Sombrilla con dos sillas (casi siempre con alguien sentado).
-		var c := q - out * rng.randf_range(1.1, 1.5)
+	if roll < 0.5:
+		var p := q - out * rng.randf_range(1.2, 1.8)
+		if _crowd_put(lists, rng, "towel", p, track_q, 0.5) and rng.randf() < 0.75:
+			_crowd_put(lists, rng, "lie%d" % (rng.randi() % BeachCrowd.LYING), p, track_q, 0.0, false, _last_yaw)
+		if rng.randf() < 0.4:
+			_crowd_put(lists, rng, "umbrella", p - out * 1.2 + side * 0.9, track_q, 0.0, true)
+	elif roll < 0.8:
+		var c := q - out * 1.3
 		_crowd_put(lists, rng, "umbrella", c - out * 0.8, track_q, 0.0, true)
-		for s in [-0.88, 0.88]:
-			var p := c + side * float(s)
-			if _crowd_put(lists, rng, "chair", p, track_q, 0.25) and rng.randf() < 0.8:
-				_crowd_put(lists, rng, "sit%d" % (rng.randi() % BeachCrowd.SITTING), p, track_q, 0.0, false,
-					_last_yaw)
-	elif roll < 0.92:
-		# Dos reposeras con su sombrilla.
+		for k in [-0.88, 0.88]:
+			var p := c + side * float(k)
+			if _crowd_put(lists, rng, "chair", p, track_q, 0.25) and rng.randf() < 0.6:
+				_crowd_put(lists, rng, "sit%d" % (rng.randi() % BeachCrowd.SITTING), p, track_q, 0.0, false, _last_yaw)
+	else:
 		var c := q - out * 1.8
 		_crowd_put(lists, rng, "umbrella", c - out * 1.25, track_q, 0.0, true)
-		for s in [-0.62, 0.62]:
-			_crowd_put(lists, rng, "lounger", c + side * float(s), track_q, 0.15)
-	else:
-		# Una bandera y alguien al lado.
-		var p := q - out * rng.randf_range(1.0, 1.8)
-		_crowd_put(lists, rng, "flag", p, track_q, 0.0, true)
-		_crowd_put(lists, rng, "stand%d" % (rng.randi() % BeachCrowd.STANDING), p + side * 0.8, track_q, 0.3)
+		for k in [-0.62, 0.62]:
+			_crowd_put(lists, rng, "lounger", c + side * float(k), track_q, 0.15)
 
 
 var _last_yaw: float = 0.0
 
 
 ## Pone una cosa del público en `p`, mirando a la pista (más un poco de giro
-## al azar). Devuelve false si ahí no se puede (fuera de la arena, sobre el
-## pasto).
+## al azar), con su sombra. Devuelve false si ahí no se puede (fuera de la
+## arena, sobre el pasto o encima de otra cosa). `hue`: familia de colores
+## (ver BeachCrowd.custom). La carpa va atrás y puede quedar sobre el pasto.
 func _crowd_put(lists: Dictionary, rng: RandomNumberGenerator, model: String, p: Vector2, track_q: Vector2,
-		turn: float, any_yaw: bool = false, yaw: float = INF) -> bool:
-	if not Geometry2D.is_point_in_polygon(p, _outline) or _on_grass(p):
+		turn: float, any_yaw: bool = false, yaw: float = INF, hue: float = -1.0, on_grass: bool = false) -> bool:
+	if not Geometry2D.is_point_in_polygon(p, _outline) or (_on_grass(p) and not on_grass):
 		return false
 	if BezierShape.distance_to_edge(_outline, p) < 0.6:
 		return false
-	var room: float = CROWD_ROOM.get(model.rstrip("0123456789"), 0.0)
+	var kind := model.rstrip("0123456789")
+	var room: float = CROWD_ROOM.get(kind, 0.0)
 	if room > 0.0:
 		for k in _crowd_spots.size():
 			if _crowd_spots[k].distance_to(p) < room + _crowd_room[k]:
@@ -525,11 +581,20 @@ func _crowd_put(lists: Dictionary, rng: RandomNumberGenerator, model: String, p:
 	if yaw == INF:
 		yaw = rng.randf() * TAU if any_yaw else atan2(to.x, to.y) + rng.randf_range(-turn, turn)
 	_last_yaw = yaw
+	var y := GRASS_Y if _on_grass(p) else SAND_Y
+	_add_item(lists, model, Transform3D(Basis(Vector3.UP, yaw), Vector3(p.x, y, p.y)), BeachCrowd.custom(rng, hue))
+	if SHADOW_SIZE.has(kind):
+		var size: Vector2 = SHADOW_SIZE[kind] * BeachCrowd.SIZE
+		var basis := Basis(Vector3.UP, yaw) * Basis.from_scale(Vector3(size.x, 1.0, size.y))
+		_add_item(lists, "shadow", Transform3D(basis, Vector3(p.x, y, p.y)), Color())
+	return true
+
+
+func _add_item(lists: Dictionary, model: String, xf: Transform3D, custom: Color) -> void:
 	if not lists.has(model):
 		lists[model] = [[] as Array[Transform3D], [] as Array[Color]]
-	(lists[model][0] as Array[Transform3D]).append(Transform3D(Basis(Vector3.UP, yaw), Vector3(p.x, SAND_Y, p.y)))
-	(lists[model][1] as Array[Color]).append(BeachCrowd.custom(rng))
-	return true
+	(lists[model][0] as Array[Transform3D]).append(xf)
+	(lists[model][1] as Array[Color]).append(custom)
 
 
 ## true si hay público a menos de `r` metros de `p`.

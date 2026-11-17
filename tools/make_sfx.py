@@ -185,6 +185,63 @@ def main():
     gust = 0.6 + 0.4 * np.sin(2 * np.pi * t(length) / (length / 2)) ** 2
     wind = bandpass(noise(length), 350 + 250 * gust, q=1.5) * gust
     save("rain_loop", seamless(hiss + patter + 0.8 * wind, 0.4), 0.6)
+    crowd_sounds()
+
+
+def fft_band(x, lo, hi):
+    """Pasa-banda rápido (por FFT) entre lo y hi Hz, con bordes suaves."""
+    spec = np.fft.rfft(x)
+    f = np.fft.rfftfreq(len(x), 1.0 / SR)
+    gain = np.clip((f - lo * 0.7) / (lo * 0.3), 0, 1) * np.clip((hi * 1.3 - f) / (hi * 0.3), 0, 1)
+    return np.fft.irfft(spec * gain, len(x))
+
+
+def babble(seconds, voices, r):
+    """Mucha gente hablando y gritando a la vez: cada voz es ruido con
+    formantes que suben y bajan a ritmo de sílabas."""
+    n = int(SR * seconds)
+    out = np.zeros(n)
+    x = np.arange(n) / SR
+    for _ in range(voices):
+        center = r.uniform(500, 1600)
+        v = fft_band(r.standard_normal(n), center * 0.6, center * 1.6)
+        rate = r.uniform(2.5, 5.5)
+        syll = np.clip(np.sin(2 * np.pi * rate * x + r.uniform(0, 6.3)), 0, 1) ** 1.5
+        swell = 0.5 + 0.5 * np.sin(2 * np.pi * r.uniform(0.15, 0.5) * x + r.uniform(0, 6.3))
+        out += v * (0.3 + 0.7 * syll) * swell
+    return out
+
+
+def crowd_sounds():
+    """Público: murmullo en loop (de fondo, cerca de la gente) y festejo
+    (cuando alguien pasa cerca o hace un truco frente a ellos)."""
+    r = np.random.default_rng(42)
+    length = 6.0
+    murmur = babble(length, 36, r) + 0.6 * fft_band(r.standard_normal(int(SR * length)), 200, 1200)
+    save("crowd_loop", seamless(murmur, 0.6), 0.55)
+    # Festejo: el griterío sube rápido, silbidos que suben y aplausos.
+    length = 2.6
+    n = int(SR * length)
+    x = np.arange(n) / SR
+    shape = np.clip(x / 0.25, 0, 1) * np.exp(-1.1 * np.clip(x - 0.6, 0, None))
+    roar = (babble(length, 40, r) * 1.4 + fft_band(r.standard_normal(n), 400, 3000)) * shape
+    whistles = np.zeros(n)
+    for _ in range(5):
+        start = r.uniform(0.05, 0.8)
+        dur = r.uniform(0.35, 0.7)
+        f0 = r.uniform(1300, 2000)
+        k = (x >= start) & (x < start + dur)
+        tt = x[k] - start
+        freq = f0 * (1 + 0.35 * tt / dur) + 25 * np.sin(2 * np.pi * 6 * tt)
+        phase = 2 * np.pi * np.cumsum(freq) / SR
+        whistles[k] += np.sin(phase) * np.sin(np.pi * tt / dur) * 0.35
+    claps = np.zeros(n)
+    for _ in range(90):
+        at = int(r.uniform(0.1, 2.2) * SR)
+        m = int(0.025 * SR)
+        if at + m < n:
+            claps[at:at + m] += fft_band(r.standard_normal(m), 900, 4000)[:m] * np.exp(-np.arange(m) / (0.006 * SR)) * 0.5
+    save("cheer", roar + whistles * shape.max() + claps * shape, 0.9)
 
 
 if __name__ == "__main__":

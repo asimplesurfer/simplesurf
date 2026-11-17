@@ -339,6 +339,17 @@ func _test_tropical_island() -> void:
 			spots += 1
 			if BezierShape.distance_to_edge(p._outline, spot) > TropicalIslandPiece.CROWD_DEPTH + 1.0:
 				far_from_shore += 1
+	# Puntos de fiesta: uno por isla como mucho; la gente se entera de dónde
+	# están los surfistas (para entusiasmarse cuando pasan cerca).
+	var director := course.get_node_or_null("CrowdDirector") as CrowdDirector
+	var parties := 0
+	for p in parts:
+		parties += p.party_spots.size()
+	await process_frame
+	var mats := BeachCrowd.materials()
+	_check(director != null and director.spot_count() >= parties and parties <= parts.size()
+		and not mats.is_empty() and int(mats[0].get_shader_parameter("rider_count")) >= 1,
+		"puntos de fiesta (%d) y la gente sabe dónde están los surfistas" % parties)
 	_check(spots > 4 and far_from_shore == 0 and crowd_meshes <= 2 * (BeachCrowd.STANDING + BeachCrowd.SITTING + 5),
 		"público en la orilla que da a la pista (%d cosas, %d lejos del agua, %d mallas)" % [spots, far_from_shore, crowd_meshes])
 	var covered := func(x: float, z: float) -> bool:

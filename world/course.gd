@@ -107,6 +107,9 @@ func _ready() -> void:
 	CourseObstacles.place(self, map.ring_count, map.rock_count)
 	for piece in pieces:
 		piece.finish(self)
+	# Público: la tribuna de la largada y los barcos con gente (las islas
+	# tropicales ya pusieron su gente en la playa).
+	CrowdDirector.of(self).build_extras()
 	if weather < 0:
 		weather = _session_config().weather
 	if weather == GameSettings.Weather.STORM:
