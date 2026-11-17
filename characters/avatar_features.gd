@@ -467,6 +467,8 @@ func _glasses(style: int) -> void:
 					Basis(Vector3.UP, side * 0.35))
 		13:
 			_wrap_shades()
+		14:
+			_thick_glasses()
 		10:
 			# Snorkel: antiparras de buceo y el tubo al costado.
 			_piece(_sphere, _face(0.0, 0.1, 0.06), Vector3(0.38, 0.17, 0.05), Color("#2fbfb0"))
@@ -480,6 +482,30 @@ func _glasses(style: int) -> void:
 ## Anteojos de sol envolventes y cuadrados: una sola pieza recortada (los dos
 ## vidrios y el puente) que sigue la curva de la cara, azul con degradé (más
 ## oscuro arriba) y dos brillos en diagonal en cada vidrio.
+## Culo de botella: vidrios redondos y gruesos con marco marrón; detrás, los
+## ojos se ven enormes (blanco, pupila grande y brillo), y unos aros más
+## claros marcan lo grueso del vidrio.
+func _thick_glasses() -> void:
+	var facing := Basis(Vector3.RIGHT, PI / 2.0)
+	var frame := Color("#4a2f1c")
+	var glass := Color("#dff3ff")
+	for side in [-1.0, 1.0]:
+		var c := _eye_pos(side) + Vector3(side * 0.015, 0.0, 0.06)
+		_piece(_sphere, c, Vector3(0.17, 0.17, 0.04), glass, true)
+		_piece(_ring, c + Vector3(0.0, 0.0, 0.03), Vector3(0.14, 0.14, 0.14), Color("#c5e6f7"), false, facing)
+		# El ojo agrandado.
+		_piece(_sphere, c + Vector3(0.0, -0.005, 0.03), Vector3(0.115, 0.12, 0.02), WHITE, false)
+		_piece(_sphere, c + Vector3(-side * 0.01, -0.012, 0.044), Vector3(0.068, 0.072, 0.012), BLACK, false)
+		_piece(_sphere, c + Vector3(-0.03, 0.025, 0.054), Vector3(0.024, 0.024, 0.008), WHITE, false)
+		_piece(_sphere, c + Vector3(0.05, 0.075, 0.05), Vector3(0.03, 0.012, 0.006), WHITE, false,
+			Basis(Vector3.BACK, -0.6))
+		_piece(_ring_thick, c + Vector3(0.0, 0.0, 0.035), Vector3(0.18, 0.18, 0.18), frame, true, facing)
+		# Patilla hacia la oreja.
+		_piece(_box, Vector3(side * 0.47, 0.13, 0.1), Vector3(0.014, 0.018, 0.18), frame, false,
+			Basis(Vector3.UP, side * 0.3))
+	_piece(_cyl, _face(0.0, 0.13, 0.09), Vector3(0.022, 0.045, 0.022), frame, true, Basis(Vector3.BACK, PI / 2.0))
+
+
 func _wrap_shades() -> void:
 	# Contorno de la mitad derecha (x >= 0), en unidades de cabeza; se espeja.
 	var half := [
@@ -961,7 +987,7 @@ func _hair(style: int, hair: Color) -> void:
 
 
 ## Anteojos oscuros: detrás no se ven los ojos.
-const OPAQUE_GLASSES := [1, 5, 6, 7, 8, 10, 11, 12, 13]
+const OPAQUE_GLASSES := [1, 5, 6, 7, 8, 10, 11, 12, 13, 14]
 ## Rojo, amarillo y verde (de arriba a abajo).
 const RASTA := [Color("#e8302a"), Color("#ffd23f"), Color("#2fa84f")]
 
