@@ -5,6 +5,9 @@ shader_type spatial;
 render_mode unshaded, cull_disabled, fog_disabled;
 #include "res://world/sky/horizon.gdshaderinc"
 uniform vec3 island_color : source_color = vec3(0.42, 0.68, 0.66);
+// El mar lejano con bruma (el mismo que el agua a esa distancia): la base de
+// cada isla se funde con él, no con el blanco del horizonte.
+uniform vec3 far_sea_color : source_color = vec3(0.4, 0.72, 0.84);
 
 varying float v_far;
 varying float v_up;
@@ -21,8 +24,10 @@ void vertex() {
 void fragment() {
 	vec3 h = horizon_at(v_world.xz - CAMERA_POSITION_WORLD.xz);
 	vec3 top = mix(island_color, island_color * 1.25, v_up);
-	// Las de atrás, casi del color del horizonte; abajo, bruma sobre el mar.
-	float haze = mix(0.38, 0.78, v_far);
-	haze = mix(haze, 1.0, (1.0 - smoothstep(0.0, 0.35, v_up)) * 0.6);
-	ALBEDO = mix(top, h, haze);
+	// Las de atrás, más metidas en la bruma del horizonte.
+	vec3 col = mix(top, h, mix(0.38, 0.7, v_far));
+	// Abajo, la base se funde con el mar lejano (el mismo color que el agua ahí).
+	vec3 sea = mix(far_sea_color, h, 0.45);
+	col = mix(col, sea, (1.0 - smoothstep(0.0, 0.3, v_up)) * 0.7);
+	ALBEDO = col;
 }

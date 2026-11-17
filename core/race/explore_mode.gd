@@ -7,16 +7,26 @@ extends Node
 ## Mientras se juega:
 ##   - X / RB sube las olas y Z / LB las baja (como en el modo libre).
 ##   - T / Select prende o apaga la tormenta.
-##   - F: las boyas se pueden atravesar o no (para ver más allá de la pista).
+##   - F: modo totalmente libre: las boyas se atraviesan y se puede volar
+##     (mantener ESPACIO sube, mantener SHIFT baja; soltando, se queda en el
+##     aire a esa altura). Al bajar hasta el agua, vuelve a surfear.
 
 var race: RaceManager
 var course: Course
 var wave_level: int = 3
-## true: las boyas no frenan (se puede salir de la pista).
+## true: las boyas no frenan (se puede salir de la pista) y se puede volar.
 var buoys_open: bool = false
+## Velocidad al subir o bajar volando (m/s).
+const FLY_SPEED := 14.0
+## Altura máxima de vuelo (m).
+const FLY_MAX := 120.0
+## Por surfista: a qué altura vuela (sin entrada: no está volando).
+var _fly: Dictionary = {}
 
 
 func _ready() -> void:
+	# Después de la física del surfista: así la altura de vuelo es la última palabra.
+	process_physics_priority = 100
 	race = get_parent() as RaceManager
 	course = race.course
 	set_wave_level(GameSettings.sandbox_wave_level, true)
@@ -57,7 +67,43 @@ func set_buoys_open(open: bool) -> void:
 	var views := race.get_parent().get_node_or_null("Views") as SplitScreen
 	if views:
 		for hud in views.huds:
-			hud.show_center("Boyas: se atraviesan" if open else "Boyas: normales", Color(0.6, 0.95, 1.0), 1.6)
+			hud.show_center("Libre: se vuela (ESPACIO sube, SHIFT baja)" if open else "Boyas: normales", Color(0.6, 0.95, 1.0), 1.8)
+
+
+## Vuelo (solo con F): ESPACIO sube, SHIFT baja, soltando se queda en el aire.
+func _physics_process(delta: float) -> void:
+	if not buoys_open:
+		_fly.clear()
+		return
+	var up := Input.is_physical_key_pressed(KEY_SPACE)
+	var down := Input.is_physical_key_pressed(KEY_SHIFT)
+	for r in race.racers:
+		if not r.is_human or r.player_index != 0:
+			continue
+		if not _fly.has(r):
+			if not up:
+				continue
+			_fly[r] = r.position.y
+		var h: float = _fly[r]
+		if up:
+			h += FLY_SPEED * delta
+		if down:
+			h -= FLY_SPEED * delta
+		h = minf(h, FLY_MAX)
+		if h <= 0.6 and not up:
+			# Llegó al agua: vuelve a surfear (cae normal).
+			_fly.erase(r)
+			r.can_trick = true
+			continue
+		_fly[r] = h
+		r.position.y = h
+		r.vertical_speed = 0.0
+		r.can_trick = false
+
+
+## true si ese surfista está volando.
+func is_flying(r: Rider) -> bool:
+	return _fly.has(r)
 
 
 func _unhandled_input(event: InputEvent) -> void:

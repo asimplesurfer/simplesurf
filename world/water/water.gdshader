@@ -20,7 +20,9 @@ uniform float outside_strength = 0.8;
 // (el mismo que el cielo, ver horizon.gdshaderinc): llega a ese color antes de
 // que termine el agua, así no se ve el borde ni desde un salto alto.
 #include "res://world/sky/horizon.gdshaderinc"
-uniform vec2 haze_range = vec2(300.0, 470.0);
+// (Empieza detrás del anillo de islas lejanas, así quedan apoyadas sobre mar
+// azul y no sobre una franja blanca.)
+uniform vec2 haze_range = vec2(445.0, 515.0);
 // Antes, el mar lejano: el agua se va a este celeste con bruma (el del cielo)
 // entre estas distancias, y recién después se funde con el horizonte.
 uniform vec3 far_sea_color : source_color = vec3(0.4, 0.72, 0.84);
