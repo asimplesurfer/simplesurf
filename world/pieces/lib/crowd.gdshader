@@ -14,6 +14,10 @@ render_mode diffuse_toon, specular_toon, cull_disabled;
 
 // Cuánto salta el cuerpo entero (0 = sentados, cosas quietas).
 uniform float jump = 0.0;
+// Saturación del color propio y del segundo color: baja en la ropa de la gente
+// (tonos pastel, que no llamen la atención), un poco más en sillas y sombrillas.
+uniform float own_saturation = 0.5;
+uniform float accent_saturation = 0.45;
 // Colores fijos (BeachCrowd.FIXED_COLORS); UV2.y dice cuál.
 uniform vec3 fixed_colors[9];
 // Tonos de piel y de pelo (BeachCrowd.SKIN_TONES y HAIR_TONES).
@@ -38,9 +42,9 @@ void vertex() {
 	} else if (part > 0.85 && part < 0.92) {
 		col = hair_tones[clamp(int(fract(c.z * 13.7 + c.y * 3.1) * 6.0), 0, 5)];
 	} else if (part > 0.4 && part < 0.6) {
-		col = hsv(c.x, 0.7, 0.97);
+		col = hsv(c.x, own_saturation, 0.95);
 	} else if (part > 0.65 && part < 0.85) {
-		col = hsv(fract(c.x * 7.31 + 0.37), 0.6, 0.6);
+		col = hsv(fract(c.x * 7.31 + 0.37), accent_saturation, 0.78);
 	} else if (part > 0.95) {
 		col = vec3(0.97);
 	}

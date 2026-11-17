@@ -100,6 +100,10 @@ static func multimesh(node_name: String, model: String, items: Array[Transform3D
 	for c in FIXED_COLORS:
 		palette.append(Vector3(c.r, c.g, c.b))
 	mat.set_shader_parameter("fixed_colors", palette)
+	# Ropa de la gente en tonos pastel; las cosas de la playa, un poco más vivas.
+	var person := model.begins_with("stand") or model.begins_with("sit")
+	mat.set_shader_parameter("own_saturation", 0.32 if person else 0.4)
+	mat.set_shader_parameter("accent_saturation", 0.3 if person else 0.38)
 	mat.set_shader_parameter("skin_tones", _vec3s(SKIN_TONES))
 	mat.set_shader_parameter("hair_tones", _vec3s(HAIR_TONES))
 	var mmi := MultiMeshInstance3D.new()
