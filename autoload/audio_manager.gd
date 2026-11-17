@@ -113,6 +113,20 @@ static func _set_bus_volume(bus_name: String, v: float) -> void:
 	AudioServer.set_bus_volume_db(idx, linear_to_db(maxf(v, 0.001)))
 
 
+## Sin foco (otra ventana u otra pestaña): todo en silencio; al volver, suena.
+func _notification(what: int) -> void:
+	match what:
+		NOTIFICATION_APPLICATION_FOCUS_OUT, NOTIFICATION_WM_WINDOW_FOCUS_OUT:
+			set_focus_mute(true)
+		NOTIFICATION_APPLICATION_FOCUS_IN, NOTIFICATION_WM_WINDOW_FOCUS_IN:
+			set_focus_mute(false)
+
+
+## Silencia (o no) todo el audio por haber perdido el foco.
+func set_focus_mute(muted: bool) -> void:
+	AudioServer.set_bus_mute(AudioServer.get_bus_index("Master"), muted)
+
+
 ## Toca un efecto de sonido. Devuelve true si sonó.
 func play(sfx_name: String, volume_db: float = 0.0, pitch: float = 1.0) -> bool:
 	var stream: AudioStream = _sfx.get(sfx_name)
