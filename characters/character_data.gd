@@ -122,7 +122,7 @@ const EYES := [
 const GLASSES := [
 	"Ninguno", "De sol", "Antiparras", "Redondos", "Monóculo",
 	"Aviador", "Corazones", "Estrellas", "Visera", "Parche pirata", "Snorkel", "Redondos de sol",
-	"Lentes de color", "Envolventes",
+	"Lentes de color", "Envolventes", "Culo de botella",
 ]
 const NOSES := ["Ninguna", "Botón", "Narigón", "De payaso", "Larga", "Con protector solar"]
 const MOUTHS := [
