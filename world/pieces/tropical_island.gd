@@ -420,7 +420,7 @@ const CROWD_REACH := 75.0
 const CROWD_SLOT := 4.5
 ## Lugar que ocupa cada cosa del público (radio en m): no se pone nada encima
 ## de otra cosa (la gente no se choca entre sí). Los sentados van en su silla.
-const CROWD_ROOM := {"stand": 0.42, "chair": 0.42, "lounger": 0.45, "towel": 0.5, "umbrella": 0.2, "flag": 0.2}
+const CROWD_ROOM := {"stand": 0.55, "chair": 0.55, "lounger": 0.6, "towel": 0.65, "umbrella": 0.25, "flag": 0.25}
 ## Hasta cuántos metros de la orilla se pone el público (en la arena, cerca
 ## del agua: no en el medio de la isla ni entre las plantas).
 const CROWD_DEPTH := 2.3
@@ -485,17 +485,17 @@ func _crowd_slot(lists: Dictionary, rng: RandomNumberGenerator, q: Vector2, out:
 	elif roll < 0.84:
 		# Sombrilla con dos sillas (casi siempre con alguien sentado).
 		var c := q - out * rng.randf_range(1.1, 1.5)
-		_crowd_put(lists, rng, "umbrella", c - out * 0.6, track_q, 0.0, true)
-		for s in [-0.65, 0.65]:
+		_crowd_put(lists, rng, "umbrella", c - out * 0.8, track_q, 0.0, true)
+		for s in [-0.88, 0.88]:
 			var p := c + side * float(s)
 			if _crowd_put(lists, rng, "chair", p, track_q, 0.25) and rng.randf() < 0.8:
 				_crowd_put(lists, rng, "sit%d" % (rng.randi() % BeachCrowd.SITTING), p, track_q, 0.0, false,
 					_last_yaw)
 	elif roll < 0.92:
 		# Dos reposeras con su sombrilla.
-		var c := q - out * 1.5
-		_crowd_put(lists, rng, "umbrella", c - out * 0.9, track_q, 0.0, true)
-		for s in [-0.45, 0.45]:
+		var c := q - out * 1.8
+		_crowd_put(lists, rng, "umbrella", c - out * 1.25, track_q, 0.0, true)
+		for s in [-0.62, 0.62]:
 			_crowd_put(lists, rng, "lounger", c + side * float(s), track_q, 0.15)
 	else:
 		# Una bandera y alguien al lado.

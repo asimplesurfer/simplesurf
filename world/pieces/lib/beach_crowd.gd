@@ -40,10 +40,14 @@ const SITTING := 2
 const VISIBLE_UP_TO := 200.0
 ## Tamaño del público al lado del personaje jugable (que mide ~2,7 m).
 const PERSON_SCALE := 0.62
+## Tamaño de todo el público (gente y cosas, en la misma proporción para que
+## los sentados entren en sus sillas). Al lado del personaje jugable, la gente
+## mide unos 2,3 m.
+const SIZE := 1.35
 
 static var _models: Dictionary = {}
 ## Escala con la que se arma la pieza actual.
-static var _k: float = 1.0
+static var _k: float = SIZE
 
 
 ## Las mallas (se arman una sola vez).
@@ -110,7 +114,7 @@ static func multimesh(node_name: String, model: String, items: Array[Transform3D
 ## medidas del personaje jugable y se achica a PERSON_SCALE.
 static func _person(variant: int, sitting: bool) -> ArrayMesh:
 	var st := _begin()
-	_k = PERSON_SCALE
+	_k = PERSON_SCALE * SIZE
 	var hair: Color = HAIR_COLORS[variant % HAIR_COLORS.size()]
 	var torso := Vector3(0.0, 1.24, 0.0)
 	var head := Vector3(0.0, 2.08, 0.02)
@@ -149,7 +153,7 @@ static func _person(variant: int, sitting: bool) -> ArrayMesh:
 	for side in [-1.0, 1.0]:
 		var hand := 1 if side < 0.0 else 2
 		_ellipsoid(st, Vector3(0.15, 0.15, 0.17), head + Vector3(side * 0.78, 0.42, 0.12), SKIN, Color.WHITE, hand)
-	_k = 1.0
+	_k = SIZE
 	return _commit(st)
 
 
@@ -196,7 +200,7 @@ static func _umbrella() -> ArrayMesh:
 		var part := OWN if i % 2 == 0 else WHITE
 		var n := (r1 - apex).cross(r0 - apex).normalized()
 		for v in [apex, r0, r1]:
-			_vertex(st, v, n, part, Color.WHITE)
+			_vertex(st, v * _k, n, part, Color.WHITE)
 	return _commit(st)
 
 
@@ -222,7 +226,7 @@ static func _flag() -> ArrayMesh:
 		st.set_uv(Vector2(3.0, (v as Vector3).x))
 		st.set_uv2(Vector2(OWN, 0.0))
 		st.set_normal(Vector3.BACK)
-		st.add_vertex(v)
+		st.add_vertex(v * _k)
 	return _commit(st)
 
 
