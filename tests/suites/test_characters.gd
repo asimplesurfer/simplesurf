@@ -193,6 +193,17 @@ func _test_customization() -> void:
 	red_style.apply_preset(CharacterData.PRESET_NAMES.find("Pelirroja"))
 	_check(red_style.option_name("hair") == "Melena ondulada" and red_style.option_name("hat") == "Sombrero de paja"
 		and red_style.option_name("head") == "Suave", "estilo Pelirroja: melena, sombrero de paja y cabeza suave")
+	# Piezas para armar un abuelo.
+	var old_man := CharacterData.from_dict({"head": 7, "hair": 18, "hat": 13, "extra": 11, "mouth": 14})
+	_check(old_man.option_name("head") == "Cachetes" and old_man.option_name("hair") == "Científico"
+		and old_man.option_name("hat") == "Galera" and old_man.option_name("extra") == "Arrugas y bigotón"
+		and old_man.option_name("mouth") == "Abuelo feliz", "piezas de abuelo: cachetes, científico, galera, arrugas y boca")
+	_check(old_man.field_applies("hat_color"), "la galera se puede pintar de cualquier color")
+	var old_av := Avatar.new()
+	old_av.data = old_man
+	root.add_child(old_av)
+	_check(old_av.find_children("*", "MeshInstance3D", true, false).size() > 5, "el abuelo se arma entero")
+	old_av.free()
 	_check(CharacterData.MOUTHS.has("Canchera") and CharacterData.MOUTHS.has("Sonrisa ancha")
 		and CharacterData.MOUTHS.has("Pícara"), "sonrisas confiadas de una línea")
 	# Piezas del despeinado (pelo, anteojos y cuellito). Un personaje guardado
