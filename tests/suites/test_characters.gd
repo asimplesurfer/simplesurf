@@ -196,9 +196,9 @@ func _test_customization() -> void:
 	# Piezas para armar un abuelo.
 	var old_man := CharacterData.from_dict({"head": 7, "hair": 18, "hat": 13, "extra": 11, "mouth": 14})
 	_check(old_man.option_name("head") == "Cachetes" and old_man.option_name("hair") == "Científico"
-		and old_man.option_name("hat") == "Galera" and old_man.option_name("extra") == "Arrugas y bigotón"
-		and old_man.option_name("mouth") == "Abuelo feliz", "piezas de abuelo: cachetes, científico, galera, arrugas y boca")
-	_check(old_man.field_applies("hat_color"), "la galera se puede pintar de cualquier color")
+		and old_man.option_name("hat") == "Bombín" and old_man.option_name("extra") == "Arrugas y bigotón"
+		and old_man.option_name("mouth") == "Abuelo feliz", "piezas de abuelo: cachetes, científico, bombín, arrugas y boca")
+	_check(old_man.field_applies("hat_color"), "el bombín se puede pintar de cualquier color")
 	var old_av := Avatar.new()
 	old_av.data = old_man
 	root.add_child(old_av)
