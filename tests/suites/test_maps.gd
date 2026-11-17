@@ -339,7 +339,7 @@ func _test_tropical_island() -> void:
 			spots += 1
 			if BezierShape.distance_to_edge(p._outline, spot) > TropicalIslandPiece.CROWD_DEPTH + 1.0:
 				far_from_shore += 1
-	_check(spots > 4 and far_from_shore == 0 and crowd_meshes <= 2 * 9,
+	_check(spots > 4 and far_from_shore == 0 and crowd_meshes <= 2 * (BeachCrowd.STANDING + BeachCrowd.SITTING + 5),
 		"público en la orilla que da a la pista (%d cosas, %d lejos del agua, %d mallas)" % [spots, far_from_shore, crowd_meshes])
 	var covered := func(x: float, z: float) -> bool:
 		for p in parts:
