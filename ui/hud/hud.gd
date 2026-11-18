@@ -138,6 +138,21 @@ var _last_y: float = 0.0
 var _last_vy: float = 0.0
 var _was_grounded: bool = true
 var _water_ready: bool = false
+## Gotas que salta el agua al caer fuerte: [posición (centro 0, lado 1),
+## velocidad, vida que le queda].
+var _drops: Array = []
+## Espuma acumulada, chorrito al ganar nitro, remolino del turbo, pulso del
+## tramo del aro recién completado (y cuál), y cuántas cargas había.
+var _foam: float = 0.0
+var _stream: float = 0.0
+var _swirl: float = 0.0
+var _pulse: float = 0.0
+var _pulse_seg: int = 0
+var _last_charges: int = -1
+## De noche el agua brilla en los bordes.
+var _night: float = -1.0
+## Un surfista chiquito en la superficie del agua (de prueba: false lo saca).
+const GAUGE_SURFER := true
 ## Amague de la barra al apretar turbo cuando no se puede (0..1).
 var _blocked: float = 0.0
 
@@ -453,6 +468,9 @@ func _update_gauge(delta: float, base: Color, glow: float, turbo_on: bool) -> vo
 			var impact := clampf(-_last_vy / 18.0, 0.0, 1.0)
 			_bob_v -= impact * 2.2
 			_ripple = maxf(_ripple, 0.05 + impact * 0.12)
+			_foam = maxf(_foam, impact)
+			if impact > 0.25:
+				_splash(impact)
 		if not rider.grounded and _was_grounded:
 			_bob_v += 0.6
 		_bob_v += ((lift - _bob) * BOB_SPRING - _bob_v * BOB_DAMP) * delta
@@ -466,10 +484,26 @@ func _update_gauge(delta: float, base: Color, glow: float, turbo_on: bool) -> vo
 		_ripple = move_toward(_ripple, calm, delta * 0.25)
 		if _ripple < calm:
 			_ripple = calm
+		# Espuma: se junta en las curvas fuertes y se disuelve sola.
+		_foam = clampf(maxf(_foam, absf(_slosh_v) * 0.25) - delta * 0.6, 0.0, 1.0)
+		_update_drops(delta)
+		# Chorrito al ganar nitro (sigue el brillo de lo ganado).
+		_stream = _gain_flash
+		# Remolino: entra rápido con el turbo y se va suave.
+		_swirl = move_toward(_swirl, 1.0 if turbo_on else 0.0, delta * (4.0 if turbo_on else 1.5))
+		_pulse = maxf(_pulse - delta * 2.2, 0.0)
 	_last_heading = heading
 	_last_y = y
 	_was_grounded = rider.grounded
-	var charges := float(rider.turbo_charges())
+	var ready := rider.turbo_charges()
+	if _last_charges >= 0 and ready > _last_charges:
+		_pulse = 1.0
+		_pulse_seg = ready - 1
+	_last_charges = ready
+	if _night < 0.0:
+		var course := get_tree().get_first_node_in_group("course") as Course
+		_night = 1.0 if course and course.time_of_day == GameSettings.TimeOfDay.NIGHT else 0.0
+	var charges := float(ready)
 	var part := fposmod(rider.nitro / Rider.TURBO_CHARGE, 1.0) if charges < Rider.TURBO_CHARGES else 1.0
 	_gauge_mat.set_shader_parameter("size", _gauge.size)
 	_gauge_mat.set_shader_parameter("level", _nitro_bar.value)
@@ -479,9 +513,57 @@ func _update_gauge(delta: float, base: Color, glow: float, turbo_on: bool) -> vo
 	_gauge_mat.set_shader_parameter("color", base)
 	_gauge_mat.set_shader_parameter("glow", glow)
 	_gauge_mat.set_shader_parameter("flash", _gain_glow.color.a if _gain_glow.visible else 0.0)
-	_gauge_mat.set_shader_parameter("bubbles", 1.0 if turbo_on else 0.0)
+	_gauge_mat.set_shader_parameter("bubbles", 1.0 if turbo_on or _full_look > 0.5 else 0.0)
+	_gauge_mat.set_shader_parameter("boil", _full_look)
+	_gauge_mat.set_shader_parameter("foam", _foam)
+	_gauge_mat.set_shader_parameter("stream", _stream)
+	_gauge_mat.set_shader_parameter("swirl", _swirl)
+	_gauge_mat.set_shader_parameter("pulse", _pulse)
+	_gauge_mat.set_shader_parameter("pulse_seg", float(_pulse_seg))
+	_gauge_mat.set_shader_parameter("night", _night)
+	_gauge_mat.set_shader_parameter("show_surfer", GAUGE_SURFER)
+	var drops := []
+	for k in 4:
+		if k < _drops.size():
+			var d: Array = _drops[k]
+			drops.append(Vector4(d[0].x, d[0].y, 0.014, clampf(d[2] * 3.0, 0.0, 1.0)))
+		else:
+			drops.append(Vector4.ZERO)
+	_gauge_mat.set_shader_parameter("drops", drops)
 	_gauge_mat.set_shader_parameter("charges", charges)
 	_gauge_mat.set_shader_parameter("charge_part", part)
+
+
+## Al caer fuerte saltan gotas de la superficie (más cuanto más fuerte).
+func _splash(impact: float) -> void:
+	var water_r := 0.36
+	var level := _nitro_bar.value
+	if level <= 0.03:
+		return
+	for k in 2 + int(impact * 2.0):
+		var x := randf_range(-0.14, 0.14)
+		var y := (level * 2.0 - 1.0) * water_r + _slosh * x
+		_drops.append([Vector2(x, y), Vector2(randf_range(-0.18, 0.18), randf_range(0.45, 0.8) * (0.6 + impact)), 1.0])
+	while _drops.size() > 4:
+		_drops.pop_front()
+
+
+## Las gotas suben, caen y se apagan al volver al agua.
+func _update_drops(delta: float) -> void:
+	var water_r := 0.36
+	var surface := (_nitro_bar.value * 2.0 - 1.0) * water_r
+	for d in _drops:
+		var pos: Vector2 = d[0]
+		var vel: Vector2 = d[1]
+		vel.y -= 2.6 * delta
+		pos += vel * delta
+		var life: float = d[2] - delta * 0.6
+		if vel.y < 0.0 and pos.y < surface + _slosh * pos.x:
+			life = 0.0
+		d[0] = pos
+		d[1] = vel
+		d[2] = life
+	_drops = _drops.filter(func(d: Array) -> bool: return d[2] > 0.0)
 
 
 ## Ganó nitro de golpe (no el goteo de a poco): ese tramo brilla en blanco.
