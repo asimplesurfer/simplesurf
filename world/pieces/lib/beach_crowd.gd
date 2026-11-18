@@ -52,6 +52,8 @@ const DARK := Color("34404f")
 const STANDING := 5
 const SITTING := 3
 const LYING := 2
+## Sentados en la toalla (de noche no se toma sol).
+const GROUND_SITTING := 3
 
 ## Hasta dónde se ve el público (m): más lejos son puntitos y pesan mucho.
 const VISIBLE_UP_TO := 200.0
@@ -83,6 +85,8 @@ static func models() -> Dictionary:
 			_models["sit%d" % i] = _person([0, 1, 3][i], true)
 		for i in LYING:
 			_models["lie%d" % i] = _lying([0, 1][i])
+		for i in GROUND_SITTING:
+			_models["sitground%d" % i] = _ground_sitter([0, 1, 2][i])
 		_models["chair"] = _chair()
 		_models["lounger"] = _lounger()
 		_models["umbrella"] = _umbrella()
@@ -239,33 +243,86 @@ static func _person(variant: int, sitting: bool) -> ArrayMesh:
 		_ellipsoid(st, Vector3(0.36, 0.3, 0.3), Vector3(0.0, 0.82, 0.0), ACCENT)
 	# Pecho (remera del color de cada uno) y cabeza de huevo.
 	_ellipsoid(st, Vector3(0.37, 0.44, 0.27), torso, OWN)
-	_ellipsoid(st, Vector3(0.5, 0.6, 0.47), head, SKIN, Color.WHITE, 0, 2)
-	# Ojos de punto (sin boca).
+	_head(st, head, variant)
+	_cheer_hands(st, head)
+	_k = SIZE
+	return _commit(st)
+
+
+## Cabeza de huevo con ojos de punto (sin boca) y el pelo o lo que lleva
+## puesto (ver _person). `basis`: giro de la cabeza alrededor de su centro.
+static func _head(st: SurfaceTool, head: Vector3, variant: int, basis: Basis = Basis()) -> void:
+	var at := func(offset: Vector3) -> Vector3: return head + basis * offset
+	_prim_ellipsoid(st, Vector3(0.5, 0.6, 0.47), head, SKIN, Color.WHITE, basis, 2)
 	for side in [-1.0, 1.0]:
-		_ellipsoid(st, Vector3(0.05, 0.05, 0.02), head + Vector3(side * 0.15, 0.06, 0.45), FIXED, EYES, 0, 0)
+		_prim_ellipsoid(st, Vector3(0.05, 0.05, 0.02), at.call(Vector3(side * 0.15, 0.06, 0.45)), FIXED, EYES, basis, 0)
 	match variant:
 		2:
 			# Gorra con visera.
-			_ellipsoid(st, Vector3(0.51, 0.34, 0.49), head + Vector3(0.0, 0.27, -0.01), ACCENT)
-			_ellipsoid(st, Vector3(0.28, 0.035, 0.24), head + Vector3(0.0, 0.31, 0.45), ACCENT)
+			_prim_ellipsoid(st, Vector3(0.51, 0.34, 0.49), at.call(Vector3(0.0, 0.27, -0.01)), ACCENT, Color.WHITE, basis)
+			_prim_ellipsoid(st, Vector3(0.28, 0.035, 0.24), at.call(Vector3(0.0, 0.31, 0.45)), ACCENT, Color.WHITE, basis)
 		3:
 			# Sombrero de paja.
-			_cylinder(st, 0.72, 0.72, 0.04, head + Vector3(0.0, 0.34, 0.0), FIXED, STRAW)
-			_cylinder(st, 0.34, 0.42, 0.28, head + Vector3(0.0, 0.48, 0.0), FIXED, STRAW)
+			_cylinder(st, 0.72, 0.72, 0.04, at.call(Vector3(0.0, 0.34, 0.0)), FIXED, STRAW)
+			_cylinder(st, 0.34, 0.42, 0.28, at.call(Vector3(0.0, 0.48, 0.0)), FIXED, STRAW)
 		_:
-			_ellipsoid(st, Vector3(0.53, 0.4, 0.5), head + Vector3(0.0, 0.22, -0.06), HAIR, Color.WHITE, 0, 2)
+			_prim_ellipsoid(st, Vector3(0.53, 0.4, 0.5), at.call(Vector3(0.0, 0.22, -0.06)), HAIR, Color.WHITE, basis, 2)
 			if variant == 1:
 				# Pelo largo: cae por atrás hasta los hombros.
-				_ellipsoid(st, Vector3(0.5, 0.55, 0.26), head + Vector3(0.0, -0.15, -0.28), HAIR, Color.WHITE, 0, 1)
+				_prim_ellipsoid(st, Vector3(0.5, 0.55, 0.26), at.call(Vector3(0.0, -0.15, -0.28)), HAIR, Color.WHITE, basis, 1)
 			elif variant == 4:
 				# Rodete arriba.
-				_ellipsoid(st, Vector3(0.2, 0.18, 0.2), head + Vector3(0.0, 0.62, -0.12), HAIR)
-	# Manos sueltas, en alto para alentar (se mueven en el shader).
+				_prim_ellipsoid(st, Vector3(0.2, 0.18, 0.2), at.call(Vector3(0.0, 0.62, -0.12)), HAIR, Color.WHITE, basis)
+
+
+## Manos sueltas, en alto para alentar (se mueven en el shader).
+static func _cheer_hands(st: SurfaceTool, head: Vector3) -> void:
 	for side in [-1.0, 1.0]:
 		var hand := 1 if side < 0.0 else 2
 		_ellipsoid(st, Vector3(0.15, 0.15, 0.17), head + Vector3(side * 0.78, 0.42, 0.12), SKIN, Color.WHITE, hand)
+
+
+## Elipsoide girado (`basis`), para las partes de las poses.
+static func _prim_ellipsoid(st: SurfaceTool, radii: Vector3, pos: Vector3, part: float, color: Color, basis: Basis,
+		detail: int = 1) -> void:
+	var m := SphereMesh.new()
+	m.radius = 1.0
+	m.height = 2.0
+	m.radial_segments = [4, 7, 10][detail]
+	m.rings = [2, 3, 5][detail]
+	_prim(st, m, pos, part, basis, radii, 0, Vector3.ZERO, 0.0, color)
+
+
+## Alguien sentado en la toalla con las rodillas arriba, alentando con las
+## manos en alto (de noche, en vez de tomar sol).
+static func _ground_sitter(variant: int) -> ArrayMesh:
+	var st := _begin()
+	_k = PERSON_SCALE * SIZE
+	for side in [-1.0, 1.0]:
+		var hip := Vector3(side * 0.2, 0.3, 0.05)
+		var knee := Vector3(side * 0.21, 0.62, 0.5)
+		var foot := Vector3(side * 0.22, 0.1, 0.78)
+		_limb(st, hip, knee, 0.15, ACCENT)
+		_limb(st, knee, foot, 0.13, SKIN)
+		_ellipsoid(st, Vector3(0.13, 0.08, 0.2), foot + Vector3(0.0, -0.01, 0.08), SKIN)
+	_ellipsoid(st, Vector3(0.36, 0.24, 0.32), Vector3(0.0, 0.3, 0.0), ACCENT)
+	var torso := Vector3(0.0, 0.76, -0.08)
+	_ellipsoid(st, Vector3(0.37, 0.44, 0.27), torso, OWN)
+	var head := Vector3(0.0, 1.6, -0.06)
+	_head(st, head, variant)
+	_cheer_hands(st, head)
 	_k = SIZE
 	return _commit(st)
+
+
+## Un hueso redondeado de `a` a `b` (muslo, pierna), de radio `r`.
+static func _limb(st: SurfaceTool, a: Vector3, b: Vector3, r: float, part: float) -> void:
+	var dir := b - a
+	var len := dir.length()
+	var y := dir / len
+	var x := y.cross(Vector3.FORWARD).normalized() if absf(y.dot(Vector3.FORWARD)) < 0.95 else y.cross(Vector3.RIGHT).normalized()
+	var z := x.cross(y)
+	_prim_ellipsoid(st, Vector3(r, len * 0.5 + r * 0.6, r), (a + b) * 0.5, part, Color.WHITE, Basis(x, y, z))
 
 
 ## Alguien tirado en una toalla tomando sol, con las manos al costado (no
@@ -273,23 +330,50 @@ static func _person(variant: int, sitting: bool) -> ArrayMesh:
 static func _lying(variant: int) -> ArrayMesh:
 	var st := _begin()
 	_k = PERSON_SCALE * SIZE
-	# Se arma parado y se acuesta boca arriba (la cabeza hacia atrás, -Z).
-	var lift := 0.55 * PERSON_SCALE * SIZE
-	_pose = Transform3D(Basis(Vector3.RIGHT, -PI * 0.5), Vector3(0.0, lift, 1.35 * PERSON_SCALE * SIZE))
-	var torso := Vector3(0.0, 1.24, 0.0)
-	var head := Vector3(0.0, 2.08, 0.02)
-	for side in [-1.0, 1.0]:
-		_ellipsoid(st, Vector3(0.14, 0.09, 0.21), Vector3(side * 0.24, 0.09, 0.07), SKIN)
-		_ellipsoid(st, Vector3(0.15, 0.3, 0.15), Vector3(side * 0.24, 0.42, 0.0), SKIN)
-		_ellipsoid(st, Vector3(0.15, 0.15, 0.17), torso + Vector3(side * 0.6, -0.05, 0.0), SKIN)
+	# Se arma "parado" (y = de los pies a la cabeza, z = para donde mira) y
+	# después se acuesta. 0: boca arriba, con las manos detrás de la cabeza, el
+	# pecho un poco levantado y una rodilla arriba. 1: boca abajo, apoyado en
+	# los codos con la cara en las manos y los pies para arriba.
+	var lift := 0.5 * PERSON_SCALE * SIZE
+	var face_up := variant == 0
+	_pose = Transform3D(Basis(Vector3.RIGHT, -PI * 0.5 if face_up else PI * 0.5),
+		Vector3(0.0, lift, (1.35 if face_up else -1.35) * PERSON_SCALE * SIZE))
+	var hip := Vector3(0.0, 0.8, 0.0)
+	# Del lado de la toalla queda -z (boca arriba) o +z (boca abajo); levantar el
+	# pecho es girar el torso hacia el otro lado.
+	var up := Basis(Vector3.RIGHT, 0.3 if face_up else -0.55)
+	var torso := hip + up * Vector3(0.0, 0.44, 0.0)
+	var head := hip + up * Vector3(0.0, 1.28, 0.02)
 	_ellipsoid(st, Vector3(0.36, 0.3, 0.3), Vector3(0.0, 0.82, 0.0), ACCENT)
-	_ellipsoid(st, Vector3(0.37, 0.44, 0.27), torso, OWN)
-	_ellipsoid(st, Vector3(0.5, 0.6, 0.47), head, SKIN, Color.WHITE, 0, 2)
-	for side in [-1.0, 1.0]:
-		_ellipsoid(st, Vector3(0.05, 0.05, 0.02), head + Vector3(side * 0.15, 0.06, 0.45), FIXED, EYES, 0, 0)
-	_ellipsoid(st, Vector3(0.53, 0.4, 0.5), head + Vector3(0.0, 0.22, -0.06), HAIR, Color.WHITE, 0, 2)
-	if variant == 1:
-		_ellipsoid(st, Vector3(0.5, 0.55, 0.26), head + Vector3(0.0, -0.15, -0.28), HAIR, Color.WHITE, 0, 1)
+	_prim_ellipsoid(st, Vector3(0.37, 0.44, 0.27), torso, OWN, Color.WHITE, up)
+	if face_up:
+		_head(st, head, 0, up * Basis(Vector3.RIGHT, 0.25))
+		# Manos detrás de la cabeza (asoman a los costados).
+		for side in [-1.0, 1.0]:
+			_ellipsoid(st, Vector3(0.15, 0.15, 0.17), head + up * Vector3(side * 0.5, 0.12, -0.3), SKIN)
+		# Una pierna estirada y la otra con la rodilla arriba.
+		_limb(st, Vector3(-0.22, 0.72, 0.0), Vector3(-0.24, 0.12, 0.0), 0.15, SKIN)
+		_ellipsoid(st, Vector3(0.14, 0.21, 0.09), Vector3(-0.24, 0.06, 0.1), SKIN)
+		var knee := Vector3(0.24, 0.5, 0.42)
+		var foot := Vector3(0.24, 0.12, 0.1)
+		_limb(st, Vector3(0.22, 0.72, 0.02), knee, 0.15, SKIN)
+		_limb(st, knee, foot, 0.14, SKIN)
+		_ellipsoid(st, Vector3(0.14, 0.09, 0.21), foot + Vector3(0.0, -0.05, 0.08), SKIN)
+	else:
+		# La cara mira para adelante (no al piso), apoyada en las manos.
+		_head(st, head, 1, up * Basis(Vector3.RIGHT, -0.6))
+		for side in [-1.0, 1.0]:
+			_ellipsoid(st, Vector3(0.15, 0.15, 0.17), head + up * Vector3(side * 0.2, -0.5, 0.35), SKIN)
+			# Codos en la toalla.
+			_ellipsoid(st, Vector3(0.12, 0.12, 0.12), hip + Vector3(side * 0.45, 0.75, 0.42), SKIN)
+		# Rodillas dobladas, los pies para arriba (uno más que el otro).
+		for side in [-1.0, 1.0]:
+			var knee := Vector3(side * 0.22, 0.2, 0.0)
+			var bend := 1.9 if side < 0.0 else 1.35
+			var foot := knee + Basis(Vector3.RIGHT, bend) * Vector3(0.0, -0.55, 0.0)
+			_limb(st, Vector3(side * 0.22, 0.72, 0.0), knee, 0.15, SKIN)
+			_limb(st, knee, foot, 0.14, SKIN)
+			_ellipsoid(st, Vector3(0.13, 0.09, 0.2), foot, SKIN)
 	_pose = Transform3D.IDENTITY
 	_k = SIZE
 	return _commit(st)

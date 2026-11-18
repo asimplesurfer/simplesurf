@@ -7,10 +7,10 @@ render_mode unshaded, cull_front;
 
 #include "res://world/pieces/lib/crowd_motion.gdshaderinc"
 
-uniform float width = 0.04;
+uniform float width = 0.02;
 // Cuánto se ensancha por metro de distancia a la cámara, y el máximo.
-uniform float width_per_m = 0.0016;
-uniform float max_width = 0.13;
+uniform float width_per_m = 0.0008;
+uniform float max_width = 0.065;
 
 void vertex() {
 	vec3 origin = (MODEL_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;

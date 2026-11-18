@@ -37,7 +37,12 @@ float crowd_excite(vec3 origin) {
 vec3 crowd_move(vec3 v, vec2 uv, vec4 c, float excite, float time) {
 	float e = clamp(excite, 0.0, 1.0);
 	float hype = clamp(excite - 1.0, 0.0, 1.0);
-	float t = time * (1.4 + c.w * 1.6 + e * 2.0) + c.z * 6.2831;
+	// Dos ritmos fijos (tranquilo y alentando) que se mezclan: si el ritmo
+	// dependiera de las ganas, que cambian todo el tiempo, multiplicado por el
+	// reloj daría saltos de fase (manos que tiemblan y se agitan raro).
+	float phase = c.z * 6.2831;
+	float t_calm = time * (1.4 + c.w * 0.8) + phase;
+	float t_cheer = time * (3.2 + c.w * 1.6) + phase;
 	// Manos: tranquilos, abajo al costado del cuerpo; alentando, arriba y
 	// agitándolas (subiendo y abriéndose).
 	if (uv.x > 0.5 && uv.x < 2.5) {
@@ -45,7 +50,7 @@ vec3 crowd_move(vec3 v, vec2 uv, vec4 c, float excite, float time) {
 		float rest = 1.0 - e;
 		v.x -= side * hand_rest.x * rest * uv.y;
 		v.y -= hand_rest.y * rest * uv.y;
-		float wave = sin(t * 2.0 + side * 1.3);
+		float wave = mix(sin(t_calm * 2.0 + side * 1.3), sin(t_cheer * 2.0 + side * 1.3), e);
 		v.x += side * wave * (0.02 + 0.1 * e) * uv.y;
 		v.y += (wave * 0.5 + 0.5) * (0.02 + 0.12 * e + 0.08 * hype) * uv.y;
 	}
@@ -56,6 +61,6 @@ vec3 crowd_move(vec3 v, vec2 uv, vec4 c, float excite, float time) {
 	// Saltitos de festejo (los que están parados): cuando pasan cerca, los más
 	// entusiasmados; con un truco, casi todos.
 	float jumper = max(smoothstep(0.5, 1.0, c.w) * e, hype * smoothstep(0.15, 0.6, c.w));
-	v.y += jump * max(0.0, sin(t)) * 0.2 * jumper;
+	v.y += jump * max(0.0, sin(t_cheer)) * 0.2 * jumper;
 	return v;
 }

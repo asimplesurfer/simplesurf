@@ -10,7 +10,9 @@
 //   1 = blanco que acompaña (rayas).
 // UV.x marca lo que se mueve (ver crowd_motion.gdshaderinc).
 shader_type spatial;
-render_mode diffuse_toon, specular_toon, cull_disabled;
+// Sin brillo: los ojos son puntos negros lisos (el brillo los hacía parecer
+// pupilas con iris).
+render_mode diffuse_toon, specular_disabled, cull_disabled;
 
 // Saturación del color propio y del segundo color: baja en la ropa de la gente
 // (tonos pastel, que no llamen la atención), un poco más en sillas y sombrillas.

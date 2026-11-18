@@ -439,10 +439,25 @@ func _test_tropical_island() -> void:
 	race.skip_countdown()
 	await process_frame
 	var r: Rider = race.racers[0]
-	r.position = Vector3(225, r.position.y, 10)
+	# Esta isla está lejos de la pista (a más de 100 m): no se puede alcanzar,
+	# así que no choca.
+	_check(parts.all(func(p: TropicalIslandPiece) -> bool: return not p._solid),
+		"las islas lejos de la pista no chocan")
+	for p in parts:
+		p._solid = true
+	# Seguro: un choque que lo mandaría lejos no cuenta.
+	var before := r.position
+	course._crash(r, before + Vector3(40, 0, 0))
+	_check(not r.is_fallen() and r.position.distance_to(before) < 0.1, "un choque nunca lo manda lejos")
+	# Entra por la orilla (como en el juego): justo pasando el borde.
+	var z := -20.0
+	while z < 10.0 and not covered.call(225.0, z):
+		z += 0.25
+	r.position = Vector3(225, r.position.y, z + 0.5)
 	await process_frame
 	await process_frame
 	_check(r.is_fallen() and not covered.call(r.position.x, r.position.z), "subirse a la isla tira al surfista y lo deja en el agua")
+
 	m.queue_free()
 	await process_frame
 	GameSettings.track_layout = GameSettings.TrackLayout.CLASSIC
