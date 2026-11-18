@@ -43,8 +43,6 @@ uniform float pulse_seg = 0.0;
 uniform float boil : hint_range(0.0, 1.0) = 0.0;
 // De noche: el agua brilla en los bordes (bioluminiscencia).
 uniform float night : hint_range(0.0, 1.0) = 0.0;
-// Un surfista chiquito en la superficie (de prueba).
-uniform bool show_surfer = false;
 
 const float WATER_R = 0.36;
 const float RING_R = 0.445;
@@ -65,13 +63,6 @@ float surface_at(float px_x, float t) {
 	// Remolino: la superficie se hunde en el medio como un embudo.
 	h -= swirl * WATER_R * 0.28 * exp(-x * x * 5.0);
 	return mix(-WATER_R * 1.3, h, smoothstep(0.0, 0.02, level));
-}
-
-// Distancia del punto p al segmento a-b.
-float seg_dist(vec2 p, vec2 a, vec2 b) {
-	vec2 ab = b - a;
-	float k = clamp(dot(p - a, ab) / dot(ab, ab), 0.0, 1.0);
-	return length(p - a - ab * k);
 }
 
 void fragment() {
@@ -151,30 +142,6 @@ void fragment() {
 		float dd = length(p - d.xy);
 		float drop = (1.0 - smoothstep(d.z - px, d.z + px, dd)) * d.w * inside;
 		col = mix(col, vec4(mix(color, vec3(1.0), 0.3), 1.0), drop);
-	}
-	// Surfista chiquito (de prueba): tabla, cuerpo y cabeza sobre la superficie.
-	if (show_surfer && level > 0.04) {
-		float sx = 0.0;
-		float sy = surface_at(sx, t);
-		float dx = 0.02;
-		float tilt = atan((surface_at(sx + dx, t) - surface_at(sx - dx, t)) / (2.0 * dx));
-		vec2 dir = vec2(cos(tilt), sin(tilt));
-		vec2 up = vec2(-dir.y, dir.x);
-		vec2 base = vec2(sx, sy) + up * 0.014;
-		float board = seg_dist(p, base - dir * 0.07, base + dir * 0.07) - 0.011;
-		// Agachado: piernas abiertas sobre la tabla, el cuerpo inclinado adelante.
-		vec2 hip = base + up * 0.05 - dir * 0.005;
-		float legs = min(seg_dist(p, base - dir * 0.03, hip), seg_dist(p, base + dir * 0.03, hip)) - 0.007;
-		vec2 neck = hip + up * 0.04 + dir * 0.012;
-		float body = seg_dist(p, hip, neck) - 0.009;
-		float head = length(p - (neck + up * 0.02 + dir * 0.004)) - 0.015;
-		float arms = seg_dist(p, neck - up * 0.008 - dir * 0.04, neck - up * 0.008 + dir * 0.045) - 0.005;
-		body = min(body, min(legs, arms));
-		float fig = min(board, min(body, head));
-		float figure = (1.0 - smoothstep(-px, px, fig)) * inside;
-		float outline = (1.0 - smoothstep(-px, px, fig - 1.6 * px)) * inside;
-		col = mix(col, vec4(0.03, 0.1, 0.18, 1.0), outline * 0.8);
-		col = mix(col, vec4(1.0), figure);
 	}
 	// Borde de la ventana: fino y blanco.
 	float rim = 1.0 - smoothstep(0.0, 1.6 * px, abs(r - WATER_R) - 0.8 * px);
