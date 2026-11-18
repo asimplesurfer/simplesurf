@@ -13,6 +13,13 @@ const BURN_COLOR := Color(1.0, 0.45, 0.05)
 ## Barra llena (3 cargas): roja, vibra y parpadea.
 const FULL_COLOR := Color(1.0, 0.12, 0.1)
 const NITRO_FIRE_SHADER := preload("res://ui/shaders/nitro_fire.gdshader")
+const ControlsHint := preload("res://ui/hud/controls_hint.gd")
+## Guía de controles (abajo a la derecha): se ve los primeros HINT_START
+## segundos de la carrera y vuelve si la persona no toca nada por HINT_IDLE
+## segundos o se queda frenada / trabada HINT_STUCK segundos.
+const HINT_START := 20.0
+const HINT_IDLE := 8.0
+const HINT_STUCK := 2.5
 const NITRO_GAUGE_SHADER := preload("res://ui/shaders/nitro_gauge.gdshader")
 ## Lado del medidor de nitro (la ventanita redonda con el aro).
 const NITRO_GAUGE_SIZE := 118.0
@@ -154,6 +161,12 @@ var _gain_flash: float = 0.0
 var _last_nitro: float = 0.0
 var _full_look: float = 0.0
 var _nitro_box: VBoxContainer
+var _hint: Control
+## 0 = a la vista, 1 = escondida a la derecha.
+var _hint_slide: float = 0.0
+var _hint_hold: float = 0.0
+var _idle_time: float = 0.0
+var _stuck_time: float = 0.0
 ## Lo que se ve del nitro: el "ojo de buey" (ver nitro_gauge.gdshader). Las
 ## barras de arriba quedan ocultas y llevan el estado (cuánto hay, lo que se
 ## gasta, el brillo de lo ganado), que el medidor dibuja.
@@ -377,6 +390,44 @@ func _unhandled_input(event: InputEvent) -> void:
 			cam.shake(0.6)
 
 
+## Cualquier botón o tecla cuenta como "está jugando" (para la guía).
+func _input(event: InputEvent) -> void:
+	if (event is InputEventKey or event is InputEventJoypadButton) and event.is_pressed():
+		_idle_time = 0.0
+	elif event is InputEventJoypadMotion and absf((event as InputEventJoypadMotion).axis_value) > 0.5:
+		_idle_time = 0.0
+
+
+const HINT_WIDTH := 230.0
+
+
+## La guía de controles: solo en carrera (no en el modo libre ni en la demo).
+## A la vista al principio y cuando hace falta; si no, se va a la derecha.
+func _update_hint(delta: float) -> void:
+	var race := _race()
+	if race == null or free_ride or demo:
+		_hint.visible = false
+		return
+	_hint.visible = true
+	_hint.pad = _using_pad()
+	var racing := race.state == RaceManager.State.RACING
+	var early := race.state == RaceManager.State.COUNTDOWN or (racing and race.race_time < HINT_START)
+	_idle_time += delta
+	# Frenado o trabado contra algo (o caído) en plena carrera.
+	if racing and rider.speed < 2.0 and not race.finish_times.has(rider):
+		_stuck_time += delta
+	else:
+		_stuck_time = 0.0
+	var need := early or (racing and (_idle_time > HINT_IDLE or _stuck_time > HINT_STUCK))
+	_hint_hold = 3.0 if need else maxf(_hint_hold - delta, 0.0)
+	var show := _hint_hold > 0.0 and race.state != RaceManager.State.FINISHED
+	_hint_slide = move_toward(_hint_slide, 0.0 if show else 1.0, delta * 2.5)
+	var e := _hint_slide * _hint_slide * (3.0 - 2.0 * _hint_slide)
+	_hint.offset_left = -20.0 - HINT_WIDTH + e * (HINT_WIDTH + 60.0)
+	_hint.offset_right = -20.0 + e * (HINT_WIDTH + 60.0)
+	_hint.modulate.a = 1.0 - e
+
+
 func _process(delta: float) -> void:
 	if compact and _root:
 		# Más chico: se escala la capa y se agranda la raíz para que ocupe toda la vista.
@@ -462,6 +513,7 @@ func _process(delta: float) -> void:
 	_speed_lines.visible = _lines > 0.01
 	_speed_lines_material.set_shader_parameter("intensity", _lines)
 	_update_turbo_meter(delta)
+	_update_hint(delta)
 
 
 ## Barra de nitro según el turbo:
@@ -973,6 +1025,17 @@ func _build() -> void:
 	_place_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 	_style_number(_place_label, 64)
 	root.add_child(_place_label)
+	# Arriba del puesto: la guía de controles (ver _update_hint).
+	_hint = ControlsHint.new()
+	_hint.anchor_left = 1.0
+	_hint.anchor_right = 1.0
+	_hint.anchor_top = 1.0
+	_hint.anchor_bottom = 1.0
+	_hint.offset_left = -20.0 - HINT_WIDTH
+	_hint.offset_right = -20.0
+	_hint.offset_top = -118.0 - _hint.custom_minimum_size.y
+	_hint.offset_bottom = -118.0
+	root.add_child(_hint)
 
 	# Mensajes (truco, nitro...), arriba al centro.
 	_message = _make_label(40, NITRO_COLOR)
