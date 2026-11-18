@@ -138,5 +138,8 @@ const _SUNSET_WATER := {
 	"wave_color": Color(0.3, 0.42, 0.52),
 	"outside_color": Color(0.05, 0.1, 0.22),
 	"sky_tint": Color(0.95, 0.65, 0.55),
+	# Arrecifes: apenas más claros que el mar, con el reflejo cálido del cielo
+	# (el turquesa de día queda pegado encima).
+	"reef_color": Color(0.64, 0.56, 0.56),
 	"foam_color": Color(1.0, 0.9, 0.85),
 }
