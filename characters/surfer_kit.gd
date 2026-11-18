@@ -62,6 +62,12 @@ var _pose: Dictionary = {}
 ## Pelo y collar: se mueven solos (con la velocidad, los saltos, los giros).
 var hair_rig: Node3D
 var necklace_rig: Node3D
+## Panza redonda de los gorditos (cuerpo de huevo): rebota sola.
+var belly_rig: Node3D
+var _belly_sq: float = 0.0
+var _belly_v: float = 0.0
+## Musculosa puesta (con panza redonda, la panza es de tela).
+var _shirt: bool = false
 var _hair_rot := Vector3.ZERO
 var _hair_vel := Vector3.ZERO
 var _neck_rot := Vector3.ZERO
@@ -92,6 +98,7 @@ func build(parent: Node3D, data: CharacterData, features: AvatarFeatures) -> voi
 	parent.add_child(character)
 	character.basis = Basis(Vector3.UP, _yaw)
 	_lycra = data.get_option("top") == CharacterData.LYCRA
+	_shirt = data.get_option("top") == 2
 	_bikini = data.get_option("bottom") == CharacterData.BIKINI
 	_fist_left_hand()
 	_choose_accessories(data)
@@ -104,6 +111,10 @@ func build(parent: Node3D, data: CharacterData, features: AvatarFeatures) -> voi
 	hair_rig = _rig(head_node, "HairRig", HAIR_PIVOT, ["Hair", "HairStrand"])
 	var torso_node := character.find_child("Torso", false, false) as Node3D
 	necklace_rig = _rig(torso_node, "NecklaceRig", NECK_PIVOT, ["PearlNecklace"])
+	var egg := torso_node.find_child("Egg_fill", false, false) as Node3D
+	if egg:
+		belly_rig = _rig(torso_node, "BellyRig", egg.position, ["Egg", "Navel"])
+		_bake(belly_rig)
 	_bake(hair_rig)
 	_bake(necklace_rig)
 	# Juntar las piezas de cada parte animada en una malla por color.
@@ -303,6 +314,14 @@ func _secondary(state: Dictionary, dt: float, snap: bool) -> void:
 	_neck_vel += ((neck_target - _neck_rot) * 90.0 - _neck_vel * 5.0) * dt
 	_neck_rot += _neck_vel * dt
 	necklace_rig.basis = Basis.from_euler(_neck_rot)
+	if belly_rig:
+		# La panza rebota: al caer (aceleración para arriba) se aplasta y
+		# después vuelve, con resorte.
+		var squash := clampf(-ca_local.y * 0.0022 + absf(cv_local.y) * 0.0, -0.14, 0.14)
+		_belly_v += ((squash - _belly_sq) * 160.0 - _belly_v * 7.0) * dt
+		_belly_sq += _belly_v * dt
+		var q := clampf(_belly_sq, -0.18, 0.18)
+		belly_rig.scale = Vector3(1.0 + q * 0.6, 1.0 - q, 1.0 + q * 0.6)
 
 
 func face_position() -> Vector3:
@@ -356,12 +375,82 @@ func _choose_accessories(data: CharacterData) -> void:
 			n.free()
 
 
+## Cuerpo de huevo: una forma redonda de piel que envuelve el pecho y la
+## panza (más ancha abajo), y un ombligo. `k` va de 0 (normal) a 1 (panzón).
+func _add_egg(torso: Node3D, chest: Node3D, waist: Node3D, k: float) -> void:
+	var box := AABB()
+	var first := true
+	var skin_mat: Material = null
+	for part in [chest, waist]:
+		for mi in (part as Node3D).find_children("*_fill", "MeshInstance3D", true, false):
+			var inst := mi as MeshInstance3D
+			var xf := _relative(inst, torso)
+			var bb := xf * inst.mesh.get_aabb()
+			box = bb if first else box.merge(bb)
+			first = false
+			if skin_mat == null:
+				skin_mat = inst.mesh.surface_get_material(0)
+	if first:
+		return
+	var center := box.get_center()
+	var half := box.size * 0.5
+	var radii := half * lerpf(0.92, 1.04, k) + Vector3(0.05, 0.02, 0.06) * k
+	var src := SphereMesh.new()
+	src.radius = 1.0
+	src.height = 2.0
+	src.radial_segments = 24
+	src.rings = 12
+	var arrays := src.get_mesh_arrays()
+	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+	for i in verts.size():
+		var v := verts[i]
+		# Más ancho abajo (forma de huevo / pera).
+		var widen := 1.0 + 0.2 * clampf(-v.y, 0.0, 1.0) - 0.08 * clampf(v.y, 0.0, 1.0)
+		verts[i] = Vector3(v.x * widen, v.y, v.z * widen) * radii
+		normals[i] = (normals[i] / radii).normalized()
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	mesh.surface_set_material(0, skin_mat)
+	var egg := MeshInstance3D.new()
+	egg.name = "Egg_fill"
+	egg.mesh = mesh
+	egg.position = center + Vector3(0.0, -0.02 * k, 0.03 * k)
+	torso.add_child(egg)
+	var outline := Node3D.new()
+	outline.name = "Egg_outline"
+	torso.add_child(outline)
+	# Ombligo (del color de las líneas de la piel).
+	var line_mat: Material = null
+	for mi in torso.find_children("*", "MeshInstance3D", true, false):
+		var m := (mi as MeshInstance3D).mesh.surface_get_material(0)
+		if m and m.resource_name == "skin_line":
+			line_mat = m
+			break
+	if line_mat == null:
+		line_mat = StandardMaterial3D.new()
+		line_mat.resource_name = "skin_line"
+	var navel_mesh := SphereMesh.new()
+	navel_mesh.radius = 1.0
+	navel_mesh.height = 2.0
+	navel_mesh.material = line_mat
+	var navel := MeshInstance3D.new()
+	navel.name = "Navel"
+	navel.mesh = navel_mesh
+	var widen_at := 1.0 + 0.2 * 0.25
+	navel.position = egg.position + Vector3(0.0, -0.25 * radii.y, radii.z * widen_at * 0.97)
+	navel.scale = Vector3(0.028, 0.04, 0.02)
+	torso.add_child(navel)
+
+
 ## De normal a panzón la panza crece esta parte de lo que crecía antes (hacia
 ## adelante y para abajo) y esta otra a los costados.
 const BELLY_GROWTH := 0.5
 const BELLY_SIDE := 0.25
 ## Cuánto más adelante va el short con la panza (de normal a panzón).
-const SHORTS_FOLLOW := 1.4
+const SHORTS_FOLLOW := 0.7
 ## Tamaño de la cabeza (ya no se elige).
 const HEAD_SCALE := 1.085
 ## Silueta flaca: cuánto se afinan el pecho, la cintura, la cadera y las piernas.
@@ -432,9 +521,11 @@ func _apply_sliders(data: CharacterData) -> void:
 	# El short acompaña la panza por delante (así se sigue viendo).
 	hips.scale = Vector3(1.0 + 0.35 * w + 0.35 * BELLY_SIDE * e, 1.0 + 0.08 * w, 1.0 + 0.45 * w + SHORTS_FOLLOW * e)
 	if data.get_option("bottom") == CharacterData.BIKINI:
-		# Bikini: la cadera más chica y más abajo (no un short).
-		hips.scale *= Vector3(0.94, 0.62, 0.9)
-		hips.position.y -= 0.06
+		# Bikini: la cadera más chica y más abajo (no un short). Con panza
+		# redonda, menos achicada (si no, la tapa la panza).
+		var kb := e / 0.5
+		hips.scale *= Vector3(0.94 + 0.1 * kb, 0.62 + 0.25 * kb, 0.9 + 0.15 * kb)
+		hips.position.y -= 0.06 + 0.02 * kb
 	for part in ["SleeveL", "SleeveR", "ThighL", "ThighR"]:
 		(character.find_child(part, false, false) as Node3D).scale *= Vector3(1.0 + 0.35 * w, 1.0, 1.0 + 0.35 * w)
 	for part in ["ShinL", "ShinR"]:
@@ -450,7 +541,17 @@ func _apply_sliders(data: CharacterData) -> void:
 	for part in ["HandL", "HandR"]:
 		var hand := character.find_child(part, false, false) as Node3D
 		var out := Vector3(hand.position.x, 0.0, hand.position.z).normalized()
-		hand.position += out * 0.18 * w
+		hand.position += out * (0.18 * w + 0.12 * e)
+	# Gordito: cuerpo de huevo (pecho y panza en una sola forma redonda), manos
+	# más grandes y piernas más gorditas.
+	var k := e / 0.5
+	if k > 0.0:
+		_add_egg(torso, chest, waist, k)
+		for part in ["HandL", "HandR"]:
+			(character.find_child(part, false, false) as Node3D).scale *= 1.0 + 0.3 * k
+		for part in ["ThighL", "ThighR", "ShinL", "ShinR", "SleeveL", "SleeveR"]:
+			(character.find_child(part, false, false) as Node3D).scale *= Vector3(1.0 + 0.28 * k, 1.0, 1.0 + 0.28 * k)
+		hips.scale *= Vector3(1.0 + 0.15 * k, 1.0, 1.0)
 	# Cabeza: siempre del mismo tamaño; la forma se elige. Se sube para no
 	# hundirse en el pecho.
 	var s := HEAD_SCALE
@@ -523,6 +624,9 @@ func _make_materials(data: CharacterData) -> void:
 	var top := (_materials["skin"] as BaseMaterial3D).duplicate() as BaseMaterial3D
 	top.albedo_color = data.accent("top_color")
 	_materials["top"] = top
+	var shirt := (_materials["skin"] as BaseMaterial3D).duplicate() as BaseMaterial3D
+	shirt.albedo_color = data.shorts_color()
+	_materials["shirt"] = shirt
 
 
 ## Junta todas las piezas debajo de `part` en una malla (una superficie por color),
@@ -539,6 +643,12 @@ func _bake(part: Node3D) -> void:
 		var key := mat.resource_name if mat else "skin"
 		if _bikini and String(part.name).begins_with("Sleeve"):
 			continue
+		if belly_rig and part == belly_rig and (_lycra or _shirt):
+			# La panza redonda con remera puesta: es de tela, sin ombligo.
+			if key == "skin_line":
+				continue
+			if key == "skin":
+				key = "top" if _lycra else "shirt"
 		if _lycra and part.name == "Torso":
 			# La lycra tapa el torso: la piel se vuelve tela y las líneas de
 			# los músculos no se ven.
@@ -587,7 +697,7 @@ func _bake(part: Node3D) -> void:
 				part_indices[t] -= base
 			append_hull(ob, part_verts, part_normals, part_indices, to_char, OUTLINE_WIDTH)
 	for c in part.get_children():
-		if c == hair_rig or c == necklace_rig:
+		if c == hair_rig or c == necklace_rig or (belly_rig and c == belly_rig):
 			continue
 		part.remove_child(c)
 		c.free()
@@ -670,11 +780,11 @@ func _rig(parent: Node3D, rig_name: String, pivot: Vector3, prefixes: Array) -> 
 
 
 func _inside_rig(node: Node, part: Node3D) -> bool:
-	if part == hair_rig or part == necklace_rig:
+	if part == hair_rig or part == necklace_rig or (belly_rig and part == belly_rig):
 		return false
 	var n := node.get_parent()
 	while n != null and n != part:
-		if n == hair_rig or n == necklace_rig:
+		if n == hair_rig or n == necklace_rig or (belly_rig and n == belly_rig):
 			return true
 		n = n.get_parent()
 	return false

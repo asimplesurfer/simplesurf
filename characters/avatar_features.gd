@@ -59,6 +59,12 @@ const HIGH_PONYTAIL := 16
 const DREADS := 14
 ## Altura del ribete de la bombacha (en radios de la cadera).
 const BIKINI_TRIM_Y := 0.5
+## Con panza redonda, cuánto se agrandan (x ancho, y fondo) la franja de la
+## lycra y el bikini, para quedar sobre la panza.
+const LYCRA_BELLY := Vector2(0.32, 1.0)
+const BIKINI_BELLY := Vector2(0.1, 1.0)
+## Cuánto de panza redonda tiene (0 normal ... 1 panzón).
+var _belly_k: float = 0.0
 ## Bikini: color de los lunares (transparente si no lleva) y del ribete.
 var _bikini_dots := Color(0, 0, 0, 0)
 var _bikini_trim := Color("#e8302a")
@@ -218,6 +224,7 @@ func build_head(group: Node3D, hair_group: Node3D, data: CharacterData, skin: Co
 func build_chest(group: Node3D, data: CharacterData, radii: Vector3, neck_scale := Vector2.ONE) -> void:
 	_begin(group)
 	_neck_scale = neck_scale
+	_belly_k = clampf((data.weight - 0.5) / 0.5, 0.0, 1.0)
 	_bikini_dots = data.accent("shorts_pattern_color") if data.get_option("shorts_pattern") == 2 else Color(0, 0, 0, 0)
 	_bikini_trim = data.accent("trim_color")
 	_top(data.get_option("top"), data.shorts_color(), radii, data.accent("top_color2"))
@@ -895,6 +902,12 @@ func _curve(center: Vector3, xs: Array, bend: float, tilt: float = 0.0) -> void:
 
 func _extra(style: int, hair: Color, skin: Color = Color.WHITE) -> void:
 	match style:
+		12:
+			# Cachetes colorados: dos manchitas rosadas redondas.
+			for side in [-1.0, 1.0]:
+				var q := Vector2(side * 0.27, -0.09)
+				_disc(_face(q.x, q.y, 0.008), (_face(q.x, q.y, 1.0) - _face(q.x, q.y)).normalized(), 0.07,
+					skin.lerp(Color("#ff6f86"), 0.55), false)
 		10, 11:
 			_wrinkles(skin)
 			if style == 11:
@@ -1180,8 +1193,9 @@ func _hat(style: int, tint: Color = Color("#ff9b1f")) -> void:
 func _top(style: int, color: Color, radii: Vector3, band: Color = WHITE) -> void:
 	match style:
 		1:
-			# El bikini sigue el ancho del pecho (más finito en la silueta flaca).
-			radii *= Vector3(_neck_scale.x, 1.0, _neck_scale.y)
+			# El bikini sigue el ancho del pecho (más finito en la silueta flaca) y
+			# la panza redonda de los gorditos.
+			radii *= Vector3(_neck_scale.x, 1.0, _neck_scale.y) * Vector3(1.0 + BIKINI_BELLY.x * _belly_k, 1.0, 1.0 + BIKINI_BELLY.y * _belly_k)
 			# Bikini: dos copas grandes (acordes al torso), banda debajo y tiras al cuello.
 			for side in [-1.0, 1.0]:
 				var d := Vector3(side * 0.5, 0.02, 1.0).normalized()
@@ -1210,13 +1224,15 @@ func _top(style: int, color: Color, radii: Vector3, band: Color = WHITE) -> void
 					_align_y(top - bottom))
 			_piece(_sphere, Vector3(0.0, -0.1, 0.0), Vector3(radii.x * 1.03, 0.04, radii.z * 1.04), color)
 		2:
-			# Musculosa: cubre el pecho.
-			_piece(_sphere, Vector3(0.0, -0.03, 0.0), radii * Vector3(1.04, 0.95, 1.06), color)
+			# Musculosa: cubre el pecho (con panza redonda, la panza ya es de tela).
+			if _belly_k <= 0.0:
+				_piece(_sphere, Vector3(0.0, -0.03, 0.0), radii * Vector3(1.04, 0.95, 1.06), color)
 		CharacterData.LYCRA:
 			# Lycra de surf: el torso ya es de tela (SurferKit); acá va la franja
 			# de otro color alrededor de la panza, sobre la tela.
 			_piece(_cyl, Vector3(0.0, LYCRA_BAND_Y, 0.0),
-				Vector3(radii.x * _neck_scale.x * LYCRA_BAND_R.x, 0.055, radii.z * _neck_scale.y * LYCRA_BAND_R.y),
+				Vector3(radii.x * _neck_scale.x * LYCRA_BAND_R.x * (1.0 + LYCRA_BELLY.x * _belly_k), 0.055,
+					radii.z * _neck_scale.y * LYCRA_BAND_R.y * (1.0 + LYCRA_BELLY.y * _belly_k)),
 				band, true)
 
 
