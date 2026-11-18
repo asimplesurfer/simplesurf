@@ -5,8 +5,8 @@ extends MapPiece
 ## focos colgando. Cada cable está atado al tronco (un nudo de soga abajo de
 ## la copa) y cae un poco por su peso. De día están apagados (vidrio de
 ## color). Al atardecer se prenden suave; de noche alumbran fuerte: una luz
-## que llega hasta el agua y a lo que está cerca, y un reflejo cálido en el
-## mar debajo de los cables.
+## que llega a lo que está cerca y luces en el agua que iluminan las olas y
+## se reflejan en ellas.
 ##
 ## En el mapa: `a` y `b` son un punto en cada isla (donde se toca en el
 ## editor); cada punta se ata a las palmeras de esa isla más cercanas a ese
@@ -40,8 +40,6 @@ const XMAS: Array[Color] = [
 
 const BULB_SHADER := preload("res://world/pieces/lib/string_bulb.gdshader")
 const GLOW_SHADER := preload("res://world/pieces/lib/string_glow.gdshader")
-const POOL_SHADER := preload("res://world/pieces/lib/string_pool.gdshader")
-const STREAK_SHADER := preload("res://world/pieces/lib/string_streak.gdshader")
 
 ## Cables armados: cada uno [punta en la isla de a, punta en la isla de b]
 ## (para los tests).
@@ -109,26 +107,29 @@ func finish(course: Course) -> void:
 	root.add_child(_bulbs(bulbs, colors, lit, twinkle))
 	if lit > 0.0:
 		root.add_child(_glows(bulbs, colors, lit, twinkle))
-		root.add_child(_streaks(bulbs, colors, lit))
-		_light_up(root, colors, lit)
+		_light_up(course, root, colors, lit)
 
 
-## La luz que dan: una luz de verdad por guirnalda (alumbra el agua, las
-## palmeras y a los surfistas que pasan) y un reflejo cálido en el mar debajo
-## de cada cable. Colores un poco lavados (no saturados).
-func _light_up(root: Node3D, colors: Array[Color], lit: float) -> void:
+## La luz que dan: una luz de verdad por guirnalda (alumbra las palmeras, la
+## arena y a los surfistas que pasan) y unas cuantas luces en el agua (ver
+## Water.add_lamp), que iluminan el mar y las olas y se reflejan en ellas.
+## Colores un poco lavados (no saturados).
+func _light_up(course: Course, root: Node3D, colors: Array[Color], lit: float) -> void:
 	var tint := Color.BLACK
 	for c in colors:
 		tint += Color(c.r, c.g, c.b)
 	# Más amarillo que naranja: el naranja sumado al mar azul de noche queda
 	# gris violáceo; el amarillo cálido lo lleva a un verde agua más natural.
 	tint = (tint / maxf(colors.size(), 1)).lerp(Color(1.0, 0.93, 0.7), 0.6)
-	var mid := Vector3.ZERO
-	var span := 0.0
+	# La guirnalda como un solo cable (el promedio de todos).
+	var e0 := Vector3.ZERO
+	var e1 := Vector3.ZERO
 	for c in cables:
-		mid += (c[0] + c[1]) * 0.5
-		span = maxf(span, (c[0] as Vector3).distance_to(c[1]))
-	mid /= maxf(cables.size(), 1)
+		e0 += c[0]
+		e1 += c[1]
+	e0 /= maxf(cables.size(), 1)
+	e1 /= maxf(cables.size(), 1)
+	var span := e0.distance_to(e1)
 	var light := OmniLight3D.new()
 	light.name = "Light"
 	light.light_color = tint
@@ -136,43 +137,25 @@ func _light_up(root: Node3D, colors: Array[Color], lit: float) -> void:
 	light.omni_range = maxf(span * 0.75, 22.0)
 	light.omni_attenuation = 0.8
 	light.shadow_enabled = false
-	# Casi sin brillo en el agua (si no, deja manchas chicas y duras): solo ilumina.
 	light.light_specular = 0.08
-	light.position = mid - Vector3.UP * 2.0
+	# El agua no: se ilumina sola (así se iluminan bien las olas, sin el
+	# límite de luces por objeto del motor).
+	light.light_cull_mask = Water.LIGHT_MASK
+	light.position = (e0 + e1) * 0.5 - Vector3.UP * 2.0
 	root.add_child(light)
-	root.add_child(_pools(tint, lit))
+	var water := course.get_tree().get_first_node_in_group("water") as Water if course.is_inside_tree() else null
+	if water == null:
+		return
+	var n := clampi(roundi(span / LAMP_SPACING), 1, 3)
+	for i in n:
+		var p := e0.lerp(e1, (i + 0.5) / n) - Vector3.UP * 1.5
+		water.add_lamp(root.to_global(p) if root.is_inside_tree() else p, tint, LAMP_REACH, lit)
 
 
-## Reflejo en el mar: una franja ancha y suave debajo de cada cable, que se
-## suma al agua (más fuerte en el medio, se apaga hacia los bordes y las puntas).
-func _pools(tint: Color, lit: float) -> MeshInstance3D:
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for c in cables:
-		var p0 := Vector2((c[0] as Vector3).x, (c[0] as Vector3).z)
-		var p1 := Vector2((c[1] as Vector3).x, (c[1] as Vector3).z)
-		var along := (p1 - p0).normalized()
-		var side := Vector2(-along.y, along.x) * POOL_HALF_WIDTH
-		var q := [p0 - side, p0 + side, p1 + side, p1 - side]
-		var uv := [Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)]
-		for k in [0, 1, 2, 0, 2, 3]:
-			st.set_uv(uv[k])
-			st.add_vertex(Vector3(q[k].x, POOL_HEIGHT, q[k].y))
-	var mat := ShaderMaterial.new()
-	mat.shader = POOL_SHADER
-	mat.set_shader_parameter("tint", tint)
-	mat.set_shader_parameter("strength", 0.3 * lit)
-	var mi := MeshInstance3D.new()
-	mi.name = "WaterGlow"
-	mi.mesh = st.commit()
-	mi.material_override = mat
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	return mi
-
-
-## Mitad del ancho del reflejo en el agua (m) y su altura (apenas sobre el mar).
-const POOL_HALF_WIDTH := 22.0
-const POOL_HEIGHT := 0.9
+## Cada cuántos metros de guirnalda hay una luz en el agua (hasta 3), y hasta
+## dónde llega cada una.
+const LAMP_SPACING := 24.0
+const LAMP_REACH := 26.0
 
 
 ## La isla tropical de un punto (la que lo tiene adentro, o la más cercana).
@@ -370,25 +353,6 @@ func _glows(items: Array[Transform3D], colors: Array[Color], lit: float, twinkle
 	mat.set_shader_parameter("strength", 0.5 * lit)
 	mat.set_shader_parameter("twinkle", twinkle)
 	return _multi("Glow", q, items, colors, mat)
-
-
-## Reflejo de cada foco en el agua: una estela hacia la cámara (ver
-## string_streak.gdshader). Va a la altura del mar, debajo de cada foco.
-func _streaks(items: Array[Transform3D], colors: Array[Color], lit: float) -> MultiMeshInstance3D:
-	# Uno de cada tres focos: con todos queda una cortina de rayas.
-	var at: Array[Transform3D] = []
-	var cs: Array[Color] = []
-	for i in range(0, items.size(), 3):
-		var t := items[i]
-		at.append(Transform3D(Basis.IDENTITY, Vector3(t.origin.x, POOL_HEIGHT + 0.05, t.origin.z)))
-		cs.append(colors[i])
-	var mat := ShaderMaterial.new()
-	mat.shader = STREAK_SHADER
-	mat.set_shader_parameter("strength", 0.35 * lit)
-	var mmi := _multi("Streaks", QuadMesh.new(), at, cs, mat)
-	# La estela se estira en el shader: que no se corte por estar fuera de la caja.
-	mmi.extra_cull_margin = 40.0
-	return mmi
 
 
 func _multi(node_name: String, mesh: Mesh, items: Array[Transform3D], colors: Array[Color],
