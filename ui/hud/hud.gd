@@ -151,8 +151,6 @@ var _pulse_seg: int = 0
 var _last_charges: int = -1
 ## De noche el agua brilla en los bordes.
 var _night: float = -1.0
-## Un surfista chiquito en la superficie del agua (de prueba: false lo saca).
-const GAUGE_SURFER := true
 ## Amague de la barra al apretar turbo cuando no se puede (0..1).
 var _blocked: float = 0.0
 
@@ -521,7 +519,6 @@ func _update_gauge(delta: float, base: Color, glow: float, turbo_on: bool) -> vo
 	_gauge_mat.set_shader_parameter("pulse", _pulse)
 	_gauge_mat.set_shader_parameter("pulse_seg", float(_pulse_seg))
 	_gauge_mat.set_shader_parameter("night", _night)
-	_gauge_mat.set_shader_parameter("show_surfer", GAUGE_SURFER)
 	var drops := []
 	for k in 4:
 		if k < _drops.size():
