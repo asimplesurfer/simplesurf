@@ -262,6 +262,7 @@ func _roughen(water: Water) -> void:
 	_set_water(mat, "outside_color", Color(0.04, 0.1, 0.16))
 	_set_water(mat, "rising_color", Color(0.03, 0.1, 0.17))
 	_set_water(mat, "sky_tint", Color(0.5, 0.55, 0.62))
+	_set_water(mat, "reef_color", Color(0.2, 0.32, 0.35))
 	_set_water(mat, "glow_strength", 0.15)
 	_set_water(mat, "sky_reflect", 0.6)
 	# Espuma solo en las crestas más altas (si no, el mar picado se llena de manchas).
