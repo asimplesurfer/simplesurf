@@ -35,7 +35,8 @@ var compact: bool = false
 ## Modo libre: sin vuelta ni posición; muestra el nivel de las olas.
 var free_ride: bool = false
 
-## Colores del contador de trucos: cuanto más vueltas, más "caliente".
+## Colores del contador de trucos: van rotando (después del último vuelve al
+## primero), así cada vuelta cambia de color aunque sean muchas.
 const TRICK_COLORS: Array[Color] = [
 	Color(1.0, 1.0, 1.0),
 	Color(0.45, 0.9, 1.0),
@@ -43,8 +44,17 @@ const TRICK_COLORS: Array[Color] = [
 	Color(1.0, 0.9, 0.25),
 	Color(1.0, 0.6, 0.2),
 	Color(1.0, 0.32, 0.3),
-	Color(1.0, 0.35, 0.9),
+	Color(1.0, 0.62, 0.93),
 ]
+## Tamaño del contador: x1 en TRICK_FONT, crece parejo hasta x10
+## (TRICK_FONT * TRICK_GROW) y de ahí queda igual. Desde x3 tiembla, cada vez
+## más (hasta TRICK_SHAKE píxeles en x10): "esto es un montón".
+const TRICK_FONT := 72
+const TRICK_GROW := 1.5
+const TRICK_MAX_AT := 10
+const TRICK_SHAKE := 7.0
+## Dónde va el contador (respecto del centro de arriba de la pantalla).
+const TRICK_BOX := Rect2(-260.0, 20.0, 520.0, 150.0)
 
 const COMPACT_SCALE := 0.6
 
@@ -76,6 +86,8 @@ var _message_time: float = 0.0
 ## Contador de vueltas del truco mientras está en el aire (x1, x2...).
 var _trick_label: Label
 var _trick_pop: float = 0.0
+var _trick_spins: int = 0
+var _trick_shake_t: float = 0.0
 ## Modo libre: manteniendo la coma (,) se ve el contador de trucos subiendo
 ## (x1, x2, x3...) para evaluar su tamaño, sus colores y la fuente.
 var _preview_spins: int = 0
@@ -187,8 +199,12 @@ func _on_trick_landed(spins: int) -> void:
 func _on_live_spins(spins: int) -> void:
 	if spins <= 0:
 		return
+	_trick_spins = spins
 	_trick_label.text = "x%d" % spins
 	_trick_label.add_theme_color_override("font_color", trick_color(spins))
+	var font := roundi(TRICK_FONT * trick_size(spins))
+	_trick_label.add_theme_font_size_override("font_size", font)
+	_trick_label.add_theme_constant_override("outline_size", maxi(6, font / 5))
 	_trick_pop = 1.0
 
 
@@ -207,7 +223,18 @@ func _update_trick_preview(delta: float) -> void:
 
 
 static func trick_color(spins: int) -> Color:
-	return TRICK_COLORS[clampi(spins - 1, 0, TRICK_COLORS.size() - 1)]
+	return TRICK_COLORS[posmod(spins - 1, TRICK_COLORS.size())]
+
+
+## Cuánto más grande que x1 se ve el contador (1 en x1, TRICK_GROW desde x10).
+static func trick_size(spins: int) -> float:
+	var k := clampf(float(spins - 1) / float(TRICK_MAX_AT - 1), 0.0, 1.0)
+	return lerpf(1.0, TRICK_GROW, k)
+
+
+## Cuánto tiembla el contador (0 hasta x2, TRICK_SHAKE píxeles desde x10).
+static func trick_shake(spins: int) -> float:
+	return TRICK_SHAKE * clampf(float(spins - 2) / float(TRICK_MAX_AT - 2), 0.0, 1.0)
 
 
 func _on_countdown_tick(value: int) -> void:
@@ -273,6 +300,16 @@ func _process(delta: float) -> void:
 	_trick_pop = move_toward(_trick_pop, 0.0, delta * 4.0)
 	_trick_label.pivot_offset = _trick_label.size * 0.5
 	_trick_label.scale = Vector2.ONE * (1.0 + 0.45 * _trick_pop * _trick_pop)
+	# Temblor: más fuerte cuantas más vueltas (y un golpe extra al sumar una).
+	var shake := trick_shake(_trick_spins) * (1.0 + _trick_pop) if _trick_label.visible else 0.0
+	_trick_shake_t += delta
+	var jitter := Vector2(sin(_trick_shake_t * 61.0) + 0.6 * sin(_trick_shake_t * 97.0),
+		cos(_trick_shake_t * 53.0) + 0.6 * sin(_trick_shake_t * 83.0)) * shake * 0.6
+	_trick_label.offset_left = TRICK_BOX.position.x + jitter.x
+	_trick_label.offset_right = TRICK_BOX.end.x + jitter.x
+	_trick_label.offset_top = TRICK_BOX.position.y + jitter.y
+	_trick_label.offset_bottom = TRICK_BOX.end.y + jitter.y
+	_trick_label.rotation = jitter.x * 0.004
 
 	if free_ride:
 		_place_label.visible = false
@@ -672,14 +709,16 @@ func _build() -> void:
 	_message.visible = false
 	root.add_child(_message)
 
-	# Contador del truco en el aire (x1, x2...), arriba, debajo de los mensajes.
-	_trick_label = _make_label(72, Color.WHITE)
+	# Contador del truco en el aire (x1, x2...), arriba (centrado en TRICK_BOX:
+	# crece hacia todos lados).
+	_trick_label = _make_label(TRICK_FONT, Color.WHITE)
 	_trick_label.anchor_left = 0.5
 	_trick_label.anchor_right = 0.5
-	_trick_label.offset_left = -150.0
-	_trick_label.offset_right = 150.0
-	_trick_label.offset_top = 120.0
-	_trick_label.offset_bottom = 210.0
+	_trick_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_trick_label.offset_left = TRICK_BOX.position.x
+	_trick_label.offset_right = TRICK_BOX.end.x
+	_trick_label.offset_top = TRICK_BOX.position.y
+	_trick_label.offset_bottom = TRICK_BOX.end.y
 	_trick_label.visible = false
 	root.add_child(_trick_label)
 
