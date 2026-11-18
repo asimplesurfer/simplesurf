@@ -58,6 +58,19 @@ const TRICK_MAX_AT := 10
 const TRICK_SHAKE := 7.0
 ## Dónde va el contador (respecto del centro de arriba de la pantalla).
 const TRICK_BOX := Rect2(-260.0, 20.0, 520.0, 150.0)
+## Calificación al aterrizar según el combo: [desde cuántos, palabra, color,
+## tamaño (veces TRICK_FONT)]. Abajo de la palabra va el combo exacto (×N).
+const GRADES := [
+	[1, "Bien", Color(1.0, 1.0, 1.0), 0.8],
+	[3, "¡Bueno!", Color(0.56, 0.9, 1.0), 0.92],
+	[5, "¡Genial!", Color(1.0, 0.88, 0.4), 1.05],
+	[8, "¡Bestial!", Color(1.0, 0.63, 0.3), 1.18],
+	[12, "¡LEYENDA!", Color(1.0, 0.61, 0.9), 1.32],
+]
+## Cuánto dura la calificación en pantalla, y lo que tardan las gotas en
+## llegar al medidor de nitro.
+const GRADE_TIME := 1.6
+const DROP_TRAIL_TIME := 0.7
 
 const COMPACT_SCALE := 0.6
 
@@ -91,6 +104,18 @@ var _trick_label: Label
 var _trick_pop: float = 0.0
 var _trick_spins: int = 0
 var _trick_shake_t: float = 0.0
+## Las vueltas del truco en curso (para partir el número si se cae).
+var _air_spins: int = 0
+## Efectos del contador y de la calificación (se dibujan en _fx): ondas al
+## sumar una vuelta, el brillo de los combos grandes, las gotas que van al
+## medidor y el número partido que cae.
+var _fx: Control
+var _ripples: Array = []
+var _grade: Label
+var _grade_count: Label
+var _grade_t: float = -1.0
+var _trail: Array = []
+var _shards: Array = []
 ## Modo libre: manteniendo la coma (,) se ve el contador de trucos subiendo
 ## (x1, x2, x3...) para evaluar su tamaño, sus colores y la fuente.
 var _preview_spins: int = 0
@@ -188,7 +213,7 @@ func _connect_rider() -> void:
 	)
 	rider.trick_landed.connect(_on_trick_landed)
 	rider.live_spins_changed.connect(_on_live_spins)
-	rider.trick_failed.connect(func() -> void: show_message("¡Truco fallido!", BAD_COLOR))
+	rider.trick_failed.connect(_on_trick_failed)
 	rider.drift_hit.connect(func(_victim: Rider) -> void: show_message("¡Lo tiraste!", PROMPT_COLOR))
 	rider.turbo_blocked.connect(func() -> void: _blocked = 1.0)
 	rider.trick_preview_started.connect(func(trick_name: String, index: int, total: int) -> void:
@@ -223,9 +248,46 @@ func show_center(text: String, color: Color, seconds: float) -> void:
 	_center_time = seconds
 
 
+## Calificación de un combo: [palabra, color, tamaño].
+static func trick_grade(spins: int) -> Array:
+	var best: Array = GRADES[0]
+	for g in GRADES:
+		if spins >= int(g[0]):
+			best = g
+	return [best[1], best[2], best[3]]
+
+
+## Al aterrizar: la palabra entra como un sello con el combo exacto abajo, y
+## sale un hilito de gotas hacia el medidor de nitro.
 func _on_trick_landed(spins: int) -> void:
-	var text := "¡Truco!" if spins <= 1 else "¡Truco x%d!" % spins
-	show_message(text, NITRO_COLOR)
+	var g := trick_grade(spins)
+	var font := roundi(TRICK_FONT * float(g[2]))
+	_grade.text = g[0]
+	_grade.add_theme_color_override("font_color", g[1])
+	_grade.add_theme_font_size_override("font_size", font)
+	_style_number(_grade, font)
+	_grade_count.text = "X%d" % spins
+	_style_number(_grade_count, 42)
+	_grade_t = 0.0
+	_air_spins = 0
+	_trail.clear()
+	for k in 7:
+		_trail.append(-k * 0.05)
+
+
+## Se cayó con trucos encima: el número se parte en dos y cae, en gris.
+func _on_trick_failed() -> void:
+	show_message("¡Al agua!", BAD_COLOR)
+	if _air_spins <= 0:
+		return
+	var center := _trick_center()
+	var text := "X%d" % _air_spins
+	var font := roundi(TRICK_FONT * trick_size(_air_spins))
+	_shards = [
+		{"text": text, "font": font, "pos": center, "vel": Vector2(-90.0, -160.0), "rot": 0.0, "spin": -2.2, "left": true, "t": 0.0},
+		{"text": text, "font": font, "pos": center, "vel": Vector2(110.0, -120.0), "rot": 0.0, "spin": 2.6, "left": false, "t": 0.0},
+	]
+	_air_spins = 0
 
 
 ## Contador del truco en el aire: x1, x2... cambia de color al subir.
@@ -233,12 +295,14 @@ func _on_live_spins(spins: int) -> void:
 	if spins <= 0:
 		return
 	_trick_spins = spins
-	_trick_label.text = "x%d" % spins
+	_trick_label.text = "X%d" % spins
 	_trick_label.add_theme_color_override("font_color", trick_color(spins))
 	var font := roundi(TRICK_FONT * trick_size(spins))
 	_trick_label.add_theme_font_size_override("font_size", font)
-	_trick_label.add_theme_constant_override("outline_size", maxi(6, font / 5))
+	_style_number(_trick_label, font)
 	_trick_pop = 1.0
+	# Una onda que sale de atrás del número, como una gota en el agua.
+	_ripples.append([0.0, trick_color(spins)])
 
 
 ## Modo libre: mientras se mantiene la coma, el contador sube solo (x1, x2,
@@ -332,9 +396,14 @@ func _process(delta: float) -> void:
 	# Contador del truco: visible mientras gira en el aire; late al sumar una vuelta.
 	_update_trick_preview(delta)
 	_trick_label.visible = (rider.live_spins > 0 and not rider.grounded) or _preview_spins > 0
-	_trick_pop = move_toward(_trick_pop, 0.0, delta * 4.0)
+	if rider.live_spins > 0 and not rider.grounded:
+		_air_spins = rider.live_spins
+	_trick_pop = move_toward(_trick_pop, 0.0, delta * 2.6)
 	_trick_label.pivot_offset = _trick_label.size * 0.5
-	_trick_label.scale = Vector2.ONE * (1.0 + 0.45 * _trick_pop * _trick_pop)
+	# Entra con rebote: grande, se pasa de chico y vuelve (un resorte amortiguado).
+	var bounce := 1.0 - _trick_pop
+	_trick_label.scale = Vector2.ONE * (1.0 + 0.5 * exp(-7.0 * bounce) * cos(13.0 * bounce) * signf(_trick_pop))
+	_update_trick_fx(delta)
 	# Temblor: más fuerte cuantas más vueltas (y un golpe extra al sumar una).
 	var shake := trick_shake(_trick_spins) * (1.0 + _trick_pop) if _trick_label.visible else 0.0
 	_trick_shake_t += delta
@@ -910,7 +979,23 @@ func _build() -> void:
 	_trick_label.offset_top = TRICK_BOX.position.y
 	_trick_label.offset_bottom = TRICK_BOX.end.y
 	_trick_label.visible = false
+	_style_number(_trick_label, TRICK_FONT)
+	# Efectos del contador (atrás del número) y la calificación al aterrizar.
+	_fx = FxLayer.new()
+	_fx.hud = self
+	_fx.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_fx.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(_fx)
 	root.add_child(_trick_label)
+	_grade = _make_label(TRICK_FONT, Color.WHITE)
+	_grade_count = _make_label(42, Color.WHITE)
+	for l in [_grade, _grade_count]:
+		l.anchor_left = 0.5
+		l.anchor_right = 0.5
+		l.offset_left = TRICK_BOX.position.x
+		l.offset_right = TRICK_BOX.end.x
+		l.visible = false
+		root.add_child(l)
 
 	# Cartel grande al centro (cuenta regresiva, vuelta, llegada, al revés).
 	_center_label = _make_label(84, Color.WHITE)
@@ -937,6 +1022,114 @@ func _build() -> void:
 	_fps_label.offset_right = 200.0
 	_fps_label.visible = false
 	root.add_child(_fps_label)
+
+
+## Los números de trucos: contorno fino y una sombra suave abajo (en vez del
+## contorno negro grueso).
+static func _style_number(label: Label, font_size: int) -> void:
+	label.add_theme_color_override("font_outline_color", Color(0.05, 0.13, 0.2))
+	label.add_theme_constant_override("outline_size", maxi(4, font_size / 11))
+	label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.3))
+	label.add_theme_constant_override("shadow_offset_x", 0)
+	label.add_theme_constant_override("shadow_offset_y", maxi(3, font_size / 18))
+	label.add_theme_constant_override("shadow_outline_size", maxi(6, font_size / 7))
+
+
+## Centro del contador de trucos (en el espacio de _fx).
+func _trick_center() -> Vector2:
+	return _trick_label.get_global_rect().get_center() * _fx.get_global_transform()
+
+
+## Animaciones del contador y de la calificación (lo que dibuja _fx lo pinta
+## _draw_fx).
+func _update_trick_fx(delta: float) -> void:
+	for r in _ripples:
+		r[0] += delta / 0.55
+	_ripples = _ripples.filter(func(r: Array) -> bool: return r[0] < 1.0)
+	# Calificación: sello (grande -> su tamaño de golpe), quieta, y al final sube
+	# y se desvanece.
+	_grade.visible = _grade_t >= 0.0
+	_grade_count.visible = _grade.visible
+	if _grade_t >= 0.0:
+		_grade_t += delta
+		var stamp := clampf(_grade_t / 0.16, 0.0, 1.0)
+		var s := lerpf(2.1, 1.0, 1.0 - pow(1.0 - stamp, 3.0))
+		if stamp >= 1.0:
+			var after := _grade_t - 0.16
+			s = 1.0 + 0.07 * exp(-14.0 * after) * cos(30.0 * after)
+		var fade := clampf((GRADE_TIME - _grade_t) / 0.35, 0.0, 1.0)
+		var rise := (1.0 - fade) * 26.0
+		for l in [_grade, _grade_count]:
+			l.pivot_offset = l.size * 0.5
+			l.scale = Vector2.ONE * s
+			l.modulate.a = fade * clampf(_grade_t / 0.06, 0.0, 1.0)
+		_grade.position.y = GRADE_TOP - rise
+		_grade_count.position.y = GRADE_TOP + _grade.size.y * 0.78 - rise
+		if _grade_t >= GRADE_TIME:
+			_grade_t = -1.0
+	for k in _trail.size():
+		_trail[k] += delta / DROP_TRAIL_TIME
+	_trail = _trail.filter(func(v: float) -> bool: return v < 1.0)
+	for sh in _shards:
+		sh["t"] += delta
+		sh["vel"].y += 900.0 * delta
+		sh["pos"] += sh["vel"] * delta
+		sh["rot"] += sh["spin"] * delta
+	_shards = _shards.filter(func(sh: Dictionary) -> bool: return sh["t"] < 1.3)
+	_fx.queue_redraw()
+
+
+## Dónde arranca la calificación (arriba, centrada).
+const GRADE_TOP := 22.0
+
+
+func _draw_fx() -> void:
+	var font := ThemeDB.fallback_font
+	var center := _trick_center()
+	# Brillo detrás del número: suave desde ×5; desde ×10 un resplandor que late.
+	if _trick_label.visible and _trick_spins >= 5:
+		var col := trick_color(_trick_spins)
+		var big := _trick_spins >= TRICK_MAX_AT
+		var t := Time.get_ticks_msec() * 0.001
+		var radius := _trick_label.get_theme_font_size("font_size") * (1.05 if big else 0.8)
+		var strength := (0.32 + 0.12 * sin(t * 7.0)) if big else 0.2
+		for i in 10:
+			var f := 1.0 - i / 10.0
+			_fx.draw_circle(center, radius * f, Color(col.r, col.g, col.b, strength * 0.12 * (1.0 - f * 0.5)))
+	# Ondas.
+	for r in _ripples:
+		var k: float = r[0]
+		var col: Color = r[1]
+		var radius := lerpf(40.0, 150.0, 1.0 - pow(1.0 - k, 2.0))
+		_fx.draw_arc(center, radius, 0.0, TAU, 48, Color(col.r, col.g, col.b, (1.0 - k) * 0.55), 3.0 * (1.0 - k) + 1.0, true)
+	# Gotas que van de la calificación al medidor de nitro.
+	if not _trail.is_empty():
+		var from := _grade_count.get_global_rect().get_center() * _fx.get_global_transform()
+		var to := _gauge.get_global_rect().get_center() * _fx.get_global_transform()
+		var mid := Vector2(lerpf(from.x, to.x, 0.25), lerpf(from.y, to.y, 0.15) - 40.0)
+		for v in _trail:
+			if v <= 0.0:
+				continue
+			var e: float = v * v * (3.0 - 2.0 * v)
+			var p := from.lerp(mid, e).lerp(mid.lerp(to, e), e)
+			var a: float = clampf(v * 6.0, 0.0, 1.0) * clampf((1.0 - v) * 8.0, 0.0, 1.0)
+			_fx.draw_circle(p, 5.0, Color(0.05, 0.13, 0.2, 0.5 * a))
+			_fx.draw_circle(p, 3.6, Color(0.78, 0.95, 1.0, a))
+	# El número partido que cae: cada mitad (los primeros caracteres y el
+	# resto) por su lado, girando, en gris.
+	for sh in _shards:
+		var fsize: int = sh["font"]
+		var text: String = sh["text"]
+		var cut := ceili(text.length() / 2.0)
+		var part := text.substr(0, cut) if sh["left"] else text.substr(cut)
+		var w := font.get_string_size(part, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize).x
+		var a := clampf((1.3 - float(sh["t"])) / 0.4, 0.0, 1.0)
+		var at := Vector2(-w if sh["left"] else 0.0, fsize * 0.35)
+		_fx.draw_set_transform(sh["pos"], sh["rot"], Vector2.ONE)
+		_fx.draw_string_outline(font, at, part, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize, maxi(4, fsize / 11),
+			Color(0.1, 0.13, 0.16, a))
+		_fx.draw_string(font, at, part, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize, Color(0.62, 0.65, 0.69, a))
+		_fx.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _make_label(font_size: int, color: Color) -> Label:
@@ -969,3 +1162,12 @@ func _make_bar(color: Color, height: float) -> ProgressBar:
 	bar.add_theme_stylebox_override("background", bg)
 	bar.add_theme_stylebox_override("fill", fill)
 	return bar
+
+
+## Capa donde se dibujan los efectos de los trucos (ver Hud._draw_fx).
+class FxLayer extends Control:
+	var hud: Hud
+
+	func _draw() -> void:
+		if hud:
+			hud._draw_fx()

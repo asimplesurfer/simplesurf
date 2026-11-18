@@ -144,6 +144,7 @@ func update(delta: float, input: RiderInput) -> void:
 				rider.add_nitro(_pending_nitro)
 				_pending_nitro = 0.0
 			if rider.trick_units_done > 0:
+				rider.best_combo = maxi(rider.best_combo, rider.trick_units_done)
 				rider.trick_landed.emit(rider.trick_units_done)
 			state_machine.transition_to(&"riding")
 
