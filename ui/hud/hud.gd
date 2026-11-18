@@ -311,7 +311,9 @@ func _process(delta: float) -> void:
 	_speed_label.text = "%d km/h" % roundi(rider.speed * 3.6)
 	# Handicap: muestra cuánto más rápido carga el nitro.
 	var mult := rider.nitro_gain_mult()
-	_nitro_label.text = "NITRO ×%.1f" % mult if mult >= 1.15 else "NITRO"
+	# Al lado del medidor, solo el multiplicador (y solo cuando hay).
+	_nitro_label.text = "×%.1f" % mult if mult >= 1.15 else ""
+	_nitro_label.visible = mult >= 1.15
 	_name_label.text = rider.display_name
 
 	# Contador del truco: visible mientras gira en el aire; late al sumar una vuelta.
@@ -698,7 +700,8 @@ func _build() -> void:
 	_nitro_label = nitro_label
 	nitro_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	nitro_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	nitro_label.text = "NITRO"
+	nitro_label.text = ""
+	nitro_label.visible = false
 	gauge_row.add_child(nitro_label)
 	_nitro_bar = _make_bar(NITRO_COLOR, 18.0)
 	_nitro_fill = _nitro_bar.get_theme_stylebox("fill") as StyleBoxFlat

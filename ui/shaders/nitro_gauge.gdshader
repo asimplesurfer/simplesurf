@@ -65,7 +65,16 @@ void fragment() {
 		float br = 0.012;
 		bub += (1.0 - smoothstep(br - px, br + px, length(p - vec2(bx, by)))) * step(by, surf - 0.02);
 	}
-	vec3 wcol = mix(color, vec3(1.0), clamp(bub, 0.0, 1.0) * bubbles * 0.45 + flash * 0.6);
+	// Ola de atrás: una segunda superficie un poco más alta y desfasada, más
+	// clara y transparente (da profundidad).
+	float back_surf = surf + 0.035 + ripple * WATER_R * 0.8 * sin(x * 3.0 - t * 2.1 + 1.7);
+	float back = smoothstep(-px, px, back_surf - p.y) * (1.0 - water) * inside * step(0.001, level);
+	col = mix(col, vec4(mix(color, vec3(1.0), 0.25), 1.0), back * 0.38);
+	// Un degradé suave (más claro arriba, más profundo abajo) y una banda de
+	// luz justo debajo de la superficie.
+	vec3 wcol = mix(color * 1.04, color * 0.8, clamp(depth / (WATER_R * 1.6), 0.0, 1.0));
+	wcol = mix(wcol, mix(color, vec3(1.0), 0.45), (1.0 - smoothstep(0.012, 0.05, depth)) * 0.5);
+	wcol = mix(wcol, vec3(1.0), clamp(bub, 0.0, 1.0) * bubbles * 0.45 + flash * 0.6);
 	col = mix(col, vec4(wcol, 1.0), water);
 	float line = (1.0 - smoothstep(0.0, 1.5 * px, abs(depth) - 0.7 * px)) * inside * step(0.001, level);
 	col = mix(col, vec4(1.0), line);
