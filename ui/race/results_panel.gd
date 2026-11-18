@@ -40,7 +40,7 @@ func _show(race_manager: RaceManager, ranking: Array[Rider]) -> void:
 	# El mejor combo de cada persona, con su calificación.
 	for r in ranking:
 		if r.is_human and r.best_combo > 0:
-			lines.append("Mejor combo de %s:   X%d · %s" % [r.display_name, r.best_combo, Hud.trick_grade(r.best_combo)[0]])
+			lines.append("Mejor combo de %s:   ×%d · %s" % [r.display_name, r.best_combo, Hud.trick_grade(r.best_combo)[0]])
 	_list.text = "\n".join(lines)
 	var trial := race_manager.time_trial
 	if trial:

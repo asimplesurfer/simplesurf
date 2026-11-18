@@ -52,14 +52,16 @@ const TRICK_COLORS: Array[Color] = [
 ## Tamaño del contador: x1 en TRICK_FONT, crece parejo hasta x10
 ## (TRICK_FONT * TRICK_GROW) y de ahí queda igual. Desde x3 tiembla, cada vez
 ## más (hasta TRICK_SHAKE píxeles en x10): "esto es un montón".
-const TRICK_FONT := 72
+const TRICK_FONT := 90
+## Tamaño base de las palabras de la calificación (ver GRADES).
+const GRADE_FONT := 72
 const TRICK_GROW := 1.5
 const TRICK_MAX_AT := 10
 const TRICK_SHAKE := 7.0
 ## Dónde va el contador (respecto del centro de arriba de la pantalla).
-const TRICK_BOX := Rect2(-260.0, 20.0, 520.0, 150.0)
+const TRICK_BOX := Rect2(-320.0, 10.0, 640.0, 190.0)
 ## Calificación al aterrizar según el combo: [desde cuántos, palabra, color,
-## tamaño (veces TRICK_FONT)]. Abajo de la palabra va el combo exacto (×N).
+## tamaño (veces GRADE_FONT)]. Abajo de la palabra va el combo exacto (×N).
 const GRADES := [
 	[1, "Bien", Color(1.0, 1.0, 1.0), 0.8],
 	[3, "¡Bueno!", Color(0.56, 0.9, 1.0), 0.92],
@@ -221,7 +223,6 @@ func _connect_rider() -> void:
 	)
 	rider.ring_collected.connect(func() -> void: show_message("+ NITRO", NITRO_COLOR))
 	rider.crashed.connect(func() -> void: show_message("¡Pum!", BAD_COLOR))
-	rider.popped.connect(func() -> void: show_message("¡POP!", PROMPT_COLOR))
 	rider.wave_punched.connect(_on_wave_punched)
 	var pc := rider.controller as PlayerController
 	if pc:
@@ -261,15 +262,18 @@ static func trick_grade(spins: int) -> Array:
 ## sale un hilito de gotas hacia el medidor de nitro.
 func _on_trick_landed(spins: int) -> void:
 	var g := trick_grade(spins)
-	var font := roundi(TRICK_FONT * float(g[2]))
+	var font := roundi(GRADE_FONT * float(g[2]))
 	_grade.text = g[0]
 	_grade.add_theme_color_override("font_color", g[1])
 	_grade.add_theme_font_size_override("font_size", font)
 	_style_number(_grade, font)
-	_grade_count.text = "X%d" % spins
+	_grade_count.text = "×%d" % spins
 	_style_number(_grade_count, 42)
 	_grade_t = 0.0
 	_air_spins = 0
+	# Lo nuevo borra lo viejo (un número partido que todavía caía).
+	_shards.clear()
+	_ripples.clear()
 	_trail.clear()
 	for k in 7:
 		_trail.append(-k * 0.05)
@@ -278,10 +282,14 @@ func _on_trick_landed(spins: int) -> void:
 ## Se cayó con trucos encima: el número se parte en dos y cae, en gris.
 func _on_trick_failed() -> void:
 	show_message("¡Al agua!", BAD_COLOR)
+	# Lo nuevo borra lo viejo (la calificación anterior y sus gotas).
+	_grade_t = -1.0
+	_trail.clear()
+	_ripples.clear()
 	if _air_spins <= 0:
 		return
 	var center := _trick_center()
-	var text := "X%d" % _air_spins
+	var text := "×%d" % _air_spins
 	var font := roundi(TRICK_FONT * trick_size(_air_spins))
 	_shards = [
 		{"text": text, "font": font, "pos": center, "vel": Vector2(-90.0, -160.0), "rot": 0.0, "spin": -2.2, "left": true, "t": 0.0},
@@ -295,12 +303,16 @@ func _on_live_spins(spins: int) -> void:
 	if spins <= 0:
 		return
 	_trick_spins = spins
-	_trick_label.text = "X%d" % spins
+	_trick_label.text = "×%d" % spins
 	_trick_label.add_theme_color_override("font_color", trick_color(spins))
 	var font := roundi(TRICK_FONT * trick_size(spins))
 	_trick_label.add_theme_font_size_override("font_size", font)
 	_style_number(_trick_label, font)
 	_trick_pop = 1.0
+	# Un truco nuevo borra lo que quedaba del anterior.
+	if spins == 1:
+		_grade_t = -1.0
+		_shards.clear()
 	# Una onda que sale de atrás del número, como una gota en el agua.
 	_ripples.append([0.0, trick_color(spins)])
 
@@ -987,7 +999,7 @@ func _build() -> void:
 	_fx.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(_fx)
 	root.add_child(_trick_label)
-	_grade = _make_label(TRICK_FONT, Color.WHITE)
+	_grade = _make_label(GRADE_FONT, Color.WHITE)
 	_grade_count = _make_label(42, Color.WHITE)
 	for l in [_grade, _grade_count]:
 		l.anchor_left = 0.5
