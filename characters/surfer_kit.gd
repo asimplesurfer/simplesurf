@@ -66,6 +66,11 @@ var necklace_rig: Node3D
 var belly_rig: Node3D
 var _belly_sq: float = 0.0
 var _belly_v: float = 0.0
+## Centro y radios del cuerpo de huevo (en el torso), para los collares.
+## Cuánto de hombros grandes tiene (para subir y cerrar los collares).
+var _shoulder_k: float = 0.0
+var _egg_center := Vector3.ZERO
+var _egg_radii := Vector3.ZERO
 ## Musculosa puesta (con panza redonda, la panza es de tela).
 var _shirt: bool = false
 var _hair_rot := Vector3.ZERO
@@ -140,7 +145,8 @@ func build(parent: Node3D, data: CharacterData, features: AvatarFeatures) -> voi
 	chest_group.position = Vector3(0.0, 0.24, 0.0) - NECK_PIVOT
 	var chest_node := character.find_child("Torso", false, false).find_child("Chest", false, false) as Node3D
 	var neck := Vector2(chest_node.scale.x, chest_node.scale.z) if chest_node else Vector2.ONE
-	features.build_chest(chest_group, data, CHEST_RADII, neck)
+	neck = _neck_over_belly(neck)
+	features.build_chest(chest_group, data, CHEST_RADII, neck, _shoulder_k)
 	# Rastas: las tiras se mueven poco y nunca hacia la cabeza (solo para atrás).
 	_dreads = data.get_option("hair") == AvatarFeatures.DREADS
 	_setup_legs()
@@ -375,6 +381,21 @@ func _choose_accessories(data: CharacterData) -> void:
 			n.free()
 
 
+## Ancho y fondo del aro del collar (como `neck` en build_chest) para que
+## quede apoyado por fuera de la panza redonda a la altura del cuello.
+func _neck_over_belly(neck: Vector2) -> Vector2:
+	if _egg_radii == Vector3.ZERO:
+		return neck
+	# El aro del collar está a esta altura del torso (adelante, más abajo).
+	var y := 0.24 + 0.1
+	var t := clampf((y - _egg_center.y) / _egg_radii.y, -0.99, 0.99)
+	var narrow := 1.0 - 0.08 * clampf(t, 0.0, 1.0)
+	var k := sqrt(1.0 - t * t) * narrow
+	var rx := _egg_radii.x * k
+	var rz := _egg_radii.z * k + _egg_center.z
+	return Vector2(maxf(neck.x, rx * 1.06 / 0.32), maxf(neck.y, rz * 1.06 / 0.285))
+
+
 ## Cuerpo de huevo: una forma redonda de piel que envuelve el pecho y la
 ## panza (más ancha abajo), y un ombligo. `k` va de 0 (normal) a 1 (panzón).
 func _add_egg(torso: Node3D, chest: Node3D, waist: Node3D, k: float) -> void:
@@ -418,6 +439,8 @@ func _add_egg(torso: Node3D, chest: Node3D, waist: Node3D, k: float) -> void:
 	egg.name = "Egg_fill"
 	egg.mesh = mesh
 	egg.position = center + Vector3(0.0, -0.02 * k, 0.03 * k)
+	_egg_center = egg.position
+	_egg_radii = radii
 	torso.add_child(egg)
 	var outline := Node3D.new()
 	outline.name = "Egg_outline"
@@ -493,6 +516,7 @@ func _apply_sliders(data: CharacterData) -> void:
 	# Hombros: solo del lado musculoso, y ya grandes (nunca hombritos chicos).
 	var slim := data.get_option("build") == CharacterData.SLIM
 	var shoulders := m >= SHOULDERS_FROM and not slim
+	_shoulder_k = clampf(inverse_lerp(SHOULDERS_FROM, 1.0, m), 0.0, 1.0) if shoulders else 0.0
 	var delt := lerpf(0.8, 1.0, inverse_lerp(SHOULDERS_FROM, 1.0, m))
 	for side in ["DeltL", "DeltR"]:
 		var d := torso.find_child(side, false, false) as Node3D
@@ -515,7 +539,12 @@ func _apply_sliders(data: CharacterData) -> void:
 	# Collar de perlas: acompaña el ancho del pecho.
 	var pearls := torso.find_child("PearlNecklace", false, false) as Node3D
 	if pearls:
-		pearls.scale = Vector3(chest.scale.x, 1.0, chest.scale.z)
+		pearls.scale = Vector3(chest.scale.x * (1.0 - AvatarFeatures.NECK_TIGHT * _shoulder_k), 1.0,
+			chest.scale.z * (1.0 - 0.06 * _shoulder_k))
+		pearls.position.y += AvatarFeatures.NECK_LIFT * _shoulder_k
+		# Con panza redonda, por fuera de la panza (ver _neck_over_belly; se
+		# vuelve a medir cuando ya está la panza).
+		pearls.set_meta("chest_scale", Vector2(chest.scale.x, chest.scale.z))
 	# Short y piernas: más anchos con la panza.
 	var hips := character.find_child("ShortsHips", false, false) as Node3D
 	# El short acompaña la panza por delante (así se sigue viendo).
@@ -547,6 +576,10 @@ func _apply_sliders(data: CharacterData) -> void:
 	var k := e / 0.5
 	if k > 0.0:
 		_add_egg(torso, chest, waist, k)
+		var pearls_node := torso.find_child("PearlNecklace", false, false) as Node3D
+		if pearls_node:
+			var ns := _neck_over_belly(Vector2(chest.scale.x, chest.scale.z))
+			pearls_node.scale = Vector3(ns.x, 1.0, ns.y)
 		for part in ["HandL", "HandR"]:
 			(character.find_child(part, false, false) as Node3D).scale *= 1.0 + 0.3 * k
 		for part in ["ThighL", "ThighR", "ShinL", "ShinR", "SleeveL", "SleeveR"]:
