@@ -120,16 +120,17 @@ const _SUNSET_SKY := {
 	"ocean_color": Color(0.62, 0.5, 0.55),
 }
 const _NIGHT_WATER := {
-	"deep_color": Color(0.01, 0.04, 0.1),
-	"shallow_color": Color(0.03, 0.09, 0.18),
-	"wave_color": Color(0.05, 0.16, 0.26),
-	"outside_color": Color(0.01, 0.03, 0.08),
-	"rising_color": Color(0.01, 0.04, 0.1),
-	"sky_tint": Color(0.12, 0.17, 0.32),
-	"reef_color": Color(0.08, 0.22, 0.3),
-	"foam_color": Color(0.62, 0.7, 0.86),
-	"glow_color": Color(0.15, 0.5, 0.7),
-	"glow_strength": 0.15,
+	# Mar de noche con luz de luna: azul profundo pero que se lee bien (no negro).
+	"deep_color": Color(0.06, 0.13, 0.26),
+	"shallow_color": Color(0.11, 0.23, 0.38),
+	"wave_color": Color(0.15, 0.34, 0.47),
+	"outside_color": Color(0.05, 0.11, 0.22),
+	"rising_color": Color(0.05, 0.12, 0.24),
+	"sky_tint": Color(0.28, 0.36, 0.6),
+	"reef_color": Color(0.16, 0.36, 0.45),
+	"foam_color": Color(0.7, 0.78, 0.92),
+	"glow_color": Color(0.2, 0.55, 0.75),
+	"glow_strength": 0.18,
 }
 const _SUNSET_WATER := {
 	"deep_color": Color(0.06, 0.13, 0.27),
