@@ -33,7 +33,7 @@ func _test_trick_counter() -> void:
 	for i in int(4.0 * FPS):
 		if r.grounded:
 			break
-		if hud._trick_label.visible and not hud._trick_label.text in seen.map(func(n: int) -> String: return "X%d" % n):
+		if hud._trick_label.visible and not hud._trick_label.text in seen.map(func(n: int) -> String: return "×%d" % n):
 			seen.append(r.live_spins)
 			colors.append(hud._trick_label.get_theme_color("font_color"))
 		await process_frame

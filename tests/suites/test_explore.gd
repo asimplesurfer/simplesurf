@@ -137,7 +137,7 @@ func _test_explore() -> void:
 	_phys_key(KEY_COMMA, true)
 	for i in int(Hud.PREVIEW_STEP * 60.0 * 2.5):
 		await process_frame
-	var shown := label != null and label.visible and label.text == "X3"
+	var shown := label != null and label.visible and label.text == "×3"
 	_phys_key(KEY_COMMA, false)
 	await process_frame
 	await process_frame
