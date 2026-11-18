@@ -148,6 +148,8 @@ var catchup: float = 0.0
 var water: Water
 ## Modo libre: sin aceleración automática; quieto o lento, rema acostado.
 var free_ride: bool = false
+## El combo más grande que aterrizó en la carrera (para los resultados).
+var best_combo: int = 0
 ## Vueltas del truco en curso (para el contador del HUD); 0 si no está girando.
 var live_spins: int = 0:
 	set(value):
