@@ -173,7 +173,7 @@ const PRESETS := [
 		"head": 6, "mouth": 0, "neck": 0, "nose": 1, "shorts": 8, "shorts_pattern": 14, "shorts_pattern_color": 0,
 		"shorts_pattern_color2": 2, "skin": 0, "top": 1, "top_color": 4, "top_color2": 2,
 		"trim_color": 0, "weight": 0.1},
-	{"board": 1, "board_design": 15, "board_design_color": 6, "board_design_color2": 9, "bottom": 0, "build": 0,
+	{"board": 1, "board_design": 15, "board_design_color": 5, "board_design_color2": 9, "bottom": 0, "build": 0,
 		"ears": 2, "extra": 11, "eyes": 0, "glasses": 14, "hair": 18, "hair_color": 4, "hat": 13, "hat_color": 11,
 		"head": 4, "mouth": 15, "neck": 2, "nose": 2, "shorts": 3, "shorts_pattern": 10, "shorts_pattern_color": 9,
 		"shorts_pattern_color2": 2, "skin": 0, "top": 0, "top_color": 4, "top_color2": 2, "trim_color": 0,
