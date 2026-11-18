@@ -13,6 +13,9 @@ const BURN_COLOR := Color(1.0, 0.45, 0.05)
 ## Barra llena (3 cargas): roja, vibra y parpadea.
 const FULL_COLOR := Color(1.0, 0.12, 0.1)
 const NITRO_FIRE_SHADER := preload("res://ui/shaders/nitro_fire.gdshader")
+const NITRO_GAUGE_SHADER := preload("res://ui/shaders/nitro_gauge.gdshader")
+## Lado del medidor de nitro (la ventanita redonda con el aro).
+const NITRO_GAUGE_SIZE := 118.0
 const BAD_COLOR := Color(1.0, 0.4, 0.35)
 const SPEED_LINES_SHADER := preload("res://ui/shaders/speed_lines.gdshader")
 const SPLASH_SHADER := preload("res://ui/shaders/wave_splash.gdshader")
@@ -118,6 +121,23 @@ var _gain_flash: float = 0.0
 var _last_nitro: float = 0.0
 var _full_look: float = 0.0
 var _nitro_box: VBoxContainer
+## Lo que se ve del nitro: el "ojo de buey" (ver nitro_gauge.gdshader). Las
+## barras de arriba quedan ocultas y llevan el estado (cuánto hay, lo que se
+## gasta, el brillo de lo ganado), que el medidor dibuja.
+var _gauge: ColorRect
+var _gauge_mat: ShaderMaterial
+## El agua de adentro se mueve con el surfista: inclinación al doblar (resorte,
+## se mece), rebote en saltos y caídas, y cuánto se agita.
+var _slosh: float = 0.0
+var _slosh_v: float = 0.0
+var _bob: float = 0.0
+var _bob_v: float = 0.0
+var _ripple: float = 0.0
+var _last_heading: float = 0.0
+var _last_y: float = 0.0
+var _last_vy: float = 0.0
+var _was_grounded: bool = true
+var _water_ready: bool = false
 ## Amague de la barra al apretar turbo cuando no se puede (0..1).
 var _blocked: float = 0.0
 
@@ -383,6 +403,7 @@ func _update_turbo_meter(delta: float) -> void:
 		_fire_mat.set_shader_parameter("hot", Color(1.0, 0.85, 0.25).lerp(Color(1.0, 0.45, 0.35), _full_look))
 		_fire_mat.set_shader_parameter("flow", lerpf(3.0, 7.0, _full_look))
 	_update_gain_glow(delta)
+	_update_gauge(delta, base, fire, turbo_on)
 	_last_nitro = rider.nitro
 	_blocked = move_toward(_blocked, 0.0, delta * 4.0)
 	# Vibración: amague al apretar de más; temblor fino con la barra llena.
@@ -390,8 +411,75 @@ func _update_turbo_meter(delta: float) -> void:
 	shake += sin(t * 70.0) * 1.6 * _full_look
 	var shake_y := cos(t * 83.0) * 1.0 * _full_look
 	_nitro_box.position.x = 24.0 + shake
-	_nitro_box.offset_bottom = -20.0 + shake_y
-	_nitro_box.offset_top = -80.0 + shake_y
+	_nitro_box.offset_bottom = -12.0 + shake_y
+	_nitro_box.offset_top = -12.0 - NITRO_GAUGE_SIZE + shake_y
+
+
+## El agua del medidor: se inclina hacia afuera de la curva (como el agua en un
+## vaso que gira) y se mece al enderezar; en el aire flota, al caer salpica;
+## con velocidad se agita. Todo con resortes, a partir de cómo se mueve el
+## surfista en este cuadro.
+const SLOSH_PER_G := 0.4
+const SLOSH_MAX := 0.6
+const SLOSH_SPRING := 38.0
+const SLOSH_DAMP := 3.2
+const BOB_SPRING := 30.0
+const BOB_DAMP := 4.0
+
+
+func _update_gauge(delta: float, base: Color, glow: float, turbo_on: bool) -> void:
+	var heading := rider.heading
+	var y := rider.position.y
+	if not _water_ready or delta <= 0.0:
+		_water_ready = true
+		_last_heading = heading
+		_last_y = y
+		_was_grounded = rider.grounded
+	if delta > 0.0:
+		# Doblar: aceleración de costado (hacia el centro de la curva). El agua
+		# se va para afuera: doblando a la izquierda, sube a la derecha.
+		var yaw_rate := wrapf(heading - _last_heading, -PI, PI) / delta
+		var lateral := rider.speed * yaw_rate
+		var target := clampf(lateral / 9.8 * SLOSH_PER_G, -SLOSH_MAX, SLOSH_MAX)
+		_slosh_v += ((target - _slosh) * SLOSH_SPRING - _slosh_v * SLOSH_DAMP) * delta
+		_slosh += _slosh_v * delta
+		# Arriba y abajo: en el aire el agua flota (sube un poco); al caer, la
+		# empuja hacia abajo según qué tan fuerte cayó (y después rebota).
+		var vy := (y - _last_y) / delta
+		var lift := 0.12 if not rider.grounded else 0.0
+		if rider.grounded and not _was_grounded:
+			var impact := clampf(-_last_vy / 18.0, 0.0, 1.0)
+			_bob_v -= impact * 2.2
+			_ripple = maxf(_ripple, 0.05 + impact * 0.12)
+		if not rider.grounded and _was_grounded:
+			_bob_v += 0.6
+		_bob_v += ((lift - _bob) * BOB_SPRING - _bob_v * BOB_DAMP) * delta
+		_bob += _bob_v * delta
+		_bob = clampf(_bob, -0.5, 0.5)
+		_last_vy = vy
+		# Agitación: un poco siempre, más con velocidad, al doblar fuerte y con turbo.
+		var calm := 0.012 + clampf(rider.speed / 30.0, 0.0, 1.0) * 0.035 + absf(_slosh_v) * 0.01
+		if turbo_on:
+			calm += 0.03
+		_ripple = move_toward(_ripple, calm, delta * 0.25)
+		if _ripple < calm:
+			_ripple = calm
+	_last_heading = heading
+	_last_y = y
+	_was_grounded = rider.grounded
+	var charges := float(rider.turbo_charges())
+	var part := fposmod(rider.nitro / Rider.TURBO_CHARGE, 1.0) if charges < Rider.TURBO_CHARGES else 1.0
+	_gauge_mat.set_shader_parameter("size", _gauge.size)
+	_gauge_mat.set_shader_parameter("level", _nitro_bar.value)
+	_gauge_mat.set_shader_parameter("slope", _slosh)
+	_gauge_mat.set_shader_parameter("bob", _bob)
+	_gauge_mat.set_shader_parameter("ripple", _ripple)
+	_gauge_mat.set_shader_parameter("color", base)
+	_gauge_mat.set_shader_parameter("glow", glow)
+	_gauge_mat.set_shader_parameter("flash", _gain_glow.color.a if _gain_glow.visible else 0.0)
+	_gauge_mat.set_shader_parameter("bubbles", 1.0 if turbo_on else 0.0)
+	_gauge_mat.set_shader_parameter("charges", charges)
+	_gauge_mat.set_shader_parameter("charge_part", part)
 
 
 ## Ganó nitro de golpe (no el goteo de a poco): ese tramo brilla en blanco.
@@ -591,15 +679,27 @@ func _build() -> void:
 	nitro_box.anchor_bottom = 1.0
 	nitro_box.offset_left = 24.0
 	nitro_box.offset_right = 284.0
-	nitro_box.offset_top = -80.0
-	nitro_box.offset_bottom = -20.0
+	nitro_box.offset_top = -12.0 - NITRO_GAUGE_SIZE
+	nitro_box.offset_bottom = -12.0
 	nitro_box.alignment = BoxContainer.ALIGNMENT_END
 	root.add_child(nitro_box)
+	var gauge_row := HBoxContainer.new()
+	gauge_row.add_theme_constant_override("separation", 4)
+	nitro_box.add_child(gauge_row)
+	_gauge = ColorRect.new()
+	_gauge.custom_minimum_size = Vector2(NITRO_GAUGE_SIZE, NITRO_GAUGE_SIZE)
+	_gauge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_gauge_mat = ShaderMaterial.new()
+	_gauge_mat.shader = NITRO_GAUGE_SHADER
+	_gauge_mat.set_shader_parameter("charge_count", float(Rider.TURBO_CHARGES))
+	_gauge.material = _gauge_mat
+	gauge_row.add_child(_gauge)
 	var nitro_label := _make_label(20, NITRO_COLOR)
 	_nitro_label = nitro_label
 	nitro_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	nitro_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	nitro_label.text = "NITRO"
-	nitro_box.add_child(nitro_label)
+	gauge_row.add_child(nitro_label)
 	_nitro_bar = _make_bar(NITRO_COLOR, 18.0)
 	_nitro_fill = _nitro_bar.get_theme_stylebox("fill") as StyleBoxFlat
 	# Llamas arriba de la parte llena (debajo de las marcas de las cargas).
@@ -628,6 +728,7 @@ func _build() -> void:
 	_burn_bar = _make_bar(BURN_COLOR, 18.0)
 	_burn_fill = _burn_bar.get_theme_stylebox("fill") as StyleBoxFlat
 	nitro_box.add_child(_burn_bar)
+	_burn_bar.visible = false
 	_burn_bar.add_child(_nitro_bar)
 	_nitro_bar.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_nitro_bar.add_theme_stylebox_override("background", StyleBoxEmpty.new())
