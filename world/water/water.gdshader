@@ -59,6 +59,12 @@ uniform float sky_reflect = 0.42;
 // Lluvia pegando en el mar (0 = no llueve): circulitos que se abren donde cae
 // una gota, con un puntito de salpicadura al principio.
 uniform float rain_ripples = 0.0;
+// Luces de las guirnaldas (de noche; ver Water.add_lamp): iluminan el agua y
+// las olas (la cara que mira a la luz se aclara) y se reflejan en ellas.
+// lamps: xyz posición, w alcance (m). lamp_colors: rgb color, a fuerza.
+uniform int lamp_count = 0;
+uniform vec4 lamps[64];
+uniform vec4 lamp_colors[64];
 
 varying float v_height;
 // 0..1: cuerpo de una ola grande (para el color turquesa de la ola).
@@ -238,6 +244,39 @@ void fragment() {
 	FOG = vec4(fog_a > 0.0001 ? fog_rgb / fog_a : near_fog, fog_a);
 	ALBEDO = col;
 	EMISSION = vec3(sparkle * 0.7 * (1.0 - haze));
+	if (lamp_count > 0) {
+		vec3 nw = normalize((INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz);
+		// Una onda chica y lenta para que el reflejo se estire y se mueva (sin puntitos).
+		vec2 rp = vec2(fx_noise(wp * 0.6 + t * 0.35), fx_noise(wp * 0.6 - t * 0.3 + 5.3)) - 0.5;
+		vec3 ns = normalize(nw + vec3(rp.x, 0.0, rp.y) * 0.4);
+		vec3 vw = normalize(CAMERA_POSITION_WORLD - v_world);
+		vec3 lit = vec3(0.0);
+		vec3 shine = vec3(0.0);
+		for (int i = 0; i < lamp_count; i++) {
+			vec3 to_l = lamps[i].xyz - v_world;
+			float d = length(to_l);
+			float reach = lamps[i].w;
+			if (d > reach * 1.8) {
+				continue;
+			}
+			vec3 l = to_l / d;
+			vec3 c = pow(lamp_colors[i].rgb, vec3(2.2)) * lamp_colors[i].a;
+			float att = clamp(1.0 - d / reach, 0.0, 1.0);
+			att *= att;
+			// Difusa "envuelta": la cara de la ola que mira a la luz se aclara,
+			// pero la de atrás no queda negra.
+			float diffuse = clamp(dot(nw, l) * 0.7 + 0.3, 0.0, 1.0);
+			lit += c * att * diffuse;
+			// Reflejo: depende de hacia dónde mira la superficie, no tanto de lo
+			// cerca que esté la luz (así se estira hacia la cámara como en el mar).
+			float spec = pow(max(dot(reflect(-l, ns), vw), 0.0), 70.0);
+			shine += c * spec * (1.0 - smoothstep(reach, reach * 1.8, d));
+		}
+		// La luz aclara el color del agua (azul más claro y un poco cálido, no
+		// marrón) y el reflejo se suma dorado.
+		float keep_lamp = (1.0 - clamp(foam, 0.0, 1.0) * 0.4) * (1.0 - haze);
+		EMISSION += (col * lit * 4.0 + lit * 0.03 + mix(shine, vec3(dot(shine, vec3(0.33))), 0.3) * 0.8) * keep_lamp;
+	}
 	ROUGHNESS = mix(0.26, 0.7, clamp(foam, 0.0, 1.0));
 	SPECULAR = 0.38;
 }

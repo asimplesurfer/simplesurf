@@ -12,6 +12,14 @@ const MAX_SWELLS := 8
 
 ## Primera capa de render (índice desde 0) para los planos de cada jugador.
 const FOLLOWER_LAYER_BASE := 10
+## Capa del agua cuando no hay pantalla dividida. El agua nunca está en la capa
+## 1: así una luz puede no alumbrarla (ver LIGHT_MASK) y el agua se ilumina
+## sola con add_lamp.
+const SOLO_LAYER := 14
+## Máscara para luces que alumbran todo menos el agua.
+const LIGHT_MASK := 0xFFFFF & ~(0b11111 << FOLLOWER_LAYER_BASE)
+## Cuántas luces (add_lamp) entiende el shader.
+const MAX_LAMPS := 64
 
 @export var waves: WaveDefinition
 ## Nodo al que sigue el plano si nadie llama a add_follower (opcional).
@@ -57,6 +65,8 @@ var _material: ShaderMaterial
 var _followers: Array[Dictionary] = []
 ## Mientras drawn_depth revisa una zona lejos de las islas (ahorra cuentas).
 var _far_from_islands: bool = false
+var _lamps := PackedVector4Array()
+var _lamp_colors := PackedVector4Array()
 
 
 func _ready() -> void:
@@ -150,8 +160,7 @@ func add_follower(node: Node3D, layer_index: int = -1) -> MeshInstance3D:
 	mi.mesh = _plane
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mi.extra_cull_margin = 8.0
-	if layer_index >= 0:
-		mi.layers = 1 << (FOLLOWER_LAYER_BASE + layer_index)
+	mi.layers = 1 << (FOLLOWER_LAYER_BASE + layer_index if layer_index >= 0 else SOLO_LAYER)
 	add_child(mi)
 	_followers.append({"node": node, "mesh": mi})
 	_snap(mi, node)
@@ -166,6 +175,26 @@ static func camera_cull_mask(layer_index: int, max_players: int = 4) -> int:
 		if i != layer_index:
 			mask &= ~(1 << (FOLLOWER_LAYER_BASE + i))
 	return mask
+
+
+## Una luz que ilumina el agua y las olas y se refleja en ellas (las
+## guirnaldas de noche). `reach`: hasta dónde llega (m).
+func add_lamp(pos: Vector3, color: Color, reach: float, strength: float) -> void:
+	if _lamps.size() >= MAX_LAMPS:
+		return
+	_lamps.append(Vector4(pos.x, pos.y, pos.z, reach))
+	_lamp_colors.append(Vector4(color.r, color.g, color.b, strength))
+	var l := _lamps.duplicate()
+	var c := _lamp_colors.duplicate()
+	l.resize(MAX_LAMPS)
+	c.resize(MAX_LAMPS)
+	_material.set_shader_parameter("lamps", l)
+	_material.set_shader_parameter("lamp_colors", c)
+	_material.set_shader_parameter("lamp_count", _lamps.size())
+
+
+func lamp_count() -> int:
+	return _lamps.size()
 
 
 ## El agua avanza en pasos fijos, igual que la física de los surfistas (así la
