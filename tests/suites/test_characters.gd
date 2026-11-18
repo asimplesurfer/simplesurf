@@ -204,6 +204,10 @@ func _test_customization() -> void:
 	root.add_child(old_av)
 	_check(old_av.find_children("*", "MeshInstance3D", true, false).size() > 5, "el abuelo se arma entero")
 	old_av.free()
+	var grandpa := CharacterData.new()
+	grandpa.apply_preset(CharacterData.PRESET_NAMES.find("Abuelo"))
+	_check(grandpa.option_name("hair") == "Científico" and grandpa.option_name("hat") == "Bombín"
+		and grandpa.option_name("glasses") == "Culo de botella", "estilo Abuelo: científico, bombín y culo de botella")
 	_check(CharacterData.MOUTHS.has("Canchera") and CharacterData.MOUTHS.has("Sonrisa ancha")
 		and CharacterData.MOUTHS.has("Pícara"), "sonrisas confiadas de una línea")
 	# Piezas del despeinado (pelo, anteojos y cuellito). Un personaje guardado
