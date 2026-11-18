@@ -418,7 +418,9 @@ func _update_turbo_meter(delta: float) -> void:
 		_fire_mat.set_shader_parameter("hot", Color(1.0, 0.85, 0.25).lerp(Color(1.0, 0.45, 0.35), _full_look))
 		_fire_mat.set_shader_parameter("flow", lerpf(3.0, 7.0, _full_look))
 	_update_gain_glow(delta)
-	_update_gauge(delta, base, fire, turbo_on)
+	# El medidor no se pinta entero de naranja con turbo: lo guardado sigue
+	# celeste y lo que se está gastando va arriba, en naranja (ver _update_gauge).
+	_update_gauge(delta, NITRO_COLOR.lerp(full_color, _full_look), fire, turbo_on)
 	_last_nitro = rider.nitro
 	_blocked = move_toward(_blocked, 0.0, delta * 4.0)
 	# Vibración: amague al apretar de más; temblor fino con la barra llena.
@@ -504,7 +506,12 @@ func _update_gauge(delta: float, base: Color, glow: float, turbo_on: bool) -> vo
 	var charges := float(ready)
 	var part := fposmod(rider.nitro / Rider.TURBO_CHARGE, 1.0) if charges < Rider.TURBO_CHARGES else 1.0
 	_gauge_mat.set_shader_parameter("size", _gauge.size)
-	_gauge_mat.set_shader_parameter("level", _nitro_bar.value)
+	# El agua llega hasta lo guardado más lo que el turbo todavía está
+	# gastando; esa capa de arriba (naranja) se va vaciando, y lo guardado
+	# (abajo) sube aparte si se gana nitro mientras tanto.
+	_gauge_mat.set_shader_parameter("level", _burn_bar.value if turbo_on else _nitro_bar.value)
+	_gauge_mat.set_shader_parameter("stored", _nitro_bar.value)
+	_gauge_mat.set_shader_parameter("burn_color", BURN_COLOR)
 	_gauge_mat.set_shader_parameter("slope", _slosh)
 	_gauge_mat.set_shader_parameter("bob", _bob)
 	_gauge_mat.set_shader_parameter("ripple", _ripple)

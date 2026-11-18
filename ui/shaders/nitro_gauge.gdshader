@@ -8,8 +8,13 @@
 shader_type canvas_item;
 
 uniform vec2 size = vec2(120.0, 120.0);
-// Nivel del agua (0 vacío, 1 lleno).
+// Nivel del agua (0 vacío, 1 lleno): lo guardado más lo que el turbo está
+// gastando.
 uniform float level : hint_range(0.0, 1.0) = 0.5;
+// Lo guardado (<= level). Entre stored y level va la capa que se gasta, en
+// burn_color.
+uniform float stored : hint_range(0.0, 1.0) = 0.5;
+uniform vec3 burn_color : source_color = vec3(1.0, 0.5, 0.1);
 // Pendiente de la superficie (positiva: más alta a la derecha).
 uniform float slope = 0.0;
 // Rebote de la superficie (en radios, positivo hacia arriba).
@@ -114,6 +119,19 @@ void fragment() {
 	// De noche: brillo en los bordes del agua (contra el vidrio y en la superficie).
 	float edge = smoothstep(WATER_R - 0.05, WATER_R, r) + (1.0 - smoothstep(0.0, 0.04, depth));
 	wcol = mix(wcol, GLOW_NIGHT, clamp(edge, 0.0, 1.0) * night * (0.45 + 0.15 * sin(t * 1.7 + p.x * 9.0)));
+	// La capa que el turbo está gastando: arriba de lo guardado, naranja, con
+	// una línea fina que la separa.
+	float burning = step(stored + 0.004, level);
+	if (burning > 0.5) {
+		float sb = (stored * 2.0 - 1.0) * WATER_R + bob * WATER_R + slope * p.x
+			+ 0.006 * sin(p.x * 30.0 + t * 5.0);
+		float above = smoothstep(-px, px, p.y - sb);
+		vec3 bcol = burn_color * (0.95 + 0.07 * sin(t * 9.0));
+		bcol = mix(bcol, vec3(1.0), (1.0 - smoothstep(0.012, 0.05, depth)) * 0.35);
+		wcol = mix(wcol, bcol, above);
+		float split = 1.0 - smoothstep(0.0, 1.2 * px, abs(p.y - sb) - 0.5 * px);
+		wcol = mix(wcol, vec3(1.0), split * 0.7 * step(0.0, depth));
+	}
 	col = mix(col, vec4(wcol, 1.0), water);
 	// Línea de la superficie; con espuma, más gruesa y despareja.
 	// Espuma: una franja blanca más gruesa debajo de la línea, despareja y suave.
