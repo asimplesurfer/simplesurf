@@ -69,7 +69,7 @@ const KEYBOARD_KEYS := {
 	"down": [KEY_S, KEY_DOWN],
 	"a": [KEY_SPACE, KEY_J],
 	"drift": [KEY_S, KEY_DOWN],
-	"b": [KEY_E, KEY_K],
+	"b": [KEY_E],
 	"look_back": [KEY_Q],
 	"waves_up": [KEY_X],
 	"waves_down": [KEY_Z],

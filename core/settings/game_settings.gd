@@ -36,10 +36,9 @@ static var wave_mode: WaveMode = WaveMode.SURGES
 static var track_layout: TrackLayout = TrackLayout.ARCHIPELAGO
 static var weather: Weather = Weather.SUNNY
 static var time_of_day: TimeOfDay = TimeOfDay.DAY
-## Cuántas personas juegan (pantalla dividida). Se cambia con las teclas 1 / 2.
+## Cuántas personas juegan (pantalla dividida). Se elige en el menú (y en el
+## modo libre, con las teclas 1 / 2).
 static var player_count: int = 1
-## Pantalla dividida: true = un jugador a cada lado; false = uno arriba del otro.
-static var split_vertical: bool = true
 ## Bots en la carrera (0 a 3) y su dificultad (0 Fácil, 1 Normal, 2 Difícil).
 static var bot_count: int = 1
 static var bot_level: int = 1
@@ -74,7 +73,6 @@ static func load_settings() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load(PATH) == OK:
 		player_count = clampi(int(cfg.get_value("gameplay", "player_count", 1)), 1, InputSetup.MAX_PLAYERS)
-		split_vertical = bool(cfg.get_value("gameplay", "split_vertical", true))
 		# Se juega siempre con el salto de olas (saltito + pop): ya no se elige.
 		jump_style = JumpStyle.WAVES
 		track_layout = clampi(
@@ -102,7 +100,6 @@ static func save_settings() -> void:
 	cfg.load(PATH)
 	cfg.set_value("gameplay", "jump_mode", jump_mode)
 	cfg.set_value("gameplay", "player_count", player_count)
-	cfg.set_value("gameplay", "split_vertical", split_vertical)
 	cfg.set_value("gameplay", "jump_style", jump_style)
 	cfg.set_value("gameplay", "wave_mode", wave_mode)
 	cfg.set_value("gameplay", "track_layout", track_layout)

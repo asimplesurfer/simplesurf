@@ -370,7 +370,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if key and key.pressed and not key.echo and key.physical_keycode == KEY_H and free_ride:
 		_help.visible = not _help.visible
 	# Tecla oculta para probar el efecto de atravesar una ola.
-	if key and key.pressed and not key.echo and key.physical_keycode == KEY_F8 and rider:
+	if key and key.pressed and not key.echo and key.physical_keycode == KEY_F8 and rider and free_ride:
 		_on_wave_punched()
 		var cam := get_viewport().get_camera_3d() as ChaseCamera
 		if cam:
@@ -786,8 +786,7 @@ func _update_help() -> void:
 		+ "Derrapar (frena y tira a los de atrás): S / stick atrás / botón izquierdo / RB\n"
 		+ "Turbo (tocar, gasta 1 carga): E o botón derecho   ·   Mirar atrás: Q o gatillo izquierdo\n"
 		+ "Levantarse: spamear ESPACIO o botón de abajo\n"
-		+ "Pantalla dividida: V   ·   Esc / Start: pausa (volumen)   ·   C: menú   ·   H: ocultar ayuda   ·   P: FPS\n"
-		+ "G: ver los trucos uno por uno (cámara lenta)\n"
+		+ "Esc / Start: pausa (volumen)   ·   P: FPS\n"
 		+ "Si no responde, haz clic en el juego   ·   %s" % BuildInfo.label()
 	)
 

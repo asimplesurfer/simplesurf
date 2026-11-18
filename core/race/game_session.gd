@@ -212,8 +212,15 @@ func preview_next_trick() -> void:
 	_preview_index += 1
 
 
-## Teclas generales. Devuelve true si la usó.
+## Teclas generales. Devuelve true si la usó. En carrera solo la pausa y el
+## contador de FPS: las teclas de prueba (cambiar de jugadores, visor de
+## trucos, cámara lenta, volver al menú de golpe) quedan para el modo libre.
+const RACE_KEYS: Array[Key] = [KEY_ESCAPE, KEY_P]
+
+
 func _handle_common_key(key: InputEventKey) -> bool:
+	if not free_ride() and not key.physical_keycode in RACE_KEYS:
+		return false
 	match key.physical_keycode:
 		KEY_1:
 			set_player_count(1)
@@ -232,12 +239,6 @@ func _handle_common_key(key: InputEventKey) -> bool:
 		KEY_P:
 			# Contador de FPS en el HUD (para ver si anda lento).
 			Hud.show_fps = not Hud.show_fps
-		KEY_V:
-			# Pantalla dividida: lado a lado <-> arriba y abajo.
-			GameSettings.split_vertical = not GameSettings.split_vertical
-			GameSettings.save_settings()
-			if humans().size() > 1 or humans().is_empty():
-				restart()
 		_:
 			return false
 	return true

@@ -342,9 +342,6 @@ func _build_setup() -> void:
 	_setup_row(box, "Hora", _capitalized(GameSettings.TIME_NAMES), GameSettings.time_of_day,
 		func(i: int) -> void: GameSettings.time_of_day = i as GameSettings.TimeOfDay)
 	_setup_row(box, "Música", GameSettings.music_names(), GameSettings.music_choice, set_music)
-	if GameSettings.player_count == 2:
-		_setup_row(box, "Pantalla", ["Lado a lado", "Arriba y abajo"], 0 if GameSettings.split_vertical else 1,
-			func(i: int) -> void: GameSettings.split_vertical = i == 0)
 	var bar := HBoxContainer.new()
 	bar.add_theme_constant_override("separation", 16)
 	root.add_child(bar)
