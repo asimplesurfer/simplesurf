@@ -75,6 +75,14 @@ const GRADE_TIME := 1.6
 const DROP_TRAIL_TIME := 0.7
 
 const COMPACT_SCALE := 0.6
+## Color de la posición (pastel): oro, plata, bronce y, del 4º en adelante, un
+## gris casi blanco.
+const PLACE_COLORS: Array[Color] = [
+	Color(1.0, 0.85, 0.42),
+	Color(0.8, 0.86, 0.94),
+	Color(0.94, 0.7, 0.52),
+	Color(0.9, 0.9, 0.9),
+]
 
 var _root: Control
 
@@ -82,10 +90,8 @@ var _mash_box: VBoxContainer
 var _mash_prompt: ButtonPrompt
 var _mash_hint: Label
 var _mash_bar: ProgressBar
-var _speed_label: Label
 var _place_label: Label
 var _lap_label: Label
-var _name_label: Label
 var _center_label: Label
 var _help: Label
 ## Contador de FPS (tecla P). Se recuerda entre carreras.
@@ -193,16 +199,9 @@ func _ready() -> void:
 		race.countdown_tick.connect(_on_countdown_tick)
 		race.lap_started.connect(_on_lap_started)
 		race.racer_finished.connect(_on_racer_finished)
-	_help.visible = show_help
+	# La ayuda (tecla H) solo en el modo libre: en carrera no se muestra.
+	_help.visible = show_help and free_ride
 	_update_help()
-	if demo:
-		var tag := _make_label(18, PROMPT_COLOR)
-		tag.text = "DEMO · %s\nTocá o apretá un botón para jugar" % (
-			rider.display_name if rider else ""
-		)
-		tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-		tag.position = Vector2(16.0, 12.0)
-		add_child(tag)
 
 
 func _connect_rider() -> void:
@@ -221,7 +220,6 @@ func _connect_rider() -> void:
 	rider.trick_preview_started.connect(func(trick_name: String, index: int, total: int) -> void:
 		show_message("Truco %d/%d: %s" % [index + 1, total, trick_name], Color.WHITE)
 	)
-	rider.ring_collected.connect(func() -> void: show_message("+ NITRO", NITRO_COLOR))
 	rider.crashed.connect(func() -> void: show_message("¡Pum!", BAD_COLOR))
 	rider.wave_punched.connect(_on_wave_punched)
 	var pc := rider.controller as PlayerController
@@ -369,7 +367,7 @@ func _on_racer_finished(r: Rider, place: int) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	var key := event as InputEventKey
-	if key and key.pressed and not key.echo and key.physical_keycode == KEY_H:
+	if key and key.pressed and not key.echo and key.physical_keycode == KEY_H and free_ride:
 		_help.visible = not _help.visible
 	# Tecla oculta para probar el efecto de atravesar una ola.
 	if key and key.pressed and not key.echo and key.physical_keycode == KEY_F8 and rider:
@@ -397,13 +395,11 @@ func _process(delta: float) -> void:
 	_update_splash(delta)
 	_update_mash(delta)
 
-	_speed_label.text = "%d km/h" % roundi(rider.speed * 3.6)
 	# Handicap: muestra cuánto más rápido carga el nitro.
 	var mult := rider.nitro_gain_mult()
 	# Al lado del medidor, solo el multiplicador (y solo cuando hay).
 	_nitro_label.text = "×%.1f" % mult if mult >= 1.15 else ""
 	_nitro_label.visible = mult >= 1.15
-	_name_label.text = rider.display_name
 
 	# Contador del truco: visible mientras gira en el aire; late al sumar una vuelta.
 	_update_trick_preview(delta)
@@ -438,11 +434,14 @@ func _process(delta: float) -> void:
 	elif _race():
 		var race := _race()
 		_lap_label.text = "VUELTA %d/%d" % [race.lap_of(rider), race.config.laps]
-		_place_label.text = "%dº" % race.place_of(rider)
+		var place := race.place_of(rider)
+		_place_label.text = "%dº" % place
+		_place_label.add_theme_color_override("font_color", PLACE_COLORS[clampi(place - 1, 0, PLACE_COLORS.size() - 1)])
 		if race.time_trial:
 			# Contrarreloj: el tiempo en vez del puesto, y el récord a batir.
 			var t: float = race.finish_times.get(rider, race.race_time)
 			_place_label.text = ResultsPanel.format_time(t)
+			_place_label.add_theme_color_override("font_color", Color.WHITE)
 			var best := race.time_trial.best_time
 			_lap_label.text += "\nRécord %s\nR / Select: reiniciar" % (ResultsPanel.format_time(best) if best > 0.0 else "--")
 		if race.is_wrong_way(rider) and _center_time <= 0.0:
@@ -915,24 +914,35 @@ func _build() -> void:
 		mark.offset_right = 1.5
 		_nitro_bar.add_child(mark)
 
-	# Posición, vuelta y velocidad, arriba a la derecha.
+	# Arriba a la izquierda: la silueta del mapa y, abajo, la vuelta.
+	var left_box := VBoxContainer.new()
+	left_box.offset_left = 20.0
+	left_box.offset_right = 300.0
+	left_box.offset_top = 14.0
+	left_box.offset_bottom = 420.0
+	left_box.add_theme_constant_override("separation", 2)
+	left_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(left_box)
+	var minimap := TrackMinimap.new()
+	minimap.name = "Minimap"
+	minimap.hud = self
+	var side := 120.0 if compact else 180.0
+	minimap.custom_minimum_size = Vector2(side, side)
+	minimap.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	left_box.add_child(minimap)
+	_lap_label = _make_label(26, Color.WHITE)
+	_lap_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	left_box.add_child(_lap_label)
+
+	# Arriba a la derecha: en el modo libre, el nivel de olas.
 	var right_box := VBoxContainer.new()
 	right_box.anchor_left = 1.0
 	right_box.anchor_right = 1.0
 	right_box.offset_left = -260.0
 	right_box.offset_right = -20.0
-	right_box.offset_top = 10.0
-	right_box.offset_bottom = 420.0
+	right_box.offset_top = 14.0
+	right_box.offset_bottom = 120.0
 	root.add_child(right_box)
-	_place_label = _make_label(56, PROMPT_COLOR)
-	_place_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	right_box.add_child(_place_label)
-	_lap_label = _make_label(26, Color.WHITE)
-	_lap_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	right_box.add_child(_lap_label)
-	_speed_label = _make_label(22, Color.WHITE)
-	_speed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	right_box.add_child(_speed_label)
 	# Modo libre: nivel de las olas (barritas de alto creciente).
 	_waves_box = HBoxContainer.new()
 	_waves_box.alignment = BoxContainer.ALIGNMENT_END
@@ -949,26 +959,21 @@ func _build() -> void:
 		bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_waves_box.add_child(bar)
 		_wave_bars.append(bar)
-	# Minimapa: la silueta de la pista y dónde está cada uno.
-	var minimap := TrackMinimap.new()
-	minimap.name = "Minimap"
-	minimap.hud = self
-	var side := 120.0 if compact else 180.0
-	minimap.custom_minimum_size = Vector2(side, side)
-	right_box.add_child(minimap)
 
-	# Nombre del jugador, abajo a la derecha.
-	_name_label = _make_label(28, Color.WHITE)
-	_name_label.anchor_left = 1.0
-	_name_label.anchor_right = 1.0
-	_name_label.anchor_top = 1.0
-	_name_label.anchor_bottom = 1.0
-	_name_label.offset_left = -120.0
-	_name_label.offset_right = -20.0
-	_name_label.offset_top = -56.0
-	_name_label.offset_bottom = -16.0
-	_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	root.add_child(_name_label)
+	# Abajo a la derecha: la posición (oro, plata, bronce o gris).
+	_place_label = _make_label(64, PLACE_COLORS[0])
+	_place_label.anchor_left = 1.0
+	_place_label.anchor_right = 1.0
+	_place_label.anchor_top = 1.0
+	_place_label.anchor_bottom = 1.0
+	_place_label.offset_left = -300.0
+	_place_label.offset_right = -20.0
+	_place_label.offset_top = -112.0
+	_place_label.offset_bottom = -12.0
+	_place_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_place_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	_style_number(_place_label, 64)
+	root.add_child(_place_label)
 
 	# Mensajes (truco, nitro...), arriba al centro.
 	_message = _make_label(40, NITRO_COLOR)
@@ -1008,6 +1013,8 @@ func _build() -> void:
 		l.offset_right = TRICK_BOX.end.x
 		l.visible = false
 		root.add_child(l)
+	# Los mensajes ("¡Al agua!") van por delante del contador y del número partido.
+	_message.move_to_front()
 
 	# Cartel grande al centro (cuenta regresiva, vuelta, llegada, al revés).
 	_center_label = _make_label(84, Color.WHITE)
@@ -1022,7 +1029,7 @@ func _build() -> void:
 	# Ayuda de controles, arriba a la izquierda.
 	_help = _make_label(15, Color.WHITE)
 	_help.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_help.position = Vector2(16.0, 12.0)
+	_help.position = Vector2(20.0, 250.0)
 	root.add_child(_help)
 
 	# Contador de FPS (P), abajo al centro.

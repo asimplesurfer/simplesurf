@@ -49,9 +49,9 @@ uniform float boil : hint_range(0.0, 1.0) = 0.0;
 // De noche: el agua brilla en los bordes (bioluminiscencia).
 uniform float night : hint_range(0.0, 1.0) = 0.0;
 
-const float WATER_R = 0.36;
-const float RING_R = 0.445;
-const float RING_W = 0.04;
+const float WATER_R = 0.335;
+const float RING_R = 0.425;
+const float RING_W = 0.072;
 const vec3 GLOW_NIGHT = vec3(0.45, 1.0, 0.85);
 
 float hash(float n) {
@@ -180,14 +180,27 @@ void fragment() {
 	float ready = step(seg + 0.5, charges);
 	float partial = step(charges, seg + 0.5) * step(seg - 0.5, charges)
 		* step((in_seg - gap * 0.5) / (1.0 - gap), charge_part);
-	vec3 rc = mix(ring_color, color, glow * 0.7);
+	// Lo que dice si se puede tirar turbo: los tramos listos, gruesos y
+	// brillantes (con un pulso suave); los que faltan, oscuros; el que se está
+	// cargando se va llenando.
+	float lit = max(ready, partial);
+	vec3 ready_col = mix(mix(color, vec3(1.0), 0.35), color, glow * 0.6);
+	ready_col *= 1.0 + 0.12 * ready * sin(TIME * 4.0);
+	vec3 rc = mix(vec3(0.05, 0.13, 0.22), ready_col, lit);
 	rc = mix(rc, vec3(1.0), beat * 0.6);
-	float ring_a = mix(0.22, 1.0, max(ready, partial * 0.75));
-	float ring_shadow = (1.0 - smoothstep(RING_W * 0.5, RING_W * 0.5 + 0.015, abs(r - RING_R))) * 0.1;
-	col = mix(col, vec4(0.0, 0.0, 0.0, 1.0), ring_shadow * (1.0 - col.a));
-	col.a = max(col.a, ring_shadow);
+	float ring_a = mix(0.7, 1.0, lit);
+	// Contorno oscuro de cada tramo (que se lea sobre el agua clara).
+	float seg_edge = (1.0 - smoothstep(ring_w * 0.5 + 0.5 * px, ring_w * 0.5 + 2.5 * px, abs(r - ring_r)))
+		* smoothstep(gap * 0.5 - 0.012, gap * 0.5 + 0.008, in_seg) * smoothstep(gap * 0.5 - 0.012, gap * 0.5 + 0.008, 1.0 - in_seg);
+	col = mix(col, vec4(0.02, 0.06, 0.1, 1.0), seg_edge * 0.85);
+	col.a = max(col.a, seg_edge * 0.85);
 	col = mix(col, vec4(rc, 1.0), on_ring * ring_a);
 	col.a = max(col.a, on_ring * ring_a);
+	// Brillo de los tramos listos (como luz alrededor).
+	float shine = (1.0 - smoothstep(ring_w * 0.5, ring_w * 0.5 + 0.035, abs(r - ring_r))) * ready * (1.0 - on_ring)
+		* smoothstep(gap * 0.5, gap * 0.5 + 0.04, in_seg) * smoothstep(gap * 0.5, gap * 0.5 + 0.04, 1.0 - in_seg);
+	col = mix(col, vec4(ready_col, 1.0), shine * 0.35);
+	col.a = max(col.a, shine * 0.35);
 	// Destello alrededor del tramo que late.
 	float halo = (1.0 - smoothstep(0.0, 0.05, abs(r - ring_r))) * beat * 0.5
 		* step(abs(seg - pulse_seg), 0.5) * (1.0 - on_ring);
