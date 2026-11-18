@@ -146,7 +146,7 @@ func build(parent: Node3D, data: CharacterData, features: AvatarFeatures) -> voi
 	var chest_node := character.find_child("Torso", false, false).find_child("Chest", false, false) as Node3D
 	var neck := Vector2(chest_node.scale.x, chest_node.scale.z) if chest_node else Vector2.ONE
 	neck = _neck_over_belly(neck)
-	features.build_chest(chest_group, data, CHEST_RADII, neck, _shoulder_k)
+	features.build_chest(chest_group, data, CHEST_RADII, neck, _shoulder_k, _neck_shift_z())
 	# Rastas: las tiras se mueven poco y nunca hacia la cabeza (solo para atrás).
 	_dreads = data.get_option("hair") == AvatarFeatures.DREADS
 	_setup_legs()
@@ -392,8 +392,15 @@ func _neck_over_belly(neck: Vector2) -> Vector2:
 	var narrow := 1.0 - 0.08 * clampf(t, 0.0, 1.0)
 	var k := sqrt(1.0 - t * t) * narrow
 	var rx := _egg_radii.x * k
-	var rz := _egg_radii.z * k + _egg_center.z
-	return Vector2(maxf(neck.x, rx * 1.06 / 0.32), maxf(neck.y, rz * 1.06 / 0.285))
+	var rz := _egg_radii.z * k
+	# El aro se centra en la panza (que está corrida para adelante, ver
+	# _neck_shift_z): así ajusta adelante y atrás, sin quedar flotando atrás.
+	return Vector2(maxf(neck.x, rx * 1.05 / 0.32), maxf(neck.y, rz * 1.05 / 0.285))
+
+
+## Cuánto se corre para adelante el centro del aro del collar con la panza.
+func _neck_shift_z() -> float:
+	return _egg_center.z if _egg_radii != Vector3.ZERO else 0.0
 
 
 ## Cuerpo de huevo: una forma redonda de piel que envuelve el pecho y la
@@ -580,6 +587,7 @@ func _apply_sliders(data: CharacterData) -> void:
 		if pearls_node:
 			var ns := _neck_over_belly(Vector2(chest.scale.x, chest.scale.z))
 			pearls_node.scale = Vector3(ns.x, 1.0, ns.y)
+			pearls_node.position.z += _neck_shift_z()
 		for part in ["HandL", "HandR"]:
 			(character.find_child(part, false, false) as Node3D).scale *= 1.0 + 0.3 * k
 		for part in ["ThighL", "ThighR", "ShinL", "ShinR", "SleeveL", "SleeveR"]:

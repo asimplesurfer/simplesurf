@@ -66,6 +66,8 @@ const BIKINI_BELLY := Vector2(0.1, 1.0)
 ## Con hombros grandes: cuánto sube y se cierra el collar (ver _neck_at).
 const NECK_LIFT := 0.06
 const NECK_TIGHT := 0.2
+## Cuánto se corre para adelante el centro del collar (panza redonda).
+var _neck_shift: float = 0.0
 ## Cuánto de hombros grandes tiene (0 sin hombros ... 1 musculoso).
 var _shoulder_k: float = 0.0
 ## Cuánto más adelante van los dijes de los collares con la panza redonda.
@@ -229,10 +231,12 @@ func build_head(group: Node3D, hair_group: Node3D, data: CharacterData, skin: Co
 ## toda la vuelta al cuello (como las perlas): más abajo adelante y más arriba
 ## atrás. `neck_scale` = ancho y fondo del pecho (x, z), que cambian con el cuerpo.
 func build_chest(
-	group: Node3D, data: CharacterData, radii: Vector3, neck_scale := Vector2.ONE, shoulders := 0.0
+	group: Node3D, data: CharacterData, radii: Vector3, neck_scale := Vector2.ONE, shoulders := 0.0,
+	neck_shift := 0.0
 ) -> void:
 	_begin(group)
 	_shoulder_k = shoulders
+	_neck_shift = neck_shift
 	_neck_scale = neck_scale
 	_belly_k = clampf((data.weight - 0.5) / 0.5, 0.0, 1.0)
 	_bikini_dots = data.accent("shorts_pattern_color") if data.get_option("shorts_pattern") == 2 else Color(0, 0, 0, 0)
@@ -1907,7 +1911,7 @@ func _neck_at(a: float) -> Vector3:
 	# la base del cuello (si no, atraviesa los hombros).
 	var tight := 1.0 - NECK_TIGHT * _shoulder_k
 	return Vector3(sin(a) * 0.32 * _neck_scale.x * tight, 0.14 - 0.065 * cos(a) + NECK_LIFT * _shoulder_k,
-		cos(a) * 0.285 * _neck_scale.y * (1.0 - 0.06 * _shoulder_k))
+		_neck_shift + cos(a) * 0.285 * _neck_scale.y * (1.0 - 0.06 * _shoulder_k))
 
 
 ## Punto sobre la superficie de un elipsoide (radios `radii`) en la dirección d,
