@@ -239,7 +239,7 @@ const PIECES = {
     ["grass_color", "Pasto", "color", "#3f7f2c"], ["leaf_color", "Hojas", "color", "#2f8f2c"], ["shape_seed", "Semilla", "int", 1] ] },
   island_split: { name: "Dividir isla", params: [["width", "Ancho del mar en el medio (m)", "num", 14]] },
   light_string: { name: "Guirnalda de luces", params: [
-    ["lines", "Cables (1 a 20)", "int", 3],
+    ["lines", "Cables (1 a 20)", "int", 1],
     ["style", "Luces", "choice", "calida", [["calida", "Cálidas"], ["fria", "Frías"], ["navidad", "Navideñas"]]] ] },
   rock_formation: { name: "Roca / cueva", params: [
     ["height", "Alto de la roca (m)", "num", 34], ["ceiling", "Altura del techo (m)", "num", 12],
@@ -771,7 +771,7 @@ function drawIsle(p, poly, C, on) {
 const LIGHT_COLORS = { calida: ["#ffb85c"], fria: ["#b8dcff"], navidad: ["#ff2b24", "#33f24d", "#4073ff", "#ffd12e", "#ff66d9"] };
 function drawLights(p, C, on) {
   if (!p.a || !p.b) return;
-  const n = Math.max(1, Math.min(20, p.lines ?? 3));
+  const n = Math.max(1, Math.min(20, p.lines ?? 1));
   const d = sub(p.b, p.a), L = len(d) || 1, side = [-d[1] / L, d[0] / L];
   const cols = LIGHT_COLORS[p.style] || LIGHT_COLORS.calida;
   const gap = Math.max(0.8, 6 / cam.zoom / Math.max(1, n / 4));
@@ -958,7 +958,7 @@ function onDown(e) {
     if (isle < 0) { toast("Tocá adentro de una isla tropical."); return; }
     if (!pendingLights) { pendingLights = { a: w, i: isle }; toast("Ahora tocá la otra isla."); draw(); return; }
     if (isle === pendingLights.i) { toast("La otra punta tiene que ir en otra isla."); return; }
-    map.pieces.push({ type: "light_string", a: pendingLights.a, b: w, lines: 3, style: "calida" });
+    map.pieces.push({ type: "light_string", a: pendingLights.a, b: w, lines: 1, style: "calida" });
     pendingLights = null;
     sel = { kind: "piece", i: map.pieces.length - 1 };
     commit(); setTool("select"); return;
@@ -1309,6 +1309,14 @@ function refreshPanel() {
       box.append(field(label, kind, map[k], (v) => { map[k] = v; if (k === "name" && !lockedId()) map.id = slug(v); }, { id: k }));
     }
     if (!map.path.length) box.append(field("Radio del anillo (m)", "num", map.ring_radius, (v) => (map.ring_radius = v), { id: "ring_radius" }));
+    // Todas las guirnaldas a la vez: cuántos cables lleva cada una.
+    const strings = map.pieces.filter((p) => p.type === "light_string");
+    if (strings.length) {
+      const counts = [...new Set(strings.map((p) => p.lines ?? 1))];
+      box.append(field(`Cables de todas las guirnaldas (${strings.length})`, "int", counts.length === 1 ? counts[0] : "",
+        (v) => strings.forEach((p) => (p.lines = Math.max(1, Math.min(20, v)))), { id: "all_lines" }));
+      if (counts.length > 1) box.append(note("Ahora tienen cantidades distintas (" + counts.join(", ") + "). Poné un número para igualarlas todas."));
+    }
     box.append(note(`Archivo: world/maps/${map.id || slug(map.name)}.json. El número de mapa no se cambia en mapas que ya están en el juego (es el de los récords).`));
   } else if (s.kind === "start" && map.start) {
     const st = map.start;
