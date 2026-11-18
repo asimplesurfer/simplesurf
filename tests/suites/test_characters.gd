@@ -207,7 +207,8 @@ func _test_customization() -> void:
 	var grandpa := CharacterData.new()
 	grandpa.apply_preset(CharacterData.PRESET_NAMES.find("Abuelo"))
 	_check(grandpa.option_name("hair") == "Científico" and grandpa.option_name("hat") == "Bombín"
-		and grandpa.option_name("glasses") == "Culo de botella", "estilo Abuelo: científico, bombín y culo de botella")
+		and grandpa.option_name("glasses") == "Culo de botella"
+		and grandpa.option_name("board_design") == "Remendada", "estilo Abuelo: científico, bombín, culo de botella y tabla remendada")
 	# Gordito: cuerpo de huevo (una panza redonda que rebota), solo con panza.
 	for w in [0.5, 1.0]:
 		var chubby := Avatar.new()
