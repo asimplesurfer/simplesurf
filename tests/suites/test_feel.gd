@@ -140,7 +140,9 @@ func _test_trick_preview() -> void:
 	var hud := (m.get_node("Views") as SplitScreen).huds[0]
 	await _wait(0.5)
 	GameSession._preview_index = 0
-	await _key(KEY_G)
+	# En carrera la tecla G no anda (es de prueba): se llama directo.
+	race.preview_next_trick()
+	await process_frame
 	_check(r.trick_preview and not r.grounded and Engine.time_scale < 1.0, "G hace saltar y pone cámara lenta")
 	_check(hud._message.visible and "Giro de tabla" in hud._message.text, "muestra el nombre del truco (%s)" % hud._message.text)
 	var kinds_seen := {}
@@ -155,7 +157,9 @@ func _test_trick_preview() -> void:
 	_check(kinds_seen.has(Rider.Trick.SPIN) and kinds_seen.size() == 1, "hace ese truco y solo ese (%s, %.2f tiempos)" % [str(kinds_seen.keys()), max_units])
 	_check(not r.is_fallen() and is_equal_approx(Engine.time_scale, 1.0), "aterriza bien y vuelve la velocidad normal")
 	await _wait(0.3)
-	await _key(KEY_G)
+	# En carrera la tecla G no anda (es de prueba): se llama directo.
+	race.preview_next_trick()
+	await process_frame
 	_check(r.trick_kinds.size() == 1 and r.trick_kinds[0] == 1, "la próxima vez muestra el siguiente truco")
 	for i in 600:
 		await process_frame

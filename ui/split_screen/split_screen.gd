@@ -1,7 +1,7 @@
 class_name SplitScreen
 extends Control
-## Pantalla dividida: una vista por jugador humano. Por defecto lado a lado
-## (vertical); con GameSettings.split_vertical = false, una arriba de la otra.
+## Pantalla dividida: una vista por jugador humano. Con dos, siempre lado a
+## lado (una a la izquierda y otra a la derecha); con 3 o 4, en grilla de 2x2.
 ## Cada vista es un SubViewport sobre el mismo mundo, con su cámara, su HUD,
 ## sus rayas de velocidad y su propio plano de agua.
 
@@ -33,11 +33,10 @@ func _ready() -> void:
 		grid.add_theme_constant_override("h_separation", 4)
 		grid.add_theme_constant_override("v_separation", 4)
 		box = grid
-	elif GameSettings.split_vertical:
-		box = HBoxContainer.new()
-		box.add_theme_constant_override("separation", 4)
 	else:
-		box = VBoxContainer.new()
+		# Dos jugadores: siempre lado a lado (una cámara a la izquierda y otra
+		# a la derecha), nunca una arriba de la otra.
+		box = HBoxContainer.new()
 		box.add_theme_constant_override("separation", 4)
 	box.set_anchors_preset(Control.PRESET_FULL_RECT)
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE

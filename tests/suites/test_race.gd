@@ -1156,7 +1156,7 @@ func _test_split_screen() -> void:
 	_check(race.racers.size() == 3, "2 jugadores + 1 bot: 3 corredores")
 	_check(race.humans().size() == 2, "2 personas")
 	_check(split.views.size() == 2, "2 jugadores: 2 pantallas")
-	_check(split.get_child(0) is HBoxContainer, "por defecto la pantalla se divide lado a lado")
+	_check(split.get_child(0) is HBoxContainer, "dos jugadores: siempre lado a lado")
 	# La cámara nunca queda debajo del agua (olas grandes).
 	var water2 := main2.get_node("Water") as Water
 	var s := Swell.new()
