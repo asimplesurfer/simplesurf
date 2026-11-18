@@ -1226,7 +1226,7 @@ func _test_split_screen() -> void:
 	_check(last.catchup > 0.99, "con una vuelta de atraso el handicap es el máximo")
 	_check(last.trick_grace() > 0.5, "con handicap hay tolerancia al caer de un truco")
 	_check(
-		split.huds[1]._nitro_label.text.begins_with("NITRO ×"),
+		split.huds[1]._nitro_label.text.begins_with("×"),
 		"el HUD muestra el multiplicador de nitro"
 	)
 	main2.queue_free()
