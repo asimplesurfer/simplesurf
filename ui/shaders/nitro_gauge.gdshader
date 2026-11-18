@@ -186,14 +186,14 @@ void fragment() {
 	float lit = max(ready, partial);
 	vec3 ready_col = mix(mix(color, vec3(1.0), 0.35), color, glow * 0.6);
 	ready_col *= 1.0 + 0.12 * ready * sin(TIME * 4.0);
-	vec3 rc = mix(vec3(0.05, 0.13, 0.22), ready_col, lit);
+	vec3 rc = mix(vec3(0.24, 0.36, 0.48), ready_col, lit);
 	rc = mix(rc, vec3(1.0), beat * 0.6);
-	float ring_a = mix(0.7, 1.0, lit);
+	float ring_a = mix(0.75, 1.0, lit);
 	// Contorno oscuro de cada tramo (que se lea sobre el agua clara).
 	float seg_edge = (1.0 - smoothstep(ring_w * 0.5 + 0.5 * px, ring_w * 0.5 + 2.5 * px, abs(r - ring_r)))
 		* smoothstep(gap * 0.5 - 0.012, gap * 0.5 + 0.008, in_seg) * smoothstep(gap * 0.5 - 0.012, gap * 0.5 + 0.008, 1.0 - in_seg);
-	col = mix(col, vec4(0.02, 0.06, 0.1, 1.0), seg_edge * 0.85);
-	col.a = max(col.a, seg_edge * 0.85);
+	col = mix(col, vec4(0.02, 0.06, 0.1, 1.0), seg_edge * 0.65);
+	col.a = max(col.a, seg_edge * 0.65);
 	col = mix(col, vec4(rc, 1.0), on_ring * ring_a);
 	col.a = max(col.a, on_ring * ring_a);
 	// Brillo de los tramos listos (como luz alrededor).
