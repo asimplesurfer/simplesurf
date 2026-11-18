@@ -1,9 +1,9 @@
 class_name TrackMinimap
 extends Control
 ## Minimapa (vista desde arriba, igual que en el editor de mapas: x a la
-## derecha, z hacia abajo), sobre un recuadro oscuro translúcido: la pista como
-## un camino celeste con borde blanco, la largada a cuadros, un punto por rival
-## y una flechita amarilla para este jugador (apunta hacia donde va).
+## derecha, z hacia abajo): la pista como un camino celeste con borde blanco,
+## la largada a cuadros, un punto por rival y una flechita amarilla para este
+## jugador (apunta hacia donde va).
 ##
 ## La pone la HUD arriba a la derecha. Sin pista (el modo libre en mar
 ## abierto) no se ve.
@@ -85,13 +85,6 @@ func _to_map(world: Vector3) -> Vector2:
 func _draw() -> void:
 	if _line.size() < 3:
 		return
-	# Fondo: un recuadro redondeado oscuro y translúcido (se lee sobre el cielo).
-	var panel := StyleBoxFlat.new()
-	panel.bg_color = Color(0.05, 0.13, 0.2, 0.38)
-	panel.set_corner_radius_all(16)
-	panel.set_border_width_all(2)
-	panel.border_color = Color(1, 1, 1, 0.22)
-	draw_style_box(panel, Rect2(Vector2.ZERO, size))
 	# La pista: sombra, borde blanco y el camino celeste adentro.
 	var w := clampf(_course.track.half_width * 2.0 * _scale, 5.0, 9.0)
 	var shadow := PackedVector2Array()
