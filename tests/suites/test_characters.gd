@@ -208,6 +208,14 @@ func _test_customization() -> void:
 	grandpa.apply_preset(CharacterData.PRESET_NAMES.find("Abuelo"))
 	_check(grandpa.option_name("hair") == "Científico" and grandpa.option_name("hat") == "Bombín"
 		and grandpa.option_name("glasses") == "Culo de botella", "estilo Abuelo: científico, bombín y culo de botella")
+	# Gordito: cuerpo de huevo (una panza redonda que rebota), solo con panza.
+	for w in [0.5, 1.0]:
+		var chubby := Avatar.new()
+		chubby.data = CharacterData.from_dict({"weight": w})
+		root.add_child(chubby)
+		var belly := chubby.find_child("BellyRig", true, false)
+		_check((belly != null) == (w > 0.5), "cuerpo de huevo solo con panza (peso %.1f)" % w)
+		chubby.free()
 	_check(CharacterData.MOUTHS.has("Canchera") and CharacterData.MOUTHS.has("Sonrisa ancha")
 		and CharacterData.MOUTHS.has("Pícara"), "sonrisas confiadas de una línea")
 	# Piezas del despeinado (pelo, anteojos y cuellito). Un personaje guardado

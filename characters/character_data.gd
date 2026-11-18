@@ -133,7 +133,7 @@ const MOUTHS := [
 ]
 const FACE_EXTRAS := [
 	"Nada", "Bigote", "Barba", "Uniceja", "Cejas gruesas", "Chivita", "Bigote y chivita", "Barba tupida",
-	"Bigotón", "Pecas", "Arrugas", "Arrugas y bigotón",
+	"Bigotón", "Pecas", "Arrugas", "Arrugas y bigotón", "Cachetes colorados",
 ]
 const EARS := ["Sin orejas", "Normales", "Grandes", "Dumbo", "Con aritos"]
 const NECKLACES := [
