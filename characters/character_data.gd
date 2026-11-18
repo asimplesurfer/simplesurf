@@ -154,7 +154,7 @@ const LYCRA := 3
 const TOPS := ["Nada", "Bikini", "Musculosa", "Lycra de surf"]
 
 ## Estilos armados (el primero es el surfista original del modelo 3D).
-const PRESET_NAMES := ["Surfista rubio", "Rasta", "Despeinado", "Pelirroja"]
+const PRESET_NAMES := ["Surfista rubio", "Rasta", "Despeinado", "Pelirroja", "Abuelo"]
 const PRESETS := [
 	{"weight": 0.0, "skin": 2, "head": 0, "hair": 2, "hair_color": 0,
 		"eyes": 0, "glasses": 1, "nose": 0, "mouth": 2, "extra": 0, "ears": 0, "neck": 1, "shorts": 0,
@@ -173,6 +173,11 @@ const PRESETS := [
 		"head": 6, "mouth": 0, "neck": 0, "nose": 1, "shorts": 8, "shorts_pattern": 14, "shorts_pattern_color": 0,
 		"shorts_pattern_color2": 2, "skin": 0, "top": 1, "top_color": 4, "top_color2": 2,
 		"trim_color": 0, "weight": 0.1},
+	{"board": 1, "board_design": 0, "board_design_color": 9, "board_design_color2": 2, "bottom": 0, "build": 0,
+		"ears": 2, "extra": 11, "eyes": 0, "glasses": 14, "hair": 18, "hair_color": 4, "hat": 13, "hat_color": 11,
+		"head": 4, "mouth": 15, "neck": 2, "nose": 2, "shorts": 1, "shorts_pattern": 10, "shorts_pattern_color": 9,
+		"shorts_pattern_color2": 2, "skin": 0, "top": 0, "top_color": 4, "top_color2": 2, "trim_color": 0,
+		"weight": 1.0},
 ]
 
 ## Barra de cuerpo (0..1): 0 = musculoso ... 0.5 = normal ... 1 = panzón.
