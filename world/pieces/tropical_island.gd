@@ -150,6 +150,7 @@ func build(course: Course) -> void:
 	if not _grass.is_empty():
 		root.add_child(_grass_mesh())
 	_sample_track(course.track)
+	_solid = _touches_track(course)
 	# El público va primero: las plantas y las palmeras le dejan lugar.
 	var crowd_lists := _plan_crowd(course)
 	_add_vegetation(root)
@@ -166,9 +167,11 @@ func covers(x: float, z: float) -> bool:
 	return Geometry2D.is_point_in_polygon(p, _outline) or BezierShape.distance_to_edge(_outline, p) < SHORE
 
 
-## Subirse a la arena: se cae y queda afuera, en el agua.
+## Subirse a la arena: se cae y queda afuera, en el agua. Solo las islas que
+## tocan la pista (o están a pocos metros de las corcheras): las de afuera no se
+## pueden alcanzar, así que no chocan nunca.
 func affect_rider(course: Course, rider: Rider) -> bool:
-	if not course.hazards_enabled or rider.is_fallen() or _outline.is_empty():
+	if not _solid or not course.hazards_enabled or rider.is_fallen() or _outline.is_empty():
 		return false
 	if not covers(rider.position.x, rider.position.z):
 		return false
@@ -468,8 +471,11 @@ const CROWD_ROOM := {"stand": 0.62, "chair": 0.6, "lounger": 0.65, "towel": 0.7,
 ## del agua: no en el medio de la isla ni entre las plantas).
 const CROWD_DEPTH := 2.3
 ## Tamaño de la sombra de cada cosa (m, ancho y largo).
-const SHADOW_SIZE := {"stand": Vector2(1.0, 1.0), "sit": Vector2(1.1, 1.2), "chair": Vector2(0.9, 0.9),
+const SHADOW_SIZE := {"stand": Vector2(1.0, 1.0), "sit": Vector2(1.1, 1.2), "sitground": Vector2(1.1, 1.3), "chair": Vector2(0.9, 0.9),
 	"lie": Vector2(1.1, 2.3), "lounger": Vector2(0.9, 2.4), "umbrella": Vector2(3.0, 3.0), "tent": Vector2(5.0, 4.0)}
+
+## true si la partida es de noche (nadie toma sol).
+var _night: bool = false
 
 ## Puntos de fiesta de esta isla (para los tests).
 var party_spots := PackedVector2Array()
@@ -477,6 +483,8 @@ var party_spots := PackedVector2Array()
 
 func _plan_crowd(course: Course) -> Dictionary:
 	var lists := {}
+	var hour := course.time_of_day if course.time_of_day >= 0 else GameSettings.time_of_day
+	_night = hour == GameSettings.TimeOfDay.NIGHT
 	if crowd <= 0.0 or _track_pts.is_empty():
 		return lists
 	var rng := RandomNumberGenerator.new()
@@ -573,7 +581,10 @@ func _calm(lists: Dictionary, rng: RandomNumberGenerator, q: Vector2, out: Vecto
 	if roll < 0.5:
 		var p := q - out * rng.randf_range(1.2, 1.8)
 		if _crowd_put(lists, rng, "towel", p, track_q, 0.5) and rng.randf() < 0.75:
-			_crowd_put(lists, rng, "lie%d" % (rng.randi() % BeachCrowd.LYING), p, track_q, 0.0, false, _last_yaw)
+			# De día toma sol; de noche, sentado en la toalla alentando.
+			var who := "sitground%d" % (rng.randi() % BeachCrowd.GROUND_SITTING) if _night \
+				else "lie%d" % (rng.randi() % BeachCrowd.LYING)
+			_crowd_put(lists, rng, who, p, track_q, 0.0, false, _last_yaw)
 		if rng.randf() < 0.4:
 			_crowd_put(lists, rng, "umbrella", p - out * 1.2 + side * 0.9, track_q, 0.0, true)
 	elif roll < 0.8:
@@ -653,6 +664,25 @@ func _nearest_track(p: Vector2) -> Vector2:
 
 ## Puntos de la pista (cada ~8 m), para saber qué lado de la isla se ve.
 var _track_pts := PackedVector2Array()
+## true si la isla llega a la pista (ver affect_rider).
+var _solid: bool = true
+## Hasta cuántos metros afuera de las corcheras una isla todavía choca.
+const SOLID_MARGIN := 4.0
+
+
+## true si algún punto de la orilla queda dentro de la pista (o a SOLID_MARGIN
+## de las corcheras), o si la isla tapa el centro de la pista.
+func _touches_track(course: Course) -> bool:
+	if course.track == null:
+		return true
+	var reach := course.half_width + SHORE + SOLID_MARGIN
+	for p in _outline:
+		if absf(course.track.locate(Vector3(p.x, 0.0, p.y)).y) < reach:
+			return true
+	for q in _track_pts:
+		if Geometry2D.is_point_in_polygon(q, _outline):
+			return true
+	return false
 
 
 func _sample_track(track: TrackSpace) -> void:

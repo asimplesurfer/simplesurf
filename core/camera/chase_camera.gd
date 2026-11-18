@@ -54,7 +54,7 @@ func _ready() -> void:
 	if target == null:
 		target = get_node_or_null(target_path) as Rider
 	if target:
-		target.wave_punched.connect(func() -> void: shake(0.6))
+		# Atravesar una ola no sacude la cámara (mareaba y no sumaba nada).
 		# Lo chocaron: un sacudón según la fuerza del golpe.
 		target.bumped.connect(func(_dir: Vector3, strength: float) -> void: shake(0.2 + 0.4 * strength))
 		# Chocó a otro: un sacudón chico. Cayó de un salto alto: según la altura.

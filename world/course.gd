@@ -299,7 +299,17 @@ func crash(rider: Rider, safe_position: Vector3) -> void:
 	_crash(rider, safe_position)
 
 
+## Seguro: un choque nunca lleva al surfista a más de MAX_CRASH_SHIFT metros
+## de donde estaba (el lugar "afuera" de una roca o de la orilla queda siempre
+## cerca). Si da más lejos, algo salió mal: no cuenta como choque.
+const MAX_CRASH_SHIFT := 10.0
+
+
 func _crash(rider: Rider, safe_position: Vector3) -> void:
+	var shift := Vector2(safe_position.x - rider.position.x, safe_position.z - rider.position.z).length()
+	if shift > MAX_CRASH_SHIFT:
+		push_warning("choque ignorado: lo mandaba %.0f m lejos" % shift)
+		return
 	rider.crash(safe_position)
 	rider.heading = track.heading_at(track.angle_of(rider.position))
 
