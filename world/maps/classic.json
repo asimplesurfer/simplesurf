@@ -1,15 +1,22 @@
 {
 	"format": 1,
 	"id": "classic",
-	"name": "isla (anillo)",
+	"name": "Anillo",
 	"order": 0,
-	"laps": 5,
-	"ring_radius": 82,
+	"laps": 3,
+	"ring_radius": 92,
 	"half_width": 20,
 	"ring_count": 10,
-	"rock_count": 12,
+	"rock_count": 22,
 	"islands": [
-		{"x": 0, "z": 0, "radius": 45, "lighthouse": true, "seed": 11}
+		{"x":1,"z":1,"radius":4,"lighthouse":false,"seed":13619}
 	],
-	"pieces": []
+	"pieces": [
+		{"type":"tropical_island","shape":[{"p":[0.55,-54.497],"in":[-16.845,0.145],"out":[13.375,-0.115]},{"p":[52.894,-1.785],"in":[1.528,-16.998],"out":[-3.38,37.596]},[0.302,50.846],[-52.238,-3.1]],"beach_width":15,"palm_density":2.2},
+		{"type":"tropical_island","shape":[{"p":[208.639,-110.929],"in":[0,0],"out":[0,0]},{"p":[252.817,-138.79],"in":[-63.492,-142.496],"out":[63.492,142.496]},{"p":[245.073,-53.119],"in":[0,0],"out":[0,0]},{"p":[245.073,-53.119],"in":[0,0],"out":[0,0]}],"crowd":0},
+		{"type":"tropical_island","shape":[[181.051,168.926],{"p":[263.632,163.277],"in":[0,0],"out":[0,0]},{"p":[205.58,276.941],"in":[0,0],"out":[0,0]}],"crowd":0},
+		{"type":"tropical_island","shape":[[432.241,-0.207],{"p":[473.002,66.53],"in":[0,0],"out":[0,0]},[387.683,152.515]]},
+		{"type":"tropical_island","shape":[[-313.622,45.203],{"p":[-396.679,170.807],"in":[0,0],"out":[0,0]},[-228.69,271.446]],"crowd":0},
+		{"type":"tropical_island","shape":[[-190.625,-455.554],[-281.904,-381.071],[-21.762,-360.925]],"crowd":0}
+	]
 }
