@@ -6,6 +6,17 @@ extends MapPiece
 
 const REQUIRED := ["x", "z"]
 
+## Cómo se ve en el editor de mapas (ver MapPiece.editor_entry).
+const EDITOR := {
+	"name": "Arco de roca", "place": "point",
+	"hint": "Clic para poner un arco de roca. El puntito del extremo lo gira.",
+	"fields": {
+		"angle": "Ángulo (°)", "span": "Ancho (m)", "height": "Alto (m)",
+		"shape_seed": {"label": "Variante", "kind": "variant"},
+		"stone_color": "Piedra", "moss_color": "Musgo",
+	},
+}
+
 ## Centro del arco (al nivel del agua).
 var x: float = 0.0
 var z: float = 0.0

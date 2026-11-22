@@ -6,6 +6,16 @@ extends MapPiece
 
 const REQUIRED := ["x", "z"]
 
+## Cómo se ve en el editor de mapas (ver MapPiece.editor_entry).
+const EDITOR := {
+	"name": "Géiser", "place": "point",
+	"hint": "Clic para poner un géiser (mejor sobre la pista).",
+	"fields": {
+		"phase": "Desfase (s)", "calm": "Tranquilo (s)", "warn": "Aviso (s)",
+		"erupt": "Chorro (s)", "launch_speed": "Fuerza (m/s)",
+	},
+}
+
 var x: float = 0.0
 var z: float = 0.0
 ## Desfase del ciclo (s), para que no exploten todos juntos.

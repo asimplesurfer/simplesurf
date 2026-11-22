@@ -13,6 +13,20 @@ extends MapPiece
 
 const REQUIRED := ["shape"]
 
+## Cómo se ve en el editor de mapas (ver MapPiece.editor_entry).
+const EDITOR := {
+	"name": "Isla tropical", "place": "shape", "solid": true, "what": "una isla",
+	"hint": "Dibujá la figura de la isla tropical como la pista (clic: punto, arrastrar: curva) y cerrala tocando el primer punto. Puede tener cualquier forma.",
+	"fields": {
+		"crowd": {"label": "Público en la playa", "kind": "numbool"},
+		"beach_width": {"label": "Playa", "kind": "level", "options": [[3, "Angosta"], [5, "Normal"], [8, "Ancha"], [12, "Muy ancha"]]},
+		"palm_density": {"label": "Palmeras", "kind": "level", "options": [[0.5, "Pocas"], [1.2, "Normal"], [2, "Muchas"], [3, "Selva"]]},
+		"rocks": {"label": "Piedras en la arena", "kind": "level", "options": [[0, "Ninguna"], [3, "Algunas"], [6, "Muchas"]]},
+		"sand_color": "Color de la arena", "grass_color": "Color del pasto", "leaf_color": "Color de las hojas",
+		"shape_seed": {"label": "Variante", "kind": "variant"},
+	},
+}
+
 ## Contorno visto desde arriba: [[x, z], {"p": [x, z], "in": [..], "out": [..]}, ...].
 var shape: Array = []
 ## Ancho de la franja de arena antes de la selva (m).

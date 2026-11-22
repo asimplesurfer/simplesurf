@@ -5,6 +5,13 @@ extends MapPiece
 
 const REQUIRED := ["x", "z"]
 
+## Cómo se ve en el editor de mapas (ver MapPiece.editor_entry).
+const EDITOR := {
+	"name": "Barco hundido", "place": "point",
+	"hint": "Clic para poner un barco hundido.",
+	"fields": {"angle": "Ángulo (°)", "size": "Tamaño"},
+}
+
 var x: float = 0.0
 var z: float = 0.0
 ## Hacia dónde apunta la proa (grados).

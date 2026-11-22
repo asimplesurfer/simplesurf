@@ -13,7 +13,8 @@ extends RefCounted
 ## van en una constante REQUIRED de la pieza (const REQUIRED := ["shape"]) y el
 ## mapa tiene que darlos.
 ##
-## Agregar una pieza nueva = agregar un archivo acá (no se toca nada más).
+## Agregar una pieza nueva = agregar un archivo acá (no se toca nada más; el
+## editor de mapas la toma sola, ver EDITOR más abajo).
 
 const FOLDER := "res://world/pieces/"
 
@@ -115,6 +116,101 @@ func affect_rider(_course: Course, _rider: Rider) -> bool:
 ## En cada paso de física (una vez, no por surfista).
 func update(_course: Course, _delta: float) -> void:
 	pass
+
+
+# ------------------------------------------------------------ editor de mapas
+
+## El editor de mapas (tools/map_editor) arma sus herramientas con lo que dice
+## cada pieza: no hay que tocarlo para sumar una. Cada pieza tiene su
+## constante EDITOR := {...}:
+## - "name": cómo se llama ("Géiser").
+## - "place": cómo se pone: "point" (un clic: x, z), "shape" (figura cerrada),
+##   "path" (línea abierta) o "two_points" (dos puntas: a, b).
+## - "key": para "shape" y "path", la variable con los puntos (por defecto
+##   "shape" o "path").
+## - "solid": true si se choca (el editor avisa si pisa la pista).
+## - "what": cómo se nombra mientras se dibuja ("una isla").
+## - "hint": la ayuda que se ve al elegir la herramienta.
+## - "fields": opcional, por parámetro, cuando lo automático no alcanza: un
+##   texto (la etiqueta) o {"label", "kind", "options"}. Lo automático: la
+##   etiqueta es el comentario ## de la variable y el campo sale de su tipo.
+##   "kind" puede ser num, int, bool, color, text, choice o level (una lista
+##   de opciones [valor, nombre]), numbool (sí/no que se guarda 1 o 0) o
+##   variant (semilla con botón para sortear otra).
+const PLACES := ["point", "shape", "path", "two_points"]
+## Tipos de variable que son campos del editor, y el campo de cada uno.
+const FIELD_KINDS := {TYPE_FLOAT: "num", TYPE_INT: "int", TYPE_BOOL: "bool", TYPE_COLOR: "color", TYPE_STRING: "text"}
+
+
+## Todas las piezas de world/pieces/, como las ve el editor (ver editor_entry).
+static func editor_catalog() -> Array:
+	var out := []
+	var files := DirAccess.get_files_at(FOLDER)
+	files.sort()
+	for f in files:
+		var file := f.trim_suffix(".remap")
+		if file.get_extension() != "gd" or file == "map_piece.gd":
+			continue
+		# Faltan los parámetros obligatorios, pero para leerla alcanza.
+		var piece := create({"type": file.get_basename()})
+		if piece:
+			out.append(piece.editor_entry())
+	return out
+
+
+## Esta pieza para el editor: {type, name, place, key, solid, what, hint,
+## required, params: [[nombre, etiqueta, campo, valor por defecto, opciones?]]}.
+func editor_entry() -> Dictionary:
+	var script := get_script() as GDScript
+	var consts := script.get_script_constant_map()
+	var ed: Dictionary = consts.get("EDITOR", {})
+	var place := str(ed.get("place", ""))
+	var key := str(ed.get("key", "path" if place == "path" else "shape"))
+	var fields: Dictionary = ed.get("fields", {})
+	var comments := _var_comments(script.source_code)
+	# Lo que dice dónde está la pieza no es un campo: se edita en el mapa.
+	var skip: Array = {"point": ["x", "z"], "two_points": ["a", "b"], "shape": [key], "path": [key]}.get(place, [])
+	var rows := []
+	var known := params()
+	for name in known:
+		if skip.has(name) or not FIELD_KINDS.has(known[name]):
+			continue
+		var f: Variant = fields.get(name, {})
+		if f is String:
+			f = {"label": f}
+		var row := [
+			name, str(f.get("label", comments.get(name, String(name).capitalize()))),
+			str(f.get("kind", FIELD_KINDS[known[name]])), to_json(get(name)),
+		]
+		if f.has("options"):
+			row.append(f.options)
+		rows.append(row)
+	var entry := {
+		"type": type, "name": str(ed.get("name", type.capitalize())), "place": place,
+		"solid": bool(ed.get("solid", false)), "what": str(ed.get("what", "")),
+		"hint": str(ed.get("hint", "")), "required": consts.get("REQUIRED", []), "params": rows,
+	}
+	if place == "shape" or place == "path":
+		entry["key"] = key
+	return entry
+
+
+## La primera línea del comentario ## que está justo arriba de cada variable
+## (sin el punto final): {nombre: texto}.
+static func _var_comments(source: String) -> Dictionary:
+	var out := {}
+	var pending := ""
+	for line in source.split("\n"):
+		var l := line.strip_edges()
+		if l.begins_with("##"):
+			if pending.is_empty():
+				pending = l.trim_prefix("##").strip_edges()
+			continue
+		if l.begins_with("var ") and not pending.is_empty():
+			var name := l.trim_prefix("var ").get_slice(":", 0).get_slice("=", 0).strip_edges()
+			out[name] = pending.trim_suffix(".")
+		pending = ""
+	return out
 
 
 static func from_json(v: Variant, t: int) -> Variant:
