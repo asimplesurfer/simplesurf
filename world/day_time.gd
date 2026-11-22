@@ -17,6 +17,12 @@ var time: GameSettings.TimeOfDay = GameSettings.TimeOfDay.DAY
 static func apply(main: Node, t: int) -> DayTime:
 	main.set_meta("time_of_day", t)
 	if t == GameSettings.TimeOfDay.DAY:
+		# De día, el mar lejano de la base (el agua ya la pone Water: ver WaterPalette).
+		var world_env := main.get_node_or_null("WorldEnvironment") as WorldEnvironment
+		if world_env and world_env.environment and world_env.environment.sky:
+			var sky_mat := world_env.environment.sky.sky_material as ShaderMaterial
+			if sky_mat:
+				sky_mat.set_shader_parameter("ocean_color", WaterPalette.BASE.ocean_color)
 		return null
 	var d := DayTime.new()
 	d.name = "DayTime"
@@ -70,6 +76,8 @@ func _paint(main: Node) -> void:
 			env.sky.sky_material = sky
 			for k in (_NIGHT_SKY if night else _SUNSET_SKY):
 				sky.set_shader_parameter(k, (_NIGHT_SKY if night else _SUNSET_SKY)[k])
+			# El mar lejano es un color del agua (ver WaterPalette).
+			sky.set_shader_parameter("ocean_color", WaterPalette.colors(climate()).ocean_color)
 		world_env.environment = env
 	var sun := main.get_node_or_null("Sun") as DirectionalLight3D
 	if sun:
@@ -85,9 +93,12 @@ func _paint(main: Node) -> void:
 			sun.rotation = Vector3(-0.32, 0.61, 0.0)
 	var water := main.get_node_or_null("Water") as Water
 	if water:
-		var mat := water.shader_material()
-		for k in (_NIGHT_WATER if night else _SUNSET_WATER):
-			mat.set_shader_parameter(k, (_NIGHT_WATER if night else _SUNSET_WATER)[k])
+		WaterPalette.apply_to_water(water.shader_material(), climate())
+
+
+## Nombre del clima del agua para esta hora (ver WaterPalette).
+func climate() -> String:
+	return WaterPalette.NIGHT if time == GameSettings.TimeOfDay.NIGHT else WaterPalette.SUNSET
 
 
 const _NIGHT_SKY := {
@@ -101,7 +112,6 @@ const _NIGHT_SKY := {
 	"cloud_warm": Color(0.26, 0.28, 0.42),
 	"island_color": Color(0.03, 0.05, 0.09),
 	"island_far_color": Color(0.07, 0.09, 0.17),
-	"ocean_color": Color(0.04, 0.07, 0.15),
 	"cloud_coverage": 0.3,
 	"stars": 1.0,
 	"moon": 1.0,
@@ -117,29 +127,4 @@ const _SUNSET_SKY := {
 	"cloud_warm": Color(1.0, 0.6, 0.38),
 	"island_color": Color(0.36, 0.3, 0.42),
 	"island_far_color": Color(0.7, 0.55, 0.6),
-	"ocean_color": Color(0.62, 0.5, 0.55),
-}
-const _NIGHT_WATER := {
-	# Mar de noche con luz de luna: azul profundo pero que se lee bien (no negro).
-	"deep_color": Color(0.06, 0.13, 0.26),
-	"shallow_color": Color(0.11, 0.23, 0.38),
-	"wave_color": Color(0.15, 0.34, 0.47),
-	"outside_color": Color(0.05, 0.11, 0.22),
-	"rising_color": Color(0.05, 0.12, 0.24),
-	"sky_tint": Color(0.28, 0.36, 0.6),
-	"reef_color": Color(0.16, 0.36, 0.45),
-	"foam_color": Color(0.7, 0.78, 0.92),
-	"glow_color": Color(0.2, 0.55, 0.75),
-	"glow_strength": 0.18,
-}
-const _SUNSET_WATER := {
-	"deep_color": Color(0.06, 0.13, 0.27),
-	"shallow_color": Color(0.16, 0.25, 0.4),
-	"wave_color": Color(0.3, 0.42, 0.52),
-	"outside_color": Color(0.05, 0.1, 0.22),
-	"sky_tint": Color(0.95, 0.65, 0.55),
-	# Arrecifes: apenas más claros que el mar, con el reflejo cálido del cielo
-	# (el turquesa de día queda pegado encima).
-	"reef_color": Color(0.64, 0.56, 0.56),
-	"foam_color": Color(1.0, 0.9, 0.85),
 }

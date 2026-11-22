@@ -57,6 +57,14 @@ const TURBO_CHARGE := NITRO_MAX / TURBO_CHARGES
 
 ## Rumbo en radianes (rotación alrededor de Y). 0 = mirando hacia -Z.
 var heading: float = 0.0
+## Posición y rumbo del paso de física anterior: lo visual (personaje y cámara)
+## se dibuja entre ese paso y el actual, así se mueve parejo aunque los cuadros
+## por segundo no coincidan con los pasos de física (si no, va a tirones).
+var _prev_pos: Vector3
+var _prev_heading: float = 0.0
+var _has_prev: bool = false
+## Más que esto entre dos pasos es un salto a propósito (reaparecer): sin mezcla.
+const RENDER_SNAP_DISTANCE := 4.0
 var speed: float = 0.0
 var vertical_speed: float = 0.0
 ## true si está apoyado en el agua (no en el aire).
@@ -211,6 +219,9 @@ func _physics_process(delta: float) -> void:
 	# La física va en pasos fijos (1/60 s, ver project.godot): la misma altura,
 	# velocidad y distancia con cualquier cantidad de FPS. Lo visual (animación,
 	# cámara, HUD) se dibuja en _process y solo lee este estado.
+	_prev_pos = position
+	_prev_heading = heading
+	_has_prev = true
 	input = controller.get_input(delta)
 	if controls_locked:
 		input = RiderInput.new()
@@ -398,6 +409,24 @@ static func _shove_pair(hitter: Rider, victim: Rider, n: Vector3, closing: float
 	victim.heading -= side * BUMP_TURN * strength
 	victim.bumped.emit(n, strength)
 	hitter.bumped_other.emit(victim)
+
+
+## Transform con que se dibuja: entre el paso de física anterior y el actual
+## (según cuánto del próximo paso ya pasó). Lo usan el personaje y la cámara.
+func render_transform() -> Transform3D:
+	if not _has_prev or not is_physics_processing() or _prev_pos.distance_to(position) > RENDER_SNAP_DISTANCE:
+		return global_transform
+	var f := clampf(Engine.get_physics_interpolation_fraction(), 0.0, 1.0)
+	var local := Transform3D(
+		Basis(Vector3.UP, lerp_angle(_prev_heading, heading, f)), _prev_pos.lerp(position, f)
+	)
+	var parent := get_parent() as Node3D
+	return parent.global_transform * local if parent else local
+
+
+## Hacia dónde mira lo que se dibuja (ver render_transform).
+func render_forward() -> Vector3:
+	return -render_transform().basis.z
 
 
 func forward() -> Vector3:

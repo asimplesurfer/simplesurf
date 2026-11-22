@@ -301,6 +301,8 @@ func _process(delta: float) -> void:
 	if rider == null:
 		return
 	_time += delta
+	# Se dibuja entre el paso de física anterior y el actual (ver Rider.render_transform).
+	transform = rider.global_transform.affine_inverse() * rider.render_transform()
 	var stage := rider.recovery_stage
 
 	# Inclinación: seguir la normal del agua, ponerse de costado al derrapar

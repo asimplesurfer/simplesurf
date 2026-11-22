@@ -7,6 +7,8 @@ func run() -> void:
 	_test_pieces()
 	_test_bezier()
 	_test_start_straight()
+	_test_edges_on_border()
+	_test_water_palette()
 	await _test_cave()
 	await _test_cave_map()
 	await _test_tropical_island()
@@ -47,6 +49,49 @@ func _test_map_files() -> void:
 		and again.laps == atoll.laps,
 		"un mapa se puede exportar y volver a leer igual"
 	)
+
+
+## Boyas y corcheras: todas en el borde real de la pista. En las curvas
+## cerradas el borde de adentro hacía un rulo y dejaba boyas dentro de la pista
+## (se atravesaban) y corcheras cruzadas.
+func _test_edges_on_border() -> void:
+	print("Boyas en el borde:")
+	for m in TrackMap.all():
+		if m.is_ring():
+			continue
+		var t := PathTrack.new(m.path, m.half_width, m.handles_in, m.handles_out, m.smoothing, m.start)
+		var markers := CourseMarkers.new()
+		markers.track = t
+		var inside := 0
+		var total := 0
+		for side in [-1.0, 1.0]:
+			var lat: float = side * m.half_width
+			var n := int(t.length() / 2.0)
+			for i in n:
+				var p := t.position_at(TAU * i / n, lat)
+				if markers._on_edge(p, lat):
+					total += 1
+					if absf(t.lateral_of(p)) < m.half_width - 1.0:
+						inside += 1
+		markers.free()
+		_check(inside == 0 and total > 0, "%s: ninguna boya adentro de la pista (%d en el borde)" % [m.name, total])
+
+
+## Colores del agua: una base (día) y los climas salen de ella.
+func _test_water_palette() -> void:
+	print("Colores del agua por clima:")
+	for climate in WaterPalette.CLIMATES:
+		var cols := WaterPalette.colors(climate)
+		var own: Dictionary = WaterPalette.CLIMATES[climate].colors
+		var all_keys := WaterPalette.BASE.keys().all(func(k: String) -> bool: return cols.has(k))
+		# Lo que el clima no decide no queda con el color del día: se ajusta solo.
+		var leaked := WaterPalette.BASE.keys().filter(
+			func(k: String) -> bool: return not own.has(k) and cols[k] == WaterPalette.BASE[k]
+		)
+		var own_kept := own.keys().all(func(k: String) -> bool: return cols[k] == own[k])
+		_check(all_keys and leaked.is_empty() and own_kept, "%s: todos los colores del agua, propios o sacados de la base %s" % [climate, leaked])
+	var sunset_far: Color = WaterPalette.colors(WaterPalette.SUNSET).ocean_color
+	_check(sunset_far.r > sunset_far.b + 0.2, "al atardecer el mar lejano es naranja (no celeste)")
 
 
 func _test_pieces() -> void:
