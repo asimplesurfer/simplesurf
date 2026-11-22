@@ -145,7 +145,9 @@ adentro (a `beach_width` de la orilla, un poco irregular) empieza la selva.
 Del lado que da a la pista la vegetación va tupida; atrás, más rala (pesa
 menos y casi no se ve). En la orilla que mira a la pista hay público (gente
 alentando, sillas, reposeras, toallas, sombrillas y banderas): `crowd` dice
-cuánto (1 normal, 0 nadie, 2 el doble).
+cuánto (1 normal, 0 nadie, 2 el doble). Si el mapa no lo dice es automático:
+hay público si la isla queda a menos de 20 m de la pista y no hay si está más
+lejos (ahí no se ve y pesa).
 
 Para partir una isla en dos se dibuja un corte (`island_split`): una línea
 abierta que cruce la isla de mar a mar. Cada isla tropical que cruza queda

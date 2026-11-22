@@ -321,7 +321,7 @@ func _test_night() -> void:
 	GameSettings.track_layout = TrackMap.index_of("archipelago")
 	var d: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://world/maps/archipelago.json"))
 	d.pieces = [
-		{"type": "tropical_island", "shape": ISLAND_SHAPE},
+		{"type": "tropical_island", "shape": ISLAND_SHAPE, "crowd": 1},
 		{"type": "island_split", "path": [[170, -20], [290, -20]], "width": 14},
 		{"type": "light_string", "a": [225, -60], "b": [225, 10], "lines": 2, "style": "fria"},
 	]
@@ -352,7 +352,7 @@ func _test_tropical_island() -> void:
 	GameSettings.track_layout = TrackMap.index_of("archipelago")
 	var d: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://world/maps/archipelago.json"))
 	d.pieces = [
-		{"type": "tropical_island", "shape": ISLAND_SHAPE},
+		{"type": "tropical_island", "shape": ISLAND_SHAPE, "crowd": 1},
 		{"type": "island_split", "path": [[170, -20], [290, -20]], "width": 14},
 		{"type": "light_string", "a": [225, -60], "b": [225, 10], "lines": 4, "style": "navidad"},
 	]
@@ -470,6 +470,22 @@ func _test_tropical_island() -> void:
 		"puntos de fiesta (%d) y la gente sabe dónde están los surfistas" % parties)
 	_check(spots > 4 and far_from_shore == 0 and crowd_meshes <= 2 * (BeachCrowd.STANDING + BeachCrowd.SITTING + 5),
 		"público en la orilla que da a la pista (%d cosas, %d lejos del agua, %d mallas)" % [spots, far_from_shore, crowd_meshes])
+	# Público automático (si el mapa no lo dice): cerca de la pista hay, lejos no.
+	var edge := course.track.position_at(0.5, course.half_width + 6.0)
+	var out := (edge - course.track.position_at(0.5, 0.0)).normalized() * 30.0
+	var along := course.track.tangent_at(0.5) * 20.0
+	var near_shape := []
+	for q in [edge - along, edge + along, edge + out]:
+		near_shape.append([q.x, q.z])
+	var near := MapPiece.create({"type": "tropical_island", "shape": near_shape}) as TropicalIslandPiece
+	near.prepare(course)
+	var far := MapPiece.create({"type": "tropical_island", "shape": [[1500, 1500], [1560, 1500], [1530, 1550]]}) as TropicalIslandPiece
+	far.prepare(course)
+	var far_on := MapPiece.create({"type": "tropical_island", "shape": [[1500, 1500], [1560, 1500], [1530, 1550]], "crowd": 1}) as TropicalIslandPiece
+	far_on.prepare(course)
+	_check(near.crowd < 0.0 and near.crowd_amount(course) == 1.0 and far.crowd_amount(course) == 0.0,
+		"público automático: una isla a %.0f m de la pista tiene, una a %.0f m no" % [near.track_gap(course), far.track_gap(course)])
+	_check(far_on.crowd_amount(course) == 1.0, "si el mapa pide público, lo tiene aunque esté lejos")
 	var covered := func(x: float, z: float) -> bool:
 		for p in parts:
 			if p.covers(x, z):
