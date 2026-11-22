@@ -45,7 +45,7 @@ func _test_map_files() -> void:
 	var atoll := maps[TrackMap.index_of("atoll")]
 	var again := TrackMap.from_dict(JSON.parse_string(JSON.stringify(atoll.to_dict())))
 	_check(
-		again.path == atoll.path and again.islands == atoll.islands and again.pieces == atoll.pieces
+		again.path == atoll.path and again.pieces == atoll.pieces
 		and again.laps == atoll.laps,
 		"un mapa se puede exportar y volver a leer igual"
 	)
@@ -269,11 +269,7 @@ func _test_cave_map() -> void:
 			fall = p
 	_check(cave != null and course.get_node_or_null("Cave/Rock") != null, "hay una cueva sobre la pista")
 	_check(fall != null and course.get_node_or_null("Waterfall/Curtain") != null, "hay una cascada")
-	var clear := true
-	for isl in course.islands:
-		if absf(course.track.lateral_of(isl.position)) < course.track.half_width + isl.radius + 0.5:
-			clear = false
-	_check(clear, "las islas no pisan la pista")
+	_check(_land_clear_of_track(course, 0.5), "las islas no pisan la pista")
 	# La cascada cruza la pista en la salida de la cueva.
 	var on_track := absf(course.track.lateral_of(Vector3(fall.x, 0, fall.z))) < 6.0
 	var at_exit := false
@@ -359,11 +355,6 @@ func _test_tropical_island() -> void:
 		{"type": "island_split", "path": [[170, -20], [290, -20]], "width": 14},
 		{"type": "light_string", "a": [225, -60], "b": [225, 10], "lines": 4, "style": "navidad"},
 	]
-	var keep: Array = []
-	for i in d.islands:
-		if Vector2(i.x, i.z).distance_to(Vector2(230, -10)) > 110:
-			keep.append(i)
-	d.islands = keep
 	var m: Node = load("res://main.tscn").instantiate()
 	var course := m.get_node("Course") as Course
 	course.map = TrackMap.from_dict(d)
@@ -431,7 +422,7 @@ func _test_tropical_island() -> void:
 			if BezierShape.distance_to_edge(p._outline, spot) > TropicalIslandPiece.CROWD_DEPTH + 1.0:
 				far_from_shore += 1
 	# Las olas grandes no pasan por encima de las islas tropicales: se apagan
-	# sobre la isla y cerca de la orilla, como con las islas redondas.
+	# sobre la isla y cerca de la orilla.
 	var water := m.get_node("Water") as Water
 	var on_isle := water._island_fade(Vector2(225, -60))
 	var shore := water._island_fade(Vector2(255, -60))
@@ -544,7 +535,7 @@ func _test_archipelago() -> void:
 	var course := m.get_node("Course") as Course
 	var track := course.track
 	_check(track is PathTrack, "el recorrido no es un círculo")
-	_check(course.islands.size() >= 12, "hay muchas islas (%d)" % course.islands.size())
+	_check(course.registered("ground").size() >= 12, "hay muchas islas (%d)" % course.registered("ground").size())
 	_check(
 		track.length() > 700.0 and track.length() < 1000.0,
 		"una vuelta mide %.0f m" % track.length()
@@ -578,20 +569,14 @@ func _test_archipelago() -> void:
 	_check(lefts > 10 and rights > 10, "hay curvas a los dos lados (%d / %d)" % [lefts, rights])
 
 	# Ninguna isla pisa la pista.
-	var clear := true
-	for isl in course.islands:
-		var lat := absf(track.lateral_of(isl.position))
-		if lat < track.half_width + isl.radius + 4.0:
-			clear = false
-			print("    isla en %s muy cerca (%.1f m)" % [isl.position, lat])
-	_check(clear, "las islas no pisan la pista")
+	_check(_land_clear_of_track(course, 4.0), "las islas no pisan la pista")
 	# Desde cualquier lugar de la pista se ven islas cerca.
 	var always_islands := true
 	for i in 30:
 		var p := track.position_at(-PI + TAU * i / 30.0)
 		var near := 0
-		for isl in course.islands:
-			if Vector2(p.x - isl.position.x, p.z - isl.position.z).length() < 130.0:
+		for o in course.land_outlines():
+			if BezierShape.distance_to_edge(o, Vector2(p.x, p.z)) < 110.0:
 				near += 1
 		if near < 2:
 			always_islands = false
@@ -601,9 +586,8 @@ func _test_archipelago() -> void:
 	var island_crashes := [0]
 	for r in race.racers:
 		r.crashed.connect(func() -> void:
-			for isl in course.islands:
-				if Vector2(r.position.x - isl.position.x, r.position.z - isl.position.z).length() < isl.radius + 8.0:
-					island_crashes[0] += 1
+			if _distance_to_land(course, Vector2(r.position.x, r.position.z)) < 8.0:
+				island_crashes[0] += 1
 		)
 	var finished := false
 	var waves := m.get_node("WaveManager") as WaveManager
@@ -669,20 +653,10 @@ func _test_atoll() -> void:
 		track.length() > 1000.0 and track.length() < 1300.0,
 		"una vuelta mide %.0f m" % track.length()
 	)
-	var volcano := false
-	for isl in course.islands:
-		if isl is VolcanoPiece.VolcanoIsland:
-			volcano = true
-	_check(volcano, "hay un volcán en el medio")
+	_check(_distance_to_land(course, Vector2.ZERO) == 0.0, "hay una isla en el medio de la laguna")
 	_check(course.get_node_or_null("RockArch") != null, "hay un arco de roca sobre el paso norte")
 	_check(course.get_node_or_null("Shipwreck") != null, "hay un barco hundido en la laguna")
-	var clear := true
-	for isl in course.islands:
-		var lat := absf(track.lateral_of(isl.position))
-		if lat < track.half_width + isl.radius + 0.5:
-			clear = false
-			print("    isla en %s muy cerca (%.1f m)" % [isl.position, lat])
-	_check(clear, "las islas no pisan la pista")
+	_check(_land_clear_of_track(course, 0.5), "las islas no pisan la pista")
 	var geysers := _geysers(course)
 	_check(geysers.size() >= 3, "hay géiseres en la laguna (%d)" % geysers.size())
 	# Tormenta: cielo gris, poca luz, mar picado, rayos con trueno.
@@ -756,9 +730,8 @@ func _test_atoll() -> void:
 	var island_crashes := [0]
 	for r in race.racers:
 		r.crashed.connect(func() -> void:
-			for isl in course.islands:
-				if Vector2(r.position.x - isl.position.x, r.position.z - isl.position.z).length() < isl.radius + 8.0:
-					island_crashes[0] += 1
+			if _distance_to_land(course, Vector2(r.position.x, r.position.z)) < 8.0:
+				island_crashes[0] += 1
 		)
 	var finished := false
 	for i in int(200.0 * FPS):
@@ -801,3 +774,26 @@ func _geysers(course: Course) -> Array[Geyser]:
 		if course.is_ancestor_of(n):
 			out.append(n as Geyser)
 	return out
+
+
+## Distancia de p a la tierra más cercana (0 si está encima).
+func _distance_to_land(course: Course, p: Vector2) -> float:
+	var best := INF
+	for o in course.land_outlines():
+		if Geometry2D.is_point_in_polygon(p, o):
+			return 0.0
+		best = minf(best, BezierShape.distance_to_edge(o, p))
+	return best
+
+
+## Ninguna isla llega a menos de `margin` metros del borde de la pista.
+func _land_clear_of_track(course: Course, margin: float) -> bool:
+	var ok := true
+	for i in 300:
+		var p := course.track.position_at(-PI + TAU * i / 300.0)
+		var d := _distance_to_land(course, Vector2(p.x, p.z))
+		if d < course.half_width + margin:
+			ok = false
+			print("    isla a %.1f m del centro de la pista en (%d, %d)" % [d, p.x, p.z])
+			break
+	return ok

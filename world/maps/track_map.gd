@@ -1,7 +1,7 @@
 class_name TrackMap
 extends RefCounted
-## Los datos de un mapa: el recorrido, las islas, cuántos obstáculos tiene y
-## sus piezas (volcán, géiseres, cuevas...: ver world/pieces/map_piece.gd).
+## Los datos de un mapa: el recorrido, cuántos obstáculos tiene y sus piezas
+## (islas, géiseres, cuevas...: ver world/pieces/map_piece.gd).
 ## Cada mapa es un archivo .json en world/maps/: agregar un mapa = agregar un
 ## archivo, no tocar código. Course lo lee y arma todo. El editor de mapas lee y
 ## escribe este mismo formato (ver world/maps/README.md).
@@ -30,7 +30,8 @@ var laps: int = 3
 ## Recorrido: puntos (x, z) en el sentido de la carrera, con manijas Bézier
 ## opcionales (relativas al punto). Una manija que no está (null) es automática:
 ## la curva pasa suave por los puntos vecinos. Una manija (0, 0) hace esquina.
-## Vacío = un anillo alrededor de la primera isla, de radio `ring_radius`.
+## Vacío = un anillo de radio `ring_radius` alrededor del centro del mapa
+## (0, 0). Que haya una isla en el medio es opcional: se dibuja como cualquiera.
 var path: PackedVector2Array = PackedVector2Array()
 var handles_in: Array = []
 var handles_out: Array = []
@@ -42,8 +43,6 @@ var smoothing: int = 60
 var ring_radius: float = 82.0
 ## Mitad del ancho de la pista (m).
 var half_width: float = 20.0
-## Islas: [{x, z, radius, lighthouse, seed}]. La primera es la principal.
-var islands: Array[Dictionary] = []
 var ring_count: int = 10
 var rock_count: int = 12
 ## Piezas del mapa, tal como vienen en el archivo ({"type": ..., parámetros}).
@@ -110,7 +109,7 @@ static func index_of(map_id: String) -> int:
 	return -1
 
 
-## true si el recorrido es un anillo alrededor de la isla principal.
+## true si el recorrido es un anillo (ver `path`).
 func is_ring() -> bool:
 	return path.is_empty()
 
@@ -165,17 +164,9 @@ static func from_dict(d: Dictionary, errors: PackedStringArray = PackedStringArr
 		m.start = st
 	if not m.path.is_empty() and m.path.size() < (1 if not m.start.is_empty() else 3):
 		errors.append("el recorrido necesita al menos 3 puntos")
-	for isl in d.get("islands", []):
-		if not isl is Dictionary or not isl.has("x") or not isl.has("z") or not isl.has("radius"):
-			errors.append("isla mal escrita (necesita x, z y radius): %s" % str(isl))
-			continue
-		m.islands.append({
-			"x": float(isl.x), "z": float(isl.z), "radius": float(isl.radius),
-			"lighthouse": bool(isl.get("lighthouse", false)),
-			"seed": int(isl.get("seed", -1)),
-		})
-	if m.path.is_empty() and m.islands.is_empty():
-		errors.append("un mapa sin recorrido (anillo) necesita una isla en el medio")
+	var round_islands: Variant = d.get("islands")
+	if round_islands is Array and not (round_islands as Array).is_empty():
+		errors.append("las islas redondas ya no existen: las islas son piezas \"tropical_island\"")
 	for p in d.get("pieces", []):
 		if not p is Dictionary:
 			errors.append("pieza mal escrita: %s" % str(p))
@@ -201,7 +192,7 @@ func to_dict() -> Dictionary:
 	var d := {
 		"format": FORMAT, "id": id, "name": name, "order": order, "laps": laps,
 		"half_width": half_width, "ring_count": ring_count, "rock_count": rock_count,
-		"islands": islands, "pieces": pieces,
+		"pieces": pieces,
 	}
 	if path.is_empty():
 		d["ring_radius"] = ring_radius

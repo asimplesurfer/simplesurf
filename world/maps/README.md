@@ -37,11 +37,8 @@ puede abrir en el editor para cambiarlo.
   "half_width": 20,         // mitad del ancho de la pista (m)
   "ring_count": 14,         // círculos de nitro
   "rock_count": 12,         // rocas sobre la pista
-  "islands": [
-    {"x": 330, "z": 0, "radius": 40, "lighthouse": true, "seed": 130}
-  ],
-  "pieces": [
-    {"type": "volcano", "x": 0, "z": 0, "radius": 40},
+  "pieces": [               // islas, géiseres, cuevas... (ver Piezas)
+    {"type": "tropical_island", "shape": [[300, -40], [360, 0], [300, 40]]},
     {"type": "geyser", "x": -85.2, "z": -44.4, "phase": 0}
   ]
 }
@@ -74,10 +71,12 @@ puede abrir en el editor para cambiarlo.
   pista sale de la punta de adelante, pasa por los puntos de `path` y vuelve
   por la de atrás. El suavizado no toca la recta, así los surfistas arrancan
   mirando hacia donde va la pista. Sin `start`, la meta va en el primer punto.
-- **Sin `path`**: la pista es un anillo de radio `ring_radius` alrededor de la
-  primera isla (el mapa "isla").
-- **Islas**: `lighthouse` pone un faro. `seed` cambia dónde salen las palmeras;
-  si no está, sale del lugar de la isla.
+- **Sin `path`**: la pista es un anillo de radio `ring_radius` alrededor del
+  centro del mapa (0, 0), como el mapa "Anillo". Una isla en el medio es
+  opcional: se dibuja como cualquier otra.
+- **Islas**: todas son piezas `tropical_island` (ver abajo). Ya no hay islas
+  redondas aparte (`islands`): un mapa que las tenga no se carga. El editor
+  las pasa solo a islas tropicales redondas al importarlo.
 
 ## Piezas
 
@@ -88,7 +87,6 @@ pieza se puede repetir todas las veces que haga falta.
 
 | Pieza | Qué es | Parámetros |
 |---|---|---|
-| `volcano` | Isla volcán (se choca como una isla) | `x`, `z`, `radius`; `island_seed` |
 | `geyser` | Géiser que explota cada tanto y lanza al que pasa | `x`, `z`; `phase`, `calm`, `warn`, `erupt` (s), `launch_speed` |
 | `rock_arch` | Arco de roca de paisaje, se pasa por debajo | `x`, `z`; `angle` (grados), `span`, `height`, `shape_seed`, `stone_color`, `moss_color` |
 | `shipwreck` | Barco hundido de paisaje | `x`, `z`; `angle` (grados), `size` |
@@ -161,12 +159,15 @@ lista de piezas esté el corte: las islas lo buscan al prepararse (ver
 2. Sus variables son sus parámetros. Los que el mapa tiene que dar sí o sí van en
    `const REQUIRED := ["x", "z"]`.
 3. Hacer lo que necesite, todo dentro de la pieza:
-   - `build(course)`: construirse. Se llama apenas está el recorrido, antes que
-     las islas del mapa.
+   - `build(course)`: construirse. Se llama apenas está el recorrido.
    - `finish(course)`: si necesita ver el mapa entero.
    - `affect_rider(course, rider)`: qué le pasa a un surfista que la toca.
      Devuelve `true` si eso corta el resto del paso, por ejemplo si se cayó.
    - `update(course, delta)`: algo que haga sola en cada paso.
+   - `blocks_track(samples)`: si se choca, el punto de la pista que tapa (o
+     `null`). Lo usa el validador de mapas antes de publicar.
+   - Si es tierra: anotarse como `"ground"` en `prepare` y tener `ground_y(p)`
+     y `outline()` (así el agua y las olas la tienen en cuenta).
 4. Sumarla a la tabla de arriba y al editor de mapas.
 
 `Course` no sabe qué hace cada pieza: solo las arma y las llama.

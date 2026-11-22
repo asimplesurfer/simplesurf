@@ -6,7 +6,7 @@ extends RefCounted
 ## orilla (no es una línea pareja alrededor de la isla). La pendiente no tiene
 ## un borde marcado: las normales se suavizan entre la parte plana y la playa.
 ##
-## La usan las islas redondas (Island) y las tropicales (TropicalIslandPiece).
+## La usan las islas tropicales (TropicalIslandPiece).
 
 ## Cuánto más oscura es la arena mojada.
 const WET_SHADE := 0.74
