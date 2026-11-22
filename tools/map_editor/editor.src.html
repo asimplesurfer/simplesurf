@@ -1410,7 +1410,11 @@ function refreshPanel() {
     for (const [k, label, kind, d, choices] of def?.params || []) {
       let set = (v) => (p[k] = v);
       if (p.type === "light_string" && k === "lines") set = (v) => (p[k] = Math.max(1, Math.min(20, v)));
-      box.append(field(label, kind, p[k] ?? d, set, { id: k, bind: k, choices }));
+      const auto = autoValue(p, s.i, k);
+      box.append(field(label, kind, auto !== null ? auto : p[k] ?? d, set, { id: k, bind: k, choices }));
+      // Automático: se muestra lo que va a pasar en el juego, dicho en palabras.
+      if (auto !== null) box.append(note(auto ? "Automático: tiene público porque está cerca de la pista." : "Automático: sin público porque está lejos de la pista."));
+      else if (def.auto?.[k]) box.append(btn("Volver a automático (según la distancia a la pista)", () => { delete p[k]; commit(); refreshPanel(); }));
     }
     if (p.type === "rock_formation") {
       const { line, shapes } = computed();
@@ -1448,6 +1452,20 @@ function refreshPanel() {
   }
   refreshReview();
   updateButtons();
+}
+// Valor automático de un parámetro (el juego lo decide si el mapa no lo dice):
+// el que va a tener ahora, o null si el mapa ya lo dice.
+function autoValue(p, i, k) {
+  const rule = PIECES[p.type]?.auto?.[k];
+  const row = PIECES[p.type]?.params.find((q) => q[0] === k);
+  if (!rule || (p[k] !== undefined && p[k] !== row?.[3])) return null;
+  const { line, shapes } = computed();
+  const poly = shapes[i];
+  if (!poly || poly.length < 3 || line.length < 3) return 1;
+  // Igual que el juego (TropicalIslandPiece.track_gap): de la orilla al borde de la pista.
+  let gap = Infinity;
+  for (const q of poly) gap = Math.min(gap, distToLine(q, line) - map.half_width);
+  return Math.max(gap, 0) < rule.near_track ? 1 : 0;
 }
 function refreshFieldsValues() {
   // Mientras se arrastra: actualizar números sin rearmar el panel.

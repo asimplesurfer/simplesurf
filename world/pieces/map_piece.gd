@@ -136,7 +136,10 @@ func update(_course: Course, _delta: float) -> void:
 ##   etiqueta es el comentario ## de la variable y el campo sale de su tipo.
 ##   "kind" puede ser num, int, bool, color, text, choice o level (una lista
 ##   de opciones [valor, nombre]), numbool (sí/no que se guarda 1 o 0) o
-##   variant (semilla con botón para sortear otra).
+##   variant (semilla con botón para sortear otra). "auto_near": metros: si
+##   el mapa no dice el valor, es automático (sí cerca de la pista, no lejos).
+## Los textos son para quien arma mapas, no para programadores: ver
+## tools/map_editor/CLAUDE.md.
 const PLACES := ["point", "shape", "path", "two_points"]
 ## Tipos de variable que son campos del editor, y el campo de cada uno.
 const FIELD_KINDS := {TYPE_FLOAT: "num", TYPE_INT: "int", TYPE_BOOL: "bool", TYPE_COLOR: "color", TYPE_STRING: "text"}
@@ -159,7 +162,8 @@ static func editor_catalog() -> Array:
 
 
 ## Esta pieza para el editor: {type, name, place, key, solid, what, hint,
-## required, params: [[nombre, etiqueta, campo, valor por defecto, opciones?]]}.
+## required, params: [[nombre, etiqueta, campo, valor por defecto, opciones?]],
+## auto: {nombre: {"near_track": metros}}}.
 func editor_entry() -> Dictionary:
 	var script := get_script() as GDScript
 	var consts := script.get_script_constant_map()
@@ -171,6 +175,7 @@ func editor_entry() -> Dictionary:
 	# Lo que dice dónde está la pieza no es un campo: se edita en el mapa.
 	var skip: Array = {"point": ["x", "z"], "two_points": ["a", "b"], "shape": [key], "path": [key]}.get(place, [])
 	var rows := []
+	var autos := {}
 	var known := params()
 	for name in known:
 		if skip.has(name) or not FIELD_KINDS.has(known[name]):
@@ -184,11 +189,14 @@ func editor_entry() -> Dictionary:
 		]
 		if f.has("options"):
 			row.append(f.options)
+		if f.has("auto_near"):
+			autos[name] = {"near_track": float(f.auto_near)}
 		rows.append(row)
 	var entry := {
 		"type": type, "name": str(ed.get("name", type.capitalize())), "place": place,
 		"solid": bool(ed.get("solid", false)), "what": str(ed.get("what", "")),
 		"hint": str(ed.get("hint", "")), "required": consts.get("REQUIRED", []), "params": rows,
+		"auto": autos,
 	}
 	if place == "shape" or place == "path":
 		entry["key"] = key

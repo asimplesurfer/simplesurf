@@ -32,8 +32,10 @@ line = next((l for l in run.stdout.splitlines() if l.startswith("PIECES_JSON "))
 if line is None:
     sys.exit("No se pudo leer el catálogo de piezas de Godot:\n" + run.stdout[-2000:] + run.stderr[-2000:])
 pieces = json.loads(line[len("PIECES_JSON "):])
-if not pieces:
-    sys.exit("El catálogo de piezas salió vacío")
+files = [f for f in (root / "world" / "pieces").glob("*.gd") if f.name != "map_piece.gd"]
+if len(pieces) != len(files):
+    missing = sorted({f.stem for f in files} - {p["type"] for p in pieces})
+    sys.exit(f"Godot no pudo leer estas piezas (¿no compilan?): {', '.join(missing)}\n" + run.stderr[-2000:])
 
 src = (here / "editor.src.html").read_text()
 for mark in ("/*MAPS*/", "/*PIECES*/"):
