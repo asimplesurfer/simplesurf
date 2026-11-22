@@ -24,7 +24,7 @@ const SWELL_FIELDS := [
 	"breaking", "age", "lifetime",
 ]
 ## Código de estado (state en RIDER_FIELDS).
-const STATES := ["riding", "airborne", "drifting", "fallen", "paddling"]
+const STATES := ["riding", "airborne", "drifting", "fallen", "paddling", "tube"]
 
 var race: RaceManager
 var _tick: int = 0

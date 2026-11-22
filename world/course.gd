@@ -180,6 +180,9 @@ func _physics_process(delta: float) -> void:
 
 
 func _apply_to_rider(rider: Rider) -> void:
+	# Adentro de un tubo lo lleva la ola: nada del mapa lo toca.
+	if rider.in_tube():
+		return
 	# Lo que hacen las piezas del mapa (una isla que se choca, un géiser que
 	# lanza, una cueva...).
 	for piece in pieces:
@@ -202,13 +205,15 @@ func _apply_to_rider(rider: Rider) -> void:
 		return
 
 	for rock in rocks:
-		if not rider.is_fallen() and rock.is_hitting(rider, _water):
+		# Las que esconde un tubo no están.
+		if rock.visible and not rider.is_fallen() and rock.is_hitting(rider, _water):
 			_crash(rider, _safe_position_beside(rock, rider))
 			return
 
 	if not rider.is_fallen():
 		for ring in rings:
-			ring.try_collect(rider, _time)
+			if ring.visible:
+				ring.try_collect(rider, _time)
 
 
 ## Contra la corchera: nunca se traba. Lo endereza hacia donde avanza la

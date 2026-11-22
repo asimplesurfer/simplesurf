@@ -46,6 +46,8 @@ var _last_tick: int = -1
 var recorder: RaceRecorder
 ## Contrarreloj: tiempos, récords y fantasma (null en las carreras normales).
 var time_trial: TimeTrial
+## Olas tubo para el que va último (null en la contrarreloj y el modo libre).
+var tubes: TubeDirector
 
 
 func _ready() -> void:
@@ -79,6 +81,13 @@ func _ready() -> void:
 		recorder.name = "Recorder"
 		recorder.race = self
 		add_child(recorder)
+	# Olas tubo para el que va último: en la carrera (y la demo), no en la
+	# contrarreloj (los tiempos dejarían de compararse) ni en el modo libre.
+	if not config.is_explore() and not config.is_time_trial():
+		tubes = TubeDirector.new()
+		tubes.name = "Tubes"
+		add_child(tubes)
+		tubes.setup(self)
 	if with_warmup:
 		# Durante la cuenta, se dibujan una vez todos los materiales (sin tirones
 		# la primera vez que aparece un efecto).
