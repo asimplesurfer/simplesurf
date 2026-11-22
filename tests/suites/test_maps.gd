@@ -374,9 +374,20 @@ func _test_tropical_island() -> void:
 	var isl := course.get_node_or_null("TropicalIsland")
 	_check(isl != null and isl.get_node_or_null("Sand") != null and isl.get_node_or_null("Grass") != null, "tiene arena y pasto")
 	var palms := 0
+	var in_sand := 0
 	for p in course.pieces:
 		if p is TropicalIslandPiece:
-			palms += (p as TropicalIslandPiece).palm_count()
+			var piece := p as TropicalIslandPiece
+			palms += piece.palm_count()
+			# Ninguna palmera en medio de la playa (solo en el pasto o pegadas a él).
+			for node in course.find_children("*Palms*", "MultiMeshInstance3D", true, false):
+				var mm := (node as MultiMeshInstance3D).multimesh
+				for k in mm.instance_count:
+					var o := mm.get_instance_transform(k).origin
+					var q := Vector2(o.x, o.z)
+					if Geometry2D.is_point_in_polygon(q, piece._outline) and not piece._near_grass(q, TropicalIslandPiece.PALM_SAND_REACH + 0.5):
+						in_sand += 1
+	_check(in_sand == 0, "ninguna palmera en medio de la playa (%d)" % in_sand)
 	var draws := 0
 	for c in isl.get_children():
 		if (c is MultiMeshInstance3D or c is MeshInstance3D) and not String(c.name).begins_with("Crowd_"):

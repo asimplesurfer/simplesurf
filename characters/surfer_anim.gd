@@ -286,8 +286,9 @@ static func _paddle(p: Dictionary, s: Dictionary) -> void:
 		var hand := "HandL" if i == 0 else "HandR"
 		var side := -1.0 if i == 0 else 1.0
 		var a := ph + PI * i
-		# Adelante (+Y) por arriba (-Z), atrás por el agua (+Z).
-		var stroke := Vector3(side * 0.66, 1.65 + cos(a) * 0.85, -sin(a) * 0.55 + 0.2)
+		# Tira por el agua (+Z) de adelante (+Y) hacia atrás y vuelve adelante
+		# por arriba (-Z), como un crol (al revés parecía que remaba para atrás).
+		var stroke := Vector3(side * 0.66, 1.65 + cos(a) * 0.85, sin(a) * 0.55 + 0.2)
 		# Descansando: a los costados de la tabla, un poco adelante.
 		var rest := Vector3(side * 0.62, 1.35, 0.25)
 		_reach(p, hand, rest.lerp(stroke, amp), 1.0)

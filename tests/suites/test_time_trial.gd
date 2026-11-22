@@ -97,11 +97,15 @@ func _run_trial(seconds: float, check_ghost: bool = false) -> Array:
 	var ghost_ok := false
 	var start_pos := Vector3.ZERO
 	var t := 0.0
+	# A mitad de camino, la diferencia con el récord (la misma carrera: casi 0).
+	var mid_gap := NAN
 	while t < seconds:
 		await process_frame
 		t += 1.0 / 60.0
 		if check_ghost and race.time_trial.ghost and start_pos == Vector3.ZERO and race.time_trial.ghost.is_inside_tree():
 			start_pos = race.time_trial.ghost.position
+		if check_ghost and is_nan(mid_gap) and t > 1.5:
+			mid_gap = race.time_trial.gap()
 	waves = (m.get_node("WaveManager") as WaveManager).fixed_spawned.slice(0, 3)
 	var hair := -1
 	var hud_ok := false
@@ -111,7 +115,16 @@ func _run_trial(seconds: float, check_ghost: bool = false) -> Array:
 		if g:
 			hair = (g.get_node("Visual") as RiderVisual).character.hair_index
 		var hud := (m.get_node("Views") as SplitScreen).huds[0]
-		hud_ok = hud._place_label.text.begins_with("0:0") and hud._lap_label.text.contains("Récord 0:0")
+		# El récord, chico arriba de nuestro reloj (sin decir "Récord"), en
+		# verde o rojo según vayamos mejor o peor.
+		var rec: Label = hud._record_label
+		var col: Color = rec.get_theme_color("font_color")
+		hud_ok = (
+			hud._place_label.text.begins_with("0:0") and rec.visible and rec.text.begins_with("0:0")
+			and not hud._lap_label.text.contains("Récord")
+			and (col == hud.AHEAD_COLOR or col == hud.BEHIND_COLOR or col == Color.WHITE)
+			and not is_nan(mid_gap) and absf(mid_gap) < 0.6
+		)
 	race._finish(race.racers[0])
 	await process_frame
 	var time: float = race.finish_times.get(race.racers[0], 0.0)

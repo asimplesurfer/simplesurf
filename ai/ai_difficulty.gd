@@ -58,6 +58,11 @@ extends Resource
 ## Calcula el aterrizaje con el agua de adelante (no la de abajo): no lo
 ## agarra una ola a mitad de una vuelta de truco.
 @export var reads_landing: bool = false
+## En la largada sigue unos segundos derecho por su carril (ver
+## AIController.START_LANE_TIME) en vez de cerrarse enseguida a la línea: si
+## no, todos se juntan en la misma línea, se chocan entre ellos y quedan en
+## fila detrás de la persona (fácil de tirar a todos con un derrape).
+@export var keeps_start_lane: bool = true
 
 const MASH_SPREAD := 0.8
 
@@ -70,6 +75,7 @@ static func preset(level: int) -> AIDifficulty:
 		0:
 			d.display_name = "Fácil"
 			d.max_throttle = 0.82
+			d.keeps_start_lane = false
 			d.think_interval = 0.3
 			d.steer_noise = 0.3
 			d.ring_seek = 0.3

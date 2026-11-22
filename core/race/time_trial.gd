@@ -43,6 +43,9 @@ var _ghost_count: int = 0
 var _ghost_stage: int = -1
 var _transparency_timer: float = 0.0
 var _done: bool = false
+## Avance en la pista (como RaceManager.progress_of) de cada muestra del
+## fantasma: para saber en qué tiempo pasó el récord por donde vamos.
+var _ghost_progress := PackedFloat32Array()
 
 
 func setup(p_race: RaceManager) -> void:
@@ -144,6 +147,50 @@ func _record() -> void:
 		float(kinds[2]) if kinds.size() > 2 else -1.0,
 		r.jump_charge,
 	]))
+
+
+## Diferencia con el récord en este punto de la pista (s): negativa si vamos
+## mejor, positiva si vamos peor. NAN si no hay récord con el que comparar.
+func gap() -> float:
+	if race == null or _ghost_count < 2:
+		return NAN
+	if _ghost_progress.is_empty():
+		_build_ghost_progress()
+	var mine := race.progress_of(rider)
+	# Primera muestra del récord que llegó a donde estamos (búsqueda binaria).
+	var lo := 0
+	var hi := _ghost_progress.size() - 1
+	if mine > _ghost_progress[hi]:
+		return NAN
+	while lo < hi:
+		var mid := (lo + hi) / 2
+		if _ghost_progress[mid] < mine:
+			lo = mid + 1
+		else:
+			hi = mid
+	var t := float(lo) / GHOST_RATE
+	if lo > 0:
+		var a := _ghost_progress[lo - 1]
+		var b := _ghost_progress[lo]
+		if b > a:
+			t -= (b - mine) / (b - a) / GHOST_RATE
+	return race.race_time - t
+
+
+func _build_ghost_progress() -> void:
+	var track := race.course.track
+	var n := GHOST_FIELDS.size()
+	var progress := RaceManager.START_ANGLE
+	var last := progress
+	var best := progress
+	for i in _ghost_count:
+		var p := Vector3(_ghost_frames[i * n], 0.0, _ghost_frames[i * n + 2])
+		var angle := track.angle_of(p)
+		progress += wrapf(angle - last, -PI, PI)
+		last = angle
+		# Siempre creciente (si el récord retrocedió un poco, cuenta lo mejor).
+		best = maxf(best, progress)
+		_ghost_progress.append(best)
 
 
 # ---------------------------------------------------------------- fantasma

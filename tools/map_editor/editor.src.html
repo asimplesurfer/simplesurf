@@ -227,16 +227,19 @@ const PIECES = {
   volcano: { name: "Isla volcán", params: [["radius", "Radio (m)", "num", 40], ["island_seed", "Semilla palmeras", "int", -1]] },
   rock_arch: { name: "Arco de roca", params: [
     ["angle", "Ángulo (°)", "num", 0], ["span", "Ancho (m)", "num", 40], ["height", "Alto (m)", "num", 26],
-    ["shape_seed", "Semilla", "int", 77], ["stone_color", "Piedra", "color", "#806b5c"], ["moss_color", "Musgo", "color", "#5c8c4d"] ] },
+    ["shape_seed", "Variante", "variant", 77], ["stone_color", "Piedra", "color", "#806b5c"], ["moss_color", "Musgo", "color", "#5c8c4d"] ] },
   shipwreck: { name: "Barco hundido", params: [["angle", "Ángulo (°)", "num", 40.107], ["size", "Tamaño", "num", 1.5]] },
   waterfall: { name: "Cascada", params: [
     ["angle", "Ángulo (°)", "num", 0], ["width", "Ancho (m)", "num", 50], ["height", "Altura (m)", "num", 34],
     ["color", "Agua", "color", "#bdf3ff"], ["drag", "Cuánto frena (0–1)", "num", 0.12] ] },
   tropical_island: { name: "Isla tropical", params: [
-    ["beach_width", "Ancho de la playa (m)", "num", 5], ["palm_density", "Palmeras (cada 100 m²)", "num", 1.2],
-    ["rocks", "Piedras en la arena", "int", 3], ["crowd", "Público en la playa (0 = nadie)", "num", 1],
-    ["sand_color", "Arena", "color", "#f2d8a0"],
-    ["grass_color", "Pasto", "color", "#3f7f2c"], ["leaf_color", "Hojas", "color", "#2f8f2c"], ["shape_seed", "Semilla", "int", 1] ] },
+    ["crowd", "Público en la playa", "numbool", 1],
+    ["beach_width", "Playa", "level", 5, [[3, "Angosta"], [5, "Normal"], [8, "Ancha"], [12, "Muy ancha"]]],
+    ["palm_density", "Palmeras", "level", 1.2, [[0.5, "Pocas"], [1.2, "Normal"], [2, "Muchas"], [3, "Selva"]]],
+    ["rocks", "Piedras en la arena", "level", 3, [[0, "Ninguna"], [3, "Algunas"], [6, "Muchas"]]],
+    ["sand_color", "Color de la arena", "color", "#f2d8a0"],
+    ["grass_color", "Color del pasto", "color", "#3f7f2c"], ["leaf_color", "Color de las hojas", "color", "#2f8f2c"],
+    ["shape_seed", "Variante", "variant", 1] ] },
   island_split: { name: "Dividir isla", params: [["width", "Ancho del mar en el medio (m)", "num", 14]] },
   light_string: { name: "Guirnalda de luces", params: [
     ["lines", "Cables (1 a 20)", "int", 1],
@@ -247,7 +250,7 @@ const PIECES = {
     ["darkness", "Oscuridad al entrar (0–1)", "num", 0.78], ["adapt_time", "Ojos se acostumbran (s)", "num", 1.6],
     ["stone_low", "Piedra abajo", "color", "#8a4a2e"], ["stone_high", "Piedra arriba", "color", "#b89a74"],
     ["grass_color", "Pasto arriba", "color", "#6fae4a"], ["moss_color", "Musgo", "color", "#6f8f3a"],
-    ["glow_color", "Agua y luz de la cueva", "color", "#2fe3c8"], ["shape_seed", "Semilla", "int", 1] ] },
+    ["glow_color", "Agua y luz de la cueva", "color", "#2fe3c8"], ["shape_seed", "Variante", "variant", 1] ] },
 };
 const GEYSER_RADIUS = 4;
 // Piezas que se dibujan con puntos y manijas: dónde guardan los puntos y si la
@@ -1090,6 +1093,7 @@ function onMove(e) {
   const s = [e.offsetX, e.offsetY];
   if (pointers.has(e.pointerId)) pointers.set(e.pointerId, s);
   const w = toWorld(s);
+  mouseWorld = w;
   $("coords").textContent = `x ${Math.round(w[0])} · z ${Math.round(w[1])}`;
   if (!drag) return;
   if (drag.kind === "pinch") { if (pointers.size === 2) applyPinch(drag.start); return; }
@@ -1234,6 +1238,46 @@ function cancelDrawing() {
   drawing = null; invalidate(); refreshPanel();
 }
 document.querySelectorAll(".tool").forEach((b) => b.addEventListener("click", () => setTool(b.dataset.tool)));
+// --- Girar, copiar y pegar islas tropicales (y las demás figuras dibujadas).
+let mouseWorld = null;
+let clipboard = null;
+const selectedShape = () => (sel?.kind === "piece" && DRAWN[map.pieces[sel.i]?.type]?.closed ? map.pieces[sel.i] : null);
+function shapeCenter(p) { return centroid(nodesOf(p).map((n) => n.p)); }
+// Gira la figura (puntos y manijas) alrededor de su centro.
+function rotateShape(p, deg) {
+  const a = (deg * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a), o = shapeCenter(p);
+  const rot = (v) => [v[0] * c - v[1] * s, v[0] * s + v[1] * c];
+  const r3 = (v) => [Math.round(v[0] * 1000) / 1000, Math.round(v[1] * 1000) / 1000];
+  p[DRAWN[p.type].key] = nodesOf(p).map((n) => ({
+    p: r3(add(o, rot(sub(n.p, o)))), in: n.in ? r3(rot(n.in)) : null, out: n.out ? r3(rot(n.out)) : null,
+  }));
+  if (p.skylights) p.skylights = p.skylights.map((k) => r3(add(o, rot(sub(k, o)))));
+}
+function rotateSelection(deg) {
+  const p = selectedShape();
+  if (!p) { toast("Elegí una isla tropical (o una roca) para girarla."); return; }
+  rotateShape(p, deg); commit(); refreshPanel(); draw();
+}
+function copySelection() {
+  const p = selectedShape();
+  if (!p) { toast("Elegí una isla tropical (o una roca) para copiarla."); return false; }
+  clipboard = JSON.parse(JSON.stringify(p));
+  toast("Copiada. Ctrl+V (o Pegar) la pone donde está el mouse.");
+  return true;
+}
+// Pega la copia centrada en `at` (o un poco al costado de la original).
+function pasteClipboard(at) {
+  if (!clipboard) { toast("Primero copiá una isla (Ctrl+C)."); return; }
+  const p = JSON.parse(JSON.stringify(clipboard));
+  const c = shapeCenter(p);
+  const to = at || add(c, [25, 25]);
+  const d = sub(to, c);
+  p[DRAWN[p.type].key] = nodesOf(p).map((n) => ({ ...n, p: add(n.p, d) }));
+  if (p.skylights) p.skylights = p.skylights.map((k) => add(k, d));
+  if ("shape_seed" in p || p.type === "tropical_island") p.shape_seed = Math.floor(Math.random() * 99999) + 1;
+  map.pieces.push(p); sel = { kind: "piece", i: map.pieces.length - 1 };
+  commit(); refreshPanel(); draw();
+}
 function deleteSelection() {
   if (!sel) return;
   if (sel.kind === "path" && sel.node >= 0) { if (map.path.length <= 3) return toast("La pista necesita al menos 3 puntos."); map.path.splice(sel.node, 1); sel.node = -1; }
@@ -1270,6 +1314,11 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && drawing) { finishDrawing(); return; }
   if (e.key === "Escape") { if (drawing) cancelDrawing(); else { sel = { kind: "map" }; refreshPanel(); draw(); } return; }
   if (e.key === "Delete" || e.key === "Backspace") { deleteSelection(); return; }
+  const isC = e.code === "KeyC" || k === "c", isV = e.code === "KeyV" || k === "v", isD = e.code === "KeyD" || k === "d";
+  if (mod && isC) { if (selectedShape()) { e.preventDefault(); copySelection(); } return; }
+  if (mod && isV) { e.preventDefault(); pasteClipboard(mouseWorld); return; }
+  if (mod && isD) { e.preventDefault(); if (copySelection()) pasteClipboard(null); return; }
+  if (selectedShape() && (k === "q" || k === "e")) { rotateSelection(k === "q" ? -15 : 15); return; }
   const map_ = { v: "select", h: "pan", p: "track", r: "rock", t: "tropical_island", m: "start", i: "island", g: "geyser" };
   if (map_[k]) setTool(map_[k]);
   if (k === "f") fit();
@@ -1291,17 +1340,29 @@ function field(label, kind, value, onChange, opts = {}) {
   const wrap = document.createElement("div"); wrap.className = "field";
   const id = "f_" + (opts.id || label).replace(/[^a-z0-9]/gi, "_");
   const l = document.createElement("label"); l.textContent = label; l.htmlFor = id;
-  const inp = document.createElement(kind === "choice" ? "select" : "input"); inp.id = id;
-  if (kind === "choice") {
-    for (const [v, text] of opts.choices || []) { const o = document.createElement("option"); o.value = v; o.textContent = text; inp.append(o); }
-    inp.value = value;
+  const inp = document.createElement(kind === "choice" || kind === "level" ? "select" : "input"); inp.id = id;
+  if (kind === "variant") {
+    // Número de variante: un botón la cambia por otra al azar (no hace falta saber qué es).
+    const b = btn("Otra variante", () => { onChange(Math.floor(Math.random() * 99999) + 1); commit(); refreshPanel(); });
+    wrap.append(l, b);
+    return wrap;
   }
+  if (kind === "choice" || kind === "level") {
+    for (const [v, text] of opts.choices || []) { const o = document.createElement("option"); o.value = v; o.textContent = text; inp.append(o); }
+    // "level": opciones con nombre para un número (si el número no es una de
+    // ellas, se marca la más cercana; no se cambia hasta que elijan otra).
+    if (kind === "level") {
+      const near = (opts.choices || []).reduce((a, c) => (Math.abs(c[0] - value) < Math.abs(a[0] - value) ? c : a), (opts.choices || [[value]])[0]);
+      inp.value = near[0];
+    } else inp.value = value;
+  }
+  else if (kind === "numbool") { inp.type = "checkbox"; inp.checked = Number(value) > 0; }
   else if (kind === "bool") { inp.type = "checkbox"; inp.checked = !!value; }
   else if (kind === "color") { inp.type = "color"; inp.value = (value || "#000000").slice(0, 7); }
   else if (kind === "text") { inp.type = "text"; inp.value = value ?? ""; }
   else { inp.type = "number"; inp.step = kind === "int" ? "1" : "any"; inp.value = value ?? ""; }
   inp.addEventListener("change", () => {
-    let v = kind === "bool" ? inp.checked : kind === "color" || kind === "text" || kind === "choice" ? inp.value : Number(inp.value);
+    let v = kind === "bool" ? inp.checked : kind === "numbool" ? (inp.checked ? 1 : 0) : kind === "color" || kind === "text" || kind === "choice" ? inp.value : Number(inp.value);
     if ((kind === "num" || kind === "int") && !Number.isFinite(v)) return;
     if (kind === "int") v = Math.round(v);
     onChange(v); commit(); refreshPanel();
@@ -1403,6 +1464,14 @@ function refreshPanel() {
       box.append(row);
     }
     if (p.type === "tropical_island") box.append(note("Arena en toda la figura y selva adentro. Del lado que da a la pista va más tupida; atrás, más rala. Se choca como una isla."));
+    if (DRAWN[p.type]?.closed) {
+      const rr = document.createElement("div"); rr.className = "row";
+      rr.append(btn("Girar a la izquierda (Q)", () => rotateSelection(-15)), btn("Girar a la derecha (E)", () => rotateSelection(15)));
+      box.append(rr);
+      const cr = document.createElement("div"); cr.className = "row";
+      cr.append(btn("Copiar (Ctrl+C)", copySelection), btn("Pegar (Ctrl+V)", () => pasteClipboard(null)), btn("Duplicar (Ctrl+D)", () => { if (copySelection()) pasteClipboard(null); }));
+      box.append(cr);
+    }
     if (p.type === "light_string") box.append(note("Cada cable sale atado a una palmera alta cerca de una punta y llega a otra cerca de la otra punta. De día se ven los focos de color; de noche (o al atardecer) se prenden. Arrastrá las puntas para moverlas."));
     if (p.type === "island_split") box.append(note("Cada isla tropical que la línea cruza de lado a lado queda partida en islas separadas, con mar en el medio. Si entra desde el mar sin cruzarla, le hace una bahía."));
     if (DRAWN[p.type] && s.node >= 0) {

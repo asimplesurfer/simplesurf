@@ -39,7 +39,9 @@ static func build(palm_seed: int, height: float, lean: float, detail: float = 1.
 		_nuts(bark, top, top_dir, rng)
 	bark.index()
 	bark.generate_normals()
-	var bark_mat := ToonMaterial.make(Color.WHITE, 0.025)
+	# Sin contorno negro (como las hojas): en las islas tropicales los troncos
+	# con contorno se veían muy marcados.
+	var bark_mat := ToonMaterial.make(Color.WHITE, 0.0)
 	bark_mat.vertex_color_use_as_albedo = true
 	bark.set_material(bark_mat)
 	bark.commit(mesh)

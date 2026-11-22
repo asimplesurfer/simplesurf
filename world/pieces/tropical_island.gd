@@ -33,6 +33,8 @@ const SAND_Y := 0.55
 const GRASS_Y := 0.85
 ## Distancia de la orilla a la que tira al surfista (m, la playa entra al agua).
 const SHORE := 1.5
+## Hasta cuántos metros del pasto puede haber palmeras en la arena (las de la orilla).
+const PALM_SAND_REACH := 2.0
 
 var _outline := PackedVector2Array()
 var _lo := Vector2.ZERO
@@ -283,6 +285,16 @@ func _grass_depth(p: Vector2) -> float:
 	return 0.0
 
 
+## true si está en el pasto o a menos de `reach` metros de su borde.
+func _near_grass(p: Vector2, reach: float) -> bool:
+	if _on_grass(p):
+		return true
+	for g in _grass:
+		if BezierShape.distance_to_edge(g, p) < reach:
+			return true
+	return false
+
+
 func _on_grass(p: Vector2) -> bool:
 	for g in _grass:
 		if Geometry2D.is_point_in_polygon(p, g):
@@ -342,7 +354,9 @@ func _add_vegetation(root: Node3D) -> void:
 			if not Geometry2D.is_point_in_polygon(p, _outline):
 				continue
 			var depth := BezierShape.distance_to_edge(_outline, p)
-			if depth < beach_width * 0.4 or _near_crowd(p, 2.6):
+			# Solo en el pasto o pegadas a su borde (no en medio de la playa): con
+			# una playa más ancha, las palmeras se corren hacia adentro.
+			if depth < beach_width * 0.4 or _near_crowd(p, 2.6) or not _near_grass(p, PALM_SAND_REACH):
 				continue
 			var facing := _facing(p)
 			if _rng.randf() > 0.2 + 0.8 * facing:

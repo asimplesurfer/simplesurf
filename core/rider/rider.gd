@@ -137,6 +137,9 @@ const HARD_LAND_SPEED := 11.0
 const SHOVE_DECEL := 7.0
 ## Cuánto gira (rad) el chocado hacia donde lo empujan, con un choque fuerte.
 const BUMP_TURN := 0.5
+## Al decidir quién choca a quién: cuánto pesa estar doblando hacia el otro
+## (además de hacia dónde apunta).
+const BUMP_STEER_WEIGHT := 0.35
 ## true mientras el turbo está empujando (para efectos visuales).
 var turbo_active: bool = false
 ## true cuando ya cruzó la meta (festeja).
@@ -390,13 +393,23 @@ func _bump_riders() -> void:
 		if closing < 0.6 or _bump_cooldown.has(other) or other._bump_cooldown.has(self):
 			continue
 		_bump_cooldown[other] = 0.45
-		# El que más va hacia el otro es el que choca.
-		var a_in := va.dot(n)
-		var b_in := -vb.dot(n)
+		# Choca el que se mueve contra el otro (hacia dónde apunta y si dobla
+		# hacia él), aunque vaya más lento: el otro sale empujado y gira.
+		var a_in := _aim_at(n)
+		var b_in := other._aim_at(-n)
 		if a_in >= b_in:
 			_shove_pair(self, other, n, closing)
 		else:
 			_shove_pair(other, self, -n, closing)
+
+
+## Cuánto va en contra de lo que está en la dirección `n` (de él hacia el
+## otro): hacia dónde apunta (sin importar la velocidad) más si está doblando
+## hacia ese lado.
+func _aim_at(n: Vector3) -> float:
+	var toward := forward().dot(n)
+	var steer_toward := steer_amount * signf(n.dot(right()))
+	return toward + BUMP_STEER_WEIGHT * steer_toward
 
 
 static func _shove_pair(hitter: Rider, victim: Rider, n: Vector3, closing: float) -> void:
