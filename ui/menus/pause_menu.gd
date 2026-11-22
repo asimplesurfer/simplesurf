@@ -55,6 +55,30 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel") or _is_toggle(event):
 		get_viewport().set_input_as_handled()
 		close()
+		return
+	# Mando: las acciones "ui_" de Godot mueven el foco con el stick / la cruz,
+	# pero no traen botones para elegir ni volver: A elige, B vuelve al juego.
+	match _pad_role(event):
+		"bottom":
+			get_viewport().set_input_as_handled()
+			var focused := get_viewport().gui_get_focus_owner() as Button
+			if focused:
+				focused.pressed.emit()
+		"right":
+			get_viewport().set_input_as_handled()
+			close()
+
+
+## Posición del botón del mando apretado ("bottom" = A, "right" = B...), o "".
+static func _pad_role(event: InputEvent) -> String:
+	var jb := event as InputEventJoypadButton
+	if jb == null or not jb.pressed:
+		return ""
+	var buttons: Dictionary = InputSetup.PAD_BUTTONS[InputSetup.detect_pad_layout(jb.device)]
+	for role in buttons:
+		if buttons[role] == jb.button_index:
+			return role
+	return ""
 
 
 ## ESC o Start de cualquier jugador (abre y cierra la pausa).
@@ -112,7 +136,7 @@ func _build() -> void:
 		if session:
 			session.back_to_menu()
 	))
-	box.add_child(_label("ESC / Start / B: seguir · flechas: elegir y mover el volumen", 15, Color(0.85, 0.9, 1.0)))
+	box.add_child(_label("ESC / Start / B: seguir · A: elegir · flechas: moverse y cambiar el volumen", 15, Color(0.85, 0.9, 1.0)))
 
 
 func _apply_volumes() -> void:

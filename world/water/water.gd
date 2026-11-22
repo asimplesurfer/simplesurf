@@ -80,6 +80,8 @@ func _ready() -> void:
 	_material = ShaderMaterial.new()
 	_material.shader = SHADER
 	waves.apply_to(_material)
+	# Los colores del agua de día (la base de todos los climas: ver WaterPalette).
+	WaterPalette.apply_to_water(_material, WaterPalette.DAY)
 
 	_plane = _build_mesh()
 

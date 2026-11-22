@@ -125,19 +125,24 @@ func _desired_position() -> Vector3:
 	var normal := lerpf(STOPPED_DISTANCE, distance, smoothstep(0.0, MOVING_SPEED, target.speed))
 	var dist := fallen_distance if fallen else lerpf(normal, turbo, _boost * _boost * (3.0 - 2.0 * _boost))
 	var h := fallen_height if fallen else height
-	var base := target.global_position
+	# Sigue al personaje como se dibuja (entre pasos de física): si siguiera la
+	# posición de la física, con menos cuadros por segundo iría a saltos.
+	var xf := target.render_transform()
+	var base := xf.origin
+	var fwd := -xf.basis.z
 	base.y *= _follow_y
 	if looking_back:
 		# Adelante del Rider, mirando hacia atrás (un poco más alta para ver a los de atrás).
-		return base + target.forward() * maxf(dist, LOOK_BACK_DISTANCE) + Vector3.UP * (h + 0.4)
-	return base - target.forward() * dist + Vector3.UP * h
+		return base + fwd * maxf(dist, LOOK_BACK_DISTANCE) + Vector3.UP * (h + 0.4)
+	return base - fwd * dist + Vector3.UP * h
 
 
 func _look_point() -> Vector3:
-	var p := target.global_position
+	var xf := target.render_transform()
+	var p := xf.origin
 	p.y = p.y * lerpf(0.5, 1.0, (_follow_y - 0.6) / 0.4) + look_height
 	if looking_back:
 		# Mirando hacia atrás: hacia el horizonte (lejos, detrás del personaje),
 		# así se ve bien quiénes vienen; el personaje queda abajo en la imagen.
-		return p - target.forward() * LOOK_BACK_FAR + Vector3.UP * 0.6
+		return p + xf.basis.z * LOOK_BACK_FAR + Vector3.UP * 0.6
 	return p
