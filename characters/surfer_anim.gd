@@ -38,7 +38,7 @@ const WAIST := Vector3(0.0, 1.0, 0.0)
 ## Animaciones de pie sobre la tabla (cuerpo de costado).
 const STANCE := [
 	&"idle", &"ride", &"air", &"trick", &"drift", &"duck", &"pop_up",
-	&"hands_down", &"pommel", &"superman",
+	&"hands_down", &"pommel", &"superman", &"tube",
 ]
 
 
@@ -62,6 +62,8 @@ static func pose(s: Dictionary) -> Dictionary:
 			_air(p, s, true)
 		&"duck":
 			_duck(p, s)
+		&"tube":
+			_tube(p, s)
 		&"pop_up":
 			_pop_up(p, s)
 		&"flail":
@@ -190,6 +192,30 @@ static func _air(p: Dictionary, s: Dictionary, trick: bool) -> void:
 		_reach(p, "HandL", Vector3(-1.35, 1.75 + wiggle, 0.25), down)
 		_reach(p, "HandR", Vector3(1.3, 1.65 - wiggle, 0.0), down)
 		_turn(p, "Head", Vector3(0.35 * down, 0.0, 0.0))
+
+
+## Adentro del tubo: bien agachado y compacto (el labio pasa por arriba), la
+## mano de la pared rozando el agua y la otra adelante para el equilibrio.
+## drift_side: de qué lado está la pared (+1 del lado del pecho, -1 de la espalda).
+## Con steer se balancea hacia un lado y el otro.
+static func _tube(p: Dictionary, s: Dictionary) -> void:
+	var t: float = s.time
+	var side: float = 1.0 if s.drift_side >= 0 else -1.0
+	var steer: float = s.steer
+	var wobble := sin(t * 7.0) * 0.04
+	_crouch(p, 0.95 + wobble + absf(steer) * 0.1)
+	_bend(p, Vector3(0.35 + steer * 0.25 * side, steer * 0.2, 0.0))
+	# Mano de la pared: abajo y hacia la pared, como acariciando el agua.
+	var hand := Vector3(0.25, 0.45 + wobble, 0.85 * side)
+	var front := Vector3(-1.15, 1.35 - wobble, 0.15 - 0.25 * side)
+	if side > 0.0:
+		_reach(p, "HandR", hand + p["Torso"].pos, 1.0)
+		_reach(p, "HandL", front + p["Torso"].pos, 0.9)
+	else:
+		_reach(p, "HandL", hand + p["Torso"].pos, 1.0)
+		_reach(p, "HandR", Vector3(1.0, 1.25, 0.2) + p["Torso"].pos, 0.9)
+	# Mira hacia la salida (la punta).
+	_turn(p, "Head", Vector3(0.1, 0.35, 0.0))
 
 
 ## Atravesando una ola: agachado y con los brazos tapándose la cabeza.

@@ -44,6 +44,9 @@ const TURBO_BASE := 6.0
 const LOOK_BACK_DISTANCE := 6.0
 ## Mirando hacia atrás, apunta a este punto detrás del personaje (m).
 const LOOK_BACK_FAR := 22.0
+## Adentro del tubo: distancia y altura de la cámara (m).
+const TUBE_DISTANCE := 4.2
+const TUBE_HEIGHT := 1.9
 ## 0..1: cuánto se alejó (se acerca y aleja suave).
 var _boost: float = 0.0
 
@@ -104,9 +107,9 @@ func _process(delta: float) -> void:
 	fov = lerpf(fov, BOOST_FOV if boosting_now else BASE_FOV, 1.0 - exp(-4.0 * delta))
 
 
-## true con turbo o motivación.
+## true con turbo o motivación (y adentro del tubo: se siente la velocidad).
 func boosting() -> bool:
-	return target.turbo_active or target.motivation_timer > 0.0
+	return target.turbo_active or target.motivation_timer > 0.0 or target.in_tube()
 
 
 ## Cuántos metros se aleja con turbo.
@@ -127,6 +130,10 @@ func _desired_position() -> Vector3:
 	var normal := lerpf(STOPPED_DISTANCE, distance, smoothstep(0.0, MOVING_SPEED, target.speed))
 	var dist := fallen_distance if fallen else lerpf(normal, turbo, _boost * _boost * (3.0 - 2.0 * _boost))
 	var h := fallen_height if fallen else height
+	# Adentro del tubo: más baja y más cerca, para quedar adentro (con el labio arriba).
+	if target.in_tube():
+		dist = TUBE_DISTANCE
+		h = TUBE_HEIGHT
 	# Sigue al personaje como se dibuja (entre pasos de física): si siguiera la
 	# posición de la física, con menos cuadros por segundo iría a saltos.
 	var xf := target.render_transform()

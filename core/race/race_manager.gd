@@ -82,10 +82,12 @@ func _ready() -> void:
 		recorder.race = self
 		add_child(recorder)
 	# Olas tubo para el que va último: en la carrera (y la demo), no en la
-	# contrarreloj (los tiempos dejarían de compararse) ni en el modo libre.
-	if not config.is_explore() and not config.is_time_trial():
+	# contrarreloj (los tiempos dejarían de compararse). En el modo libre no
+	# aparecen solas (solo con la tecla de prueba).
+	if not config.is_time_trial():
 		tubes = TubeDirector.new()
 		tubes.name = "Tubes"
+		tubes.automatic = not config.is_explore()
 		add_child(tubes)
 		tubes.setup(self)
 	if with_warmup:
@@ -299,6 +301,13 @@ func _input(event: InputEvent) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	var key := event as InputEventKey
+	# Y: prueba de la ola tubo (aparece adelante de J1).
+	if key and key.pressed and not key.echo and key.physical_keycode == KEY_Y and tubes and state == State.RACING:
+		var people := humans()
+		if not people.is_empty():
+			get_viewport().set_input_as_handled()
+			tubes.spawn_test(people[0])
+		return
 	# L: descargar el registro de la carrera (en cualquier momento).
 	if key and key.pressed and not key.echo and key.physical_keycode == KEY_L and recorder:
 		get_viewport().set_input_as_handled()

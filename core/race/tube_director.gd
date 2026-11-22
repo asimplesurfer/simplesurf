@@ -10,7 +10,8 @@ extends Node
 ##   - como mucho una vez por vuelta para cada uno;
 ##   - nunca en la largada, ni si la meta está más cerca que el largo del tubo;
 ##   - una ola a la vez.
-## No está en la contrarreloj ni en el modo libre (lo decide RaceManager).
+## No está en la contrarreloj. En el modo libre no aparece sola (`automatic`
+## en false), solo con la tecla de prueba (Y).
 
 ## Distancia mínima al primero para que aparezca (m).
 const MIN_GAP := 55.0
@@ -38,6 +39,8 @@ const AHEAD_MAX := 42.0
 const EDGE_MARGIN := 7.0
 
 var race: RaceManager
+## Si aparece sola (en carrera). En el modo libre solo con la tecla de prueba.
+var automatic: bool = true
 ## La ola que está ahora (null si no hay).
 var current: TubeWave = null
 ## Vuelta en la que cada uno ya tuvo su ola (rider -> vuelta).
@@ -52,7 +55,7 @@ func setup(p_race: RaceManager) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if race == null or race.state != RaceManager.State.RACING:
+	if race == null or not automatic or race.state != RaceManager.State.RACING:
 		return
 	if current != null and is_instance_valid(current):
 		return
@@ -129,10 +132,23 @@ func needed_length(r: Rider) -> float:
 	return _ahead_of(r) + TubeWave.OPEN_LENGTH + v * (MAX_TIME + TubeWave.ENTRY_WINDOW) + 40.0
 
 
+## Tecla de prueba: una ola ya mismo adelante de `r` (como si fuera 120 m atrás).
+## Si hay una, la saca primero.
+func spawn_test(r: Rider) -> TubeWave:
+	if current != null and is_instance_valid(current):
+		current.dismiss()
+		current.queue_free()
+		current = null
+	if r.is_fallen() or r.in_tube():
+		return null
+	return spawn_for(r, 120.0)
+
+
 ## Hace aparecer una ola adelante de `r`. Devuelve la ola (o null si no hay lugar).
-func spawn_for(r: Rider) -> TubeWave:
+## `forced_gap`: distancia al primero a usar (si no, la de verdad).
+func spawn_for(r: Rider, forced_gap: float = -1.0) -> TubeWave:
 	var track := race.course.track
-	var gap := gap_of(r)
+	var gap := gap_of(r) if forced_gap < 0.0 else forced_gap
 	var time := duration_for(gap)
 	var speed := speed_for(gap, time, r.stats.max_speed)
 	var ahead := _ahead_of(r)
@@ -150,7 +166,7 @@ func spawn_for(r: Rider) -> TubeWave:
 	race.get_parent().add_child(wave)
 	# La pared hacia el borde más cercano: el lado abierto mira al medio de la pista.
 	var side := 1.0 if lane >= 0.0 else -1.0
-	wave.setup(race.course, mouth, lane, side, time, speed, r, ahead / maxf(r.speed, 4.0) + 3.0)
+	wave.setup(race.course, mouth, lane, side, time, speed, r, ahead / maxf(r.speed, 4.0) + 4.0)
 	wave.finished.connect(func() -> void: _cooldown = COOLDOWN)
 	current = wave
 	return wave

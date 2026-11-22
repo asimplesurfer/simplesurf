@@ -505,6 +505,14 @@ func _look_target() -> float:
 	return target
 
 
+## true si la pared del tubo queda a la derecha del surfista.
+func _tube_wall_right() -> bool:
+	var st := rider.state_machine.current
+	if st and st.has_method("wall_on_right_sign"):
+		return float(st.call("wall_on_right_sign")) > 0.0
+	return true
+
+
 ## Elige la animación del personaje según lo que está haciendo el Rider.
 func _update_avatar_anim(delta: float) -> void:
 	_stage_time += delta
@@ -538,6 +546,10 @@ func _update_avatar_anim(delta: float) -> void:
 			if _stage_time < _pose_duration and _pose_t < 1.0:
 				a = &"pop_up"
 				_body.pop_time = _pose_duration
+			elif rider.in_tube():
+				a = &"tube"
+				# De qué lado está la pared: el pecho mira a la derecha del surfista.
+				_body.drift_side = 1 if _tube_wall_right() else -1
 			elif duck_time > 0.0:
 				a = &"duck"
 			elif not rider.grounded:

@@ -852,6 +852,7 @@ func _update_help() -> void:
 			+ "Olas: X sube · Z baja (mando: RB / LB)   ·   Tormenta: T (mando: Select)\n"
 			+ "F: totalmente libre (se atraviesan las boyas y se vuela: ESPACIO sube, SHIFT baja)\n"
 			+ "G: ver los trucos uno por uno (cámara lenta)   ·   , (mantener): ver el contador de trucos\n"
+			+ "Y: ola tubo adelante (prueba)\n"
 			+ "Esc / Start: pausa (volumen)   ·   C: menú   ·   H: ocultar ayuda"
 		)
 		return
