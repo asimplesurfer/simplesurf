@@ -22,6 +22,7 @@ const SUITES := [
 	"res://tests/suites/test_time_trial.gd",
 	"res://tests/suites/test_feel.gd",
 	"res://tests/suites/test_rider_states.gd",
+	"res://tests/suites/test_tube.gd",
 ]
 
 var _checks: int = 0

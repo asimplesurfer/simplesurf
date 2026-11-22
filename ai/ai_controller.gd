@@ -98,12 +98,16 @@ func get_input(delta: float) -> RiderInput:
 	if rider == null or course == null or rider.controls_locked:
 		return input
 	var state := rider.state_machine.current_name
+	if state != &"tube":
+		_in_tube_before = false
 	if state == &"fallen":
 		_jump_hold = 0.0
 		_turbo_on = false
 		return _mash(delta, input)
 	_mash_rate = 0.0
-	if state == &"airborne":
+	if state == &"tube":
+		_tube(delta, input)
+	elif state == &"airborne":
 		_air(delta, input)
 	else:
 		_drive(delta, input)
@@ -122,6 +126,68 @@ func _mash(delta: float, input: RiderInput) -> RiderInput:
 		_mash_timer = 1.0 / _mash_rate
 		input.mash_presses = 1
 	return input
+
+
+# --- Ola tubo ---------------------------------------------------------------
+
+## Decisión de ir o no a cada ola tubo (id -> bool).
+var _tube_choice: Dictionary = {}
+## En este tubo se va a caer (según la dificultad), y cuándo deja de corregir.
+var _tube_will_fail: bool = false
+var _tube_fail_at: float = 0.0
+var _tube_time: float = 0.0
+var _tube_steer: float = 0.0
+var _tube_think: float = 0.0
+var _in_tube_before: bool = false
+
+
+## Desvío lateral de la boca de una ola tubo que tiene adelante y a la que
+## decidió ir (NAN si no hay).
+func _tube_target(angle: float) -> float:
+	for node in rider.get_tree().get_nodes_in_group("tube_waves"):
+		var tw := node as TubeWave
+		if tw == null or tw.course != course or not tw.accepting() or tw.used.has(rider):
+			continue
+		var ahead := -tw.s_of(rider.position)
+		if ahead < -1.0 or ahead > 90.0:
+			continue
+		var id := tw.get_instance_id()
+		if not _tube_choice.has(id):
+			# El que la provocó va siempre; los demás según cuánto buscan las olas.
+			_tube_choice[id] = tw.opener == rider or _rng.randf() < 0.5 + 0.5 * difficulty.wave_seek
+		if _tube_choice[id]:
+			# Un poco hacia el lado abierto (la boca es más ancha de ese lado).
+			return tw.lateral - tw.side * 0.8
+	return NAN
+
+
+## Adentro del tubo: corrige el equilibrio con algo de demora y ruido (según
+## la dificultad). A veces (más en fácil) se le escapa y se cae.
+func _tube(delta: float, input: RiderInput) -> void:
+	var state := rider.state_machine.current as RiderState
+	if not _in_tube_before:
+		_in_tube_before = true
+		_tube_time = 0.0
+		_tube_steer = 0.0
+		_tube_think = 0.0
+		_tube_will_fail = _rng.randf() < difficulty.trick_fail_chance * 1.2
+		var total := rider.tube.time_left() if rider.tube else 8.0
+		_tube_fail_at = _rng.randf_range(0.25, 0.85) * total
+	_tube_time += delta
+	_tube_think -= delta
+	if _tube_think <= 0.0:
+		_tube_think = maxf(difficulty.think_interval, 0.05)
+		var bal := rider.tube_balance
+		# Hacia la pared (+) o hacia el lado abierto (-): lo contrario de donde está.
+		var toward_wall := clampf(-bal * 2.6, -1.0, 1.0)
+		toward_wall += _rng.randf_range(-1.0, 1.0) * difficulty.steer_noise
+		if _tube_will_fail and _tube_time > _tube_fail_at:
+			# Se le fue: corrige para el lado equivocado.
+			toward_wall = signf(bal) if bal != 0.0 else 1.0
+		var wall_sign: float = state.call("wall_on_right_sign") if state and state.has_method("wall_on_right_sign") else 1.0
+		_tube_steer = clampf(toward_wall, -1.0, 1.0) * wall_sign
+	input.steer = _tube_steer
+	input.throttle = 1.0
 
 
 # --- En el agua -------------------------------------------------------------
@@ -318,6 +384,10 @@ func _think(angle: float, lateral: float) -> void:
 	var nearest_ahead := 1e9
 	for rock in course.rocks:
 		var id := rock.get_instance_id()
+		# Las que esconde un tubo no están.
+		if not rock.visible:
+			_rock_side.erase(id)
+			continue
 		var ahead := _arc_ahead(angle, track.angle_of(rock.position), lateral)
 		if ahead < -3.0:
 			_rock_side.erase(id)
@@ -351,6 +421,13 @@ func _think(angle: float, lateral: float) -> void:
 		# Cerca y todavía no está al costado: aflojar para poder girar más cerrado.
 		if nearest_ahead < 14.0 and absf(rock_lat - lateral) < clearance:
 			_brake = true
+
+	# Una ola tubo adelante con la boca abierta: ir a meterse (casi siempre).
+	var tube_lat := _tube_target(angle)
+	if not is_nan(tube_lat):
+		target = tube_lat
+		_on_line = false
+		_brake = false
 
 	_target_lateral = clampf(target, -lane, lane)
 
@@ -398,6 +475,8 @@ func _next_ring(angle: float) -> NitroRing:
 	var best: NitroRing = null
 	var best_d := 1e9
 	for ring in course.rings:
+		if not ring.visible:
+			continue
 		var d := _arc_ahead(angle, course.track.angle_of(ring.position), 0.0)
 		if d > 4.0 and d < 70.0 and d < best_d:
 			best_d = d

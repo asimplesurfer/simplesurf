@@ -29,6 +29,7 @@ const BEHIND_COLOR := Color(1.0, 0.32, 0.3)
 const WRONG_WAY_SIZE := 190.0
 const SPEED_LINES_SHADER := preload("res://ui/shaders/speed_lines.gdshader")
 const SPLASH_SHADER := preload("res://ui/shaders/wave_splash.gdshader")
+const TUBE_WARNING_SHADER := preload("res://ui/shaders/tube_warning.gdshader")
 ## Duración del efecto de atravesar una ola (s): golpe de agua y gotas que chorrean.
 const SPLASH_TIME := 1.2
 ## Duración del golpe (cortina de espuma) al principio (s).
@@ -117,6 +118,11 @@ var _nitro_bar: ProgressBar
 var _message: Label
 ## Efecto de cámara al atravesar una ola (borroso, gotas, tono de agua).
 var splash_overlay: ColorRect
+## Tubo: el borde de la pantalla avisa que se está por caer.
+var tube_warning: ColorRect
+var _tube_warning_mat: ShaderMaterial
+var _tube_warning_amount: float = 0.0
+var _tube_time: float = 0.0
 var _splash_material: ShaderMaterial
 var _splash_t: float = 0.0
 var _speed_lines: ColorRect
@@ -242,6 +248,14 @@ func _connect_rider() -> void:
 	)
 	rider.crashed.connect(func() -> void: show_message("¡Pum!", BAD_COLOR))
 	rider.wave_punched.connect(_on_wave_punched)
+	rider.tube_entered.connect(func() -> void: show_message("¡Al tubo!", PROMPT_COLOR))
+	rider.tube_exited.connect(func(success: bool) -> void:
+		if success:
+			show_center("¡Qué tubo!", PROMPT_COLOR, 1.4)
+	)
+	rider.tube_wiped_out.connect(func(lip: bool) -> void:
+		show_message("¡Te tapó la ola!" if lip else "¡Te escupió la espuma!", BAD_COLOR)
+	)
 	var pc := rider.controller as PlayerController
 	if pc:
 		pc.jump_mode_changed.connect(func(mode_name: String) -> void:
@@ -440,6 +454,7 @@ func _process(delta: float) -> void:
 	if rider == null:
 		return
 	_update_splash(delta)
+	_update_tube_warning(delta)
 	_update_mash(delta)
 
 	# Handicap: muestra cuánto más rápido carga el nitro.
@@ -759,6 +774,27 @@ func _on_wave_punched() -> void:
 	_splash_material.set_shader_parameter("seed", randf() * 100.0)
 
 
+## Tubo: el borde se tiñe cuando está por perder el equilibrio (amarillo y
+## después rojo, más fuerte del lado hacia donde se va).
+func _update_tube_warning(delta: float) -> void:
+	var target := rider.tube_danger if rider.in_tube() else 0.0
+	_tube_warning_amount = move_toward(_tube_warning_amount, target, delta * 4.0)
+	tube_warning.visible = _tube_warning_amount > 0.01
+	if not tube_warning.visible:
+		return
+	_tube_time += delta
+	var a := _tube_warning_amount
+	_tube_warning_mat.set_shader_parameter("amount", a)
+	_tube_warning_mat.set_shader_parameter("color", Color(1.0, 0.85, 0.2).lerp(Color(1.0, 0.2, 0.15), smoothstep(0.3, 0.9, a)))
+	_tube_warning_mat.set_shader_parameter("pulse", 0.5 + 0.5 * sin(_tube_time * lerpf(6.0, 16.0, a)))
+	# Hacia qué lado de la pantalla se va (la pared puede estar a la izquierda o a la derecha).
+	var side := 0.0
+	var state := rider.state_machine.current
+	if state and state.has_method("wall_on_right_sign"):
+		side = signf(rider.tube_balance) * float(state.call("wall_on_right_sign"))
+	_tube_warning_mat.set_shader_parameter("side", side)
+
+
 func _update_splash(delta: float) -> void:
 	_splash_t = maxf(_splash_t - delta, 0.0)
 	splash_overlay.visible = _splash_t > 0.0
@@ -861,6 +897,15 @@ func _build() -> void:
 	splash_overlay.material = _splash_material
 	splash_overlay.visible = false
 	root.add_child(splash_overlay)
+
+	tube_warning = ColorRect.new()
+	tube_warning.set_anchors_preset(Control.PRESET_FULL_RECT)
+	tube_warning.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tube_warning_mat = ShaderMaterial.new()
+	_tube_warning_mat.shader = TUBE_WARNING_SHADER
+	tube_warning.material = _tube_warning_mat
+	tube_warning.visible = false
+	root.add_child(tube_warning)
 
 	_speed_lines = ColorRect.new()
 	_speed_lines.set_anchors_preset(Control.PRESET_FULL_RECT)

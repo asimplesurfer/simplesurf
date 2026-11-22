@@ -39,6 +39,12 @@ signal crashed
 signal geyser_launched
 ## Cambió la cantidad de vueltas del truco en curso (en el aire).
 signal live_spins_changed(spins: int)
+## Entró a un tubo (ver TubeWave).
+signal tube_entered
+## Salió del tubo: success = llegó al final (sale con turbo); si no, se cayó.
+signal tube_exited(success: bool)
+## Se cayó adentro del tubo: lip = lo tapó el labio (si no, lo escupió la espuma).
+signal tube_wiped_out(lip: bool)
 
 ## En qué punto de la recuperación está: en el agua, acostado sobre la tabla o parado.
 enum RecoveryStage { IN_WATER, PRONE, STANDING }
@@ -191,6 +197,12 @@ const PUNCH_SEEN_DISTANCE := 60.0
 const PUNCH_MIN_GAP := 0.3
 ## La cara estaba adentro de una ola el frame anterior.
 var _face_in_wave: bool = false
+## El tubo en el que está (null si no está en ninguno).
+var tube: TubeWave = null
+## Equilibrio adentro del tubo (-1..1; ver el estado `tube`) y cuánto peligro
+## hay de caerse (0..1, para el aviso del HUD).
+var tube_balance: float = 0.0
+var tube_danger: float = 0.0
 var _steer_smoothed: float = 0.0
 
 @onready var controller: BaseController = $Controller
@@ -210,6 +222,11 @@ func _ready() -> void:
 	paddling.set_script(preload("res://core/rider/states/state_paddling.gd"))
 	paddling.name = "Paddling"
 	state_machine.add_child(paddling)
+	# Adentro de un tubo (ver TubeWave).
+	var tubing := RiderState.new()
+	tubing.set_script(preload("res://core/rider/states/state_tube.gd"))
+	tubing.name = "Tube"
+	state_machine.add_child(tubing)
 	visual.setup(self)
 	state_machine.setup(self)
 	var sounds := RiderAudio.new()
@@ -244,7 +261,7 @@ func _physics_process(delta: float) -> void:
 	_top_up_first_charge(delta)
 	# Turbo en ráfagas: cada toque dispara una (mantener no hace nada).
 	turbo_time = maxf(0.0, turbo_time - delta)
-	if input.turbo_pressed and not is_fallen() and not fire_turbo():
+	if input.turbo_pressed and not is_fallen() and not in_tube() and not fire_turbo():
 		turbo_blocked.emit()
 	if wave_air_time >= 0.0:
 		wave_air_time += delta
@@ -366,11 +383,12 @@ func _bump_riders() -> void:
 		_bump_cooldown[k] = float(_bump_cooldown[k]) - get_physics_process_delta_time()
 		if _bump_cooldown[k] <= 0.0:
 			_bump_cooldown.erase(k)
-	if is_fallen():
+	# Adentro del tubo no se choca (van todos a la misma velocidad).
+	if is_fallen() or in_tube():
 		return
 	for node in get_tree().get_nodes_in_group("riders"):
 		var other := node as Rider
-		if other == null or other == self or other.is_fallen() or other.get_instance_id() < get_instance_id():
+		if other == null or other == self or other.is_fallen() or other.in_tube() or other.get_instance_id() < get_instance_id():
 			continue
 		# Solo los de la misma partida (en los tests puede haber varias abiertas).
 		if other.water != water:
@@ -611,7 +629,7 @@ func _check_wave_punch() -> void:
 		return
 	# Solo atravesando una ola grande de pie o en el aire: caerse al agua o
 	# nadar no cuenta (aunque la cabeza se moje).
-	if is_fallen():
+	if is_fallen() or in_tube():
 		_face_in_wave = false
 		return
 	var face := visual.face_position()
@@ -815,6 +833,18 @@ func fall() -> void:
 
 func is_fallen() -> bool:
 	return state_machine.current_name == &"fallen"
+
+
+## true mientras está adentro de un tubo.
+func in_tube() -> bool:
+	return state_machine.current_name == &"tube"
+
+
+## Entra al tubo (lo llama TubeWave cuando pasa por la boca).
+func enter_tube(wave: TubeWave) -> void:
+	tube = wave
+	state_machine.transition_to(&"tube")
+	tube_entered.emit()
 
 
 func set_recovery_stage(stage: RecoveryStage) -> void:

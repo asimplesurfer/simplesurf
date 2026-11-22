@@ -47,7 +47,7 @@ func _hit_riders_in_cone() -> void:
 	var spray: DriftSpray = rider.visual.drift_spray() if rider.visual else null
 	for node in rider.get_tree().get_nodes_in_group("riders"):
 		var other := node as Rider
-		if other == null or other == rider or other.is_fallen() or not other.grounded:
+		if other == null or other == rider or other.is_fallen() or not other.grounded or other.in_tube():
 			continue
 		var hit := false
 		if spray:
