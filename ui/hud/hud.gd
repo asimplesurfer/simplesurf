@@ -21,6 +21,12 @@ const NITRO_GAUGE_SHADER := preload("res://ui/shaders/nitro_gauge.gdshader")
 ## Lado del medidor de nitro (la ventanita redonda con el aro).
 const NITRO_GAUGE_SIZE := 118.0
 const BAD_COLOR := Color(1.0, 0.4, 0.35)
+## Reloj del récord en contrarreloj: verde si vamos mejor, rojo si peor
+## (los mismos verde y rojo pastel del contador de trucos).
+const AHEAD_COLOR := Color(0.5, 1.0, 0.5)
+const BEHIND_COLOR := Color(1.0, 0.32, 0.3)
+## Tamaño de la señal de ir al revés (px).
+const WRONG_WAY_SIZE := 190.0
 const SPEED_LINES_SHADER := preload("res://ui/shaders/speed_lines.gdshader")
 const SPLASH_SHADER := preload("res://ui/shaders/wave_splash.gdshader")
 ## Duración del efecto de atravesar una ola (s): golpe de agua y gotas que chorrean.
@@ -62,6 +68,8 @@ const GRADE_FONT := 72
 const TRICK_GROW := 1.5
 const TRICK_MAX_AT := 10
 const TRICK_SHAKE := 7.0
+## Cuánto se baja el centro de los anillos del contador (veces el tamaño de letra).
+const TRICK_CENTER_DROP := 0.15
 ## Dónde va el contador (respecto del centro de arriba de la pantalla).
 const TRICK_BOX := Rect2(-320.0, 10.0, 640.0, 190.0)
 ## Calificación al aterrizar según el combo: [desde cuántos, palabra, color,
@@ -97,6 +105,10 @@ var _mash_bar: ProgressBar
 var _place_label: Label
 var _lap_label: Label
 var _center_label: Label
+## Ir al revés: señal de prohibido grande y roja (en vez de un texto).
+var _wrong_way: Control
+## Contrarreloj: el tiempo del récord (arriba de nuestro reloj).
+var _record_label: Label
 var _help: Label
 ## Contador de FPS (tecla P). Se recuerda entre carreras.
 static var show_fps: bool = false
@@ -274,6 +286,8 @@ func _on_trick_landed(spins: int) -> void:
 	_grade.add_theme_font_size_override("font_size", font)
 	_style_number(_grade, font)
 	_grade_count.text = "×%d" % spins
+	# Del mismo color que tenía en el contador (no siempre blanco).
+	_grade_count.add_theme_color_override("font_color", trick_color(spins))
 	_style_number(_grade_count, 42)
 	_grade_t = 0.0
 	_air_spins = 0
@@ -475,14 +489,19 @@ func _process(delta: float) -> void:
 			var t: float = race.finish_times.get(rider, race.race_time)
 			_place_label.text = ResultsPanel.format_time(t)
 			_place_label.add_theme_color_override("font_color", Color.WHITE)
+			# Arriba de nuestro reloj, chico, el del récord: verde si vamos mejor,
+			# rojo si vamos peor (comparado en el mismo punto de la pista).
 			var best := race.time_trial.best_time
-			_lap_label.text += "\nRécord %s" % (ResultsPanel.format_time(best) if best > 0.0 else "--")
-		if race.is_wrong_way(rider) and _center_time <= 0.0:
-			_center_label.text = "¡Al revés!"
-			_center_label.add_theme_color_override("font_color", BAD_COLOR)
-			_center_label.visible = true
-		else:
-			_center_label.visible = _center_time > 0.0
+			_record_label.visible = best > 0.0
+			_record_label.text = ResultsPanel.format_time(best)
+			var gap: float = race.time_trial.gap()
+			var col := Color.WHITE
+			if not is_nan(gap):
+				col = AHEAD_COLOR if gap <= 0.0 else BEHIND_COLOR
+			_record_label.add_theme_color_override("font_color", col)
+		var wrong := race.is_wrong_way(rider) and _center_time <= 0.0
+		_wrong_way.visible = wrong
+		_center_label.visible = _center_time > 0.0 and not wrong
 
 	_center_time = maxf(0.0, _center_time - delta)
 	_message_time = maxf(0.0, _message_time - delta)
@@ -1007,6 +1026,21 @@ func _build() -> void:
 	_place_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 	_style_number(_place_label, 64)
 	root.add_child(_place_label)
+	# Contrarreloj: el reloj del récord, chico, arriba del nuestro.
+	_record_label = _make_label(30, Color.WHITE)
+	_record_label.anchor_left = 1.0
+	_record_label.anchor_right = 1.0
+	_record_label.anchor_top = 1.0
+	_record_label.anchor_bottom = 1.0
+	_record_label.offset_left = -300.0
+	_record_label.offset_right = -22.0
+	_record_label.offset_top = -152.0
+	_record_label.offset_bottom = -104.0
+	_record_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_record_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	_record_label.visible = false
+	_style_number(_record_label, 30)
+	root.add_child(_record_label)
 	# Arriba del puesto: la guía de controles (ver _update_hint).
 	_hint = ControlsHint.new()
 	_hint.anchor_left = 1.0
@@ -1015,8 +1049,8 @@ func _build() -> void:
 	_hint.anchor_bottom = 1.0
 	_hint.offset_left = -20.0 - HINT_WIDTH
 	_hint.offset_right = -20.0
-	_hint.offset_top = -118.0 - _hint.custom_minimum_size.y
-	_hint.offset_bottom = -118.0
+	_hint.offset_top = -158.0 - _hint.custom_minimum_size.y
+	_hint.offset_bottom = -158.0
 	root.add_child(_hint)
 
 	# Mensajes (truco, nitro...), arriba al centro.
@@ -1069,6 +1103,14 @@ func _build() -> void:
 	_center_label.offset_bottom = 20.0
 	_center_label.visible = false
 	root.add_child(_center_label)
+	_wrong_way = preload("res://ui/hud/no_entry_sign.gd").new()
+	_wrong_way.set_anchors_preset(Control.PRESET_CENTER)
+	_wrong_way.offset_left = -WRONG_WAY_SIZE * 0.5
+	_wrong_way.offset_right = WRONG_WAY_SIZE * 0.5
+	_wrong_way.offset_top = -WRONG_WAY_SIZE * 0.5 - 40.0
+	_wrong_way.offset_bottom = WRONG_WAY_SIZE * 0.5 - 40.0
+	_wrong_way.visible = false
+	root.add_child(_wrong_way)
 
 	# Ayuda de controles, arriba a la izquierda.
 	_help = _make_label(15, Color.WHITE)
@@ -1098,9 +1140,12 @@ static func _style_number(label: Label, font_size: int) -> void:
 	label.add_theme_constant_override("shadow_outline_size", maxi(6, font_size / 7))
 
 
-## Centro del contador de trucos (en el espacio de _fx).
+## Centro del contador de trucos (en el espacio de _fx). Las cifras quedan un
+## poco más abajo que el centro del recuadro de la letra (que deja lugar
+## arriba para los acentos): se baja para que los anillos queden centrados.
 func _trick_center() -> Vector2:
-	return _trick_label.get_global_rect().get_center() * _fx.get_global_transform()
+	var fsize := float(_trick_label.get_theme_font_size("font_size")) * _trick_label.get_global_transform().get_scale().y
+	return (_trick_label.get_global_rect().get_center() + Vector2(0.0, fsize * TRICK_CENTER_DROP)) * _fx.get_global_transform()
 
 
 ## Animaciones del contador y de la calificación (lo que dibuja _fx lo pinta

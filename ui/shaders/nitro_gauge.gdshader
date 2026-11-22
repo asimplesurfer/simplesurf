@@ -100,9 +100,11 @@ void fragment() {
 		bub += on * (1.0 - smoothstep(br - px, br + px, length(p - vec2(bx + sin(t * 4.0 + fi) * 0.006, by))))
 			* step(by, surf - 0.02);
 	}
-	// Ola de atrás: más alta, desfasada, más clara y transparente.
+	// Ola de atrás: más alta, desfasada, más clara y transparente. Con turbo
+	// no va (se veía como una ola fantasma detrás del agua que se gasta).
 	float back_surf = surf + 0.035 + ripple * WATER_R * 0.8 * sin(p.x / WATER_R * 3.0 - t * 2.1 + 1.7);
-	float back = smoothstep(-px, px, back_surf - p.y) * (1.0 - water) * inside * has_water;
+	float no_turbo = (1.0 - step(stored + 0.004, level)) * (1.0 - clamp(swirl * 4.0, 0.0, 1.0));
+	float back = smoothstep(-px, px, back_surf - p.y) * (1.0 - water) * inside * has_water * no_turbo;
 	col = mix(col, vec4(mix(color, vec3(1.0), 0.25), 1.0), back * 0.38);
 	// Degradé suave y banda de luz bajo la superficie.
 	vec3 wcol = mix(color * 1.04, color * 0.8, clamp(depth / (WATER_R * 1.6), 0.0, 1.0));

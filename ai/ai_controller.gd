@@ -75,6 +75,11 @@ const SHADOW_MARGIN := 1.4
 var _on_line: bool = false
 ## Siguiendo su línea, apunta a este punto más adelante (m).
 const AIM_DISTANCE := 14.0
+## Largada: segundos que sigue por su carril antes de ir a su línea (y lo que
+## tarda en pasar de uno a otra). Ver AIDifficulty.keeps_start_lane.
+const START_LANE_TIME := 4.0
+const START_LANE_BLEND := 2.5
+var _start_lane: float = NAN
 
 
 func _ready() -> void:
@@ -248,6 +253,15 @@ func _think(angle: float, lateral: float) -> void:
 		var ring_target := _ring_wave_target(angle, lateral)
 		if not is_nan(ring_target):
 			target = ring_target
+
+	# Largada: por su carril, y de a poco hacia su línea.
+	if race and difficulty.keeps_start_lane and race.lap_of(rider) <= 1:
+		var t := race.race_time
+		if is_nan(_start_lane):
+			_start_lane = lateral
+		if t < START_LANE_TIME + START_LANE_BLEND:
+			target = lerpf(_start_lane, target, smoothstep(START_LANE_TIME, START_LANE_TIME + START_LANE_BLEND, t))
+			_on_line = false
 
 	# Llegando a la meta: derecho al punto más cercano de la línea.
 	var to_line := _arc_ahead(angle, 0.0, lateral)
