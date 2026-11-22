@@ -80,9 +80,20 @@ var inside: Dictionary = {}
 ## Los que ya usaron esta ola (entraron, aunque se hayan caído): no vuelven a entrar.
 var used: Dictionary = {}
 
+const SHADER := preload("res://world/tube/tube_wave.gdshader")
+
 var _mesh_instance: MeshInstance3D
 var _mesh: ArrayMesh
-var _material: Material
+var _material: ShaderMaterial
+## La luz del final del tubo (un brillo que se acerca).
+var _glow: MeshInstance3D
+var _glow_mat: StandardMaterial3D
+## Espuma donde la ola ya rompió (atrás), gotas que caen del labio y la
+## escupida de la salida.
+var _back_foam: CPUParticles3D
+var _lip_drops: CPUParticles3D
+var _spit: CPUParticles3D
+var _spit_mist: CPUParticles3D
 var _collapse: float = 0.0
 ## Aros y rocas que se escondieron (para volver a mostrarlos).
 var _hidden: Array[Node3D] = []
@@ -214,11 +225,31 @@ func enter(rider: Rider, s: float = 0.0) -> void:
 		return
 	used[rider] = true
 	inside[rider] = s
+	rider.tube_exited.connect(_on_rider_exited.bind(rider), CONNECT_ONE_SHOT)
 	if phase == Phase.OPENING:
 		phase = Phase.RIDING
 		ride_time = 0.0
 	rider.enter_tube(self)
 	rider_entered.emit(rider)
+
+
+## Salió por adelante: la ola lo escupe (chorro de espuma).
+func _on_rider_exited(success: bool, rider: Rider) -> void:
+	if success and is_instance_valid(rider):
+		spit_at(rider)
+
+
+## Chorro de espuma y gotas saliendo de la boca de adelante, detrás del surfista.
+func spit_at(rider: Rider) -> void:
+	if _spit == null:
+		return
+	var fwd := rider.forward()
+	var xf := Transform3D(Basis.looking_at(fwd, Vector3.UP), rider.global_position + Vector3.UP * 1.2 - fwd * 1.5)
+	for p in [_spit, _spit_mist]:
+		var part := p as CPUParticles3D
+		part.global_transform = xf
+		part.restart()
+		part.emitting = true
 
 
 ## El estado del surfista avisa que salió (terminó o se cayó).
@@ -343,13 +374,139 @@ func _build_visual() -> void:
 	_mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	# La malla se arma en coordenadas del mundo.
 	_mesh_instance.top_level = true
+	add_child(_mesh_instance)
 	_mesh_instance.global_transform = Transform3D.IDENTITY
+	_material = ShaderMaterial.new()
+	_material.shader = SHADER
+	_material.set_shader_parameter("flow", speed)
+	if course and DayTime.is_night(course):
+		_material.set_shader_parameter("brightness", 0.55)
+	elif course and course.time_of_day == GameSettings.TimeOfDay.SUNSET:
+		_material.set_shader_parameter("brightness", 0.85)
+
+	# La luz del final: un brillo redondo que siempre mira a la cámara.
+	_glow_mat = glow_material()
+	var quad := QuadMesh.new()
+	quad.size = Vector2(1.0, 1.0)
+	_glow = MeshInstance3D.new()
+	_glow.name = "ExitLight"
+	_glow.mesh = quad
+	_glow.material_override = _glow_mat
+	_glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_glow.top_level = true
+	add_child(_glow)
+
+	_back_foam = _particles(48, 0.9, 0.55, Color(0.96, 0.99, 1.0))
+	_back_foam.name = "BackFoam"
+	_back_foam.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	_back_foam.emission_box_extents = Vector3(3.2, 1.2, 0.6)
+	_back_foam.direction = Vector3(0.0, 1.0, -0.6)
+	_back_foam.spread = 35.0
+	_back_foam.initial_velocity_min = 3.0
+	_back_foam.initial_velocity_max = 7.0
+	_back_foam.gravity = Vector3(0.0, -9.0, 0.0)
+	_back_foam.emitting = false
+
+	_lip_drops = _particles(40, 0.8, 0.18, Color(0.85, 0.97, 1.0))
+	_lip_drops.name = "LipDrops"
+	_lip_drops.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	_lip_drops.emission_box_extents = Vector3(0.4, 0.1, 9.0)
+	_lip_drops.direction = Vector3(0.0, -1.0, 0.0)
+	_lip_drops.spread = 15.0
+	_lip_drops.initial_velocity_min = 0.5
+	_lip_drops.initial_velocity_max = 1.5
+	_lip_drops.gravity = Vector3(0.0, -12.0, 0.0)
+	_lip_drops.emitting = false
+
+	_spit = _particles(70, 0.9, 0.4, Color(0.97, 1.0, 1.0))
+	_spit.name = "Spit"
+	_spit.one_shot = true
+	_spit.explosiveness = 0.85
+	_spit.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	_spit.emission_sphere_radius = 1.0
+	# Hacia adelante (el -Z del nodo, que se orienta como el surfista).
+	_spit.direction = Vector3(0.0, 0.25, -1.0)
+	_spit.spread = 22.0
+	_spit.initial_velocity_min = 14.0
+	_spit.initial_velocity_max = 26.0
+	_spit.gravity = Vector3(0.0, -9.0, 0.0)
+	_spit.damping_min = 6.0
+	_spit.damping_max = 10.0
+	_spit.emitting = false
+
+	_spit_mist = _particles(24, 1.3, 1.1, Color(0.9, 0.97, 1.0, 0.6))
+	_spit_mist.name = "SpitMist"
+	_spit_mist.one_shot = true
+	_spit_mist.explosiveness = 0.9
+	_spit_mist.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	_spit_mist.emission_sphere_radius = 1.5
+	_spit_mist.direction = Vector3(0.0, 0.2, -1.0)
+	_spit_mist.spread = 30.0
+	_spit_mist.initial_velocity_min = 6.0
+	_spit_mist.initial_velocity_max = 12.0
+	_spit_mist.damping_min = 5.0
+	_spit_mist.damping_max = 8.0
+	_spit_mist.emitting = false
+
+
+## Material del brillo de la salida.
+static func glow_material() -> StandardMaterial3D:
+	var grad := Gradient.new()
+	grad.set_color(0, Color(1.0, 1.0, 0.95, 1.0))
+	grad.set_color(1, Color(1.0, 0.95, 0.7, 0.0))
+	grad.add_point(0.35, Color(1.0, 0.98, 0.85, 0.7))
+	var tex := GradientTexture2D.new()
+	tex.gradient = grad
+	tex.fill = GradientTexture2D.FILL_RADIAL
+	tex.fill_from = Vector2(0.5, 0.5)
+	tex.fill_to = Vector2(1.0, 0.5)
+	tex.width = 64
+	tex.height = 64
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.vertex_color_use_as_albedo = true
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	_material = mat
-	add_child(_mesh_instance)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	mat.albedo_texture = tex
+	mat.albedo_color = Color(1.0, 1.0, 1.0, 0.0)
+	return mat
+
+
+## Materiales de la ola (para prepararlos antes de que aparezca: sin tirones).
+static func warmup_materials() -> Array[Material]:
+	var wave := ShaderMaterial.new()
+	wave.shader = SHADER
+	return [wave, glow_material()]
+
+
+## Partículas blancas simples (bolitas de espuma que se achican al final).
+func _particles(amount: int, lifetime: float, size: float, color: Color) -> CPUParticles3D:
+	var p := CPUParticles3D.new()
+	p.amount = amount
+	p.lifetime = lifetime
+	p.local_coords = false
+	p.top_level = true
+	var mesh := SphereMesh.new()
+	mesh.radius = size * 0.5
+	mesh.height = size
+	mesh.radial_segments = 6
+	mesh.rings = 3
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = color
+	if color.a < 1.0:
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mesh.material = mat
+	p.mesh = mesh
+	var curve := Curve.new()
+	curve.add_point(Vector2(0.0, 0.6))
+	curve.add_point(Vector2(0.25, 1.0))
+	curve.add_point(Vector2(1.0, 0.0))
+	p.scale_amount_curve = curve
+	p.scale_amount_min = 0.6
+	p.scale_amount_max = 1.2
+	add_child(p)
+	return p
 
 
 ## Tramo que se dibuja ahora [desde, hasta] (m desde la boca).
@@ -404,6 +561,7 @@ func _rebuild() -> void:
 	var rings := maxi(int(ceil((sp.y - sp.x) / RING_STEP)), 2)
 	var verts := PackedVector3Array()
 	var colors := PackedColorArray()
+	var uvs := PackedVector2Array()
 	var indices := PackedInt32Array()
 	var count := 0
 	for i in rings + 1:
@@ -425,6 +583,7 @@ func _rebuild() -> void:
 			var pos := o + w * p.x + Vector3.UP * (base + p.y * h)
 			verts.append(pos)
 			colors.append(_color_for(k, count))
+			uvs.append(Vector2(float(k) / float(count - 1), s))
 	for i in rings:
 		for k in count - 1:
 			var a := i * count + k
@@ -434,9 +593,54 @@ func _rebuild() -> void:
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = verts
 	arrays[Mesh.ARRAY_COLOR] = colors
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
 	arrays[Mesh.ARRAY_INDEX] = indices
 	_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	_mesh.surface_set_material(0, _material)
+	_material.set_shader_parameter("back_s", sp.x)
+	_material.set_shader_parameter("front_s", sp.y)
+	_material.set_shader_parameter("exit_light", progress())
+	_place_effects(sp, hs)
+
+
+## La luz de la salida, la espuma de atrás y las gotas del labio siguen al tubo.
+func _place_effects(sp: Vector2, hs: float) -> void:
+	var riding := phase == Phase.RIDING and not inside.is_empty()
+	# La luz: en la boca de adelante, adentro del tubo. Más grande y fuerte
+	# cuanto más cerca está la salida.
+	var f := frame_at(sp.y - 1.0)
+	var o: Vector3 = f[0]
+	var w: Vector3 = f[1]
+	var k := progress() if riding else 0.15
+	_glow.global_position = o + w * 0.3 + Vector3.UP * (base_height(o) + 2.6 * hs)
+	var size := lerpf(4.0, 7.5, k) * hs
+	_glow.scale = Vector3(size, size, size)
+	_glow_mat.albedo_color = Color(1.0, 1.0, 1.0, lerpf(0.45, 1.0, k) * hs)
+	_glow.visible = hs > 0.05 and phase != Phase.CLOSING
+	# La espuma: donde la ola ya rompió, atrás.
+	_back_foam.emitting = riding
+	if riding:
+		var b := frame_at(sp.x + 1.5)
+		var bo: Vector3 = b[0]
+		var bw: Vector3 = b[1]
+		var bf: Vector3 = b[2]
+		_back_foam.global_transform = Transform3D(
+			Basis.looking_at(bf, Vector3.UP), bo + bw * 0.5 + Vector3.UP * (base_height(bo) + 1.5)
+		)
+	# Gotas que caen de la punta del labio, alrededor del primero.
+	_lip_drops.emitting = riding
+	if riding:
+		var lead := -INF
+		for r in inside:
+			lead = maxf(lead, float(inside[r]))
+		var l := frame_at(lead + 3.0)
+		var lo: Vector3 = l[0]
+		var lw: Vector3 = l[1]
+		var lf: Vector3 = l[2]
+		var tip: Vector2 = LIP_CLOSED[LIP_CLOSED.size() - 1]
+		_lip_drops.global_transform = Transform3D(
+			Basis.looking_at(lf, Vector3.UP), lo + lw * tip.x + Vector3.UP * (base_height(lo) + tip.y * hs)
+		)
 
 
 ## Color de cada punto del perfil: abajo oscuro, la cara turquesa y el labio blanco.

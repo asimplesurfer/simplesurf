@@ -83,6 +83,10 @@ func _run() -> void:
 	if views and not views.cameras.is_empty():
 		cam = views.cameras[0]
 	cam.set_process(false)
+	if not is_instance_valid(tw):
+		print("La ola ya no está")
+		quit()
+		return
 	var s: float = tw.inside.get(_rider, 0.0)
 	var f := tw.frame_at(s)
 	var o: Vector3 = f[0]
@@ -124,5 +128,6 @@ func _shot(name: String) -> void:
 	var img := root.get_texture().get_image()
 	var path := _dir.path_join(name)
 	img.save_png(path)
-	print("Captura: ", path)
+	var cam := root.get_viewport().get_camera_3d()
+	print("Captura: %s  surfista %s (%s)  cámara %s" % [path, _rider.global_position, _rider.state_machine.current_name, cam.global_position if cam else Vector3.ZERO])
 	Engine.time_scale = 1.0

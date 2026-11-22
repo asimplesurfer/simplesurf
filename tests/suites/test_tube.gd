@@ -51,7 +51,15 @@ func _test_not_in_time_trial() -> void:
 	await process_frame
 	m = await _open_race(RaceConfig.explore())
 	race = m.get_node("RaceManager") as RaceManager
-	_check(race.tubes == null, "en el modo libre no hay olas tubo (por ahora)")
+	_check(race.tubes != null and not race.tubes.automatic, "en el modo libre las olas tubo no aparecen solas")
+	race.skip_countdown()
+	await process_frame
+	var me := race.humans()[0]
+	var key := InputEventKey.new()
+	key.physical_keycode = KEY_Y
+	key.pressed = true
+	race._unhandled_input(key)
+	_check(race.tubes.current != null and race.tubes.current.opener == me, "Y hace aparecer una ola tubo adelante (prueba)")
 	m.queue_free()
 	await process_frame
 	GameSettings.player_count = saved_players
