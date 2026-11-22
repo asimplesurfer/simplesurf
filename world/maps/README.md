@@ -8,8 +8,10 @@ código, salvo que el mapa necesite una pieza que todavía no existe.
 
 El editor de mapas lee y escribe este mismo formato. Es un artefacto en Claude:
 https://claude.ai/artifact/AWpL9C2N5dKRnid5Fdxyo7. Su código está en
-`tools/map_editor/`. Cuando una pieza nueva entra al juego, se suma también ahí
-y se vuelve a publicar.
+`tools/map_editor/`. Las piezas no se escriben en el editor: salen del código
+del juego (la constante `EDITOR` de cada pieza) cuando se arma con
+`python3 tools/map_editor/build.py`. Después de un cambio en mapas o piezas,
+Claude lo arma y lo vuelve a publicar.
 
 Para pasar un mapa del editor al juego:
 
@@ -168,6 +170,13 @@ lista de piezas esté el corte: las islas lo buscan al prepararse (ver
      `null`). Lo usa el validador de mapas antes de publicar.
    - Si es tierra: anotarse como `"ground"` en `prepare` y tener `ground_y(p)`
      y `outline()` (así el agua y las olas la tienen en cuenta).
-4. Sumarla a la tabla de arriba y al editor de mapas.
+4. Decir cómo se ve en el editor, con `const EDITOR := {...}`: su nombre,
+   cómo se pone (`"place"`: `"point"`, `"shape"`, `"path"` o `"two_points"`),
+   si se choca (`"solid"`) y la ayuda (`"hint"`). Cada parámetro lleva un
+   comentario `##` arriba: es su etiqueta en el editor (o se da en
+   `EDITOR.fields`, ver `MapPiece.editor_entry`). El editor la toma sola, con
+   un botón y un dibujo genéricos; un ícono o un dibujo propio son opcionales
+   (en `editor.src.html`). Un test revisa que no falte nada.
+5. Sumarla a la tabla de arriba.
 
 `Course` no sabe qué hace cada pieza: solo las arma y las llama.

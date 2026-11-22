@@ -12,6 +12,13 @@ extends MapPiece
 
 const REQUIRED := ["path"]
 
+## Cómo se ve en el editor de mapas (ver MapPiece.editor_entry).
+const EDITOR := {
+	"name": "Dividir isla", "place": "path", "what": "un corte",
+	"hint": "Dibujá una línea que cruce una isla tropical de mar a mar (clic: punto, arrastrar: curva). Enter o doble clic para terminar: la isla queda partida en dos.",
+	"fields": {"width": "Ancho del mar en el medio (m)"},
+}
+
 ## Camino del corte: [[x, z], {"p": [x, z], "in": [..], "out": [..]}, ...].
 var path: Array = []
 ## Ancho del mar que queda entre las partes (m, de orilla a orilla).

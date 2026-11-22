@@ -13,6 +13,21 @@ extends MapPiece
 
 const REQUIRED := ["shape"]
 
+## Cómo se ve en el editor de mapas (ver MapPiece.editor_entry). No es
+## "solid": sobre la pista es una cueva, que se atraviesa.
+const EDITOR := {
+	"name": "Roca / cueva", "place": "shape", "what": "una roca",
+	"hint": "Dibujá la figura de la roca igual que la pista y cerrala tocando el primer punto. Si tapa la pista es una cueva; si no, una roca de paisaje.",
+	"fields": {
+		"height": "Alto de la roca (m)", "ceiling": "Altura del techo (m)",
+		"opening": "Arco abajo (si no toca la pista)", "opening_width": "Ancho del arco (m)",
+		"darkness": "Oscuridad al entrar (0 a 1)", "adapt_time": "Ojos se acostumbran (s)",
+		"stone_low": "Piedra abajo", "stone_high": "Piedra arriba",
+		"grass_color": "Pasto arriba", "moss_color": "Musgo",
+		"glow_color": "Agua y luz de la cueva", "shape_seed": {"label": "Variante", "kind": "variant"},
+	},
+}
+
 ## La roca terminó de armarse (es en el frame siguiente a build).
 signal built
 

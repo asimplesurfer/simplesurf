@@ -5,6 +5,7 @@ extends "res://tests/test_base.gd"
 func run() -> void:
 	_test_map_files()
 	_test_pieces()
+	_test_editor_catalog()
 	_test_bezier()
 	_test_start_straight()
 	_test_edges_on_border()
@@ -797,3 +798,37 @@ func _land_clear_of_track(course: Course, margin: float) -> bool:
 			print("    isla a %.1f m del centro de la pista en (%d, %d)" % [d, p.x, p.z])
 			break
 	return ok
+
+
+## Cada pieza dice cómo se ve en el editor de mapas (su constante EDITOR), así
+## el editor la toma sola (ver MapPiece.editor_entry).
+func _test_editor_catalog() -> void:
+	var catalog := MapPiece.editor_catalog()
+	var files := 0
+	for f in DirAccess.get_files_at(MapPiece.FOLDER):
+		if f.trim_suffix(".remap").get_extension() == "gd" and not f.begins_with("map_piece"):
+			files += 1
+	_check(catalog.size() == files and files > 0, "el editor conoce todas las piezas (%d de %d)" % [catalog.size(), files])
+	var kinds := ["num", "int", "bool", "color", "text", "choice", "level", "numbool", "variant"]
+	var problems: Array[String] = []
+	for c in catalog:
+		var piece := MapPiece.create({"type": c.type})
+		var vars := piece.params()
+		var place: String = c.place
+		if not MapPiece.PLACES.has(place):
+			problems.append("%s: EDITOR sin \"place\" válido" % c.type)
+			continue
+		var need: Array = {"point": ["x", "z"], "two_points": ["a", "b"], "shape": [c.get("key", "")], "path": [c.get("key", "")]}[place]
+		for k in need:
+			if not vars.has(k):
+				problems.append("%s: para \"%s\" le falta la variable %s" % [c.type, place, k])
+		for row in c.params:
+			if not kinds.has(row[2]):
+				problems.append("%s.%s: campo \"%s\" desconocido" % [c.type, row[0], row[2]])
+			if row[1] == String(row[0]).capitalize():
+				problems.append("%s.%s: sin etiqueta (un comentario ## arriba o en EDITOR.fields)" % [c.type, row[0]])
+			if (row[2] == "choice" or row[2] == "level") and row.size() < 5:
+				problems.append("%s.%s: le faltan las opciones" % [c.type, row[0]])
+	for pr in problems:
+		print("    " + pr)
+	_check(problems.is_empty(), "cada pieza dice cómo se pone y cada parámetro tiene su etiqueta en el editor")

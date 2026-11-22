@@ -10,6 +10,16 @@ extends MapPiece
 
 const REQUIRED := ["x", "z"]
 
+## Cómo se ve en el editor de mapas (ver MapPiece.editor_entry).
+const EDITOR := {
+	"name": "Cascada", "place": "point",
+	"hint": "Clic para poner una cascada. Ponela en la salida de una cueva, cruzando la pista; el puntito del extremo la gira.",
+	"fields": {
+		"angle": "Ángulo (°)", "width": "Ancho (m)", "height": "Altura (m)",
+		"color": "Agua", "drag": "Cuánto frena (0 a 1)",
+	},
+}
+
 ## Centro de la cortina (al nivel del agua).
 var x: float = 0.0
 var z: float = 0.0
