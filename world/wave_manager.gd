@@ -467,13 +467,7 @@ func is_clear_of(s: Swell, point: Vector2) -> bool:
 	return along > clearance or across > clearance
 
 
-## Que la ola no nazca pegada a una isla.
+## Que la ola no nazca pegada a una isla (a menos de unos 28 m de la orilla,
+## donde el agua ya apaga las olas grandes).
 func _far_from_island(s: Swell) -> bool:
-	for node in get_tree().get_nodes_in_group("island"):
-		var island := node as Island
-		if island == null:
-			continue
-		var c := Vector2(island.global_position.x, island.global_position.z)
-		if s.center.distance_to(c) <= island.radius + s.width * 1.5 + 6.0:
-			return false
-	return true
+	return _water == null or _water.land_fade(s.center) >= 0.999

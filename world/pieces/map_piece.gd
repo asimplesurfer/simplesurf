@@ -1,6 +1,6 @@
 class_name MapPiece
 extends RefCounted
-## Una pieza de un mapa: algo que el mapa pone en un lugar (un volcán, un
+## Una pieza de un mapa: algo que el mapa pone en un lugar (una isla, un
 ## géiser, un arco de roca, una cueva...). Cada pieza es un archivo en
 ## world/pieces/ y sabe hacer todo lo suyo: construirse y, si afecta al juego,
 ## qué le pasa a un surfista que la toca. Course no sabe qué hace cada una.
@@ -76,15 +76,25 @@ func to_dict() -> Dictionary:
 ## Se llama antes de construir ninguna pieza. Acá una pieza calcula lo que
 ## otras necesitan saber y se anota en el registro de Course:
 ## - "ground": es tierra; tiene que tener ground_y(p: Vector2) -> float (la
-##   altura del suelo en ese punto, o -INF si ahí no hay tierra).
+##   altura del suelo en ese punto, o -INF si ahí no hay tierra) y
+##   outline() -> PackedVector2Array (su figura vista desde arriba: con ella el
+##   agua apaga las olas grandes cerca de la orilla, y las olas no salen ahí).
 ## Una pieza también puede mirar las otras en course.pieces (así una isla
 ## tropical encuentra los cortes que la dividen) y sumar piezas nuevas ahí.
 func prepare(_course: Course) -> void:
 	pass
 
 
-## Se llama apenas está el recorrido (antes que las islas del mapa). Acá se
-## construye todo lo de la pieza (como hijos de `course`).
+## Para el validador de mapas (tools/validate_maps.gd), sin armar nada: el
+## primer punto de la pista (`samples`: su línea central cada pocos metros) que
+## esta pieza tapa, o null si no tapa ninguno. Las piezas que se atraviesan
+## (cuevas, cascadas) o que van fuera de la pista no tapan.
+func blocks_track(_samples: PackedVector2Array) -> Variant:
+	return null
+
+
+## Se llama apenas está el recorrido. Acá se construye todo lo de la pieza
+## (como hijos de `course`).
 func build(_course: Course) -> void:
 	pass
 

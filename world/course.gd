@@ -1,20 +1,20 @@
 class_name Course
 extends Node3D
 ## El circuito. Lee el mapa de la partida (un TrackMap en world/maps/: el
-## recorrido, las islas, cuántos obstáculos, sus piezas) y lo arma: la pista,
-## las islas, el agua alrededor, y delega lo demás:
+## recorrido, cuántos obstáculos, sus piezas) y lo arma: la pista, el agua
+## alrededor, y delega lo demás:
 ## - CourseMarkers: corcheras, boyas y meta (flotan con el agua).
 ## - CourseObstacles: círculos de nitro y rocas.
-## - las piezas del mapa (world/pieces/: volcán, géiseres, arco, cueva...). Cada
+## - las piezas del mapa (world/pieces/: islas, géiseres, arco, cueva...). Cada
 ##   una se arma sola y hace lo suyo con los surfistas; acá no se sabe qué son.
-## Lo que sí hace acá, en pasos fijos: aplicar a cada surfista los choques
-## (islas, rocas), las piezas, los círculos y los límites de la pista.
+## Lo que sí hace acá, en pasos fijos: aplicar a cada surfista las piezas, los
+## choques con rocas, los círculos y los límites de la pista.
 
 ## -1: el mapa elegido en el menú (GameSettings.track_layout).
 @export var layout: int = -1
 
 ## Datos del mapa (salen del TrackMap; quedan acá porque los usa todo el juego).
-var island_radius: float = 45.0
+## Radio del anillo (solo en los mapas anillo).
 var track_radius: float = 82.0
 ## Mitad del ancho de la pista (m): la pista mide el doble.
 var half_width: float = 20.0
@@ -30,9 +30,6 @@ var hazards_enabled: bool = true
 var bounds_enabled: bool = true
 
 var track: TrackSpace
-## La isla principal (en el mapa Isla, la del medio).
-var island: Island
-var islands: Array[Island] = []
 var rings: Array[NitroRing] = []
 var rocks: Array[Rock] = []
 ## Las piezas del mapa (armadas para esta carrera).
@@ -75,11 +72,7 @@ func _ready() -> void:
 	half_width = map.half_width
 	if map.is_ring():
 		track_radius = map.ring_radius
-		island_radius = map.islands[0].radius
 	track = map.make_track()
-	# Las piezas van antes que las islas del mapa: una pieza que es una isla
-	# (el volcán) queda primera, y el agua alrededor de las primeras islas se
-	# dibuja con más detalle.
 	pieces = map.make_pieces()
 	# Primero todas se preparan (y se anotan: "soy tierra"...), después se
 	# construyen: así cada una puede tener en cuenta a las demás. Al prepararse
@@ -91,21 +84,10 @@ func _ready() -> void:
 		k += 1
 	for piece in pieces:
 		piece.build(self)
-	for i in map.islands.size():
-		_add_map_island(map.islands[i], i)
-	island = islands[0] if not islands.is_empty() else null
 
 	if _water:
-		var fade: Array[Vector3] = []
-		for isl in islands:
-			fade.append(Vector3(isl.position.x, isl.position.z, isl.radius + 2.0))
-		_water.set_islands(fade)
-		# Las islas con forma (tropicales) también apagan las olas grandes.
-		var land: Array[PackedVector2Array] = []
-		for g in registered("ground"):
-			if g is TropicalIslandPiece and not (g as TropicalIslandPiece)._outline.is_empty():
-				land.append((g as TropicalIslandPiece)._outline)
-		_water.set_land(land)
+		# La tierra apaga las olas grandes cerca de la orilla.
+		_water.set_land(land_outlines())
 		if uses_path():
 			_water.set_track(Vector2.ZERO, 0.0, 0.0)
 			_water.set_track_path((track as PathTrack).points, half_width)
@@ -141,18 +123,6 @@ func uses_path() -> bool:
 	return map != null and not map.is_ring()
 
 
-## Una isla común del mapa ({x, z, radius, lighthouse, seed}).
-func _add_map_island(d: Dictionary, index: int) -> void:
-	var isl := Island.new()
-	isl.name = "Island%d" % index
-	isl.radius = d.radius
-	var pos := Vector2(d.x, d.z)
-	isl.island_seed = d.seed if d.seed >= 0 else seed_for(pos)
-	isl.lighthouse = d.lighthouse
-	isl.position = Vector3(pos.x, 0.0, pos.y)
-	add_island(isl)
-
-
 ## Anota algo en el registro de las piezas (ver `_registry`).
 func register(kind: String, item: Object) -> void:
 	if not _registry.has(kind):
@@ -165,24 +135,23 @@ func registered(kind: String) -> Array:
 	return _registry.get(kind, [])
 
 
-## Suma una isla al mapa (se choca con la orilla y el agua la rodea). La usan
-## también las piezas que son islas (el volcán).
-func add_island(isl: Island) -> void:
-	add_child(isl, true)
-	islands.append(isl)
+## Toda la tierra del mapa, vista desde arriba (las figuras de las piezas
+## anotadas como "ground"; ver MapPiece.prepare).
+func land_outlines() -> Array[PackedVector2Array]:
+	var out: Array[PackedVector2Array] = []
+	for g in registered("ground"):
+		var o: PackedVector2Array = g.outline()
+		if o.size() >= 3:
+			out.append(o)
+	return out
 
 
-## Semilla de palmeras para una isla sin semilla propia: sale de dónde está,
-## así no cambia si se agregan o sacan otras islas.
+## Semilla para algo que no la trae: sale de dónde está, así no cambia si se
+## agregan o sacan otras cosas del mapa.
 static func seed_for(pos: Vector2) -> int:
 	return absi(int(round(pos.x)) * 73856093 ^ int(round(pos.y)) * 19349663) % 100000 + 1
 
 
-
-
-## Distancia a la que la orilla de la isla principal tira al jugador.
-func island_crash_radius() -> float:
-	return island_radius + 2.0
 
 
 ## Borde de afuera de la pista (corchera de afuera).
@@ -190,7 +159,7 @@ func outer_limit() -> float:
 	return track_radius + half_width
 
 
-## Borde de adentro de la pista (corchera de adentro, del lado de la isla).
+## Borde de adentro de la pista (corchera de adentro, del lado del centro).
 func inner_limit() -> float:
 	return track_radius - half_width
 
@@ -211,21 +180,8 @@ func _physics_process(delta: float) -> void:
 
 
 func _apply_to_rider(rider: Rider) -> void:
-	var flat := Vector2(rider.position.x, rider.position.z)
-
-	# Islas: la orilla tira de la tabla.
-	if hazards_enabled and not rider.is_fallen():
-		for isl in islands:
-			var c := Vector2(isl.position.x, isl.position.z)
-			var crash_r := isl.radius + 2.0
-			var d := flat.distance_to(c)
-			if d < crash_r:
-				var dir := (flat - c) / d if d > 0.01 else Vector2.RIGHT
-				var safe := c + dir * (crash_r + 2.0)
-				_crash(rider, Vector3(safe.x, rider.position.y, safe.y))
-				return
-
-	# Lo que hacen las piezas del mapa (un géiser que lanza, una cueva...).
+	# Lo que hacen las piezas del mapa (una isla que se choca, un géiser que
+	# lanza, una cueva...).
 	for piece in pieces:
 		if piece.affect_rider(self, rider):
 			return

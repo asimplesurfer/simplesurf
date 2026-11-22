@@ -913,21 +913,12 @@ func _test_course() -> void:
 	await _mash_until_standing(8.0, 4.0)
 	_check(not _rider.is_fallen(), "se levanta después del choque")
 
-	# Isla: chocar la orilla también tira y saca afuera.
-	if _rider.is_fallen():
-		await _mash_until_standing(8.0, 4.0)
-	_teleport(_course.track.position_at(1.0, -(_course.track_radius - _course.island_radius) + 0.5))
-	await process_frame
-	await process_frame
-	_check(_rider.is_fallen(), "chocar la isla tira de la tabla")
-	var r_center := Vector2(_rider.position.x, _rider.position.z).length()
-	_check(r_center >= _course.island_crash_radius(), "y queda fuera de la isla")
-
-	# Límite de afuera: no deja salir del circuito.
+	# Límite de afuera: no deja salir del circuito. (Chocar una isla lo
+	# prueba test_maps, con una isla tropical.)
 	_teleport(_course.track.position_at(2.0, _course.half_width + 20.0))
 	await process_frame
 	await process_frame
-	r_center = Vector2(_rider.position.x, _rider.position.z).length()
+	var r_center := Vector2(_rider.position.x, _rider.position.z).length()
 	_check(r_center <= _course.outer_limit() + 0.5, "no se puede salir del circuito por afuera")
 	await _mash_until_standing(8.0, 4.0)
 	_course.hazards_enabled = false

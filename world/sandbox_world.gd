@@ -32,8 +32,8 @@ func _ready() -> void:
 	add_to_group("sandbox_world")
 	_water = GameSession.find_in_scene(self, "water") as Water
 	if _water:
-		var none: Array[Vector3] = []
-		_water.set_islands(none)
+		var none: Array[PackedVector2Array] = []
+		_water.set_land(none)
 		_water.set_track(Vector2.ZERO, 0.0, 0.0)
 	_build_slalom()
 	_build_ring_loop()

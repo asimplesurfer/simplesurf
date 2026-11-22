@@ -128,6 +128,23 @@ static func _resample(poly: PackedVector2Array, step: float) -> PackedVector2Arr
 	return out
 
 
+## Una isla tapa la pista si algún punto de su centro queda adentro de la figura.
+func blocks_track(samples: PackedVector2Array) -> Variant:
+	var bez := BezierShape.parse(shape)
+	if not bez.is_valid():
+		return null
+	var poly := bez.polygon(4.0)
+	for q in samples:
+		if Geometry2D.is_point_in_polygon(q, poly):
+			return q
+	return null
+
+
+## La figura de la isla vista desde arriba (vacía si un corte se la comió).
+func outline() -> PackedVector2Array:
+	return _outline
+
+
 ## Altura del suelo en un punto (-INF si ahí no hay isla).
 func ground_y(p: Vector2) -> float:
 	if _outline.is_empty() or not Geometry2D.is_point_in_polygon(p, _outline):

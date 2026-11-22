@@ -165,9 +165,6 @@ func is_clear(p: Vector3, r: float, ends: Array[Vector3] = []) -> bool:
 	for q in [p] + ends:
 		if absf(course.track.lateral_of(q)) < course.half_width + 3.0:
 			return false
-	for isl in course.islands:
-		if Vector2(isl.position.x, isl.position.z).distance_to(Vector2(p.x, p.z)) < isl.radius + 14.0 + r:
-			return false
 	for rock in course.rocks:
 		if is_instance_valid(rock) and rock.position.distance_to(Vector3(p.x, rock.position.y, p.z)) < r + 8.0:
 			return false

@@ -42,7 +42,7 @@ func _initialize() -> void:
 		quit(1)
 
 
-## La pista se puede armar y nada la tapa (islas, volcanes, islas tropicales).
+## La pista se puede armar y nada la tapa (islas y cualquier pieza que se choque).
 func _check_track(file: String, m: TrackMap) -> void:
 	var track := m.make_track()
 	if track.length() < 150.0:
@@ -52,26 +52,22 @@ func _check_track(file: String, m: TrackMap) -> void:
 	for i in 300:
 		var p := track.position_at(-PI + TAU * i / 300.0)
 		samples.append(Vector2(p.x, p.z))
-	var round_things: Array = []
-	for i in m.islands.size():
-		var isl: Dictionary = m.islands[i]
-		round_things.append(["la isla %d" % (i + 1), Vector2(isl.x, isl.z), float(isl.radius)])
+	# Cada pieza sabe si tapa la pista (ver MapPiece.blocks_track).
 	for d in m.pieces:
-		if d.get("type") == "volcano":
-			round_things.append(["el volcán", Vector2(float(d.x), float(d.z)), float(d.get("radius", 40.0))])
-		elif d.get("type") == "tropical_island":
-			var poly := BezierShape.parse(d.get("shape", [])).polygon(4.0)
-			for q in samples:
-				if poly.size() >= 3 and Geometry2D.is_point_in_polygon(q, poly):
-					_fail(file, "una isla tropical tapa la pista cerca de (%d, %d)" % [roundi(q.x), roundi(q.y)])
-					break
-	if m.is_ring():
-		return
-	for t in round_things:
-		for q in samples:
-			if q.distance_to(t[1]) < float(t[2]) + 2.0:
-				_fail(file, "%s tapa la pista cerca de (%d, %d)" % [t[0], roundi(q.x), roundi(q.y)])
-				break
+		var piece := MapPiece.create(d)
+		if piece == null:
+			continue
+		var q: Variant = piece.blocks_track(samples)
+		if q is Vector2:
+			_fail(file, "%s tapa la pista cerca de (%d, %d)" % [_piece_name(piece.type), roundi(q.x), roundi(q.y)])
+
+
+## Cómo se llama una pieza en los avisos (para quien sube el mapa).
+func _piece_name(type: String) -> String:
+	match type:
+		"tropical_island":
+			return "una isla tropical"
+	return "una pieza \"%s\"" % type
 
 
 func _fail(file: String, message: String) -> void:
