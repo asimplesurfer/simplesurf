@@ -1392,7 +1392,7 @@ function refreshPanel() {
         (v) => strings.forEach((p) => (p.lines = Math.max(1, Math.min(20, v)))), { id: "all_lines" }));
       if (counts.length > 1) box.append(note("Ahora tienen cantidades distintas (" + counts.join(", ") + "). Poné un número para igualarlas todas."));
     }
-    box.append(note(`Archivo: world/maps/${map.id || slug(map.name)}.json. El número de mapa no se cambia en mapas que ya están en el juego (es el de los récords).`));
+    box.append(note(`Archivo: world/maps/${map.id || slug(map.name)}.json. El número de mapa es el lugar en el menú: se puede cambiar (los récords siguen al mapa por su nombre), pero no a la vez que el nombre del archivo.`));
   } else if (s.kind === "start" && map.start) {
     const st = map.start;
     title.textContent = "Recta de la meta";

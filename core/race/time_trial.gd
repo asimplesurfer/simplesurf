@@ -7,8 +7,20 @@ extends Node
 ## recorrido del mejor (el fantasma), en user://contrarreloj.dat. El fantasma
 ## siempre tiene el personaje con el que se hizo el récord, aunque después se
 ## cambie.
+##
+## Los récords van por el nombre del mapa (su id), con su número (order) al
+## lado como salvavidas (ver _map_entry). Y cada récord vale solo en la pista
+## donde se hizo: se guarda con la huella de la pista (TrackMap.track_shape).
+## Si el mapa cambia de recorrido, de vueltas o de ancho, los récords viejos
+## quedan archivados (no se borran, no se muestran y no hay fantasma) y se
+## arranca de cero; si la pista vuelve a ser la de antes, vuelven solos.
 
 const SAVE_PATH := "user://contrarreloj.dat"
+## Formato del archivo de récords:
+## {"format": 2, "maps": {id: {"order": n, "versions": [{"shape": huella,
+## "top": [...], "ghost": {...}}, ...]}}}. Sin "format": el de antes (por lugar
+## en la lista de mapas), que se pasa a este solo (ver _migrate).
+const SAVE_FORMAT := 2
 const RIDER_SCENE := preload("res://core/rider/rider.tscn")
 ## Cuántos tiempos se guardan por mapa.
 const TOP := 3
@@ -35,7 +47,8 @@ var top: Array = []
 var best_time: float = -1.0
 var ghost: Rider
 
-var _layout: int = 0
+## El mapa de esta contrarreloj.
+var _map: TrackMap
 var _tick: int = 0
 var _frames := PackedFloat32Array()
 var _ghost_frames := PackedFloat32Array()
@@ -51,9 +64,8 @@ var _ghost_progress := PackedFloat32Array()
 func setup(p_race: RaceManager) -> void:
 	race = p_race
 	rider = race.racers[0]
-	_layout = race.config.layout
-	var data := load_data()
-	var entry: Dictionary = data.get(str(_layout), {})
+	_map = race.course.map
+	var entry := records_of(_map)
 	top = entry.get("top", [])
 	if not top.is_empty():
 		best_time = float(top[0].time)
@@ -70,7 +82,19 @@ func setup(p_race: RaceManager) -> void:
 
 # ---------------------------------------------------------------- guardado
 
+## Todo lo guardado, en el formato de ahora (si estaba en el de antes, lo pasa
+## y lo guarda así una sola vez).
 static func load_data() -> Dictionary:
+	var raw := _read()
+	if int(raw.get("format", 0)) == SAVE_FORMAT:
+		return raw
+	var data := _migrate(raw)
+	if not raw.is_empty():
+		save_data(data)
+	return data
+
+
+static func _read() -> Dictionary:
 	if not FileAccess.file_exists(SAVE_PATH):
 		return {}
 	var f := FileAccess.open(SAVE_PATH, FileAccess.READ)
@@ -78,6 +102,77 @@ static func load_data() -> Dictionary:
 		return {}
 	var v: Variant = f.get_var()
 	return v if v is Dictionary else {}
+
+
+## El formato de antes guardaba por lugar en la lista de mapas ("0", "1"...).
+## Pasan al mapa que hoy está en ese lugar, con la huella de su pista de hoy
+## (es la pista donde se hicieron: hasta acá no había forma de que fuera otra).
+static func _migrate(old: Dictionary) -> Dictionary:
+	var data := {"format": SAVE_FORMAT, "maps": {}}
+	var maps := TrackMap.all()
+	for key in old:
+		var entry: Variant = old[key]
+		if not str(key).is_valid_int() or not entry is Dictionary:
+			continue
+		var i := int(str(key))
+		if i < 0 or i >= maps.size():
+			continue
+		var version := {"shape": maps[i].track_shape(), "top": (entry as Dictionary).get("top", [])}
+		if (entry as Dictionary).has("ghost"):
+			version["ghost"] = entry.ghost
+		data.maps[maps[i].id] = {"order": maps[i].order, "versions": [version]}
+	return data
+
+
+## Los récords de un mapa en `data`, buscados por su nombre. Si no está por
+## nombre (le cambiaron el nombre al archivo), adopta los de un mapa con su
+## mismo número que ya no existe y los pasa al nombre nuevo. El número
+## guardado se actualiza al de hoy (por si se reordenaron los mapas).
+## Con `create`, si no hay nada lo arma vacío; si no, devuelve {}.
+static func _map_entry(data: Dictionary, map: TrackMap, create: bool) -> Dictionary:
+	if not data.has("maps"):
+		data["maps"] = {}
+	var maps: Dictionary = data.maps
+	if not maps.has(map.id):
+		var live := {}
+		for m in TrackMap.all():
+			live[m.id] = true
+		for key in maps.keys():
+			if not live.has(key) and int(maps[key].get("order", -1)) == map.order:
+				maps[map.id] = maps[key]
+				maps.erase(key)
+				break
+	if not maps.has(map.id):
+		if not create:
+			return {}
+		maps[map.id] = {"order": map.order, "versions": []}
+	var entry: Dictionary = maps[map.id]
+	entry["order"] = map.order
+	if not entry.has("versions"):
+		entry["versions"] = []
+	return entry
+
+
+## Los récords de la pista de hoy del mapa (la versión con la misma huella).
+## Las versiones con otra huella quedan archivadas.
+static func _version(data: Dictionary, map: TrackMap, create: bool) -> Dictionary:
+	var entry := _map_entry(data, map, create)
+	if entry.is_empty():
+		return {}
+	var shape := map.track_shape()
+	for v in entry.versions:
+		if TrackMap.same_shape(v.get("shape", {}), shape):
+			return v
+	if not create:
+		return {}
+	var version := {"shape": shape, "top": []}
+	entry.versions.append(version)
+	return version
+
+
+## Los récords que valen hoy en ese mapa: {"top": [...], "ghost": {...}} (o {}).
+static func records_of(map: TrackMap) -> Dictionary:
+	return _version(load_data(), map, false)
 
 
 static func save_data(data: Dictionary) -> void:
@@ -88,8 +183,7 @@ static func save_data(data: Dictionary) -> void:
 
 ## Los mejores tiempos guardados del mapa (para el menú y los tests).
 static func top_times(layout: int) -> Array:
-	var entry: Dictionary = load_data().get(str(layout), {})
-	return entry.get("top", [])
+	return records_of(TrackMap.for_layout(layout)).get("top", [])
 
 
 func _on_finished() -> void:
@@ -109,16 +203,15 @@ func _on_finished() -> void:
 			break
 	if rank >= TOP and top.size() < TOP:
 		rank = top.size()
-	var data := load_data()
-	var entry: Dictionary = data.get(str(_layout), {})
 	if rank < TOP:
 		top.insert(rank, record)
 		top.resize(mini(top.size(), TOP))
+		var data := load_data()
+		var entry := _version(data, _map, true)
 		entry["top"] = top
 		if rank == 0:
 			# Récord nuevo: este recorrido pasa a ser el fantasma (con este personaje).
 			entry["ghost"] = {"time": time, "character": record.character, "frames": _frames}
-		data[str(_layout)] = entry
 		save_data(data)
 	finished.emit(time, rank if rank < TOP else -1)
 

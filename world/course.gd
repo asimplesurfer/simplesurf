@@ -76,9 +76,7 @@ func _ready() -> void:
 	if map.is_ring():
 		track_radius = map.ring_radius
 		island_radius = map.islands[0].radius
-		track = TrackSpace.new(track_radius, half_width)
-	else:
-		track = PathTrack.new(map.path, half_width, map.handles_in, map.handles_out, map.smoothing, map.start)
+	track = map.make_track()
 	# Las piezas van antes que las islas del mapa: una pieza que es una isla
 	# (el volcán) queda primera, y el agua alrededor de las primeras islas se
 	# dibuja con más detalle.

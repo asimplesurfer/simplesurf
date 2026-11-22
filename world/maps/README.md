@@ -48,9 +48,16 @@ puede abrir en el editor para cambiarlo.
 ```
 
 - **Coordenadas**: metros, vistas desde arriba. `x` hacia la derecha, `z` hacia abajo.
-- **`order`**: el juego guarda el mapa elegido y los récords de contrarreloj por
-  este número. Un mapa nuevo lleva el siguiente número libre, y **nunca se le
-  cambia el número a un mapa que ya existe**.
+- **Nombre del archivo y `order`**: el juego guarda el mapa elegido y los
+  récords de contrarreloj por el nombre del archivo, con el número (`order`) al
+  lado como salvavidas. Se puede cambiar el número (reordenar el menú) o el
+  nombre del archivo, de a uno por vez: el otro sirve para encontrar los datos
+  y se actualizan solos. Dos mapas no pueden tener el mismo número; uno nuevo
+  lleva el siguiente libre.
+- **Récords y cambios de pista**: un récord vale solo en la pista donde se hizo.
+  Si cambian el recorrido (más de unos 3 m), las vueltas o el ancho, los
+  récords de antes quedan archivados y se empieza de cero; si la pista vuelve a
+  ser la de antes, vuelven. Las islas, piezas, rocas y aros no cuentan.
 - **Recorrido**: es cerrado (el último punto se une con el primero). La largada
   está en el primer punto. Cada punto puede tener manijas Bézier, relativas al
   punto, como en Illustrator o Figma:
