@@ -22,9 +22,9 @@ func _test_map_files() -> void:
 	var maps := TrackMap.all()
 	_check(maps.size() >= 3, "se leen los mapas de la carpeta (%d)" % maps.size())
 	_check(
-		maps[GameSettings.TrackLayout.CLASSIC].id == "classic"
-		and maps[GameSettings.TrackLayout.ARCHIPELAGO].id == "archipelago"
-		and maps[GameSettings.TrackLayout.ATOLL].id == "atoll",
+		maps[TrackMap.index_of("classic")].id == "classic"
+		and maps[TrackMap.index_of("archipelago")].id == "archipelago"
+		and maps[TrackMap.index_of("atoll")].id == "atoll",
 		"los primeros mapas conservan su número (récords y configuración guardada)"
 	)
 	var orders := {}
@@ -42,7 +42,7 @@ func _test_map_files() -> void:
 	_check(orders.size() == maps.size() and ids.size() == maps.size(), "cada mapa tiene su número y su nombre propios")
 	_check(GameSettings.track_layout_names().size() == maps.size(), "el menú muestra todos los mapas")
 	# Ida y vuelta: leer y volver a escribir un mapa da lo mismo.
-	var atoll := maps[GameSettings.TrackLayout.ATOLL]
+	var atoll := maps[TrackMap.index_of("atoll")]
 	var again := TrackMap.from_dict(JSON.parse_string(JSON.stringify(atoll.to_dict())))
 	_check(
 		again.path == atoll.path and again.islands == atoll.islands and again.pieces == atoll.pieces
@@ -173,7 +173,7 @@ func _test_start_straight() -> void:
 ## El archipiélago con una cueva dibujada sobre la pista y una roca de paisaje.
 func _test_cave() -> void:
 	print("Cueva y roca dibujadas:")
-	GameSettings.track_layout = GameSettings.TrackLayout.ARCHIPELAGO
+	GameSettings.track_layout = TrackMap.index_of("archipelago")
 	var d: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://world/maps/archipelago.json"))
 	d.pieces = [
 		{"type": "rock_formation", "shape": [[55, -125], [100, -140], [145, -95], [138, -50], [105, -52], [85, -85], [50, -92]],
@@ -229,7 +229,7 @@ func _test_cave() -> void:
 	_check(is_equal_approx(CaveEyes.seen_brightness(1.0, 1.0), 1.0), "y afuera todo vuelve a lo normal")
 	m.queue_free()
 	await process_frame
-	GameSettings.track_layout = GameSettings.TrackLayout.CLASSIC
+	GameSettings.track_layout = TrackMap.index_of("classic")
 
 
 ## El mapa La cueva: se entra a la cueva, se sale por detrás de la cascada y
@@ -308,7 +308,7 @@ func _test_cave_map() -> void:
 	_check(finished or all_done, "los bots completan la vuelta de la cueva")
 	m.queue_free()
 	await process_frame
-	GameSettings.track_layout = GameSettings.TrackLayout.CLASSIC
+	GameSettings.track_layout = TrackMap.index_of("classic")
 
 
 ## Isla larga e irregular, al este del archipiélago, con la panza hacia la pista.
@@ -321,7 +321,7 @@ func _test_night() -> void:
 	print("De noche:")
 	var saved := GameSettings.time_of_day
 	GameSettings.time_of_day = GameSettings.TimeOfDay.NIGHT
-	GameSettings.track_layout = GameSettings.TrackLayout.ARCHIPELAGO
+	GameSettings.track_layout = TrackMap.index_of("archipelago")
 	var d: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://world/maps/archipelago.json"))
 	d.pieces = [
 		{"type": "tropical_island", "shape": ISLAND_SHAPE},
@@ -345,14 +345,14 @@ func _test_night() -> void:
 	m.queue_free()
 	await process_frame
 	GameSettings.time_of_day = saved
-	GameSettings.track_layout = GameSettings.TrackLayout.CLASSIC
+	GameSettings.track_layout = TrackMap.index_of("classic")
 
 
 ## Una isla tropical dibujada: arena, selva y palmeras (todo en pocas
 ## MultiMesh) y se choca como una isla.
 func _test_tropical_island() -> void:
 	print("Isla tropical dibujada:")
-	GameSettings.track_layout = GameSettings.TrackLayout.ARCHIPELAGO
+	GameSettings.track_layout = TrackMap.index_of("archipelago")
 	var d: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://world/maps/archipelago.json"))
 	d.pieces = [
 		{"type": "tropical_island", "shape": ISLAND_SHAPE},
@@ -516,12 +516,12 @@ func _test_tropical_island() -> void:
 
 	m.queue_free()
 	await process_frame
-	GameSettings.track_layout = GameSettings.TrackLayout.CLASSIC
+	GameSettings.track_layout = TrackMap.index_of("classic")
 
 
 func _test_archipelago() -> void:
 	print("Mapa archipiélago:")
-	GameSettings.track_layout = GameSettings.TrackLayout.ARCHIPELAGO
+	GameSettings.track_layout = TrackMap.index_of("archipelago")
 	GameSettings.jump_style = GameSettings.JumpStyle.WAVES
 	var config := RaceConfig.new()
 	config.laps = 1
@@ -549,7 +549,7 @@ func _test_archipelago() -> void:
 		track.length() > 700.0 and track.length() < 1000.0,
 		"una vuelta mide %.0f m" % track.length()
 	)
-	_check(config.laps == 1 and GameSettings.laps_for(GameSettings.TrackLayout.ARCHIPELAGO) == 3, "en el archipiélago se corren 3 vueltas")
+	_check(config.laps == 1 and GameSettings.laps_for(TrackMap.index_of("archipelago")) == 3, "en el archipiélago se corren 3 vueltas")
 
 	# Ida y vuelta: posición <-> (ángulo, lateral).
 	var roundtrip := true
@@ -636,12 +636,12 @@ func _test_archipelago() -> void:
 	_check(island_crashes[0] <= 1, "casi sin chocar islas (%d)" % island_crashes[0])
 	m.queue_free()
 	await process_frame
-	GameSettings.track_layout = GameSettings.TrackLayout.CLASSIC
+	GameSettings.track_layout = TrackMap.index_of("classic")
 
 
 func _test_atoll() -> void:
 	print("Mapa el atolón (con tormenta):")
-	GameSettings.track_layout = GameSettings.TrackLayout.ATOLL
+	GameSettings.track_layout = TrackMap.index_of("atoll")
 	GameSettings.weather = GameSettings.Weather.STORM
 	GameSettings.jump_style = GameSettings.JumpStyle.WAVES
 	var config := RaceConfig.new()
@@ -792,7 +792,7 @@ func _test_atoll() -> void:
 	)
 	sunny.queue_free()
 	await process_frame
-	GameSettings.track_layout = GameSettings.TrackLayout.CLASSIC
+	GameSettings.track_layout = TrackMap.index_of("classic")
 
 
 func _geysers(course: Course) -> Array[Geyser]:

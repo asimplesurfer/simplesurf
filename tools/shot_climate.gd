@@ -19,7 +19,7 @@ func _run() -> void:
 	GameSettings.time_of_day = times.get(args[1] if args.size() > 1 else "atardecer", GameSettings.TimeOfDay.SUNSET)
 	GameSettings.weather = GameSettings.Weather.STORM if args.size() > 2 and args[2] == "tormenta" else GameSettings.Weather.SUNNY
 	if args.size() > 3:
-		GameSettings.track_layout = TrackMap.index_of(args[3]) as GameSettings.TrackLayout
+		GameSettings.track_layout = TrackMap.index_of(args[3])
 	var config := RaceConfig.create(1, 0, 1)
 	config.time_of_day = GameSettings.time_of_day
 	config.weather = GameSettings.weather

@@ -46,7 +46,7 @@ func _test_bot_paths() -> void:
 	_check(distinct >= 4, "los caminos van por lugares distintos (%d distintos)" % distinct)
 	ai.free()
 	# Línea de carrera: la más corta dentro de la pista (corta las curvas).
-	var map := TrackMap.for_layout(GameSettings.TrackLayout.ARCHIPELAGO)
+	var map := TrackMap.for_layout(TrackMap.index_of("archipelago"))
 	var track := PathTrack.new(map.path, map.half_width)
 	var lane := map.half_width - 3.0
 	var line := RacingLine.for_track(track, lane)
@@ -255,7 +255,7 @@ func _test_demo() -> void:
 	GameSettings.player_count = 1
 	GameSettings.bot_count = 3
 	GameSettings.bot_level = 0
-	GameSettings.track_layout = GameSettings.TrackLayout.CLASSIC
+	GameSettings.track_layout = TrackMap.index_of("classic")
 	GameSettings.weather = GameSettings.Weather.SUNNY
 	var demo: Node = load("res://main.tscn").instantiate()
 	# La configuración viaja con la escena (como hace el menú al abrirla).
@@ -276,7 +276,7 @@ func _test_demo() -> void:
 	_check(demo_course.map.id == "atoll" and demo_course.storm != null, "en El Atolón con tormenta")
 	_check(race.config.laps == 3, "a 3 vueltas")
 	_check(
-		GameSettings.track_layout == GameSettings.TrackLayout.CLASSIC and GameSettings.weather == GameSettings.Weather.SUNNY,
+		GameSettings.track_layout == TrackMap.index_of("classic") and GameSettings.weather == GameSettings.Weather.SUNNY,
 		"sin cambiar el mapa ni el clima elegidos"
 	)
 	_check(split.views.size() == 2, "con la pantalla en 2 (una vista por bot)")

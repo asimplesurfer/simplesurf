@@ -12,10 +12,6 @@ enum JumpStyle { WAVES, FREE }
 ## CONSTANT_LEFT: una ola constante a la izquierda (lado de afuera de la pista).
 enum WaveMode { SURGES, CONSTANT_LEFT }
 const WAVE_MODE_NAMES := ["grandes que aparecen", "constante a la izquierda"]
-## El mapa es un número: su lugar en la lista de world/maps/ (ver TrackMap).
-## Estos son los nombres de los primeros (sus números no cambian nunca); un
-## mapa nuevo no necesita nombre acá.
-enum TrackLayout { CLASSIC, ARCHIPELAGO, ATOLL }
 ## Clima: sol o tormenta eléctrica (cielo gris, rayos, mar picado).
 enum Weather { SUNNY, STORM }
 const WEATHER_NAMES := ["soleado", "tormenta"]
@@ -33,7 +29,10 @@ const JUMP_MODE_NAMES := ["mantener para cargar", "tocar para saltar"]
 static var jump_mode: JumpMode = JumpMode.TAP
 static var jump_style: JumpStyle = JumpStyle.WAVES
 static var wave_mode: WaveMode = WaveMode.SURGES
-static var track_layout: TrackLayout = TrackLayout.ARCHIPELAGO
+## El mapa elegido: su lugar en la lista de mapas de hoy (TrackMap.all()).
+## Sirve mientras el juego está abierto; se guarda por nombre y número (ver
+## save_settings), así sacar o reordenar mapas no cambia el elegido.
+static var track_layout: int = TrackMap.default_index()
 static var weather: Weather = Weather.SUNNY
 static var time_of_day: TimeOfDay = TimeOfDay.DAY
 ## Cuántas personas juegan (pantalla dividida). Se elige en el menú (y en el
@@ -57,7 +56,7 @@ const SANDBOX_WAVE_LEVELS := 5
 static var sandbox_wave_level: int = 3
 ## La demo siempre es igual: dos bots en Imposible, en El Atolón con tormenta
 ## (ver RaceConfig.demo; el modo de la partida va en su RaceConfig, no acá).
-const DEMO_LAYOUT := TrackLayout.ATOLL
+const DEMO_MAP := "atoll"
 const DEMO_WEATHER := Weather.STORM
 const DEMO_BOTS := 2
 const DEMO_LEVEL := 4
@@ -75,9 +74,11 @@ static func load_settings() -> void:
 		player_count = clampi(int(cfg.get_value("gameplay", "player_count", 1)), 1, InputSetup.MAX_PLAYERS)
 		# Se juega siempre con el salto de olas (saltito + pop): ya no se elige.
 		jump_style = JumpStyle.WAVES
-		track_layout = clampi(
-			int(cfg.get_value("gameplay", "track_layout", TrackLayout.ARCHIPELAGO)), 0, TrackMap.count() - 1
-		) as TrackLayout
+		# El mapa va por nombre y número. Antes iba solo "track_layout" (el
+		# lugar en la lista, que era igual al número).
+		var map_id := str(cfg.get_value("gameplay", "map", ""))
+		var map_order := int(cfg.get_value("gameplay", "map_order", cfg.get_value("gameplay", "track_layout", -1)))
+		track_layout = TrackMap.find(map_id, map_order)
 		weather = clampi(int(cfg.get_value("gameplay", "weather", Weather.SUNNY)), 0, WEATHER_NAMES.size() - 1) as Weather
 		time_of_day = clampi(int(cfg.get_value("gameplay", "time_of_day", TimeOfDay.DAY)), 0, TIME_NAMES.size() - 1) as TimeOfDay
 		wave_mode = clampi(int(cfg.get_value("gameplay", "wave_mode", WaveMode.SURGES)), 0, 1) as WaveMode
@@ -102,7 +103,11 @@ static func save_settings() -> void:
 	cfg.set_value("gameplay", "player_count", player_count)
 	cfg.set_value("gameplay", "jump_style", jump_style)
 	cfg.set_value("gameplay", "wave_mode", wave_mode)
-	cfg.set_value("gameplay", "track_layout", track_layout)
+	var map := TrackMap.for_layout(track_layout)
+	cfg.set_value("gameplay", "map", map.id)
+	cfg.set_value("gameplay", "map_order", map.order)
+	if cfg.has_section_key("gameplay", "track_layout"):
+		cfg.erase_section_key("gameplay", "track_layout")
 	cfg.set_value("gameplay", "weather", weather)
 	cfg.set_value("gameplay", "time_of_day", time_of_day)
 	cfg.set_value("gameplay", "bot_count", bot_count)
@@ -152,13 +157,13 @@ static func wave_mode_name() -> String:
 
 
 static func toggle_track_layout() -> void:
-	track_layout = ((track_layout + 1) % TrackMap.count()) as TrackLayout
+	track_layout = (track_layout + 1) % TrackMap.count()
 	save_settings()
 
 
 ## Elige el mapa número `layout` (su lugar en la lista de mapas).
 static func set_track_layout(layout: int) -> void:
-	track_layout = clampi(layout, 0, TrackMap.count() - 1) as TrackLayout
+	track_layout = clampi(layout, 0, TrackMap.count() - 1)
 	save_settings()
 
 
@@ -173,6 +178,6 @@ static func track_layout_names() -> Array[String]:
 
 ## Vueltas de la carrera según el mapa (el archipiélago y el atolón son mucho
 ## más largos que la isla).
-static func laps_for(layout: TrackLayout) -> int:
+static func laps_for(layout: int) -> int:
 	return TrackMap.for_layout(layout).laps
 

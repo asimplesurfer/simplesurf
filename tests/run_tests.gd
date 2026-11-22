@@ -69,7 +69,7 @@ func _run() -> void:
 func _reset_settings() -> void:
 	GameSettings.player_count = 1
 	GameSettings.bot_count = 0
-	GameSettings.track_layout = GameSettings.TrackLayout.CLASSIC
+	GameSettings.track_layout = TrackMap.index_of("classic")
 	GameSettings.weather = GameSettings.Weather.SUNNY
 	GameSettings.jump_style = GameSettings.JumpStyle.FREE
 	Engine.time_scale = 1.0

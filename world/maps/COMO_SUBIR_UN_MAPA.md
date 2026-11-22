@@ -20,9 +20,10 @@ Antes de bajarlo, fijate dos cosas:
 2. En el panel **Mapa** (tocá el agua vacía para verlo):
    - **Nombre en el menú**: como lo vas a ver en el juego.
    - **Número de mapa**: tiene que ser distinto al de los otros mapas. Un mapa
-     nuevo lleva el siguiente número libre (el editor lo pone solo). Si estás
-     cambiando un mapa que ya existe, **no le cambies el número**: es el de sus
-     récords de contrarreloj.
+     nuevo lleva el siguiente número libre (el editor lo pone solo). Para
+     reordenar el menú se puede cambiar; los récords siguen al mapa por su
+     nombre. Lo que no conviene es cambiar el número **y** el nombre del
+     archivo a la vez: ahí el juego ya no sabe de qué mapa eran los récords.
 
 ## 2. Descargar el archivo
 

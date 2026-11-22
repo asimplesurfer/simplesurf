@@ -44,11 +44,7 @@ func _initialize() -> void:
 
 ## La pista se puede armar y nada la tapa (islas, volcanes, islas tropicales).
 func _check_track(file: String, m: TrackMap) -> void:
-	var track: TrackSpace
-	if m.is_ring():
-		track = TrackSpace.new(m.ring_radius, m.half_width)
-	else:
-		track = PathTrack.new(m.path, m.half_width, m.handles_in, m.handles_out, m.smoothing, m.start)
+	var track := m.make_track()
 	if track.length() < 150.0:
 		_fail(file, "la vuelta es muy corta (%.0f m)" % track.length())
 		return

@@ -6,13 +6,19 @@ extends RefCounted
 ## archivo, no tocar código. Course lo lee y arma todo. El editor de mapas lee y
 ## escribe este mismo formato (ver world/maps/README.md).
 ##
-## Cada mapa tiene un número fijo (`order`): es el que se guarda en la
-## configuración y en los récords de contrarreloj, así que un mapa nuevo va con
-## un número nuevo (el siguiente libre) y nunca se cambia el de uno que ya existe.
+## Cada mapa tiene dos datos que lo identifican:
+## - `id`: su nombre interno (el del archivo). Con él se guardan el mapa elegido
+##   y los récords de contrarreloj, así que reordenar los mapas no los mezcla.
+## - `order`: su número (el lugar en el menú). Se puede cambiar. Es el
+##   salvavidas: si le cambian el nombre al archivo, los datos guardados se
+##   encuentran por el número y pasan al nombre nuevo solos (ver find y
+##   TimeTrial). Dos mapas no pueden tener el mismo número.
 
 const FOLDER := "res://world/maps/"
 ## Versión del formato del archivo.
 const FORMAT := 1
+## El mapa que se elige si no hay otro (la primera vez, o si el guardado ya no está).
+const DEFAULT_ID := "archipelago"
 
 ## Nombre interno (el del archivo) y el que se ve en el menú.
 var id: String = ""
@@ -215,6 +221,104 @@ func make_pieces() -> Array[MapPiece]:
 		if piece:
 			out.append(piece)
 	return out
+
+
+# ------------------------------------------------------------- identidad
+
+## Busca un mapa por su nombre interno y, si no está (le cambiaron el nombre
+## al archivo), por su número. Devuelve su lugar en la lista, o el del mapa
+## por defecto si no aparece ninguno de los dos.
+static func find(map_id: String, map_order: int = -1) -> int:
+	var i := index_of(map_id)
+	if i >= 0:
+		return i
+	var maps := all()
+	for k in maps.size():
+		if maps[k].order == map_order:
+			return k
+	return default_index()
+
+
+## Lugar en la lista del mapa por defecto (el archipiélago, o el primero).
+static func default_index() -> int:
+	return maxi(index_of(DEFAULT_ID), 0)
+
+
+# ------------------------------------------------------- forma de la pista
+
+## La pista de este mapa (las coordenadas de carrera).
+func make_track() -> TrackSpace:
+	if is_ring():
+		return TrackSpace.new(ring_radius, half_width)
+	return PathTrack.new(path, half_width, handles_in, handles_out, smoothing, start)
+
+
+## Separación entre los puntos de la huella (m).
+const SHAPE_STEP := 6.0
+## Cuánto se puede mover la pista (m) y seguir siendo "la misma" para los récords.
+const SHAPE_TOLERANCE := 3.0
+
+var _shape: Dictionary = {}
+
+
+## La huella de la pista: un dibujo chico de la línea central (un punto cada
+## SHAPE_STEP metros, desde la meta), las vueltas y el ancho. Va guardada con
+## los récords de contrarreloj: un récord vale solo en la pista donde se hizo
+## (ver same_shape). No cuenta islas, piezas, rocas ni aros.
+func track_shape() -> Dictionary:
+	if _shape.is_empty():
+		var track := make_track()
+		var total := track.length()
+		var n := maxi(int(total / SHAPE_STEP), 16)
+		var pts := PackedVector2Array()
+		for i in n:
+			var p := track.position_at(TAU * i / n)
+			pts.append(Vector2(snappedf(p.x, 0.1), snappedf(p.z, 0.1)))
+		_shape = {"points": pts, "length": snappedf(total, 0.1), "laps": laps, "half_width": half_width}
+	return _shape
+
+
+## true si las dos huellas son la misma pista: mismas vueltas y ancho, la meta
+## en el mismo lugar y mirando para el mismo lado, y ningún punto de una más
+## lejos que SHAPE_TOLERANCE de la otra (así un retoque chiquito en el editor
+## no cuenta como pista nueva).
+static func same_shape(a: Dictionary, b: Dictionary) -> bool:
+	if int(a.get("laps", -1)) != int(b.get("laps", -2)):
+		return false
+	if absf(float(a.get("half_width", 0.0)) - float(b.get("half_width", 0.0))) > 0.5:
+		return false
+	var pa: PackedVector2Array = a.get("points", PackedVector2Array())
+	var pb: PackedVector2Array = b.get("points", PackedVector2Array())
+	if pa.size() < 2 or pb.size() < 2:
+		return false
+	if pa[0].distance_to(pb[0]) > SHAPE_TOLERANCE:
+		return false
+	var la := float(a.get("length", 0.0))
+	var lb := float(b.get("length", 0.0))
+	if absf(la - lb) > maxf(la, lb) * 0.05:
+		return false
+	if (pa[1] - pa[0]).normalized().dot((pb[1] - pb[0]).normalized()) < 0.8:
+		return false
+	return _farthest(pa, pb) <= SHAPE_TOLERANCE and _farthest(pb, pa) <= SHAPE_TOLERANCE
+
+
+## La mayor distancia de un punto de `a` a la línea (cerrada) de `b`. Las dos
+## van desde la meta y tienen casi el mismo largo: para cada punto se busca
+## solo en la parte de `b` que le corresponde (más o menos un octavo).
+static func _farthest(a: PackedVector2Array, b: PackedVector2Array) -> float:
+	var worst := 0.0
+	var n := b.size()
+	var window := maxi(n / 8, 8)
+	for k in a.size():
+		var p := a[k]
+		var mid := int(float(k) * n / a.size())
+		var best := INF
+		for j in range(mid - window, mid + window + 1):
+			var i := posmod(j, n)
+			var q := Geometry2D.get_closest_point_to_segment(p, b[i], b[(i + 1) % n])
+			best = minf(best, p.distance_squared_to(q))
+		worst = maxf(worst, best)
+	return sqrt(worst)
 
 
 static func _vec(v: Variant) -> Vector2:

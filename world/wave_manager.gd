@@ -210,10 +210,11 @@ func _update_fixed() -> void:
 			fixed_spawned.append([snappedf(s.center.x, 0.01), snappedf(s.center.y, 0.01)])
 
 
-## Arma la lista de olas fijas para `total_m` metros de pista (semilla por mapa).
+## Arma la lista de olas fijas para `total_m` metros de pista (semilla por
+## mapa: sale de su nombre, así reordenar los mapas no las cambia).
 func _build_fixed(course: Course, total_m: float) -> void:
 	var rng := RandomNumberGenerator.new()
-	rng.seed = 7919 * (course.layout + 1) + 31
+	rng.seed = 7919 * (course.map.id.hash() % 100000 + 1) + 31
 	var d := 60.0
 	while d < total_m:
 		var ahead := rng.randf_range(incoming_distance_min, incoming_distance_max)
