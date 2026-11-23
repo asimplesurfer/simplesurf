@@ -63,6 +63,17 @@ extends Resource
 ## a su lugar así de rápido (veces la velocidad del truco). Es solo para
 ## verse: ya no cuenta.
 @export var trick_release_speed_mult: float = 3.0
+## Estilo de trucos LIMPIO_JUSTO: aterrizaje justo (todavía desequilibrado).
+## Se queda con esta parte de la velocidad y del nitro del salto.
+@export var trick_sloppy_speed_mult: float = 0.6
+@export var trick_sloppy_nitro_mult: float = 0.5
+## Estilo LIMPIO_JUSTO: si suelta A cuando el truco en curso lleva menos que
+## esto (en tiempos de truco), el corte es limpio (no se desequilibra).
+@export var trick_cut_clean_units: float = 0.15
+## Estilo LIMPIO_JUSTO: cuánto tarda en acomodarse al cortar un truco (s):
+## del mínimo (recién empezado) al máximo (una vuelta o más adentro).
+@export var trick_recover_min: float = 0.2
+@export var trick_recover_max: float = 0.45
 
 @export_group("Turbo y motivación")
 ## Multiplica la velocidad máxima con el turbo.
@@ -111,8 +122,8 @@ extends Resource
 @export var catchup_jump_bonus: float = 0.15
 ## Velocidad máxima extra con el handicap al máximo (0.2 = +20%).
 @export var catchup_speed_bonus: float = 0.08
-## Tolerancia al caer de un truco con el handicap al máximo (estilo de
-## trucos SOLTAR): si le falta
+## Tolerancia al caer de un truco con el handicap al máximo (estilos de
+## trucos SOLTAR y LIMPIO_JUSTO): si le falta
 ## menos que esto para tocar el agua (s) y sigue con A apretada, el juego
 ## suelta el truco solo y aterriza bien.
 @export var catchup_trick_grace: float = 0.1

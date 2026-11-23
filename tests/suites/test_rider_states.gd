@@ -165,6 +165,60 @@ func _test_rare_transitions() -> void:
 	_set_action(&"p1_a", false)
 	await _wait(1.0)
 	_check(late and _state() == &"fallen", "trucos TERMINAR: soltar a mitad de un truco justo antes del agua te tira")
+	await _mash_until_standing(12.0, 6.0)
+
+	# 10. Trucos LIMPIO_JUSTO. Soltar a mitad de un truco justo antes de
+	# tocar el agua: no se cae, pero aterriza justo (pierde velocidad).
+	Rider.trick_style = Rider.TrickStyle.LIMPIO_JUSTO
+	var sloppy := [0]
+	r.sloppy_landed.connect(func() -> void: sloppy[0] += 1)
+	landed_spins.clear()
+	await _wait(1.0)
+	r.position.y += 1.0
+	r.vertical_speed = 9.0
+	r.speed = 10.0
+	r.grounded = false
+	r.can_trick = true
+	r.state_machine.transition_to(&"airborne")
+	_set_action(&"p1_a", true)
+	var air_speed := 0.0
+	late = false
+	for i in int(4.0 * FPS):
+		await process_frame
+		if _state() != &"airborne":
+			break
+		air_speed = r.speed
+		late = r.trick_angle > 0.0 and fmod(r.trick_units_now(), 1.0) > 0.3
+		if late and r.time_to_land() < 0.05:
+			break
+	_set_action(&"p1_a", false)
+	await _wait_until_state(&"riding", 3.0)
+	_check(
+		late and _state() == &"riding" and sloppy[0] == 1 and not r.last_landing_clean,
+		"trucos LIMPIO_JUSTO: soltar justo antes del agua a mitad de un truco no te tira, pero es justo"
+	)
+	_check(r.speed < air_speed * 0.8, "el aterrizaje justo frena (%.1f -> %.1f m/s)" % [air_speed, r.speed])
+	_check(landed_spins.size() == 1, "y los trucos completados igual cuentan (%s)" % str(landed_spins))
+	await _wait(1.0)
+
+	# 11. Trucos LIMPIO_JUSTO. Soltar con tiempo: el truco termina en el aire y
+	# el aterrizaje es limpio.
+	r.position.y += 1.0
+	r.vertical_speed = 12.0
+	r.grounded = false
+	r.can_trick = true
+	r.state_machine.transition_to(&"airborne")
+	_set_action(&"p1_a", true)
+	for i in int(2.0 * FPS):
+		await process_frame
+		if r.live_spins >= 1 or _state() != &"airborne":
+			break
+	_set_action(&"p1_a", false)
+	await _wait_until_state(&"riding", 4.0)
+	_check(
+		_state() == &"riding" and sloppy[0] == 1 and r.last_landing_clean,
+		"trucos LIMPIO_JUSTO: soltar con tiempo es un aterrizaje limpio"
+	)
 	Rider.trick_style = saved_style
 
 	m.queue_free()

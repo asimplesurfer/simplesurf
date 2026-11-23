@@ -99,7 +99,23 @@ func setup(p_rider: Rider) -> void:
 	rider.bumped_other.connect(func(_v: Rider) -> void: _ring_burst(0.6))
 	rider.hard_landed.connect(func(strength: float) -> void: _ring_burst(0.6 + strength))
 	# Festeja cuando clava un truco o tira a un rival.
-	rider.trick_landed.connect(func(_spins: int) -> void: _body.cheer())
+	rider.trick_landed.connect(func(_spins: int) -> void:
+		if rider.last_landing_clean:
+			_body.cheer()
+	)
+	# Cortó un truco: la tabla vuelve a su lugar de golpe y, si iba por la
+	# mitad, se desequilibra un momento.
+	rider.trick_cut.connect(func(recover: float) -> void:
+		_cut_from = _last_trick
+		_cut_t = 0.0
+		_cut_time = maxf(recover, CUT_UNWIND)
+		_cut_wobble = recover > 0.0
+	)
+	# Aterrizaje justo: tambalea y salpica.
+	rider.sloppy_landed.connect(func() -> void:
+		_sloppy_t = 0.0
+		_ring_burst(1.0)
+	)
 	rider.drift_hit.connect(func(_victim: Rider) -> void: _body.cheer())
 	_trail.setup(rider)
 	_last_stage = rider.recovery_stage
@@ -339,6 +355,16 @@ func _process(delta: float) -> void:
 	# Truco en el aire: cada vuelta es uno distinto (todos duran lo mismo).
 	var board := Transform3D(Basis(_board_from.slerp(_board_to, t)), Vector3.ZERO)
 	var trick := _trick_transforms(rider.current_trick(), rider.current_trick_phase())
+	if rider.trick_angle > 0.0:
+		_last_trick = trick
+	if _cut_t < _cut_time:
+		_cut_t += delta
+		trick = _unwind(_cut_from, smoothstep(0.0, CUT_UNWIND, _cut_t))
+		if _cut_wobble:
+			trick[2] = _wobble(_cut_t, CUT_ROLL) * trick[2]
+	if _sloppy_t < SLOPPY_TIME:
+		_sloppy_t += delta
+		trick[2] = _wobble(_sloppy_t, SLOPPY_ROLL) * trick[2]
 	_body_pivot.transform = trick[2] * trick[3] * Transform3D(Basis.IDENTITY, trick[1]) * xf
 	_board_pivot.transform = trick[2] * board * trick[0]
 	_update_particles(delta)
@@ -490,6 +516,44 @@ func _trick_transforms(kind: int, p: float) -> Array:
 	return [spin, lift, whole, body]
 
 
+## Corte de truco (estilo LIMPIO_JUSTO): la tabla y el cuerpo vuelven a su
+## lugar en CUT_UNWIND segundos y, si lo cortó por la mitad, tambalea
+## (CUT_ROLL) hasta acomodarse.
+const CUT_UNWIND := 0.14
+const CUT_ROLL := 0.3
+var _cut_t: float = 1.0
+var _cut_time: float = 0.0
+var _cut_wobble: bool = false
+var _cut_from: Array = [Transform3D.IDENTITY, Vector3.ZERO, Transform3D.IDENTITY, Transform3D.IDENTITY]
+## Aterrizaje justo: todo tambalea de costado, cada vez menos, durante
+## SLOPPY_TIME segundos.
+const SLOPPY_TIME := 0.9
+const SLOPPY_ROLL := 0.32
+const WOBBLE_FREQ := 15.0
+const WOBBLE_DECAY := 4.5
+var _sloppy_t: float = SLOPPY_TIME
+## Las poses del truco del último cuadro en que estaba girando.
+var _last_trick: Array = [Transform3D.IDENTITY, Vector3.ZERO, Transform3D.IDENTITY, Transform3D.IDENTITY]
+
+
+## Las poses de un truco `from`, llevadas a su lugar (k = 1: del todo).
+static func _unwind(from: Array, k: float) -> Array:
+	return [
+		(from[0] as Transform3D).interpolate_with(Transform3D.IDENTITY, k),
+		(from[1] as Vector3).lerp(Vector3.ZERO, k),
+		(from[2] as Transform3D).interpolate_with(Transform3D.IDENTITY, k),
+		(from[3] as Transform3D).interpolate_with(Transform3D.IDENTITY, k),
+	]
+
+
+## Tambaleo de costado (sobre la tabla) y un cabeceo más chico, que se apaga.
+static func _wobble(t: float, amount: float) -> Transform3D:
+	var fade := exp(-t * WOBBLE_DECAY)
+	var roll := amount * sin(t * WOBBLE_FREQ) * fade
+	var pitch := 0.4 * amount * sin(t * WOBBLE_FREQ * 0.7 + 1.0) * fade
+	return Transform3D(Basis(Vector3.BACK, roll) * Basis(Vector3.RIGHT, pitch), Vector3.ZERO)
+
+
 ## Hacia dónde mirar: al rival más cercano (si está cerca y no atrás del
 ## todo), o un poco hacia la curva.
 func _look_target() -> float:
@@ -568,6 +632,10 @@ func _update_avatar_anim(delta: float) -> void:
 				a = &"celebrate"
 	# Despegó (salto o la ola lo lanzó) / aterrizó: golpes de la animación.
 	var in_air := a == &"air" or a == &"trick"
+	# Desequilibrado (cortó un truco o aterrizó justo): brazos de molino.
+	var unsteady := (_cut_wobble and _cut_t < _cut_time) or _sloppy_t < SLOPPY_TIME * 0.7
+	if unsteady and stage == Rider.RecoveryStage.STANDING and (in_air or a == &"ride"):
+		a = &"balance"
 	if in_air and not _was_in_air:
 		_body.pop()
 	elif not in_air and _was_in_air and stage == Rider.RecoveryStage.STANDING:

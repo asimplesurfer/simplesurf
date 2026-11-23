@@ -241,6 +241,7 @@ func _connect_rider() -> void:
 	rider.trick_landed.connect(_on_trick_landed)
 	rider.live_spins_changed.connect(_on_live_spins)
 	rider.trick_failed.connect(_on_trick_failed)
+	rider.sloppy_landed.connect(func() -> void: show_message("¡Justo!", PROMPT_COLOR))
 	rider.drift_hit.connect(func(_victim: Rider) -> void: show_message("¡Lo tiraste!", PROMPT_COLOR))
 	rider.turbo_blocked.connect(func() -> void: _blocked = 1.0)
 	rider.trick_preview_started.connect(func(trick_name: String, index: int, total: int) -> void:
@@ -293,6 +294,8 @@ static func trick_grade(spins: int) -> Array:
 ## Al aterrizar: la palabra entra como un sello con el combo exacto abajo, y
 ## sale un hilito de gotas hacia el medidor de nitro.
 func _on_trick_landed(spins: int) -> void:
+	if Rider.sloppy_landings() and rider.last_landing_clean:
+		show_message("¡Limpio!", AHEAD_COLOR)
 	var g := trick_grade(spins)
 	var font := roundi(GRADE_FONT * float(g[2]))
 	_grade.text = g[0]

@@ -38,7 +38,7 @@ const WAIST := Vector3(0.0, 1.0, 0.0)
 ## Animaciones de pie sobre la tabla (cuerpo de costado).
 const STANCE := [
 	&"idle", &"ride", &"air", &"trick", &"drift", &"duck", &"pop_up",
-	&"hands_down", &"pommel", &"superman", &"tube",
+	&"hands_down", &"pommel", &"superman", &"tube", &"balance",
 ]
 
 
@@ -68,6 +68,8 @@ static func pose(s: Dictionary) -> Dictionary:
 			_pop_up(p, s)
 		&"flail":
 			_flail(p, s)
+		&"balance":
+			_balance(p, s)
 		&"tread":
 			_tread(p, s)
 		&"climb":
@@ -271,6 +273,20 @@ static func _flail(p: Dictionary, s: Dictionary) -> void:
 	_turn(p, "Head", Vector3(-0.25, sin(t * 9.0) * 0.5, sin(t * 7.0) * 0.25))
 	_kick(p, t * 14.0, 0.22)
 	_turn(p, "Torso", Vector3(0.0, sin(t * 6.0) * 0.25, 0.0))
+
+
+## Desequilibrado (cortó un truco a la mitad o aterrizó justo): agachado,
+## se va hacia las puntas y hacia los talones, y los brazos abiertos dan
+## vueltas como molinos para no caerse.
+static func _balance(p: Dictionary, s: Dictionary) -> void:
+	var t: float = s.time
+	var sway := sin(t * 10.0)
+	_crouch(p, 0.65 + sin(t * 7.0) * 0.1)
+	_bend(p, Vector3(0.15 + sway * 0.3, 0.0, 0.0))
+	var f := 13.0
+	_reach(p, "HandL", Vector3(-1.3, 1.85 + sin(t * f) * 0.5, 0.2 + cos(t * f) * 0.45) + p["Torso"].pos, 1.0)
+	_reach(p, "HandR", Vector3(1.25, 1.8 + sin(t * f + 2.2) * 0.5, 0.0 + cos(t * f + 2.2) * 0.45) + p["Torso"].pos, 1.0)
+	_turn(p, "Head", Vector3(-0.15 + sway * 0.15, sin(t * 5.0) * 0.25, 0.0))
 
 
 ## Flotando: brazada de pecho a la altura del agua (las manos abren hacia los
