@@ -38,6 +38,12 @@ func _ready() -> void:
 	add_child(_mist)
 
 
+## Colores del agua de ahora (ver Water.fx_colors).
+func set_water_colors(foam: Color, _spray: Color) -> void:
+	_sheet_material.set_shader_parameter("color", foam)
+	WaterFx.tint(_mist, foam)
+
+
 ## Llamar cada frame. side = lado del derrape (-1 / 1), 0 si no derrapa.
 func update_spray(side: int, strength: float, delta: float) -> void:
 	var active := side != 0

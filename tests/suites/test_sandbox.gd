@@ -97,10 +97,17 @@ func _test_sandbox() -> void:
 	var waves_before := water.waves
 	var amp_before := waves.amplitude_max
 	var color_before: Variant = water.shader_material().get_shader_parameter("deep_color")
+	var vis := (sb.racers[0] as Rider).get_node("Visual") as RiderVisual
+	var fx_before: Dictionary = water.fx_colors()
 	await _press(&"p1_storm")
 	_check(sb.storm_on() and sb.storm != null, "T prende la tormenta")
 	await process_frame
 	await process_frame
+	var fx_storm: Dictionary = water.fx_colors()
+	_check(
+		(fx_storm.foam as Color).v < (fx_before.foam as Color).v and vis.water_colors() == fx_storm,
+		"con tormenta el agua que levanta la tabla es más oscura (y la tabla la usa)"
+	)
 	_check(sb.storm.rain.size() == 1 and water.waves.max_height() > 1.4, "llueve y el mar se pica")
 	await _press(&"p1_storm")
 	await process_frame
@@ -110,9 +117,12 @@ func _test_sandbox() -> void:
 		and is_equal_approx(sun.light_energy, sun_before)
 		and water.waves == waves_before
 		and is_equal_approx(waves.amplitude_max, amp_before)
-		and water.shader_material().get_shader_parameter("deep_color") == color_before,
+		and water.shader_material().get_shader_parameter("deep_color") == color_before
+		and water.fx_colors() == fx_before,
 		"y queda todo como estaba (cielo, luz, agua y olas)"
 	)
+	await process_frame
+	_check(vis.water_colors() == fx_before, "el agua que levanta la tabla vuelve a la de antes")
 	var cam := (m.get_node("Views") as SplitScreen).cameras[0]
 	_check(cam.get_node_or_null("Rain") == null, "sin lluvia")
 

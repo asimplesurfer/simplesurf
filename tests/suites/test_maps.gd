@@ -107,6 +107,12 @@ func _test_water_palette() -> void:
 			changes = changes and river.deep_color != WaterPalette.RIVER_BASE.deep_color
 	_check(darker, "el agua de río es más oscura que el mar con cualquier clima")
 	_check(changes, "los climas también cambian el agua de río")
+	# El agua que levanta la tabla no recibe luz: cada clima la oscurece.
+	var dim := is_equal_approx(WaterPalette.values(WaterPalette.DAY).spray_light, 1.0)
+	for climate in WaterPalette.CLIMATES:
+		dim = dim and float(WaterPalette.values(climate).spray_light) < 1.0
+		dim = dim and WaterPalette.colors(climate, WaterPalette.RIVER).spray_color != WaterPalette.RIVER_BASE.spray_color
+	_check(dim, "el agua que levanta la tabla se oscurece con cada clima (mar y río)")
 	var rm := TrackMap.from_dict({"id": "r", "path": [[0, 0], [100, 0], [50, 80]], "water": "rio"})
 	_check(rm.water == WaterPalette.RIVER and TrackMap.from_dict(rm.to_dict()).water == WaterPalette.RIVER, "un mapa puede tener agua de río (y se guarda)")
 	var bad := PackedStringArray()
@@ -359,6 +365,16 @@ func _test_night() -> void:
 	var glow := lights.get_node_or_null("Glow") if lights else null
 	_check(glow != null and float((glow as MultiMeshInstance3D).material_override.get_shader_parameter("strength")) > 0.3,
 		"las guirnaldas están prendidas (con halo de luz)")
+	# El agua que levanta la tabla es la de noche (no la blanca y celeste del día).
+	var vis := m.get_tree().get_first_node_in_group("riders").get_node("Visual") as RiderVisual
+	var fx := vis.water_colors()
+	var day_spray: Color = WaterPalette.BASE.spray_color
+	var day_foam: Color = WaterPalette.BASE.foam_color
+	_check(not fx.is_empty() and (fx.spray as Color).v < day_spray.v * 0.8 and (fx.foam as Color).v < day_foam.v * 0.85,
+		"de noche el agua que levanta la tabla es más oscura que de día, como el mar (%s)" % [fx])
+	var sheet := vis._carve._sheet_material
+	_check(sheet.get_shader_parameter("water") == fx.spray and vis._carve._drop_shape.colors[2] == Color(fx.spray, 1.0),
+		"la pared y las gotas del giro usan esos colores")
 	m.queue_free()
 	await process_frame
 	GameSettings.time_of_day = saved

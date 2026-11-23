@@ -20,6 +20,9 @@ var _drops: CPUParticles3D
 var _foam: CPUParticles3D
 var _amount: float = 0.0
 var _flow: float = 0.0
+## Los dibujos de las gotas y de la espuma (se pintan con el agua de ahora).
+var _drop_shape: Gradient
+var _foam_shape: Gradient
 
 
 func _ready() -> void:
@@ -48,6 +51,26 @@ func _ready() -> void:
 	_foam.spread = 30.0
 	_foam.position = Vector3(0.0, 0.04, 0.3)
 	add_child(_foam)
+	set_water_colors(WaterPalette.BASE.foam_color, WaterPalette.BASE.spray_color)
+
+
+## Colores del agua de ahora (ver Water.fx_colors): lo blanco y el celeste del borde.
+func set_water_colors(foam: Color, spray: Color) -> void:
+	_sheet_material.set_shader_parameter("foam", foam)
+	_sheet_material.set_shader_parameter("water", spray)
+	_drop_shape.colors = _drop_colors(foam, spray)
+	_foam_shape.colors = _foam_colors(foam)
+
+
+## Gota: centro blanco y borde celeste, nítidos.
+static func _drop_colors(foam: Color, spray: Color) -> PackedColorArray:
+	var edge := Color(spray, 1.0)
+	return PackedColorArray([Color(foam, 1.0), Color(foam, 1.0), edge, edge, Color(spray, 0.0)])
+
+
+## Espuma: un anillo (el centro más claro que el borde, como una burbuja abierta).
+static func _foam_colors(foam: Color) -> PackedColorArray:
+	return PackedColorArray([Color(foam, 0.35), Color(foam, 0.35), Color(foam, 1.0), Color(foam, 1.0), Color(foam, 0.0)])
 
 
 ## Llamar cada frame. active: si está girando rápido; strength 0..1.
@@ -67,19 +90,18 @@ func update_spray(active: int, strength: float, delta: float) -> void:
 
 
 ## Partículas con forma nítida (un círculo blanco con borde celeste, sin
-## difuminar). `flat`: acostadas sobre el agua (espuma) en vez de mirar a la cámara.
+## difuminar; con los colores del agua de ahora). `flat`: acostadas sobre el agua (espuma) en vez de mirar a la cámara.
 func _toon_particles(amount: int, lifetime: float, size: float, flat: bool) -> CPUParticles3D:
+	# Los colores los pone set_water_colors (el agua de ahora).
 	var gradient := Gradient.new()
-	gradient.offsets = PackedFloat32Array([0.0, 0.62, 0.66, 0.84, 0.88])
-	gradient.colors = PackedColorArray([
-		Color(1, 1, 1, 1), Color(1, 1, 1, 1), Color(0.7, 0.92, 1.0, 1), Color(0.7, 0.92, 1.0, 1), Color(0.7, 0.92, 1.0, 0),
-	])
 	if flat:
-		# Espuma: un anillo (el centro más claro que el borde, como una burbuja abierta).
 		gradient.offsets = PackedFloat32Array([0.0, 0.45, 0.5, 0.8, 0.86])
-		gradient.colors = PackedColorArray([
-			Color(1, 1, 1, 0.35), Color(1, 1, 1, 0.35), Color(1, 1, 1, 1), Color(1, 1, 1, 1), Color(1, 1, 1, 0),
-		])
+		gradient.colors = _foam_colors(Color.WHITE)
+		_foam_shape = gradient
+	else:
+		gradient.offsets = PackedFloat32Array([0.0, 0.62, 0.66, 0.84, 0.88])
+		gradient.colors = _drop_colors(Color.WHITE, Color.WHITE)
+		_drop_shape = gradient
 	var tex := GradientTexture2D.new()
 	tex.gradient = gradient
 	tex.fill = GradientTexture2D.FILL_RADIAL

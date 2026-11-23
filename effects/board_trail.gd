@@ -46,6 +46,11 @@ func setup(p_rider: Rider) -> void:
 	extra_cull_margin = 16384.0
 
 
+## Color del agua de ahora (ver Water.fx_colors).
+func set_water_colors(foam: Color, _spray: Color) -> void:
+	_material.set_shader_parameter("color", foam)
+
+
 func _process(delta: float) -> void:
 	if rider == null:
 		return
