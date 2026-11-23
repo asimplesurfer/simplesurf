@@ -1352,25 +1352,41 @@ function interpretPaint() {
   let mainEdges = [];
   if (metaEdge.closed || metaEdge.a === metaEdge.b) mainEdges = [[metaEdge, true]];
   else {
-    // El camino más corto que vuelve (sin usar el tramo de la meta).
-    const distTo = new Map([[metaEdge.b, 0]]), prev = new Map(), todo = new Set(nodes.filter((n) => n.alive).map((n) => n.id));
-    while (todo.size) {
-      let u = null;
-      for (const n of todo) if (distTo.has(n) && (u === null || distTo.get(n) < distTo.get(u))) u = n;
-      if (u === null || u === metaEdge.a) break;
-      todo.delete(u);
-      for (const e of edges) {
-        if (e === metaEdge || e.closed || e.a === null || e.b === null) continue;
-        for (const [x, y, fwd] of [[e.a, e.b, true], [e.b, e.a, false]]) {
-          if (x !== u) continue;
-          const d = distTo.get(u) + polyLen(e.pts);
-          if (!distTo.has(y) || d < distTo.get(y)) { distTo.set(y, d); prev.set(y, [e, fwd, u]); }
-        }
-      }
+    // La vuelta: entre todas las que pasan por el tramo de la meta, la que deja
+    // más caminos colgados de ella (que ningún camino salga de otro camino
+    // alternativo); entre las que empatan, la más corta.
+    const usable = edges.filter((e) => e !== metaEdge && !e.closed && e.a !== null && e.b !== null);
+    const adj = new Map();
+    for (const e of usable) for (const [x, y, fwd] of [[e.a, e.b, true], [e.b, e.a, false]]) {
+      if (!adj.has(x)) adj.set(x, []);
+      adj.get(x).push([e, fwd, y]);
     }
-    if (!prev.has(metaEdge.a)) { warnings.push("La pista no da la vuelta: unila para que termine donde empieza."); return view; }
-    const path = [];
-    for (let n = metaEdge.a; n !== metaEdge.b; ) { const [e, fwd, from] = prev.get(n); path.unshift([e, fwd]); n = from; }
+    let best = null, tries = 0;
+    const score = (pathEdges) => {
+      const on = new Set([metaEdge.a, metaEdge.b]);
+      for (const [e] of pathEdges) { on.add(e.a); on.add(e.b); }
+      const used = new Set([metaEdge, ...pathEdges.map(([e]) => e)]);
+      let nested = 0;
+      for (const e of usable) if (!used.has(e) && (!on.has(e.a) || !on.has(e.b))) nested++;
+      return nested * 1e6 + pathEdges.reduce((t, [e]) => t + polyLen(e.pts), 0);
+    };
+    const dfs = (node, seen, pathEdges) => {
+      if (++tries > 20000) return;
+      if (node === metaEdge.a) {
+        const sc = score(pathEdges);
+        if (!best || sc < best.sc) best = { sc, path: pathEdges.slice() };
+        return;
+      }
+      for (const [e, fwd, y] of adj.get(node) || []) {
+        if (seen.has(y) || pathEdges.some(([f]) => f === e)) continue;
+        seen.add(y); pathEdges.push([e, fwd]);
+        dfs(y, seen, pathEdges);
+        pathEdges.pop(); seen.delete(y);
+      }
+    };
+    dfs(metaEdge.b, new Set([metaEdge.b]), []);
+    if (!best) { warnings.push("La pista no da la vuelta: unila para que termine donde empieza."); return view; }
+    const path = best.path;
     mainEdges = [[metaEdge, true], ...path];
   }
   // La línea de la vuelta (y en qué punto de ella está cada nudo).
@@ -1400,7 +1416,7 @@ function interpretPaint() {
   const branches = [];
   for (const e of edges) {
     if (mainSet.has(e)) continue;
-    if (e.closed) { warnings.push("Hay una vuelta pintada aparte que no se une con la pista: la dejé afuera."); continue; }
+    if (e.closed) { warnings.push("Hay un círculo pintado que no sale de la pista ni vuelve a ella (como mucho la cruza): lo dejé afuera."); continue; }
     if (e.a === null || e.b === null) { warnings.push("Hay un pedazo pintado que no vuelve a la pista: lo dejé afuera."); continue; }
     if (!nodeAt.has(e.a) || !nodeAt.has(e.b)) { warnings.push("Hay un camino que sale de otro camino alternativo: por ahora los caminos tienen que salir de la pista y volver a ella. Lo dejé afuera."); continue; }
     if (e.a === e.b) { warnings.push("Hay un camino que sale y vuelve al mismo lugar: lo dejé afuera."); continue; }
@@ -2436,12 +2452,9 @@ function review() {
     if (cross) out.push(["warn", "La pista pasa muy cerca de sí misma: los tramos se pueden tocar."]);
     // Caminos alternativos (lo mismo que revisa el juego al leer el mapa).
     const { branches } = computed();
-    const spans = [];
     map.branches.forEach((b, i) => {
       const name = `El camino alternativo ${i + 1}`;
       if (!(b.from >= 0 && b.to > b.from && b.to < map.path.length)) { out.push(["bad", `${name} vuelve a la pista antes de salir (pasa por encima de la meta). Borralo y dibujalo de nuevo saliendo después de la meta.`]); return; }
-      if (spans.some(([f, t]) => (f !== b.from || t !== b.to) && b.from < t && f < b.to)) out.push(["bad", `${name} se pisa con otro: los caminos que comparten tramo tienen que salir y volver de los mismos puntos de la pista.`]);
-      spans.push([b.from, b.to]);
       const bl = branches[i];
       if (bl.length > 1 && openLength(bl) < 40) out.push(["bad", `${name} es muy corto: alejá sus puntos de la pista.`]);
       map.pieces.forEach((p, k) => {

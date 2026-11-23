@@ -41,8 +41,8 @@ var start: Dictionary = {}
 ## Bifurcaciones: caminos alternativos. Cada uno sale de un punto del
 ## recorrido y vuelve a entrar en otro más adelante: {"from", "to": índices de
 ## esos puntos en `path` (from < to); "path": sus puntos; "in" / "out": sus
-## manijas (como las del recorrido)}. Varios con las mismas puntas = varios
-## caminos en el mismo tramo. Ver PathTrack.
+## manijas (como las del recorrido)}. Pueden ser varios en el mismo tramo, o
+## pisarse en parte (uno sale antes de que vuelva otro). Ver PathTrack.
 var branches: Array[Dictionary] = []
 ## Cuánto se redondean las curvas del recorrido (pasadas de suavizado).
 var smoothing: int = 60
@@ -176,7 +176,6 @@ static func from_dict(d: Dictionary, errors: PackedStringArray = PackedStringArr
 		m.start = st
 	if not m.path.is_empty() and m.path.size() < (1 if not m.start.is_empty() else 3):
 		errors.append("el recorrido necesita al menos 3 puntos")
-	var spans: Array[Vector2i] = []
 	for i in (d.get("branches", []) as Array).size():
 		var bd: Variant = d.branches[i]
 		var label := "el camino alternativo %d" % (i + 1)
@@ -205,12 +204,6 @@ static func from_dict(d: Dictionary, errors: PackedStringArray = PackedStringArr
 		if (br.path as PackedVector2Array).is_empty():
 			errors.append("%s no tiene puntos" % label)
 			continue
-		var span := Vector2i(br.from, br.to)
-		for other in spans:
-			if other != span and span.x < other.y and other.x < span.y:
-				errors.append("%s se cruza con otro tramo de caminos: los que se pisan tienen que salir y volver de los mismos puntos" % label)
-				break
-		spans.append(span)
 		m.branches.append(br)
 	var round_islands: Variant = d.get("islands")
 	if round_islands is Array and not (round_islands as Array).is_empty():

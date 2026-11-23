@@ -47,7 +47,6 @@ func _test_format() -> void:
 		"vuelve para atrás": {"from": 3, "to": 1, "path": [[0, 0]]},
 		"sin puntos": {"from": 1, "to": 3, "path": []},
 		"fuera del recorrido": {"from": 1, "to": 9, "path": [[0, 0]]},
-		"se pisa con otro tramo": {"from": 2, "to": 4, "path": [[0, 0]]},
 	}
 	for why in bad:
 		var d: Dictionary = TEST_MAP.duplicate(true)
@@ -55,6 +54,12 @@ func _test_format() -> void:
 		var errors := PackedStringArray()
 		TrackMap.from_dict(d, errors)
 		_check(not errors.is_empty(), "un camino que %s da error" % why)
+	# Caminos que se pisan en parte (uno sale antes de que vuelva otro): valen.
+	var over: Dictionary = TEST_MAP.duplicate(true)
+	(over.branches as Array).append({"from": 2, "to": 4, "path": [[120, -380]]})
+	var over_errors := PackedStringArray()
+	TrackMap.from_dict(over, over_errors)
+	_check(over_errors.is_empty(), "un camino que se pisa en parte con otro tramo vale %s" % str(over_errors))
 	var ring := {"id": "r", "branches": [{"from": 0, "to": 1, "path": [[0, 0]]}]}
 	var errors := PackedStringArray()
 	TrackMap.from_dict(ring, errors)
@@ -64,7 +69,7 @@ func _test_format() -> void:
 func _test_geometry() -> void:
 	print("Forma de los caminos:")
 	var track := _map().make_track() as PathTrack
-	_check(track.route_count() == 5 and track.groups().size() == 2, "5 caminos en 2 tramos")
+	_check(track.route_count() == 5, "5 caminos (la principal y 4 alternativos)")
 	var joins := true
 	var far := true
 	var smooth := true
@@ -129,18 +134,32 @@ func _test_variants() -> void:
 	for c in choices:
 		var v := track.variant(c)
 		var expected := track.length()
-		for g in track.groups().size():
-			expected += track.route_length(c[g], g) - track.route_length(0, g)
+		for r in c:
+			expected += track.route_extra(r)
 		ok = ok and absf(v.length() - expected) < expected * 0.02
 		ok = ok and v.position_at(0.0).distance_to(track.position_at(0.0)) < 1.0
 	_check(ok, "cada vuelta mide lo que suman sus caminos y empieza en la meta")
-	_check(track.variant([0, 0]) == track.variant([0, 0]), "cada vuelta se arma una sola vez")
-	var g0 := track.groups()[0]
-	var lengths: Array[float] = []
-	for r in g0.routes:
-		lengths.append(track.route_length(r, 0))
+	_check(track.variant([]) == track.variant([]), "cada vuelta se arma una sola vez")
+	var lengths: Array[float] = [track.main_span(1), track.branches[0].length, track.branches[1].length]
 	_check(lengths[2] < lengths[0] and lengths[0] < lengths[1],
 		"el camino de adentro es el más corto y el de afuera el más largo (%d / %d / %d m)" % [lengths[2], lengths[0], lengths[1]])
+	# Caminos que se pisan en parte: una vuelta toma uno o el otro, nunca los dos.
+	var over: Dictionary = TEST_MAP.duplicate(true)
+	(over.branches as Array).append({"from": 2, "to": 4, "path": [[120, -380]]})
+	var ot := TrackMap.from_dict(over).make_track() as PathTrack
+	var both := false
+	var alone := false
+	for c in ot.all_choices():
+		var has5 := (c as Array).has(5)
+		var crossing := false
+		for r in c:
+			if int(r) != 5 and has5 and ot.branches[int(r) - 1].s_from < ot.branches[4].s_to and ot.branches[4].s_from < ot.branches[int(r) - 1].s_to:
+				crossing = true
+		both = both or crossing
+		alone = alone or has5
+	_check(alone and not both, "con caminos que se pisan, cada vuelta toma uno solo de ellos")
+	var v5 := ot.variant([5])
+	_check(absf(v5.length() - (ot.length() + ot.route_extra(5))) < ot.length() * 0.02, "la vuelta por el camino que se pisa mide lo que tiene que medir")
 
 
 func _test_shape() -> void:
@@ -249,8 +268,13 @@ func _test_bots() -> void:
 		var shortest := 0
 		for i in 200:
 			ai.pick_routes()
-			counts[ai.route_choices[0]] = true
-			if ai.route_choices[0] == 2:
+			# Lo que eligió en el primer tramo (0: la principal).
+			var first := 0
+			for r in ai.route_choices:
+				if track.branches[int(r) - 1].from_index == 1:
+					first = int(r)
+			counts[first] = true
+			if first == 2:
 				shortest += 1
 		counts["corto_%d" % level] = shortest
 		ai.free()
@@ -263,11 +287,12 @@ func _test_bots() -> void:
 	await process_frame
 	await process_frame
 	var race := m.get_node("RaceManager") as RaceManager
-	var plans := [[1, 0], [2, 3], [4, 3]]
+	var plans := [[1], [2, 3], [4, 3]]
 	var seen := {}
 	for i in race.racers.size():
 		var ai := race.racers[i].controller as AIController
 		ai.route_choices = plans[i].duplicate()
+		ai._routes_picked = true
 		seen[race.racers[i]] = {}
 	race.skip_countdown()
 	var t := race.course.track

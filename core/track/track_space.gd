@@ -82,11 +82,6 @@ func heading_on(route: int, angle: float) -> float:
 	return atan2(-t.x, -t.z)
 
 
-## Tramos con más de un camino (ver PathTrack.groups). El anillo no tiene.
-func groups() -> Array[Dictionary]:
-	return []
-
-
-## La vuelta entera eligiendo un camino en cada tramo (ver PathTrack.variant).
-func variant(_choices: Array) -> TrackSpace:
+## La vuelta entera por algunos caminos alternativos (ver PathTrack.variant).
+func variant(_taken: Array) -> TrackSpace:
 	return self

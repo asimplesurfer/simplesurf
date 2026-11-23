@@ -44,8 +44,10 @@ var _track: TrackSpace:
 	set(value):
 		_view = value
 var _view: TrackSpace
-## Camino elegido en cada tramo con bifurcación (ruta por grupo; ver PathTrack.groups).
+## Caminos alternativos que va a tomar en esta vuelta (rutas, en orden; ver
+## PathTrack.variant). Vacío: toda la vuelta por la principal.
 var route_choices: Array = []
+var _routes_picked: bool = false
 
 var _rng := RandomNumberGenerator.new()
 var _think_timer: float = 0.0
@@ -110,7 +112,7 @@ func get_input(delta: float) -> RiderInput:
 	var input := RiderInput.new()
 	if rider == null or course == null or rider.controls_locked:
 		return input
-	if route_choices.size() != course.track.groups().size():
+	if not _routes_picked:
 		pick_routes()
 	_track = course.track.variant(route_choices)
 	var state := rider.state_machine.current_name
@@ -286,38 +288,64 @@ func _pick_path() -> void:
 	_path_phase = _rng.randf_range(0.0, TAU)
 
 
-## Elige un camino en cada tramo con bifurcación: muchas veces el más corto
-## (más cuanto más agresivo y mejor juega), si no uno cualquiera.
+## Elige los caminos de la vuelta: recorre la pista desde la meta y en cada
+## punto donde salen caminos alternativos decide por dónde ir. Muchas veces el
+## más corto (más cuanto más agresivo y mejor juega); si no, uno cualquiera.
 func pick_routes() -> void:
-	var track := course.track
-	var groups := track.groups()
+	_routes_picked = true
 	route_choices.clear()
-	for g in groups.size():
-		var routes: Array = groups[g].routes
-		var shortest: int = routes[0]
-		for r in routes:
-			if (track as PathTrack).route_length(r, g) < (track as PathTrack).route_length(shortest, g):
+	var track := course.track as PathTrack
+	if track == null or track.branches.is_empty():
+		_track = course.track
+		return
+	var prefer := clampf(0.3 + 0.35 * difficulty.aggression + 0.35 * difficulty.line_skill, 0.0, 0.9)
+	var s := 0.0
+	for guard in 64:
+		var options := track.next_departures(s)
+		if options.is_empty():
+			break
+		var here := track.branches[options[0] - 1].s_from
+		# Opciones: seguir por la principal (0) o tomar uno de los que salen acá.
+		var all: Array[int] = [0]
+		all.append_array(options)
+		var shortest := 0
+		for r in options:
+			if track.route_extra(r) < (track.route_extra(shortest) if shortest > 0 else 0.0):
 				shortest = r
-		var prefer := clampf(0.3 + 0.35 * difficulty.aggression + 0.35 * difficulty.line_skill, 0.0, 0.9)
-		route_choices.append(shortest if _rng.randf() < prefer else routes[_rng.randi() % routes.size()])
+		var pick: int = shortest if _rng.randf() < prefer else all[_rng.randi() % all.size()]
+		if pick == 0:
+			s = here + 1.0
+		else:
+			route_choices.append(pick)
+			s = track.branches[pick - 1].s_to
 	_track = track.variant(route_choices)
 
 
 ## Si terminó en otro camino (lo empujaron, no llegó a doblar), sigue por ese:
 ## no intenta volver cruzando la tierra que los separa.
 func _stay_on_route(lateral: float) -> void:
-	if route_choices.is_empty() or absf(lateral) < course.track.half_width + 2.0:
+	var track := course.track as PathTrack
+	if track == null or track.branches.is_empty() or absf(lateral) < track.half_width + 2.0:
 		return
-	var loc := course.track.locate_route(rider.position)
-	var g := (course.track as PathTrack).group_at(loc.x)
-	if g < 0:
-		return
+	var loc := track.locate_route(rider.position)
 	var route := int(loc.z)
-	if not (course.track.groups()[g].routes as Array).has(route):
-		route = 0
-	if route_choices[g] != route:
-		route_choices[g] = route
-		_track = course.track.variant(route_choices)
+	var s := wrapf(loc.x, 0.0, TAU) / TAU * track.length()
+	var keep: Array = []
+	for r in route_choices:
+		var b := track.branches[int(r) - 1]
+		# Fuera: el que debía estar tomando acá (no está en él) y los que se
+		# pisan con el camino donde está.
+		var here := s > b.s_from and s < b.s_to
+		if (here and int(r) != route) or (route > 0 and int(r) != route
+				and b.s_from < track.branches[route - 1].s_to and track.branches[route - 1].s_from < b.s_to):
+			continue
+		keep.append(r)
+	if route > 0 and not keep.has(route):
+		keep.append(route)
+	keep.sort_custom(func(a: int, b: int) -> bool: return track.branches[a - 1].s_from < track.branches[b - 1].s_from)
+	if keep != route_choices:
+		route_choices = keep
+		_track = track.variant(route_choices)
 
 
 ## Desvío lateral del camino actual en ese ángulo.
