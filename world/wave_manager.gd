@@ -135,6 +135,10 @@ func _physics_process(delta: float) -> void:
 	if fixed_waves:
 		_update_fixed()
 		return
+	# Mientras hay una ola tubo no salen olas nuevas (se mezclarían con el tubo y
+	# así se ve claro adónde ir).
+	if not get_tree().get_nodes_in_group("tube_waves").is_empty():
+		return
 	# Recién largada: unos segundos de calma (si no, al estar todos juntos les
 	# llegan varias olas seguidas antes de poder verlas).
 	var race := GameSession.find_in_scene(self, "race_manager") as RaceManager
@@ -210,10 +214,11 @@ func _update_fixed() -> void:
 			fixed_spawned.append([snappedf(s.center.x, 0.01), snappedf(s.center.y, 0.01)])
 
 
-## Arma la lista de olas fijas para `total_m` metros de pista (semilla por mapa).
+## Arma la lista de olas fijas para `total_m` metros de pista (semilla por
+## mapa: sale de su nombre, así reordenar los mapas no las cambia).
 func _build_fixed(course: Course, total_m: float) -> void:
 	var rng := RandomNumberGenerator.new()
-	rng.seed = 7919 * (course.layout + 1) + 31
+	rng.seed = 7919 * (course.map.id.hash() % 100000 + 1) + 31
 	var d := 60.0
 	while d < total_m:
 		var ahead := rng.randf_range(incoming_distance_min, incoming_distance_max)
@@ -466,13 +471,7 @@ func is_clear_of(s: Swell, point: Vector2) -> bool:
 	return along > clearance or across > clearance
 
 
-## Que la ola no nazca pegada a una isla.
+## Que la ola no nazca pegada a una isla (a menos de unos 28 m de la orilla,
+## donde el agua ya apaga las olas grandes).
 func _far_from_island(s: Swell) -> bool:
-	for node in get_tree().get_nodes_in_group("island"):
-		var island := node as Island
-		if island == null:
-			continue
-		var c := Vector2(island.global_position.x, island.global_position.z)
-		if s.center.distance_to(c) <= island.radius + s.width * 1.5 + 6.0:
-			return false
-	return true
+	return _water == null or _water.land_fade(s.center) >= 0.999

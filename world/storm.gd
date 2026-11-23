@@ -230,7 +230,7 @@ func _paint_sky() -> void:
 		"cloud_warm": Color(0.42, 0.44, 0.5),
 		"island_color": Color(0.12, 0.17, 0.18),
 		"island_far_color": Color(0.3, 0.35, 0.4),
-		"ocean_color": Color(0.1, 0.15, 0.2),
+		"ocean_color": WaterPalette.colors(WaterPalette.STORM).ocean_color,
 		"cloud_coverage": 0.86,
 		"cloud_speed": 0.016,
 	}
@@ -256,15 +256,8 @@ func _roughen(water: Water) -> void:
 	water.storm_colors = true
 	var mat := water.shader_material()
 	w.apply_to(mat)
-	_set_water(mat, "deep_color", Color(0.05, 0.15, 0.23))
-	_set_water(mat, "shallow_color", Color(0.11, 0.29, 0.37))
-	_set_water(mat, "wave_color", Color(0.15, 0.4, 0.44))
-	_set_water(mat, "outside_color", Color(0.04, 0.1, 0.16))
-	_set_water(mat, "rising_color", Color(0.03, 0.1, 0.17))
-	_set_water(mat, "sky_tint", Color(0.5, 0.55, 0.62))
-	_set_water(mat, "reef_color", Color(0.2, 0.32, 0.35))
-	_set_water(mat, "glow_strength", 0.15)
-	_set_water(mat, "sky_reflect", 0.6)
+	# Colores del agua de la tormenta (los que no decide, salen de la base: ver WaterPalette).
+	WaterPalette.apply_to_water(mat, WaterPalette.STORM, _set_water)
 	# Espuma solo en las crestas más altas (si no, el mar picado se llena de manchas).
 	_set_water(mat, "foam_height", 0.42 * CHOP_SCALE * 0.5)
 	# Las gotas pegan en el mar: circulitos que se abren y salpicaduras.

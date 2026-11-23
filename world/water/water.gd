@@ -32,10 +32,6 @@ var time: float = 0.0
 var swells: Array[Swell] = []
 ## Modo "ola constante a la izquierda" (null = sin ola constante).
 var ring_wave: RingWave = null
-## Islas: las olas grandes se apagan cerca de la orilla. Cada una (x, z, radio).
-var islands: Array[Vector3] = []
-## Islas que entiende el shader (islands[0..15]).
-const MAX_ISLANDS := 16
 ## Grilla fina: celdas a cada lado del centro de la malla (~40 m). Después,
 ## MID_CELLS celdas de 2 pasos y el resto de 4 pasos hasta el borde.
 const FINE_HALF_CELLS := 26
@@ -80,6 +76,8 @@ func _ready() -> void:
 	_material = ShaderMaterial.new()
 	_material.shader = SHADER
 	waves.apply_to(_material)
+	# Los colores del agua de día (la base de todos los climas: ver WaterPalette).
+	WaterPalette.apply_to_water(_material, WaterPalette.DAY)
 
 	_plane = _build_mesh()
 
@@ -411,10 +409,6 @@ func drawn_depth(q: Vector3) -> float:
 	var limit := reach + near
 	# Lejos de toda isla el apagado de las olas es 1 en toda la zona.
 	_far_from_islands = not _near_land(p, limit)
-	for isl in islands:
-		if p.distance_to(Vector2(isl.x, isl.y)) - limit < isl.z + 28.0:
-			_far_from_islands = false
-			break
 	var cache := {}
 	var above: Array[float] = []
 	for j in range(j0, j1 + 1):
@@ -496,23 +490,22 @@ func normal_at(x: float, z: float) -> Vector3:
 	return Vector3(-g.x, 1.0, -g.y).normalized()
 
 
-## 0 pegado a la isla, 1 lejos: las olas grandes no se meten en la playa.
+## 0 pegado a la tierra, 1 lejos: las olas grandes no se meten en la playa.
 ## (Igual que island_fade en water_surface.gdshaderinc; tests/water_match.gd lo comprueba.)
 func _island_fade(p: Vector2) -> float:
-	var fade := 1.0
-	for i in mini(islands.size(), MAX_ISLANDS):
-		var isl := islands[i]
-		var d := p.distance_to(Vector2(isl.x, isl.y))
-		fade *= smoothstep(isl.z + 4.0, isl.z + 28.0, d)
-	if _land_w > 0:
-		fade *= _land_at(p)
-	return fade
+	return _land_at(p) if _land_w > 0 else 1.0
 
 
-## Tierra con forma (islas tropicales): una máscara de cuánto quedan las olas
-## grandes en cada punto (1 mar abierto, 0 sobre la isla, y en el medio igual
-## que con las islas redondas: de 4 a 28 m de la orilla). La usan la física
-## (_land_at) y el shader (land_mask), con el mismo filtro.
+## Cuánto quedan las olas grandes en p (1 mar abierto, 0 sobre la tierra; baja
+## de 28 a 4 m de la orilla). Lo usan también las olas para no salir en la playa.
+func land_fade(p: Vector2) -> float:
+	return _island_fade(p)
+
+
+## La tierra (las figuras de las islas): una máscara de cuánto quedan las olas
+## grandes en cada punto (1 mar abierto, 0 sobre la isla, y en el medio va
+## bajando de 28 a 4 m de la orilla). La usan la física (_land_at) y el shader
+## (land_mask), con el mismo filtro.
 const LAND_TEXEL := 2.5
 const LAND_MAX := 512
 var _land := PackedByteArray()
@@ -689,23 +682,6 @@ func _draw_band(img: Image, points: PackedVector2Array, lo: Vector2, texel: floa
 			var x1 := mini(w - 1, int(c.x + half - 0.5))
 			if x1 >= x0:
 				img.fill_rect(Rect2i(x0, y, x1 - x0 + 1, 1), color)
-
-
-func set_island(center: Vector2, radius: float) -> void:
-	var list: Array[Vector3] = [Vector3(center.x, center.y, radius)]
-	set_islands(list)
-
-
-## Islas (x, z, radio): las olas grandes se apagan cerca de cada orilla.
-## El shader entiende hasta MAX_ISLANDS (las primeras de la lista).
-func set_islands(list: Array[Vector3]) -> void:
-	islands = list.duplicate()
-	var packed := PackedVector3Array()
-	packed.resize(MAX_ISLANDS)
-	for i in MAX_ISLANDS:
-		packed[i] = list[i] if i < list.size() else Vector3.ZERO
-	_material.set_shader_parameter("islands", packed)
-	_material.set_shader_parameter("island_count", mini(list.size(), MAX_ISLANDS))
 
 
 func _push_swells() -> void:

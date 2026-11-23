@@ -14,18 +14,22 @@ const BURN_COLOR := Color(1.0, 0.45, 0.05)
 const FULL_COLOR := Color(1.0, 0.12, 0.1)
 const NITRO_FIRE_SHADER := preload("res://ui/shaders/nitro_fire.gdshader")
 const ControlsHint := preload("res://ui/hud/controls_hint.gd")
-## Guía de controles (abajo a la derecha): se ve los primeros HINT_START
-## segundos de la carrera y vuelve si la persona no toca nada por HINT_IDLE
-## segundos o se queda frenada / trabada HINT_STUCK segundos.
+## Guía de controles (abajo a la derecha): se ve solo durante la cuenta
+## regresiva y los primeros HINT_START segundos de la carrera.
 const HINT_START := 20.0
-const HINT_IDLE := 8.0
-const HINT_STUCK := 2.5
 const NITRO_GAUGE_SHADER := preload("res://ui/shaders/nitro_gauge.gdshader")
 ## Lado del medidor de nitro (la ventanita redonda con el aro).
 const NITRO_GAUGE_SIZE := 118.0
 const BAD_COLOR := Color(1.0, 0.4, 0.35)
+## Reloj del récord en contrarreloj: verde si vamos mejor, rojo si peor
+## (los mismos verde y rojo pastel del contador de trucos).
+const AHEAD_COLOR := Color(0.5, 1.0, 0.5)
+const BEHIND_COLOR := Color(1.0, 0.32, 0.3)
+## Tamaño de la señal de ir al revés (px).
+const WRONG_WAY_SIZE := 190.0
 const SPEED_LINES_SHADER := preload("res://ui/shaders/speed_lines.gdshader")
 const SPLASH_SHADER := preload("res://ui/shaders/wave_splash.gdshader")
+const TUBE_WARNING_SHADER := preload("res://ui/shaders/tube_warning.gdshader")
 ## Duración del efecto de atravesar una ola (s): golpe de agua y gotas que chorrean.
 const SPLASH_TIME := 1.2
 ## Duración del golpe (cortina de espuma) al principio (s).
@@ -65,6 +69,8 @@ const GRADE_FONT := 72
 const TRICK_GROW := 1.5
 const TRICK_MAX_AT := 10
 const TRICK_SHAKE := 7.0
+## Cuánto se baja el centro de los anillos del contador (veces el tamaño de letra).
+const TRICK_CENTER_DROP := 0.15
 ## Dónde va el contador (respecto del centro de arriba de la pantalla).
 const TRICK_BOX := Rect2(-320.0, 10.0, 640.0, 190.0)
 ## Calificación al aterrizar según el combo: [desde cuántos, palabra, color,
@@ -100,6 +106,10 @@ var _mash_bar: ProgressBar
 var _place_label: Label
 var _lap_label: Label
 var _center_label: Label
+## Ir al revés: señal de prohibido grande y roja (en vez de un texto).
+var _wrong_way: Control
+## Contrarreloj: el tiempo del récord (arriba de nuestro reloj).
+var _record_label: Label
 var _help: Label
 ## Contador de FPS (tecla P). Se recuerda entre carreras.
 static var show_fps: bool = false
@@ -108,6 +118,11 @@ var _nitro_bar: ProgressBar
 var _message: Label
 ## Efecto de cámara al atravesar una ola (borroso, gotas, tono de agua).
 var splash_overlay: ColorRect
+## Tubo: el borde de la pantalla avisa que se está por caer.
+var tube_warning: ColorRect
+var _tube_warning_mat: ShaderMaterial
+var _tube_warning_amount: float = 0.0
+var _tube_time: float = 0.0
 var _splash_material: ShaderMaterial
 var _splash_t: float = 0.0
 var _speed_lines: ColorRect
@@ -165,8 +180,6 @@ var _hint: Control
 ## 0 = a la vista, 1 = escondida a la derecha.
 var _hint_slide: float = 0.0
 var _hint_hold: float = 0.0
-var _idle_time: float = 0.0
-var _stuck_time: float = 0.0
 ## Lo que se ve del nitro: el "ojo de buey" (ver nitro_gauge.gdshader). Las
 ## barras de arriba quedan ocultas y llevan el estado (cuánto hay, lo que se
 ## gasta, el brillo de lo ganado), que el medidor dibuja.
@@ -235,6 +248,14 @@ func _connect_rider() -> void:
 	)
 	rider.crashed.connect(func() -> void: show_message("¡Pum!", BAD_COLOR))
 	rider.wave_punched.connect(_on_wave_punched)
+	rider.tube_entered.connect(func() -> void: show_message("¡Al tubo!", PROMPT_COLOR))
+	rider.tube_exited.connect(func(success: bool) -> void:
+		if success:
+			show_center("¡Qué tubo!", PROMPT_COLOR, 1.4)
+	)
+	rider.tube_wiped_out.connect(func(lip: bool) -> void:
+		show_message("¡Te tapó la ola!" if lip else "¡Te escupió la espuma!", BAD_COLOR)
+	)
 	var pc := rider.controller as PlayerController
 	if pc:
 		pc.jump_mode_changed.connect(func(mode_name: String) -> void:
@@ -279,6 +300,8 @@ func _on_trick_landed(spins: int) -> void:
 	_grade.add_theme_font_size_override("font_size", font)
 	_style_number(_grade, font)
 	_grade_count.text = "×%d" % spins
+	# Del mismo color que tenía en el contador (no siempre blanco).
+	_grade_count.add_theme_color_override("font_color", trick_color(spins))
 	_style_number(_grade_count, 42)
 	_grade_t = 0.0
 	_air_spins = 0
@@ -390,19 +413,13 @@ func _unhandled_input(event: InputEvent) -> void:
 			cam.shake(0.6)
 
 
-## Cualquier botón o tecla cuenta como "está jugando" (para la guía).
-func _input(event: InputEvent) -> void:
-	if (event is InputEventKey or event is InputEventJoypadButton) and event.is_pressed():
-		_idle_time = 0.0
-	elif event is InputEventJoypadMotion and absf((event as InputEventJoypadMotion).axis_value) > 0.5:
-		_idle_time = 0.0
 
 
 const HINT_WIDTH := 230.0
 
 
 ## La guía de controles: solo en carrera (no en el modo libre ni en la demo).
-## A la vista al principio y cuando hace falta; si no, se va a la derecha.
+## A la vista al principio; después se va a la derecha.
 func _update_hint(delta: float) -> void:
 	var race := _race()
 	if race == null or free_ride or demo:
@@ -411,15 +428,8 @@ func _update_hint(delta: float) -> void:
 	_hint.visible = true
 	_hint.pad = _using_pad()
 	var racing := race.state == RaceManager.State.RACING
-	var early := race.state == RaceManager.State.COUNTDOWN or (racing and race.race_time < HINT_START)
-	_idle_time += delta
-	# Frenado o trabado contra algo (o caído) en plena carrera.
-	if racing and rider.speed < 2.0 and not race.finish_times.has(rider):
-		_stuck_time += delta
-	else:
-		_stuck_time = 0.0
-	var need := early or (racing and (_idle_time > HINT_IDLE or _stuck_time > HINT_STUCK))
-	_hint_hold = 3.0 if need else maxf(_hint_hold - delta, 0.0)
+	var need := race.state == RaceManager.State.COUNTDOWN or (racing and race.race_time < HINT_START)
+	_hint_hold = 0.1 if need else maxf(_hint_hold - delta, 0.0)
 	var show := _hint_hold > 0.0 and race.state != RaceManager.State.FINISHED
 	_hint_slide = move_toward(_hint_slide, 0.0 if show else 1.0, delta * 2.5)
 	var e := _hint_slide * _hint_slide * (3.0 - 2.0 * _hint_slide)
@@ -444,6 +454,7 @@ func _process(delta: float) -> void:
 	if rider == null:
 		return
 	_update_splash(delta)
+	_update_tube_warning(delta)
 	_update_mash(delta)
 
 	# Handicap: muestra cuánto más rápido carga el nitro.
@@ -493,14 +504,19 @@ func _process(delta: float) -> void:
 			var t: float = race.finish_times.get(rider, race.race_time)
 			_place_label.text = ResultsPanel.format_time(t)
 			_place_label.add_theme_color_override("font_color", Color.WHITE)
+			# Arriba de nuestro reloj, chico, el del récord: verde si vamos mejor,
+			# rojo si vamos peor (comparado en el mismo punto de la pista).
 			var best := race.time_trial.best_time
-			_lap_label.text += "\nRécord %s\nR / Select: reiniciar" % (ResultsPanel.format_time(best) if best > 0.0 else "--")
-		if race.is_wrong_way(rider) and _center_time <= 0.0:
-			_center_label.text = "¡Al revés!"
-			_center_label.add_theme_color_override("font_color", BAD_COLOR)
-			_center_label.visible = true
-		else:
-			_center_label.visible = _center_time > 0.0
+			_record_label.visible = best > 0.0
+			_record_label.text = ResultsPanel.format_time(best)
+			var gap: float = race.time_trial.gap()
+			var col := Color.WHITE
+			if not is_nan(gap):
+				col = AHEAD_COLOR if gap <= 0.0 else BEHIND_COLOR
+			_record_label.add_theme_color_override("font_color", col)
+		var wrong := race.is_wrong_way(rider) and _center_time <= 0.0
+		_wrong_way.visible = wrong
+		_center_label.visible = _center_time > 0.0 and not wrong
 
 	_center_time = maxf(0.0, _center_time - delta)
 	_message_time = maxf(0.0, _message_time - delta)
@@ -758,6 +774,27 @@ func _on_wave_punched() -> void:
 	_splash_material.set_shader_parameter("seed", randf() * 100.0)
 
 
+## Tubo: el borde se tiñe cuando está por perder el equilibrio (amarillo y
+## después rojo, más fuerte del lado hacia donde se va).
+func _update_tube_warning(delta: float) -> void:
+	var target := rider.tube_danger if rider.in_tube() else 0.0
+	_tube_warning_amount = move_toward(_tube_warning_amount, target, delta * 4.0)
+	tube_warning.visible = _tube_warning_amount > 0.01
+	if not tube_warning.visible:
+		return
+	_tube_time += delta
+	var a := _tube_warning_amount
+	_tube_warning_mat.set_shader_parameter("amount", a)
+	_tube_warning_mat.set_shader_parameter("color", Color(1.0, 0.85, 0.2).lerp(Color(1.0, 0.2, 0.15), smoothstep(0.3, 0.9, a)))
+	_tube_warning_mat.set_shader_parameter("pulse", 0.5 + 0.5 * sin(_tube_time * lerpf(6.0, 16.0, a)))
+	# Hacia qué lado de la pantalla se va (la pared puede estar a la izquierda o a la derecha).
+	var side := 0.0
+	var state := rider.state_machine.current
+	if state and state.has_method("wall_on_right_sign"):
+		side = signf(rider.tube_balance) * float(state.call("wall_on_right_sign"))
+	_tube_warning_mat.set_shader_parameter("side", side)
+
+
 func _update_splash(delta: float) -> void:
 	_splash_t = maxf(_splash_t - delta, 0.0)
 	splash_overlay.visible = _splash_t > 0.0
@@ -860,6 +897,15 @@ func _build() -> void:
 	splash_overlay.material = _splash_material
 	splash_overlay.visible = false
 	root.add_child(splash_overlay)
+
+	tube_warning = ColorRect.new()
+	tube_warning.set_anchors_preset(Control.PRESET_FULL_RECT)
+	tube_warning.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tube_warning_mat = ShaderMaterial.new()
+	_tube_warning_mat.shader = TUBE_WARNING_SHADER
+	tube_warning.material = _tube_warning_mat
+	tube_warning.visible = false
+	root.add_child(tube_warning)
 
 	_speed_lines = ColorRect.new()
 	_speed_lines.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1025,6 +1071,21 @@ func _build() -> void:
 	_place_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 	_style_number(_place_label, 64)
 	root.add_child(_place_label)
+	# Contrarreloj: el reloj del récord, chico, arriba del nuestro.
+	_record_label = _make_label(30, Color.WHITE)
+	_record_label.anchor_left = 1.0
+	_record_label.anchor_right = 1.0
+	_record_label.anchor_top = 1.0
+	_record_label.anchor_bottom = 1.0
+	_record_label.offset_left = -300.0
+	_record_label.offset_right = -22.0
+	_record_label.offset_top = -152.0
+	_record_label.offset_bottom = -104.0
+	_record_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_record_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	_record_label.visible = false
+	_style_number(_record_label, 30)
+	root.add_child(_record_label)
 	# Arriba del puesto: la guía de controles (ver _update_hint).
 	_hint = ControlsHint.new()
 	_hint.anchor_left = 1.0
@@ -1033,8 +1094,8 @@ func _build() -> void:
 	_hint.anchor_bottom = 1.0
 	_hint.offset_left = -20.0 - HINT_WIDTH
 	_hint.offset_right = -20.0
-	_hint.offset_top = -118.0 - _hint.custom_minimum_size.y
-	_hint.offset_bottom = -118.0
+	_hint.offset_top = -158.0 - _hint.custom_minimum_size.y
+	_hint.offset_bottom = -158.0
 	root.add_child(_hint)
 
 	# Mensajes (truco, nitro...), arriba al centro.
@@ -1087,6 +1148,14 @@ func _build() -> void:
 	_center_label.offset_bottom = 20.0
 	_center_label.visible = false
 	root.add_child(_center_label)
+	_wrong_way = preload("res://ui/hud/no_entry_sign.gd").new()
+	_wrong_way.set_anchors_preset(Control.PRESET_CENTER)
+	_wrong_way.offset_left = -WRONG_WAY_SIZE * 0.5
+	_wrong_way.offset_right = WRONG_WAY_SIZE * 0.5
+	_wrong_way.offset_top = -WRONG_WAY_SIZE * 0.5 - 40.0
+	_wrong_way.offset_bottom = WRONG_WAY_SIZE * 0.5 - 40.0
+	_wrong_way.visible = false
+	root.add_child(_wrong_way)
 
 	# Ayuda de controles, arriba a la izquierda.
 	_help = _make_label(15, Color.WHITE)
@@ -1116,9 +1185,12 @@ static func _style_number(label: Label, font_size: int) -> void:
 	label.add_theme_constant_override("shadow_outline_size", maxi(6, font_size / 7))
 
 
-## Centro del contador de trucos (en el espacio de _fx).
+## Centro del contador de trucos (en el espacio de _fx). Las cifras quedan un
+## poco más abajo que el centro del recuadro de la letra (que deja lugar
+## arriba para los acentos): se baja para que los anillos queden centrados.
 func _trick_center() -> Vector2:
-	return _trick_label.get_global_rect().get_center() * _fx.get_global_transform()
+	var fsize := float(_trick_label.get_theme_font_size("font_size")) * _trick_label.get_global_transform().get_scale().y
+	return (_trick_label.get_global_rect().get_center() + Vector2(0.0, fsize * TRICK_CENTER_DROP)) * _fx.get_global_transform()
 
 
 ## Animaciones del contador y de la calificación (lo que dibuja _fx lo pinta

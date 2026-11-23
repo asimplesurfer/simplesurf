@@ -503,6 +503,26 @@ func _test_bumps() -> void:
 	# Lo chocaron por la derecha: gira hacia la izquierda (su cámara también).
 	_check(wrapf(other.heading - other_heading, -PI, PI) > 0.05, "el chocado gira hacia donde lo empujan (%.2f rad)" % wrapf(other.heading - other_heading, -PI, PI))
 	_rider.heading = my_heading
+	# El que se tira encima choca, aunque vaya más lento que el otro.
+	await _wait(0.6)
+	# (El otro, mucho más rápido, apenas se le acerca; antes por la velocidad
+	# contaba como el que chocaba.)
+	other.heading = _rider.heading - 0.3
+	other.speed = 13.0
+	other.global_position = _rider.global_position - _rider.right() * 1.3
+	other.position.y = _water_height_here()
+	other.shove = Vector3.ZERO
+	_rider.shove = Vector3.ZERO
+	_rider.speed = 7.0
+	_rider.heading += 0.3
+	# Los dos se acercan con el mismo ángulo; el lento además dobla hacia el otro.
+	Input.action_press(&"p1_left")
+	var hit2 := [false]
+	other.bumped.connect(func(_d: Vector3, _s: float) -> void: hit2[0] = true)
+	await _wait(0.25)
+	Input.action_release(&"p1_left")
+	_check(hit2[0] and other.shove.length() > _rider.shove.length(), "el más lento que se tira encima empuja al más rápido (%s %.2f %.2f)" % [hit2[0], other.shove.length(), _rider.shove.length()])
+	_rider.heading = my_heading
 	other.queue_free()
 	await _wait(0.5)
 	# Registro de la carrera: va guardando cómo juega cada uno y las olas.
@@ -893,21 +913,12 @@ func _test_course() -> void:
 	await _mash_until_standing(8.0, 4.0)
 	_check(not _rider.is_fallen(), "se levanta después del choque")
 
-	# Isla: chocar la orilla también tira y saca afuera.
-	if _rider.is_fallen():
-		await _mash_until_standing(8.0, 4.0)
-	_teleport(_course.track.position_at(1.0, -(_course.track_radius - _course.island_radius) + 0.5))
-	await process_frame
-	await process_frame
-	_check(_rider.is_fallen(), "chocar la isla tira de la tabla")
-	var r_center := Vector2(_rider.position.x, _rider.position.z).length()
-	_check(r_center >= _course.island_crash_radius(), "y queda fuera de la isla")
-
-	# Límite de afuera: no deja salir del circuito.
+	# Límite de afuera: no deja salir del circuito. (Chocar una isla lo
+	# prueba test_maps, con una isla tropical.)
 	_teleport(_course.track.position_at(2.0, _course.half_width + 20.0))
 	await process_frame
 	await process_frame
-	r_center = Vector2(_rider.position.x, _rider.position.z).length()
+	var r_center := Vector2(_rider.position.x, _rider.position.z).length()
 	_check(r_center <= _course.outer_limit() + 0.5, "no se puede salir del circuito por afuera")
 	await _mash_until_standing(8.0, 4.0)
 	_course.hazards_enabled = false
@@ -1052,6 +1063,8 @@ func _test_turbo_and_wrong_way() -> void:
 	_rider.heading = _course.track.heading_at(a) + PI
 	await _wait(2.0)
 	_check(_race.is_wrong_way(_rider), "ir al revés se detecta")
+	var hud_wrong: Control = (_main.get_node("Views") as SplitScreen).huds[0]._wrong_way
+	_check(hud_wrong != null and hud_wrong.visible, "al revés se ve la señal de prohibido")
 	_rider.heading = _course.track.heading_at(_course.track.angle_of(_rider.position))
 	await _wait(0.5)
 	_check(not _race.is_wrong_way(_rider), "al enderezar se va el aviso")

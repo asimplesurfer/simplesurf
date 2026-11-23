@@ -68,6 +68,10 @@ func _warm() -> void:
 					_add_material(materials, mm.mesh.surface_get_material(s))
 		elif gi is GPUParticles3D:
 			particles.append(gi as GPUParticles3D)
+	# La ola tubo todavía no está, pero puede aparecer en la carrera.
+	if TubeDirector.ENABLED:
+		for mat in TubeWave.warmup_materials():
+			_add_material(materials, mat)
 	var cameras := root.find_children("*", "Camera3D", true, false)
 	var quad := QuadMesh.new()
 	quad.size = Vector2(WARM_SIZE, WARM_SIZE)

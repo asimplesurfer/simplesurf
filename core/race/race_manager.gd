@@ -46,6 +46,8 @@ var _last_tick: int = -1
 var recorder: RaceRecorder
 ## Contrarreloj: tiempos, récords y fantasma (null en las carreras normales).
 var time_trial: TimeTrial
+## Olas tubo para el que va último (null en la contrarreloj y el modo libre).
+var tubes: TubeDirector
 
 
 func _ready() -> void:
@@ -79,6 +81,15 @@ func _ready() -> void:
 		recorder.name = "Recorder"
 		recorder.race = self
 		add_child(recorder)
+	# Olas tubo para el que va último: en la carrera (y la demo), no en la
+	# contrarreloj (los tiempos dejarían de compararse). En el modo libre no
+	# aparecen solas (solo con la tecla de prueba). Por ahora apagadas (TUBO.md).
+	if TubeDirector.ENABLED and not config.is_time_trial():
+		tubes = TubeDirector.new()
+		tubes.name = "Tubes"
+		tubes.automatic = not config.is_explore()
+		add_child(tubes)
+		tubes.setup(self)
 	if with_warmup:
 		# Durante la cuenta, se dibujan una vez todos los materiales (sin tirones
 		# la primera vez que aparece un efecto).
@@ -290,6 +301,13 @@ func _input(event: InputEvent) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	var key := event as InputEventKey
+	# Y: prueba de la ola tubo (aparece adelante de J1).
+	if key and key.pressed and not key.echo and key.physical_keycode == KEY_Y and tubes and state == State.RACING:
+		var people := humans()
+		if not people.is_empty():
+			get_viewport().set_input_as_handled()
+			tubes.spawn_test(people[0])
+		return
 	# L: descargar el registro de la carrera (en cualquier momento).
 	if key and key.pressed and not key.echo and key.physical_keycode == KEY_L and recorder:
 		get_viewport().set_input_as_handled()

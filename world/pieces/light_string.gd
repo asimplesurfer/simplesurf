@@ -15,6 +15,16 @@ extends MapPiece
 
 const REQUIRED := ["a", "b"]
 
+## Cómo se ve en el editor de mapas (ver MapPiece.editor_entry).
+const EDITOR := {
+	"name": "Guirnalda de luces", "place": "two_points",
+	"hint": "Tocá una isla tropical y después la otra: la guirnalda va de palmeras de una a palmeras de la otra (de noche se prenden).",
+	"fields": {
+		"lines": "Cables (1 a 20)",
+		"style": {"label": "Luces", "kind": "choice", "options": [["calida", "Cálidas"], ["fria", "Frías"], ["navidad", "Navideñas"]]},
+	},
+}
+
 var a: Vector2 = Vector2.ZERO
 var b: Vector2 = Vector2.ZERO
 ## Cuántos cables cruzan de una isla a la otra (1 a 20).

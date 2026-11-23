@@ -24,7 +24,7 @@ const SWELL_FIELDS := [
 	"breaking", "age", "lifetime",
 ]
 ## Código de estado (state en RIDER_FIELDS).
-const STATES := ["riding", "airborne", "drifting", "fallen", "paddling"]
+const STATES := ["riding", "airborne", "drifting", "fallen", "paddling", "tube"]
 
 var race: RaceManager
 var _tick: int = 0
@@ -144,7 +144,7 @@ func to_dict() -> Dictionary:
 			info["difficulty"] = (r.controller as AIController).difficulty.display_name
 		racers.append(info)
 	var course := race.course
-	var track := {"half_width": course.half_width, "layout": course.layout}
+	var track := {"half_width": course.half_width, "layout": course.layout, "map": course.map.id}
 	if course.track is PathTrack:
 		var pts: Array = []
 		var src := (course.track as PathTrack).points

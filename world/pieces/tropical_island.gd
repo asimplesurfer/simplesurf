@@ -13,6 +13,24 @@ extends MapPiece
 
 const REQUIRED := ["shape"]
 
+## Público automático: hay gente si la orilla queda a menos de estos metros
+## del borde de la pista; más lejos, nadie (no se ve y pesa).
+const CROWD_NEAR := 20.0
+
+## Cómo se ve en el editor de mapas (ver MapPiece.editor_entry).
+const EDITOR := {
+	"name": "Isla tropical", "place": "shape", "solid": true, "what": "una isla",
+	"hint": "Dibujá la figura de la isla tropical como la pista (clic: punto, arrastrar: curva) y cerrala tocando el primer punto. Puede tener cualquier forma.",
+	"fields": {
+		"crowd": {"label": "Público en la playa", "kind": "numbool", "auto_near": CROWD_NEAR},
+		"beach_width": {"label": "Playa", "kind": "level", "options": [[3, "Angosta"], [5, "Normal"], [8, "Ancha"], [12, "Muy ancha"]]},
+		"palm_density": {"label": "Palmeras", "kind": "level", "options": [[0.5, "Pocas"], [1.2, "Normal"], [2, "Muchas"], [3, "Selva"]]},
+		"rocks": {"label": "Piedras en la arena", "kind": "level", "options": [[0, "Ninguna"], [3, "Algunas"], [6, "Muchas"]]},
+		"sand_color": "Color de la arena", "grass_color": "Color del pasto", "leaf_color": "Color de las hojas",
+		"shape_seed": {"label": "Variante", "kind": "variant"},
+	},
+}
+
 ## Contorno visto desde arriba: [[x, z], {"p": [x, z], "in": [..], "out": [..]}, ...].
 var shape: Array = []
 ## Ancho de la franja de arena antes de la selva (m).
@@ -23,7 +41,9 @@ var palm_density: float = 1.2
 var rocks: int = 3
 ## Público en la playa del lado de la pista (gente alentando, sillas,
 ## reposeras, sombrillas y banderas): 1 = normal, 0 = nadie, 2 = el doble.
-var crowd: float = 1.0
+## -1 (lo que queda si el mapa no lo dice) = automático: hay público si la isla
+## está cerca de la pista (CROWD_NEAR) y no hay si está lejos.
+var crowd: float = -1.0
 var sand_color: Color = Color("f2d8a0")
 var grass_color: Color = Color("3f7f2c")
 var leaf_color: Color = Color("2f8f2c")
@@ -33,6 +53,8 @@ const SAND_Y := 0.55
 const GRASS_Y := 0.85
 ## Distancia de la orilla a la que tira al surfista (m, la playa entra al agua).
 const SHORE := 1.5
+## Hasta cuántos metros del pasto puede haber palmeras en la arena (las de la orilla).
+const PALM_SAND_REACH := 2.0
 
 var _outline := PackedVector2Array()
 var _lo := Vector2.ZERO
@@ -124,6 +146,23 @@ static func _resample(poly: PackedVector2Array, step: float) -> PackedVector2Arr
 		for k in parts:
 			out.append(a.lerp(b, float(k) / parts))
 	return out
+
+
+## Una isla tapa la pista si algún punto de su centro queda adentro de la figura.
+func blocks_track(samples: PackedVector2Array) -> Variant:
+	var bez := BezierShape.parse(shape)
+	if not bez.is_valid():
+		return null
+	var poly := bez.polygon(4.0)
+	for q in samples:
+		if Geometry2D.is_point_in_polygon(q, poly):
+			return q
+	return null
+
+
+## La figura de la isla vista desde arriba (vacía si un corte se la comió).
+func outline() -> PackedVector2Array:
+	return _outline
 
 
 ## Altura del suelo en un punto (-INF si ahí no hay isla).
@@ -283,6 +322,16 @@ func _grass_depth(p: Vector2) -> float:
 	return 0.0
 
 
+## true si está en el pasto o a menos de `reach` metros de su borde.
+func _near_grass(p: Vector2, reach: float) -> bool:
+	if _on_grass(p):
+		return true
+	for g in _grass:
+		if BezierShape.distance_to_edge(g, p) < reach:
+			return true
+	return false
+
+
 func _on_grass(p: Vector2) -> bool:
 	for g in _grass:
 		if Geometry2D.is_point_in_polygon(p, g):
@@ -342,7 +391,9 @@ func _add_vegetation(root: Node3D) -> void:
 			if not Geometry2D.is_point_in_polygon(p, _outline):
 				continue
 			var depth := BezierShape.distance_to_edge(_outline, p)
-			if depth < beach_width * 0.4 or _near_crowd(p, 2.6):
+			# Solo en el pasto o pegadas a su borde (no en medio de la playa): con
+			# una playa más ancha, las palmeras se corren hacia adentro.
+			if depth < beach_width * 0.4 or _near_crowd(p, 2.6) or not _near_grass(p, PALM_SAND_REACH):
 				continue
 			var facing := _facing(p)
 			if _rng.randf() > 0.2 + 0.8 * facing:
@@ -481,11 +532,16 @@ var _night: bool = false
 var party_spots := PackedVector2Array()
 
 
+## Cuánto público lleva esta isla en esta carrera (ver crowd_amount).
+var _amount: float = 0.0
+
+
 func _plan_crowd(course: Course) -> Dictionary:
 	var lists := {}
 	var hour := course.time_of_day if course.time_of_day >= 0 else GameSettings.time_of_day
 	_night = hour == GameSettings.TimeOfDay.NIGHT
-	if crowd <= 0.0 or _track_pts.is_empty():
+	_amount = crowd_amount(course)
+	if _amount <= 0.0 or _track_pts.is_empty():
 		return lists
 	var rng := RandomNumberGenerator.new()
 	rng.seed = shape_seed * 97 + 5
@@ -538,7 +594,7 @@ func _plan_crowd(course: Course) -> Dictionary:
 			var gap := absf(float(s[4]) - float(p[4]))
 			if minf(gap, perimeter - gap) < PARTY_HALF + 6.0:
 				near_party = true
-		if near_party or rng.randf() > 0.22 * minf(crowd, 1.5):
+		if near_party or rng.randf() > 0.22 * minf(_amount, 1.5):
 			continue
 		last = float(s[4])
 		_calm(lists, rng, s[0], s[1], s[2])
@@ -556,7 +612,7 @@ func _party(lists: Dictionary, rng: RandomNumberGenerator, q: Vector2, out: Vect
 		for row in [0.9, 1.75, 2.6]:
 			if row > 2.0 and absf(x) > 3.5:
 				continue
-			if rng.randf() < 0.85 * minf(crowd, 1.0):
+			if rng.randf() < 0.85 * minf(_amount, 1.0):
 				var p := q - out * (float(row) + rng.randf_range(-0.12, 0.12)) + side * (x + rng.randf_range(-0.25, 0.25))
 				_crowd_put(lists, rng, "stand%d" % (rng.randi() % BeachCrowd.STANDING), p, track_q, 0.3, false, INF,
 					hue)
@@ -683,6 +739,24 @@ func _touches_track(course: Course) -> bool:
 		if Geometry2D.is_point_in_polygon(q, _outline):
 			return true
 	return false
+
+
+## Cuánto público lleva la isla: lo que dice el mapa, o en automático, 1 si
+## está cerca de la pista y 0 si está lejos.
+func crowd_amount(course: Course) -> float:
+	if crowd >= 0.0:
+		return crowd
+	return 1.0 if track_gap(course) < CROWD_NEAR else 0.0
+
+
+## Metros de la orilla al borde de la pista (0 si la isla la toca o la tapa).
+func track_gap(course: Course) -> float:
+	if course.track == null or _outline.is_empty():
+		return 0.0
+	var best := INF
+	for p in _outline:
+		best = minf(best, absf(course.track.locate(Vector3(p.x, 0.0, p.y)).y) - course.half_width)
+	return maxf(best, 0.0)
 
 
 func _sample_track(track: TrackSpace) -> void:

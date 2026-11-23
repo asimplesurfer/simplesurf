@@ -21,8 +21,7 @@ func run() -> void:
 	c.hat_index = 9
 	var run1 := await _run_trial(3.0)
 	var waves1: Array = run1[1]
-	var data := TimeTrial.load_data()
-	var entry: Dictionary = data.get(str(config.layout), {})
+	var entry := TimeTrial.records_of(TrackMap.for_layout(config.layout))
 	_check((entry.get("top", []) as Array).size() == 1, "guarda el tiempo")
 	_check(entry.has("ghost") and int(entry.ghost.character.hair) == 14, "guarda el fantasma con el personaje que hizo el récord")
 	# Segundo intento con otro personaje: el fantasma sigue siendo el del récord.
@@ -72,6 +71,10 @@ func run() -> void:
 	menu.queue_free()
 	await process_frame
 
+	_test_identity()
+	_test_shape()
+	_test_settings()
+
 	# Volver a dejar todo como estaba.
 	GameSettings.characters[0] = CharacterData.from_dict(first_char)
 	GameSettings.player_count = saved_players
@@ -97,11 +100,15 @@ func _run_trial(seconds: float, check_ghost: bool = false) -> Array:
 	var ghost_ok := false
 	var start_pos := Vector3.ZERO
 	var t := 0.0
+	# A mitad de camino, la diferencia con el récord (la misma carrera: casi 0).
+	var mid_gap := NAN
 	while t < seconds:
 		await process_frame
 		t += 1.0 / 60.0
 		if check_ghost and race.time_trial.ghost and start_pos == Vector3.ZERO and race.time_trial.ghost.is_inside_tree():
 			start_pos = race.time_trial.ghost.position
+		if check_ghost and is_nan(mid_gap) and t > 1.5:
+			mid_gap = race.time_trial.gap()
 	waves = (m.get_node("WaveManager") as WaveManager).fixed_spawned.slice(0, 3)
 	var hair := -1
 	var hud_ok := false
@@ -111,7 +118,16 @@ func _run_trial(seconds: float, check_ghost: bool = false) -> Array:
 		if g:
 			hair = (g.get_node("Visual") as RiderVisual).character.hair_index
 		var hud := (m.get_node("Views") as SplitScreen).huds[0]
-		hud_ok = hud._place_label.text.begins_with("0:0") and hud._lap_label.text.contains("Récord 0:0")
+		# El récord, chico arriba de nuestro reloj (sin decir "Récord"), en
+		# verde o rojo según vayamos mejor o peor.
+		var rec: Label = hud._record_label
+		var col: Color = rec.get_theme_color("font_color")
+		hud_ok = (
+			hud._place_label.text.begins_with("0:0") and rec.visible and rec.text.begins_with("0:0")
+			and not hud._lap_label.text.contains("Récord")
+			and (col == hud.AHEAD_COLOR or col == hud.BEHIND_COLOR or col == Color.WHITE)
+			and not is_nan(mid_gap) and absf(mid_gap) < 0.6
+		)
 	race._finish(race.racers[0])
 	await process_frame
 	var time: float = race.finish_times.get(race.racers[0], 0.0)
@@ -119,3 +135,105 @@ func _run_trial(seconds: float, check_ghost: bool = false) -> Array:
 	await process_frame
 	await process_frame
 	return [time, waves, ghost_ok, hair, hud_ok]
+
+
+func _record(time: float) -> Dictionary:
+	return {"time": time, "date": "", "character": {}}
+
+
+## Los récords van por nombre de mapa, con su número como salvavidas.
+func _test_identity() -> void:
+	var maps := TrackMap.all()
+	var atoll := maps[TrackMap.index_of("atoll")]
+	# Formato de antes: por lugar en la lista. Pasa al mapa de ese lugar.
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(TimeTrial.SAVE_PATH))
+	TimeTrial.save_data({str(TrackMap.index_of("atoll")): {"top": [_record(90.0)], "ghost": {"time": 90.0}}})
+	var data := TimeTrial.load_data()
+	_check(int(data.get("format", 0)) == TimeTrial.SAVE_FORMAT and (data.maps as Dictionary).has("atoll"),
+		"los récords del formato de antes pasan al mapa por su nombre")
+	_check(float(TimeTrial.records_of(atoll).top[0].time) == 90.0 and TimeTrial.records_of(atoll).has("ghost"),
+		"y se siguen viendo (con su fantasma)")
+	_check(int(TimeTrial._read().get("format", 0)) == TimeTrial.SAVE_FORMAT, "el archivo queda guardado en el formato nuevo")
+	# Reordenar: el mapa se encuentra por nombre y el número se actualiza.
+	data.maps.atoll.order = 77
+	_check(not TimeTrial._version(data, atoll, false).is_empty() and int(data.maps.atoll.order) == atoll.order,
+		"si el mapa cambió de número, sus récords se encuentran por el nombre y el número se actualiza")
+	# Renombrar el archivo: se encuentra por el número y pasa al nombre nuevo.
+	data.maps["atolon_viejo"] = data.maps.atoll
+	data.maps.erase("atoll")
+	var v := TimeTrial._version(data, atoll, false)
+	_check(not v.is_empty() and (data.maps as Dictionary).has("atoll") and not (data.maps as Dictionary).has("atolon_viejo"),
+		"si el mapa cambió de nombre, sus récords se encuentran por el número y pasan al nombre nuevo")
+	# Un mapa borrado con otro número: sus récords quedan guardados, nadie los adopta.
+	data.maps["borrado"] = {"order": 999, "versions": [{"shape": {}, "top": [_record(10.0)]}]}
+	TimeTrial._version(data, atoll, false)
+	_check((data.maps as Dictionary).has("borrado"), "los récords de un mapa que ya no está quedan guardados")
+	# El número de un mapa que existe nunca se adopta (cada uno tiene los suyos).
+	var other := maps[TrackMap.index_of("classic")]
+	data.maps["otro"] = {"order": other.order, "versions": []}
+	data.maps.erase("classic")
+	var mine := TimeTrial._map_entry(data, atoll, false)
+	_check(not mine.is_empty() and (data.maps as Dictionary).has("otro"), "no se adoptan récords con el número de otro mapa")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(TimeTrial.SAVE_PATH))
+
+
+## La huella: un récord vale solo en la pista donde se hizo.
+func _test_shape() -> void:
+	var atoll := TrackMap.all()[TrackMap.index_of("atoll")]
+	var shape := atoll.track_shape()
+	_check(TrackMap.same_shape(shape, shape), "una pista es igual a sí misma")
+	# Un retoque chiquito (un punto movido 1 m) sigue siendo la misma pista.
+	var nudged := TrackMap.from_dict(atoll.to_dict())
+	nudged.path[3] += Vector2(1.0, 0.0)
+	_check(TrackMap.same_shape(shape, nudged.track_shape()), "mover un punto 1 m no cambia la pista para los récords")
+	var moved := TrackMap.from_dict(atoll.to_dict())
+	moved.path[3] += Vector2(40.0, 25.0)
+	_check(not TrackMap.same_shape(shape, moved.track_shape()), "cambiar el recorrido sí")
+	var laps := TrackMap.from_dict(atoll.to_dict())
+	laps.laps += 1
+	_check(not TrackMap.same_shape(shape, laps.track_shape()), "cambiar las vueltas también")
+	var wide := TrackMap.from_dict(atoll.to_dict())
+	wide.half_width += 4.0
+	_check(not TrackMap.same_shape(shape, wide.track_shape()), "y cambiar el ancho")
+	var rocks := TrackMap.from_dict(atoll.to_dict())
+	rocks.rock_count += 5
+	rocks.ring_count += 5
+	_check(TrackMap.same_shape(shape, rocks.track_shape()), "las rocas y los aros no cuentan")
+	# Pista cambiada: los récords viejos quedan archivados; si vuelve, vuelven.
+	moved.id = atoll.id
+	moved.order = atoll.order
+	var data := {"format": TimeTrial.SAVE_FORMAT, "maps": {}}
+	TimeTrial._version(data, atoll, true)["top"] = [_record(80.0)]
+	_check(TimeTrial._version(data, moved, false).is_empty(), "con la pista cambiada no aparecen los récords viejos")
+	TimeTrial._version(data, moved, true)["top"] = [_record(95.0)]
+	_check((data.maps.atoll.versions as Array).size() == 2, "los viejos quedan archivados, no se borran")
+	_check(float(TimeTrial._version(data, atoll, false).top[0].time) == 80.0, "si la pista vuelve a ser la de antes, vuelven sus récords")
+	# El anillo también tiene huella.
+	var ring := TrackMap.all()[TrackMap.index_of("classic")]
+	_check(TrackMap.same_shape(ring.track_shape(), ring.track_shape()) and not TrackMap.same_shape(ring.track_shape(), shape),
+		"el anillo tiene su propia huella")
+
+
+## El mapa elegido se guarda por nombre y número.
+func _test_settings() -> void:
+	var saved := GameSettings.track_layout
+	# No pisar la configuración de quien juega (ni la que miran otros tests).
+	var saved_file := FileAccess.get_file_as_string(GameSettings.PATH) if FileAccess.file_exists(GameSettings.PATH) else ""
+	var atoll := TrackMap.all()[TrackMap.index_of("atoll")]
+	_check(TrackMap.find("atoll", 999) == TrackMap.index_of("atoll"), "un mapa se encuentra por su nombre")
+	_check(TrackMap.find("no_existe", atoll.order) == TrackMap.index_of("atoll"), "o por su número si el nombre ya no está")
+	_check(TrackMap.find("no_existe", 999) == TrackMap.default_index(), "si no está ninguno, el mapa por defecto")
+	GameSettings.track_layout = TrackMap.index_of("atoll")
+	GameSettings.save_settings()
+	var cfg := ConfigFile.new()
+	cfg.load(GameSettings.PATH)
+	_check(cfg.get_value("gameplay", "map", "") == "atoll" and int(cfg.get_value("gameplay", "map_order", -1)) == atoll.order
+		and not cfg.has_section_key("gameplay", "track_layout"),
+		"la configuración guarda el mapa por nombre y número")
+	GameSettings.track_layout = saved
+	if saved_file.is_empty():
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(GameSettings.PATH))
+	else:
+		var f := FileAccess.open(GameSettings.PATH, FileAccess.WRITE)
+		f.store_string(saved_file)
+		f.close()

@@ -1,6 +1,6 @@
 class_name MapPiece
 extends RefCounted
-## Una pieza de un mapa: algo que el mapa pone en un lugar (un volcán, un
+## Una pieza de un mapa: algo que el mapa pone en un lugar (una isla, un
 ## géiser, un arco de roca, una cueva...). Cada pieza es un archivo en
 ## world/pieces/ y sabe hacer todo lo suyo: construirse y, si afecta al juego,
 ## qué le pasa a un surfista que la toca. Course no sabe qué hace cada una.
@@ -13,7 +13,8 @@ extends RefCounted
 ## van en una constante REQUIRED de la pieza (const REQUIRED := ["shape"]) y el
 ## mapa tiene que darlos.
 ##
-## Agregar una pieza nueva = agregar un archivo acá (no se toca nada más).
+## Agregar una pieza nueva = agregar un archivo acá (no se toca nada más; el
+## editor de mapas la toma sola, ver EDITOR más abajo).
 
 const FOLDER := "res://world/pieces/"
 
@@ -76,15 +77,25 @@ func to_dict() -> Dictionary:
 ## Se llama antes de construir ninguna pieza. Acá una pieza calcula lo que
 ## otras necesitan saber y se anota en el registro de Course:
 ## - "ground": es tierra; tiene que tener ground_y(p: Vector2) -> float (la
-##   altura del suelo en ese punto, o -INF si ahí no hay tierra).
+##   altura del suelo en ese punto, o -INF si ahí no hay tierra) y
+##   outline() -> PackedVector2Array (su figura vista desde arriba: con ella el
+##   agua apaga las olas grandes cerca de la orilla, y las olas no salen ahí).
 ## Una pieza también puede mirar las otras en course.pieces (así una isla
 ## tropical encuentra los cortes que la dividen) y sumar piezas nuevas ahí.
 func prepare(_course: Course) -> void:
 	pass
 
 
-## Se llama apenas está el recorrido (antes que las islas del mapa). Acá se
-## construye todo lo de la pieza (como hijos de `course`).
+## Para el validador de mapas (tools/validate_maps.gd), sin armar nada: el
+## primer punto de la pista (`samples`: su línea central cada pocos metros) que
+## esta pieza tapa, o null si no tapa ninguno. Las piezas que se atraviesan
+## (cuevas, cascadas) o que van fuera de la pista no tapan.
+func blocks_track(_samples: PackedVector2Array) -> Variant:
+	return null
+
+
+## Se llama apenas está el recorrido. Acá se construye todo lo de la pieza
+## (como hijos de `course`).
 func build(_course: Course) -> void:
 	pass
 
@@ -105,6 +116,109 @@ func affect_rider(_course: Course, _rider: Rider) -> bool:
 ## En cada paso de física (una vez, no por surfista).
 func update(_course: Course, _delta: float) -> void:
 	pass
+
+
+# ------------------------------------------------------------ editor de mapas
+
+## El editor de mapas (tools/map_editor) arma sus herramientas con lo que dice
+## cada pieza: no hay que tocarlo para sumar una. Cada pieza tiene su
+## constante EDITOR := {...}:
+## - "name": cómo se llama ("Géiser").
+## - "place": cómo se pone: "point" (un clic: x, z), "shape" (figura cerrada),
+##   "path" (línea abierta) o "two_points" (dos puntas: a, b).
+## - "key": para "shape" y "path", la variable con los puntos (por defecto
+##   "shape" o "path").
+## - "solid": true si se choca (el editor avisa si pisa la pista).
+## - "what": cómo se nombra mientras se dibuja ("una isla").
+## - "hint": la ayuda que se ve al elegir la herramienta.
+## - "fields": opcional, por parámetro, cuando lo automático no alcanza: un
+##   texto (la etiqueta) o {"label", "kind", "options"}. Lo automático: la
+##   etiqueta es el comentario ## de la variable y el campo sale de su tipo.
+##   "kind" puede ser num, int, bool, color, text, choice o level (una lista
+##   de opciones [valor, nombre]), numbool (sí/no que se guarda 1 o 0) o
+##   variant (semilla con botón para sortear otra). "auto_near": metros: si
+##   el mapa no dice el valor, es automático (sí cerca de la pista, no lejos).
+## Los textos son para quien arma mapas, no para programadores: ver
+## tools/map_editor/CLAUDE.md.
+const PLACES := ["point", "shape", "path", "two_points"]
+## Tipos de variable que son campos del editor, y el campo de cada uno.
+const FIELD_KINDS := {TYPE_FLOAT: "num", TYPE_INT: "int", TYPE_BOOL: "bool", TYPE_COLOR: "color", TYPE_STRING: "text"}
+
+
+## Todas las piezas de world/pieces/, como las ve el editor (ver editor_entry).
+static func editor_catalog() -> Array:
+	var out := []
+	var files := DirAccess.get_files_at(FOLDER)
+	files.sort()
+	for f in files:
+		var file := f.trim_suffix(".remap")
+		if file.get_extension() != "gd" or file == "map_piece.gd":
+			continue
+		# Faltan los parámetros obligatorios, pero para leerla alcanza.
+		var piece := create({"type": file.get_basename()})
+		if piece:
+			out.append(piece.editor_entry())
+	return out
+
+
+## Esta pieza para el editor: {type, name, place, key, solid, what, hint,
+## required, params: [[nombre, etiqueta, campo, valor por defecto, opciones?]],
+## auto: {nombre: {"near_track": metros}}}.
+func editor_entry() -> Dictionary:
+	var script := get_script() as GDScript
+	var consts := script.get_script_constant_map()
+	var ed: Dictionary = consts.get("EDITOR", {})
+	var place := str(ed.get("place", ""))
+	var key := str(ed.get("key", "path" if place == "path" else "shape"))
+	var fields: Dictionary = ed.get("fields", {})
+	var comments := _var_comments(script.source_code)
+	# Lo que dice dónde está la pieza no es un campo: se edita en el mapa.
+	var skip: Array = {"point": ["x", "z"], "two_points": ["a", "b"], "shape": [key], "path": [key]}.get(place, [])
+	var rows := []
+	var autos := {}
+	var known := params()
+	for name in known:
+		if skip.has(name) or not FIELD_KINDS.has(known[name]):
+			continue
+		var f: Variant = fields.get(name, {})
+		if f is String:
+			f = {"label": f}
+		var row := [
+			name, str(f.get("label", comments.get(name, String(name).capitalize()))),
+			str(f.get("kind", FIELD_KINDS[known[name]])), to_json(get(name)),
+		]
+		if f.has("options"):
+			row.append(f.options)
+		if f.has("auto_near"):
+			autos[name] = {"near_track": float(f.auto_near)}
+		rows.append(row)
+	var entry := {
+		"type": type, "name": str(ed.get("name", type.capitalize())), "place": place,
+		"solid": bool(ed.get("solid", false)), "what": str(ed.get("what", "")),
+		"hint": str(ed.get("hint", "")), "required": consts.get("REQUIRED", []), "params": rows,
+		"auto": autos,
+	}
+	if place == "shape" or place == "path":
+		entry["key"] = key
+	return entry
+
+
+## La primera línea del comentario ## que está justo arriba de cada variable
+## (sin el punto final): {nombre: texto}.
+static func _var_comments(source: String) -> Dictionary:
+	var out := {}
+	var pending := ""
+	for line in source.split("\n"):
+		var l := line.strip_edges()
+		if l.begins_with("##"):
+			if pending.is_empty():
+				pending = l.trim_prefix("##").strip_edges()
+			continue
+		if l.begins_with("var ") and not pending.is_empty():
+			var name := l.trim_prefix("var ").get_slice(":", 0).get_slice("=", 0).strip_edges()
+			out[name] = pending.trim_suffix(".")
+		pending = ""
+	return out
 
 
 static func from_json(v: Variant, t: int) -> Variant:

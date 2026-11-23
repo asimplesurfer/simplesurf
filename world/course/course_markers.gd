@@ -14,6 +14,8 @@ var half_width: float = 20.0
 var float_spacing: float = FLOAT_SPACING
 
 var _buoys: Array[Node3D] = []
+## Cuánto puede alejarse una boya o corchera del borde real (m) antes de saltearla.
+const EDGE_TOLERANCE := 1.0
 ## Corcheras: flotadores (MultiMesh) que marcan los bordes de la pista.
 var _ropes: Array[MultiMeshInstance3D] = []
 ## Altura sobre el agua de cada MultiMesh de _ropes.
@@ -116,12 +118,18 @@ func _add_rope(lateral: float, color: Color) -> void:
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_colors = true
 	mm.mesh = mesh
-	mm.instance_count = count
+	var kept: Array[Vector3] = []
+	var colors: Array[Color] = []
 	for i in count:
-		var a := TAU * i / count
-		var p := track.position_at(a, lateral)
-		mm.set_instance_transform(i, Transform3D(Basis.IDENTITY, p))
-		mm.set_instance_color(i, color if (i / 2) % 2 == 0 else Color(0.97, 0.97, 0.97))
+		var p := track.position_at(TAU * i / count, lateral)
+		if not _on_edge(p, lateral):
+			continue
+		kept.append(p)
+		colors.append(color if (i / 2) % 2 == 0 else Color(0.97, 0.97, 0.97))
+	mm.instance_count = kept.size()
+	for i in kept.size():
+		mm.set_instance_transform(i, Transform3D(Basis.IDENTITY, kept[i]))
+		mm.set_instance_color(i, colors[i])
 	var mmi := MultiMeshInstance3D.new()
 	mmi.name = "Rope"
 	mmi.multimesh = mm
@@ -131,6 +139,16 @@ func _add_rope(lateral: float, color: Color) -> void:
 	_ropes.append(mmi)
 	_float_offsets.append(0.05)
 	_float_points.append(_points_of(mm))
+
+
+## true si el punto quedó de verdad en el borde de la pista. En las curvas más
+## cerradas que el ancho de la pista, correr la línea del centro hacia adentro
+## hace un rulo: esos puntos caen DENTRO de la pista (boyas que se atraviesan y
+## corcheras cruzadas), y se saltean. El borde real es donde se cruzan los dos
+## tramos del rulo.
+func _on_edge(p: Vector3, lateral: float) -> bool:
+	var lat := track.lateral_of(p)
+	return signf(lat) == signf(lateral) and absf(absf(lat) - absf(lateral)) < EDGE_TOLERANCE
 
 
 func _add_buoy_circle(lateral: float, color: Color, spacing: float) -> void:
@@ -151,7 +169,9 @@ func _add_buoy_circle(lateral: float, color: Color, spacing: float) -> void:
 	# llamadas de dibujo. Flotan igual que las corcheras.
 	var points: Array[Vector3] = []
 	for i in count:
-		points.append(track.position_at(TAU * i / count, lateral))
+		var p := track.position_at(TAU * i / count, lateral)
+		if _on_edge(p, lateral):
+			points.append(p)
 	_add_floating_multimesh(base_mesh, points, 0.4, "BuoyBases")
 	_add_floating_multimesh(top_mesh, points, 1.2, "BuoyTops")
 

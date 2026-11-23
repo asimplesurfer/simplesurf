@@ -149,13 +149,33 @@ func _test_sandbox() -> void:
 	pause.close()
 	await process_frame
 	_check(not root.get_tree().paused, "al seguir, el juego sigue")
+	# Con mando: A elige la opción marcada ("Seguir") y B vuelve al juego.
+	sb.toggle_pause()
+	await process_frame
+	await process_frame
+	var pad_a := InputEventJoypadButton.new()
+	pad_a.button_index = JOY_BUTTON_A
+	pad_a.pressed = true
+	root.push_input(pad_a)
+	await process_frame
+	_check(not pause.is_open() and not root.get_tree().paused, "con el mando, A elige en la pausa (Seguir)")
+	sb.toggle_pause()
+	await process_frame
+	await process_frame
+	var pad_b := InputEventJoypadButton.new()
+	pad_b.button_index = JOY_BUTTON_B
+	pad_b.pressed = true
+	root.push_input(pad_b)
+	await process_frame
+	_check(not pause.is_open(), "con el mando, B cierra la pausa")
+	pause.close()
 	GameSettings.music_volume = saved_music
 	GameSettings.sfx_volume = saved_sfx
 	audio.apply_volumes()
 	# El agua tiene su color original (sin panel de ajustes).
 	await process_frame
 	_check(m.get_node_or_null("Views/TuningPanel") == null, "no hay panel de ajustes del agua (F9)")
-	_check(water.shader_material().get_shader_parameter("deep_color") == null, "el agua tiene su color original")
+	_check(water.shader_material().get_shader_parameter("deep_color") == WaterPalette.BASE.deep_color, "el agua tiene su color original (la base)")
 	# Cámara: a 3 m; con turbo, a la misma distancia de siempre (8,3 m).
 	var chase := (m.get_node("Views") as SplitScreen).cameras[0]
 	var flat_dist := func() -> float:

@@ -5,8 +5,11 @@ extends "res://tests/test_base.gd"
 func run() -> void:
 	_test_map_files()
 	_test_pieces()
+	_test_editor_catalog()
 	_test_bezier()
 	_test_start_straight()
+	_test_edges_on_border()
+	_test_water_palette()
 	await _test_cave()
 	await _test_cave_map()
 	await _test_tropical_island()
@@ -20,9 +23,9 @@ func _test_map_files() -> void:
 	var maps := TrackMap.all()
 	_check(maps.size() >= 3, "se leen los mapas de la carpeta (%d)" % maps.size())
 	_check(
-		maps[GameSettings.TrackLayout.CLASSIC].id == "classic"
-		and maps[GameSettings.TrackLayout.ARCHIPELAGO].id == "archipelago"
-		and maps[GameSettings.TrackLayout.ATOLL].id == "atoll",
+		maps[TrackMap.index_of("classic")].id == "classic"
+		and maps[TrackMap.index_of("archipelago")].id == "archipelago"
+		and maps[TrackMap.index_of("atoll")].id == "atoll",
 		"los primeros mapas conservan su número (récords y configuración guardada)"
 	)
 	var orders := {}
@@ -40,13 +43,56 @@ func _test_map_files() -> void:
 	_check(orders.size() == maps.size() and ids.size() == maps.size(), "cada mapa tiene su número y su nombre propios")
 	_check(GameSettings.track_layout_names().size() == maps.size(), "el menú muestra todos los mapas")
 	# Ida y vuelta: leer y volver a escribir un mapa da lo mismo.
-	var atoll := maps[GameSettings.TrackLayout.ATOLL]
+	var atoll := maps[TrackMap.index_of("atoll")]
 	var again := TrackMap.from_dict(JSON.parse_string(JSON.stringify(atoll.to_dict())))
 	_check(
-		again.path == atoll.path and again.islands == atoll.islands and again.pieces == atoll.pieces
+		again.path == atoll.path and again.pieces == atoll.pieces
 		and again.laps == atoll.laps,
 		"un mapa se puede exportar y volver a leer igual"
 	)
+
+
+## Boyas y corcheras: todas en el borde real de la pista. En las curvas
+## cerradas el borde de adentro hacía un rulo y dejaba boyas dentro de la pista
+## (se atravesaban) y corcheras cruzadas.
+func _test_edges_on_border() -> void:
+	print("Boyas en el borde:")
+	for m in TrackMap.all():
+		if m.is_ring():
+			continue
+		var t := PathTrack.new(m.path, m.half_width, m.handles_in, m.handles_out, m.smoothing, m.start)
+		var markers := CourseMarkers.new()
+		markers.track = t
+		var inside := 0
+		var total := 0
+		for side in [-1.0, 1.0]:
+			var lat: float = side * m.half_width
+			var n := int(t.length() / 2.0)
+			for i in n:
+				var p := t.position_at(TAU * i / n, lat)
+				if markers._on_edge(p, lat):
+					total += 1
+					if absf(t.lateral_of(p)) < m.half_width - 1.0:
+						inside += 1
+		markers.free()
+		_check(inside == 0 and total > 0, "%s: ninguna boya adentro de la pista (%d en el borde)" % [m.name, total])
+
+
+## Colores del agua: una base (día) y los climas salen de ella.
+func _test_water_palette() -> void:
+	print("Colores del agua por clima:")
+	for climate in WaterPalette.CLIMATES:
+		var cols := WaterPalette.colors(climate)
+		var own: Dictionary = WaterPalette.CLIMATES[climate].colors
+		var all_keys := WaterPalette.BASE.keys().all(func(k: String) -> bool: return cols.has(k))
+		# Lo que el clima no decide no queda con el color del día: se ajusta solo.
+		var leaked := WaterPalette.BASE.keys().filter(
+			func(k: String) -> bool: return not own.has(k) and cols[k] == WaterPalette.BASE[k]
+		)
+		var own_kept := own.keys().all(func(k: String) -> bool: return cols[k] == own[k])
+		_check(all_keys and leaked.is_empty() and own_kept, "%s: todos los colores del agua, propios o sacados de la base %s" % [climate, leaked])
+	var sunset_far: Color = WaterPalette.colors(WaterPalette.SUNSET).ocean_color
+	_check(sunset_far.r > sunset_far.b + 0.2, "al atardecer el mar lejano es naranja (no celeste)")
 
 
 func _test_pieces() -> void:
@@ -128,7 +174,7 @@ func _test_start_straight() -> void:
 ## El archipiélago con una cueva dibujada sobre la pista y una roca de paisaje.
 func _test_cave() -> void:
 	print("Cueva y roca dibujadas:")
-	GameSettings.track_layout = GameSettings.TrackLayout.ARCHIPELAGO
+	GameSettings.track_layout = TrackMap.index_of("archipelago")
 	var d: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://world/maps/archipelago.json"))
 	d.pieces = [
 		{"type": "rock_formation", "shape": [[55, -125], [100, -140], [145, -95], [138, -50], [105, -52], [85, -85], [50, -92]],
@@ -184,7 +230,7 @@ func _test_cave() -> void:
 	_check(is_equal_approx(CaveEyes.seen_brightness(1.0, 1.0), 1.0), "y afuera todo vuelve a lo normal")
 	m.queue_free()
 	await process_frame
-	GameSettings.track_layout = GameSettings.TrackLayout.CLASSIC
+	GameSettings.track_layout = TrackMap.index_of("classic")
 
 
 ## El mapa La cueva: se entra a la cueva, se sale por detrás de la cascada y
@@ -224,11 +270,7 @@ func _test_cave_map() -> void:
 			fall = p
 	_check(cave != null and course.get_node_or_null("Cave/Rock") != null, "hay una cueva sobre la pista")
 	_check(fall != null and course.get_node_or_null("Waterfall/Curtain") != null, "hay una cascada")
-	var clear := true
-	for isl in course.islands:
-		if absf(course.track.lateral_of(isl.position)) < course.track.half_width + isl.radius + 0.5:
-			clear = false
-	_check(clear, "las islas no pisan la pista")
+	_check(_land_clear_of_track(course, 0.5), "las islas no pisan la pista")
 	# La cascada cruza la pista en la salida de la cueva.
 	var on_track := absf(course.track.lateral_of(Vector3(fall.x, 0, fall.z))) < 6.0
 	var at_exit := false
@@ -263,7 +305,7 @@ func _test_cave_map() -> void:
 	_check(finished or all_done, "los bots completan la vuelta de la cueva")
 	m.queue_free()
 	await process_frame
-	GameSettings.track_layout = GameSettings.TrackLayout.CLASSIC
+	GameSettings.track_layout = TrackMap.index_of("classic")
 
 
 ## Isla larga e irregular, al este del archipiélago, con la panza hacia la pista.
@@ -276,10 +318,10 @@ func _test_night() -> void:
 	print("De noche:")
 	var saved := GameSettings.time_of_day
 	GameSettings.time_of_day = GameSettings.TimeOfDay.NIGHT
-	GameSettings.track_layout = GameSettings.TrackLayout.ARCHIPELAGO
+	GameSettings.track_layout = TrackMap.index_of("archipelago")
 	var d: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://world/maps/archipelago.json"))
 	d.pieces = [
-		{"type": "tropical_island", "shape": ISLAND_SHAPE},
+		{"type": "tropical_island", "shape": ISLAND_SHAPE, "crowd": 1},
 		{"type": "island_split", "path": [[170, -20], [290, -20]], "width": 14},
 		{"type": "light_string", "a": [225, -60], "b": [225, 10], "lines": 2, "style": "fria"},
 	]
@@ -300,25 +342,20 @@ func _test_night() -> void:
 	m.queue_free()
 	await process_frame
 	GameSettings.time_of_day = saved
-	GameSettings.track_layout = GameSettings.TrackLayout.CLASSIC
+	GameSettings.track_layout = TrackMap.index_of("classic")
 
 
 ## Una isla tropical dibujada: arena, selva y palmeras (todo en pocas
 ## MultiMesh) y se choca como una isla.
 func _test_tropical_island() -> void:
 	print("Isla tropical dibujada:")
-	GameSettings.track_layout = GameSettings.TrackLayout.ARCHIPELAGO
+	GameSettings.track_layout = TrackMap.index_of("archipelago")
 	var d: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://world/maps/archipelago.json"))
 	d.pieces = [
-		{"type": "tropical_island", "shape": ISLAND_SHAPE},
+		{"type": "tropical_island", "shape": ISLAND_SHAPE, "crowd": 1},
 		{"type": "island_split", "path": [[170, -20], [290, -20]], "width": 14},
 		{"type": "light_string", "a": [225, -60], "b": [225, 10], "lines": 4, "style": "navidad"},
 	]
-	var keep: Array = []
-	for i in d.islands:
-		if Vector2(i.x, i.z).distance_to(Vector2(230, -10)) > 110:
-			keep.append(i)
-	d.islands = keep
 	var m: Node = load("res://main.tscn").instantiate()
 	var course := m.get_node("Course") as Course
 	course.map = TrackMap.from_dict(d)
@@ -329,9 +366,20 @@ func _test_tropical_island() -> void:
 	var isl := course.get_node_or_null("TropicalIsland")
 	_check(isl != null and isl.get_node_or_null("Sand") != null and isl.get_node_or_null("Grass") != null, "tiene arena y pasto")
 	var palms := 0
+	var in_sand := 0
 	for p in course.pieces:
 		if p is TropicalIslandPiece:
-			palms += (p as TropicalIslandPiece).palm_count()
+			var piece := p as TropicalIslandPiece
+			palms += piece.palm_count()
+			# Ninguna palmera en medio de la playa (solo en el pasto o pegadas a él).
+			for node in course.find_children("*Palms*", "MultiMeshInstance3D", true, false):
+				var mm := (node as MultiMeshInstance3D).multimesh
+				for k in mm.instance_count:
+					var o := mm.get_instance_transform(k).origin
+					var q := Vector2(o.x, o.z)
+					if Geometry2D.is_point_in_polygon(q, piece._outline) and not piece._near_grass(q, TropicalIslandPiece.PALM_SAND_REACH + 0.5):
+						in_sand += 1
+	_check(in_sand == 0, "ninguna palmera en medio de la playa (%d)" % in_sand)
 	var draws := 0
 	for c in isl.get_children():
 		if (c is MultiMeshInstance3D or c is MeshInstance3D) and not String(c.name).begins_with("Crowd_"):
@@ -375,7 +423,7 @@ func _test_tropical_island() -> void:
 			if BezierShape.distance_to_edge(p._outline, spot) > TropicalIslandPiece.CROWD_DEPTH + 1.0:
 				far_from_shore += 1
 	# Las olas grandes no pasan por encima de las islas tropicales: se apagan
-	# sobre la isla y cerca de la orilla, como con las islas redondas.
+	# sobre la isla y cerca de la orilla.
 	var water := m.get_node("Water") as Water
 	var on_isle := water._island_fade(Vector2(225, -60))
 	var shore := water._island_fade(Vector2(255, -60))
@@ -422,6 +470,22 @@ func _test_tropical_island() -> void:
 		"puntos de fiesta (%d) y la gente sabe dónde están los surfistas" % parties)
 	_check(spots > 4 and far_from_shore == 0 and crowd_meshes <= 2 * (BeachCrowd.STANDING + BeachCrowd.SITTING + 5),
 		"público en la orilla que da a la pista (%d cosas, %d lejos del agua, %d mallas)" % [spots, far_from_shore, crowd_meshes])
+	# Público automático (si el mapa no lo dice): cerca de la pista hay, lejos no.
+	var edge := course.track.position_at(0.5, course.half_width + 6.0)
+	var out := (edge - course.track.position_at(0.5, 0.0)).normalized() * 30.0
+	var along := course.track.tangent_at(0.5) * 20.0
+	var near_shape := []
+	for q in [edge - along, edge + along, edge + out]:
+		near_shape.append([q.x, q.z])
+	var near := MapPiece.create({"type": "tropical_island", "shape": near_shape}) as TropicalIslandPiece
+	near.prepare(course)
+	var far := MapPiece.create({"type": "tropical_island", "shape": [[1500, 1500], [1560, 1500], [1530, 1550]]}) as TropicalIslandPiece
+	far.prepare(course)
+	var far_on := MapPiece.create({"type": "tropical_island", "shape": [[1500, 1500], [1560, 1500], [1530, 1550]], "crowd": 1}) as TropicalIslandPiece
+	far_on.prepare(course)
+	_check(near.crowd < 0.0 and near.crowd_amount(course) == 1.0 and far.crowd_amount(course) == 0.0,
+		"público automático: una isla a %.0f m de la pista tiene, una a %.0f m no" % [near.track_gap(course), far.track_gap(course)])
+	_check(far_on.crowd_amount(course) == 1.0, "si el mapa pide público, lo tiene aunque esté lejos")
 	var covered := func(x: float, z: float) -> bool:
 		for p in parts:
 			if p.covers(x, z):
@@ -460,12 +524,12 @@ func _test_tropical_island() -> void:
 
 	m.queue_free()
 	await process_frame
-	GameSettings.track_layout = GameSettings.TrackLayout.CLASSIC
+	GameSettings.track_layout = TrackMap.index_of("classic")
 
 
 func _test_archipelago() -> void:
 	print("Mapa archipiélago:")
-	GameSettings.track_layout = GameSettings.TrackLayout.ARCHIPELAGO
+	GameSettings.track_layout = TrackMap.index_of("archipelago")
 	GameSettings.jump_style = GameSettings.JumpStyle.WAVES
 	var config := RaceConfig.new()
 	config.laps = 1
@@ -487,13 +551,16 @@ func _test_archipelago() -> void:
 	await process_frame
 	var course := m.get_node("Course") as Course
 	var track := course.track
+	# Sin olas tubo (frenan las olas comunes mientras están): acá se miden las olas.
+	if race.tubes:
+		race.tubes.automatic = false
 	_check(track is PathTrack, "el recorrido no es un círculo")
-	_check(course.islands.size() >= 12, "hay muchas islas (%d)" % course.islands.size())
+	_check(course.registered("ground").size() >= 12, "hay muchas islas (%d)" % course.registered("ground").size())
 	_check(
 		track.length() > 700.0 and track.length() < 1000.0,
 		"una vuelta mide %.0f m" % track.length()
 	)
-	_check(config.laps == 1 and GameSettings.laps_for(GameSettings.TrackLayout.ARCHIPELAGO) == 3, "en el archipiélago se corren 3 vueltas")
+	_check(config.laps == 1 and GameSettings.laps_for(TrackMap.index_of("archipelago")) == 3, "en el archipiélago se corren 3 vueltas")
 
 	# Ida y vuelta: posición <-> (ángulo, lateral).
 	var roundtrip := true
@@ -522,20 +589,14 @@ func _test_archipelago() -> void:
 	_check(lefts > 10 and rights > 10, "hay curvas a los dos lados (%d / %d)" % [lefts, rights])
 
 	# Ninguna isla pisa la pista.
-	var clear := true
-	for isl in course.islands:
-		var lat := absf(track.lateral_of(isl.position))
-		if lat < track.half_width + isl.radius + 4.0:
-			clear = false
-			print("    isla en %s muy cerca (%.1f m)" % [isl.position, lat])
-	_check(clear, "las islas no pisan la pista")
+	_check(_land_clear_of_track(course, 4.0), "las islas no pisan la pista")
 	# Desde cualquier lugar de la pista se ven islas cerca.
 	var always_islands := true
 	for i in 30:
 		var p := track.position_at(-PI + TAU * i / 30.0)
 		var near := 0
-		for isl in course.islands:
-			if Vector2(p.x - isl.position.x, p.z - isl.position.z).length() < 130.0:
+		for o in course.land_outlines():
+			if BezierShape.distance_to_edge(o, Vector2(p.x, p.z)) < 110.0:
 				near += 1
 		if near < 2:
 			always_islands = false
@@ -545,9 +606,8 @@ func _test_archipelago() -> void:
 	var island_crashes := [0]
 	for r in race.racers:
 		r.crashed.connect(func() -> void:
-			for isl in course.islands:
-				if Vector2(r.position.x - isl.position.x, r.position.z - isl.position.z).length() < isl.radius + 8.0:
-					island_crashes[0] += 1
+			if _distance_to_land(course, Vector2(r.position.x, r.position.z)) < 8.0:
+				island_crashes[0] += 1
 		)
 	var finished := false
 	var waves := m.get_node("WaveManager") as WaveManager
@@ -580,12 +640,12 @@ func _test_archipelago() -> void:
 	_check(island_crashes[0] <= 1, "casi sin chocar islas (%d)" % island_crashes[0])
 	m.queue_free()
 	await process_frame
-	GameSettings.track_layout = GameSettings.TrackLayout.CLASSIC
+	GameSettings.track_layout = TrackMap.index_of("classic")
 
 
 func _test_atoll() -> void:
 	print("Mapa el atolón (con tormenta):")
-	GameSettings.track_layout = GameSettings.TrackLayout.ATOLL
+	GameSettings.track_layout = TrackMap.index_of("atoll")
 	GameSettings.weather = GameSettings.Weather.STORM
 	GameSettings.jump_style = GameSettings.JumpStyle.WAVES
 	var config := RaceConfig.new()
@@ -613,20 +673,10 @@ func _test_atoll() -> void:
 		track.length() > 1000.0 and track.length() < 1300.0,
 		"una vuelta mide %.0f m" % track.length()
 	)
-	var volcano := false
-	for isl in course.islands:
-		if isl is VolcanoPiece.VolcanoIsland:
-			volcano = true
-	_check(volcano, "hay un volcán en el medio")
+	_check(_distance_to_land(course, Vector2.ZERO) == 0.0, "hay una isla en el medio de la laguna")
 	_check(course.get_node_or_null("RockArch") != null, "hay un arco de roca sobre el paso norte")
 	_check(course.get_node_or_null("Shipwreck") != null, "hay un barco hundido en la laguna")
-	var clear := true
-	for isl in course.islands:
-		var lat := absf(track.lateral_of(isl.position))
-		if lat < track.half_width + isl.radius + 0.5:
-			clear = false
-			print("    isla en %s muy cerca (%.1f m)" % [isl.position, lat])
-	_check(clear, "las islas no pisan la pista")
+	_check(_land_clear_of_track(course, 0.5), "las islas no pisan la pista")
 	var geysers := _geysers(course)
 	_check(geysers.size() >= 3, "hay géiseres en la laguna (%d)" % geysers.size())
 	# Tormenta: cielo gris, poca luz, mar picado, rayos con trueno.
@@ -700,9 +750,8 @@ func _test_atoll() -> void:
 	var island_crashes := [0]
 	for r in race.racers:
 		r.crashed.connect(func() -> void:
-			for isl in course.islands:
-				if Vector2(r.position.x - isl.position.x, r.position.z - isl.position.z).length() < isl.radius + 8.0:
-					island_crashes[0] += 1
+			if _distance_to_land(course, Vector2(r.position.x, r.position.z)) < 8.0:
+				island_crashes[0] += 1
 		)
 	var finished := false
 	for i in int(200.0 * FPS):
@@ -736,7 +785,7 @@ func _test_atoll() -> void:
 	)
 	sunny.queue_free()
 	await process_frame
-	GameSettings.track_layout = GameSettings.TrackLayout.CLASSIC
+	GameSettings.track_layout = TrackMap.index_of("classic")
 
 
 func _geysers(course: Course) -> Array[Geyser]:
@@ -745,3 +794,60 @@ func _geysers(course: Course) -> Array[Geyser]:
 		if course.is_ancestor_of(n):
 			out.append(n as Geyser)
 	return out
+
+
+## Distancia de p a la tierra más cercana (0 si está encima).
+func _distance_to_land(course: Course, p: Vector2) -> float:
+	var best := INF
+	for o in course.land_outlines():
+		if Geometry2D.is_point_in_polygon(p, o):
+			return 0.0
+		best = minf(best, BezierShape.distance_to_edge(o, p))
+	return best
+
+
+## Ninguna isla llega a menos de `margin` metros del borde de la pista.
+func _land_clear_of_track(course: Course, margin: float) -> bool:
+	var ok := true
+	for i in 300:
+		var p := course.track.position_at(-PI + TAU * i / 300.0)
+		var d := _distance_to_land(course, Vector2(p.x, p.z))
+		if d < course.half_width + margin:
+			ok = false
+			print("    isla a %.1f m del centro de la pista en (%d, %d)" % [d, p.x, p.z])
+			break
+	return ok
+
+
+## Cada pieza dice cómo se ve en el editor de mapas (su constante EDITOR), así
+## el editor la toma sola (ver MapPiece.editor_entry).
+func _test_editor_catalog() -> void:
+	var catalog := MapPiece.editor_catalog()
+	var files := 0
+	for f in DirAccess.get_files_at(MapPiece.FOLDER):
+		if f.trim_suffix(".remap").get_extension() == "gd" and not f.begins_with("map_piece"):
+			files += 1
+	_check(catalog.size() == files and files > 0, "el editor conoce todas las piezas (%d de %d)" % [catalog.size(), files])
+	var kinds := ["num", "int", "bool", "color", "text", "choice", "level", "numbool", "variant"]
+	var problems: Array[String] = []
+	for c in catalog:
+		var piece := MapPiece.create({"type": c.type})
+		var vars := piece.params()
+		var place: String = c.place
+		if not MapPiece.PLACES.has(place):
+			problems.append("%s: EDITOR sin \"place\" válido" % c.type)
+			continue
+		var need: Array = {"point": ["x", "z"], "two_points": ["a", "b"], "shape": [c.get("key", "")], "path": [c.get("key", "")]}[place]
+		for k in need:
+			if not vars.has(k):
+				problems.append("%s: para \"%s\" le falta la variable %s" % [c.type, place, k])
+		for row in c.params:
+			if not kinds.has(row[2]):
+				problems.append("%s.%s: campo \"%s\" desconocido" % [c.type, row[0], row[2]])
+			if row[1] == String(row[0]).capitalize():
+				problems.append("%s.%s: sin etiqueta (un comentario ## arriba o en EDITOR.fields)" % [c.type, row[0]])
+			if (row[2] == "choice" or row[2] == "level") and row.size() < 5:
+				problems.append("%s.%s: le faltan las opciones" % [c.type, row[0]])
+	for pr in problems:
+		print("    " + pr)
+	_check(problems.is_empty(), "cada pieza dice cómo se pone y cada parámetro tiene su etiqueta en el editor")

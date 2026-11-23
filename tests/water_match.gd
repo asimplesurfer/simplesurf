@@ -53,8 +53,12 @@ func _run() -> void:
 	ring.settle()
 	ring.phase = 1.3
 	water.set_ring_wave(ring)
-	var isl: Array[Vector3] = [Vector3(42, 2, 10)]
-	water.set_islands(isl)
+	# Una isla redonda de 10 m (la tierra va como figura).
+	var circle := PackedVector2Array()
+	for k in 32:
+		circle.append(Vector2(42, 2) + Vector2.from_angle(TAU * k / 32.0) * 10.0)
+	var land: Array[PackedVector2Array] = [circle]
+	water.set_land(land)
 	water._push_time()
 	water._push_swells()
 

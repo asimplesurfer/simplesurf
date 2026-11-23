@@ -154,15 +154,14 @@ dialog::backdrop { background: rgba(5, 15, 20, 0.5); }
     <button class="tool" data-tool="pan" title="Mover la vista (H o espacio)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 12V6a1.5 1.5 0 013 0v5M11 11V4.5a1.5 1.5 0 013 0V11M14 11V6a1.5 1.5 0 013 0v7c0 4-2.5 7-6 7s-5-2-6.5-5L3.8 12a1.4 1.4 0 012.3-1.6L8 13"/></svg><span class="key">H</span></button>
     <hr>
     <button class="tool" data-tool="track" title="Pista: clic pone un punto, arrastrar hace curva (P)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 18c3-9 6 2 9-6s5-4 7-6"/><circle cx="4" cy="18" r="1.8" fill="currentColor"/><circle cx="20" cy="6" r="1.8" fill="currentColor"/></svg><span class="key">P</span></button>
-    <button class="tool" data-tool="rock" title="Roca o cueva: dibujá la figura (R)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 19l3-8 4-3 3 2 3-5 5 14z"/><path d="M9 19c0-3 1.5-5 3-5s3 2 3 5" /></svg><span class="key">R</span></button>
+    <button class="tool" data-tool="rock_formation" title="Roca o cueva: dibujá la figura (R)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 19l3-8 4-3 3 2 3-5 5 14z"/><path d="M9 19c0-3 1.5-5 3-5s3 2 3 5" /></svg><span class="key">R</span></button>
     <button class="tool" data-tool="start" title="Meta: una recta con la largada (M)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M6 21V4"/><path d="M6 4h12l-2 4 2 4H6"/><path d="M10 4v8M14 4v8" stroke-dasharray="2 2"/></svg><span class="key">M</span></button>
     <button class="tool" data-tool="tropical_island" title="Isla tropical: dibujá la figura (T)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 18c3-3 6-2 9-3s6-3 9-1"/><path d="M8 15V9m0 0c-2-2-4-1.5-5 0m5 0c1.5-2 3.5-2 5-.5M15 14V8m0 0c-1.5-1.8-3.5-1.5-4.5 0m4.5 0c1.5-2 3.5-1.8 4.5-.2" stroke-linecap="round"/></svg><span class="key">T</span></button>
     <button class="tool" data-tool="island_split" title="Dividir isla: dibujá una línea que cruce una isla tropical y queda partida en dos, con mar en el medio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 9c2-4 5-5 7-4v14c-3 1-6 0-7-4z"/><path d="M14 5c2-1 5 0 7 4v6c-1 4-4 5-7 4z"/><path d="M12 2v20" stroke-dasharray="2 2"/></svg></button>
     <button class="tool" data-tool="light_string" title="Guirnalda de luces: tocá una isla tropical y después otra (de noche se prenden)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 6c5 6 13 6 18 0"/><circle cx="7" cy="10" r="1.6" fill="currentColor"/><circle cx="12" cy="11.5" r="1.6" fill="currentColor"/><circle cx="17" cy="10" r="1.6" fill="currentColor"/><path d="M3 4v16M21 4v16"/></svg></button>
-    <button class="tool" data-tool="island" title="Isla (I)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="16" rx="8" ry="3.5"/><path d="M12 15V8m0 0c-2-2-4-2-5-1m5 1c2-2 4-2 5-1m-5 1c-1-2-1-3.5 0-4.5"/></svg><span class="key">I</span></button>
+    <button class="tool" data-tool="island" title="Isla tropical redonda (I)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="16" rx="8" ry="3.5"/><path d="M12 15V8m0 0c-2-2-4-2-5-1m5 1c2-2 4-2 5-1m-5 1c-1-2-1-3.5 0-4.5"/></svg><span class="key">I</span></button>
     <hr>
     <button class="tool" data-tool="geyser" title="Géiser (G)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><ellipse cx="12" cy="19" rx="6" ry="2"/><path d="M12 17V6m-3 4l3-4 3 4M8 13c-1-2 0-4 1-5m7 5c1-2 0-4-1-5"/></svg><span class="key">G</span></button>
-    <button class="tool" data-tool="volcano" title="Isla volcán"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 20l6-11h6l6 11z"/><path d="M10 9c0-2 1-3 2-5m2 5c0-2 1-3 2-4" stroke-linecap="round"/></svg></button>
     <button class="tool" data-tool="rock_arch" title="Arco de roca (paisaje)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 20V12a9 9 0 0118 0v8h-4v-8a5 5 0 00-10 0v8z"/></svg></button>
     <button class="tool" data-tool="waterfall" title="Cascada (ponela en la salida de una cueva, cruzando la pista)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 4h16M7 4v12M11 4v14M15 4v12M19 4v10"/><path d="M4 20c2-1.5 4-1.5 6 0s4 1.5 6 0 3-1 4-.5"/></svg></button>
     <button class="tool" data-tool="shipwreck" title="Barco hundido (paisaje)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 15h18l-3 5H6z"/><path d="M11 15V4l6 7h-6"/></svg></button>
@@ -218,49 +217,26 @@ dialog::backdrop { background: rgba(5, 15, 20, 0.5); }
 // ---------------------------------------------------------------------------
 const BUILTIN = /*MAPS*/;
 
-// Piezas que entiende el juego (world/pieces/*.gd) y sus parámetros.
-// k: tipo de campo; d: valor por defecto (si el mapa no lo dice, el juego usa este).
-const PIECES = {
-  geyser: { name: "Géiser", params: [
-    ["phase", "Desfase (s)", "num", 0], ["calm", "Tranquilo (s)", "num", 3.6], ["warn", "Aviso (s)", "num", 1.4],
-    ["erupt", "Chorro (s)", "num", 1.3], ["launch_speed", "Fuerza (m/s)", "num", 17] ] },
-  volcano: { name: "Isla volcán", params: [["radius", "Radio (m)", "num", 40], ["island_seed", "Semilla palmeras", "int", -1]] },
-  rock_arch: { name: "Arco de roca", params: [
-    ["angle", "Ángulo (°)", "num", 0], ["span", "Ancho (m)", "num", 40], ["height", "Alto (m)", "num", 26],
-    ["shape_seed", "Semilla", "int", 77], ["stone_color", "Piedra", "color", "#806b5c"], ["moss_color", "Musgo", "color", "#5c8c4d"] ] },
-  shipwreck: { name: "Barco hundido", params: [["angle", "Ángulo (°)", "num", 40.107], ["size", "Tamaño", "num", 1.5]] },
-  waterfall: { name: "Cascada", params: [
-    ["angle", "Ángulo (°)", "num", 0], ["width", "Ancho (m)", "num", 50], ["height", "Altura (m)", "num", 34],
-    ["color", "Agua", "color", "#bdf3ff"], ["drag", "Cuánto frena (0–1)", "num", 0.12] ] },
-  tropical_island: { name: "Isla tropical", params: [
-    ["beach_width", "Ancho de la playa (m)", "num", 5], ["palm_density", "Palmeras (cada 100 m²)", "num", 1.2],
-    ["rocks", "Piedras en la arena", "int", 3], ["crowd", "Público en la playa (0 = nadie)", "num", 1],
-    ["sand_color", "Arena", "color", "#f2d8a0"],
-    ["grass_color", "Pasto", "color", "#3f7f2c"], ["leaf_color", "Hojas", "color", "#2f8f2c"], ["shape_seed", "Semilla", "int", 1] ] },
-  island_split: { name: "Dividir isla", params: [["width", "Ancho del mar en el medio (m)", "num", 14]] },
-  light_string: { name: "Guirnalda de luces", params: [
-    ["lines", "Cables (1 a 20)", "int", 1],
-    ["style", "Luces", "choice", "calida", [["calida", "Cálidas"], ["fria", "Frías"], ["navidad", "Navideñas"]]] ] },
-  rock_formation: { name: "Roca / cueva", params: [
-    ["height", "Alto de la roca (m)", "num", 34], ["ceiling", "Altura del techo (m)", "num", 12],
-    ["opening", "Arco abajo (si no toca la pista)", "bool", false], ["opening_width", "Ancho del arco (m)", "num", 16],
-    ["darkness", "Oscuridad al entrar (0–1)", "num", 0.78], ["adapt_time", "Ojos se acostumbran (s)", "num", 1.6],
-    ["stone_low", "Piedra abajo", "color", "#8a4a2e"], ["stone_high", "Piedra arriba", "color", "#b89a74"],
-    ["grass_color", "Pasto arriba", "color", "#6fae4a"], ["moss_color", "Musgo", "color", "#6f8f3a"],
-    ["glow_color", "Agua y luz de la cueva", "color", "#2fe3c8"], ["shape_seed", "Semilla", "int", 1] ] },
-};
-const GEYSER_RADIUS = 4;
+// Piezas que entiende el juego. Salen del código del juego: cada pieza de
+// world/pieces/*.gd dice cómo se ve acá (su constante EDITOR; ver
+// MapPiece.editor_entry) y build.py mete el catálogo. Una pieza nueva aparece
+// sola, sin tocar este archivo. params: [nombre, etiqueta, campo, valor por
+// defecto (si el mapa no lo dice, el juego usa este), opciones?].
+const CATALOG = /*PIECES*/;
+const PIECES = {};
 // Piezas que se dibujan con puntos y manijas: dónde guardan los puntos y si la
 // figura es cerrada (roca, isla) o un camino abierto (corte que divide islas).
-const DRAWN = {
-  rock_formation: { key: "shape", closed: true, tool: "rock", label: "una roca" },
-  tropical_island: { key: "shape", closed: true, tool: "tropical_island", label: "una isla" },
-  island_split: { key: "path", closed: false, tool: "island_split", label: "un corte" },
-};
+const DRAWN = {};
+// Parámetros que el juego exige aunque tengan el valor de siempre.
+const REQUIRED = {};
+for (const c of CATALOG) {
+  PIECES[c.type] = c;
+  if (c.place === "shape" || c.place === "path") DRAWN[c.type] = { key: c.key, closed: c.place === "shape", tool: c.type, label: c.what || "una figura" };
+  REQUIRED[c.type] = c.required || [];
+}
+const GEYSER_RADIUS = 4;
 const nodesOf = (p) => p[DRAWN[p.type].key];
 const isClosed = (p) => DRAWN[p.type]?.closed !== false;
-// Parámetros que el juego exige aunque tengan el valor de siempre.
-const REQUIRED = { volcano: ["radius"] };
 
 const MAP_FIELDS = [
   ["name", "Nombre en el menú", "text"], ["order", "Número de mapa", "int"], ["laps", "Vueltas", "int"],
@@ -282,6 +258,19 @@ function nodeTo(n) {
   if (n.out) o.out = [r(n.out[0]), r(n.out[1])];
   return o;
 }
+// Isla tropical redonda (centro, radio): 8 puntos con manijas de círculo.
+function roundIsland(c, radius) {
+  const n = 8, k = (4 / 3) * Math.tan(Math.PI / (2 * n)) * radius, r3 = (v) => Math.round(v * 1000) / 1000;
+  const shape = [];
+  for (let i = 0; i < n; i++) {
+    const a = (2 * Math.PI * i) / n, t = [-Math.sin(a) * k, Math.cos(a) * k];
+    shape.push({ p: [r3(c[0] + Math.cos(a) * radius), r3(c[1] + Math.sin(a) * radius)], in: [r3(-t[0]), r3(-t[1])], out: [r3(t[0]), r3(t[1])] });
+  }
+  const p = { type: "tropical_island", shape };
+  for (const [key, , , def] of PIECES.tropical_island.params) p[key] = def;
+  p.shape_seed = Math.floor(Math.random() * 99999) + 1;
+  return p;
+}
 function fromJSON(d) {
   const m = {
     format: 1, id: d.id || "", name: d.name || d.id || "mapa nuevo", order: d.order ?? 3, laps: d.laps ?? 3,
@@ -289,14 +278,17 @@ function fromJSON(d) {
     smoothing: d.smoothing ?? 60, ring_radius: d.ring_radius ?? 82,
     start: d.start ? { x: d.start.x, z: d.start.z, angle: d.start.angle ?? 0, back: d.start.back ?? 40, front: d.start.front ?? 60, bend: d.start.bend ?? 0 } : null,
     path: (d.path || []).map(nodeFrom),
-    islands: (d.islands || []).map((i) => ({ x: i.x, z: i.z, radius: i.radius, lighthouse: !!i.lighthouse, seed: i.seed ?? -1 })),
     pieces: (d.pieces || []).map((p) => {
+      // El volcán ya no existe: pasa a isla tropical redonda en el mismo lugar.
+      if (p.type === "volcano") return roundIsland([p.x, p.z], p.radius ?? 40);
       const c = JSON.parse(JSON.stringify(p));
       if (DRAWN[c.type]) c[DRAWN[c.type].key] = (c[DRAWN[c.type].key] || []).map(nodeFrom);
       if (c.type === "rock_formation") c.skylights = c.skylights || [];
       return c;
     }),
   };
+  // Las islas redondas viejas ya no existen: pasan a islas tropicales redondas.
+  for (const i of d.islands || []) m.pieces.unshift(roundIsland([i.x, i.z], i.radius));
   return m;
 }
 function toJSON(m) {
@@ -312,11 +304,6 @@ function toJSON(m) {
   else d.ring_radius = m.ring_radius;
   d.half_width = m.half_width; d.ring_count = m.ring_count; d.rock_count = m.rock_count;
   const r = (v) => Math.round(v * 1000) / 1000;
-  d.islands = m.islands.map((i) => {
-    const o = { x: r(i.x), z: r(i.z), radius: r(i.radius), lighthouse: !!i.lighthouse };
-    if (i.seed >= 0) o.seed = i.seed;
-    return o;
-  });
   d.pieces = m.pieces.map((p) => {
     const o = { type: p.type };
     if ("x" in p) { o.x = r(p.x); o.z = r(p.z); }
@@ -325,7 +312,7 @@ function toJSON(m) {
       if (p[k] !== undefined && (p[k] !== def || (REQUIRED[p.type] || []).includes(k))) o[k] = typeof p[k] === "number" ? r(p[k]) : p[k];
     }
     if (p.type === "rock_formation" && p.skylights?.length) o.skylights = p.skylights.map((s) => [r(s[0]), r(s[1])]);
-    if (p.type === "light_string" && p.a && p.b) { o.a = [r(p.a[0]), r(p.a[1])]; o.b = [r(p.b[0]), r(p.b[1])]; }
+    if (p.a && p.b) { o.a = [r(p.a[0]), r(p.a[1])]; o.b = [r(p.b[0]), r(p.b[1])]; }
     // Parámetros que el editor no conoce: se dejan como estaban.
     for (const k in p) if (!(k in o) && !["shape", "path", "skylights"].includes(k) && !(PIECES[p.type]?.params || []).some((q) => q[0] === k)) o[k] = p[k];
     return o;
@@ -539,7 +526,6 @@ const toWorld = (s) => [(s[0] - W / 2) / cam.zoom + cam.x, (s[1] - H / 2) / cam.
 function fit() {
   const pts = [];
   computed().line.forEach((p) => pts.push(p));
-  map.islands.forEach((i) => { pts.push([i.x - i.radius, i.z - i.radius]); pts.push([i.x + i.radius, i.z + i.radius]); });
   map.pieces.forEach((p) => { if ("x" in p) pts.push([p.x, p.z]); (DRAWN[p.type] ? nodesOf(p) : []).forEach((n) => pts.push(n.p)); });
   if (!pts.length) { cam.x = 0; cam.z = 0; cam.zoom = Math.min(W, H) / 600; draw(); return; }
   let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
@@ -575,9 +561,6 @@ function draw() {
     drawStart(line, hw);
   }
 
-  // Islas.
-  map.islands.forEach((isl, i) => drawIsland(isl, C, sel?.kind === "island" && sel.i === i));
-
   // Piezas (las rocas, semitransparentes, encima de la pista).
   map.pieces.forEach((p, i) => { if (p.type === "tropical_island") drawIsle(p, shapes[i], C, sel?.kind === "piece" && sel.i === i); });
   map.pieces.forEach((p, i) => { if (p.type === "island_split") drawSplit(p, shapes[i], C, sel?.kind === "piece" && sel.i === i); });
@@ -585,7 +568,10 @@ function draw() {
     const on = sel?.kind === "piece" && sel.i === i;
     if (p.type === "rock_formation") drawRock(p, shapes[i], line, C, on);
     else if (p.type === "light_string") drawLights(p, C, on);
-    else if (!DRAWN[p.type]) drawPiece(p, C, on);
+    else if (p.type === "tropical_island" || p.type === "island_split") return; // ya dibujadas
+    else if (DRAWN[p.type]) drawShapeGeneric(p, shapes[i], C, on);
+    else if (p.a && p.b) drawTwoGeneric(p, C, on);
+    else drawPiece(p, C, on);
   });
   if (pendingLights) {
     const q = toScreen(pendingLights.a);
@@ -671,17 +657,6 @@ function drawStart(line, hw) {
     ctx.lineTo(p0[0] + (p1[0] - p0[0]) * (i + 1) / n, p0[1] + (p1[1] - p0[1]) * (i + 1) / n); ctx.stroke();
   }
 }
-function drawIsland(isl, C, on) {
-  const s = toScreen([isl.x, isl.z]), r = isl.radius * cam.zoom;
-  ctx.beginPath(); ctx.arc(s[0], s[1], r + 12 * cam.zoom * 0.5, 0, Math.PI * 2); ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.fill();
-  ctx.beginPath(); ctx.arc(s[0], s[1], r, 0, Math.PI * 2); ctx.fillStyle = C.sand; ctx.fill();
-  ctx.beginPath(); ctx.arc(s[0], s[1], r * 0.8, 0, Math.PI * 2); ctx.fillStyle = C.grass; ctx.fill();
-  if (isl.lighthouse) {
-    ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(s[0], s[1], Math.max(3, 2.2 * cam.zoom), 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#d9403a"; ctx.beginPath(); ctx.arc(s[0], s[1], Math.max(1.6, 1.1 * cam.zoom), 0, Math.PI * 2); ctx.fill();
-  }
-  if (on) ring(s, r, C.sel, true);
-}
 function ring(s, r, color, handle) {
   ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
   ctx.beginPath(); ctx.arc(s[0], s[1], r + 3, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
@@ -694,13 +669,6 @@ function drawPiece(p, C, on) {
     ctx.beginPath(); ctx.arc(s[0], s[1], r, 0, Math.PI * 2); ctx.fillStyle = "rgba(255,255,255,0.85)"; ctx.fill();
     ctx.strokeStyle = C.sea; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(s[0], s[1] + r * 0.5); ctx.lineTo(s[0], s[1] - r * 0.6); ctx.stroke();
     if (on) ring(s, r, C.sel, false);
-  } else if (p.type === "volcano") {
-    const r = (p.radius ?? 40) * cam.zoom;
-    ctx.beginPath(); ctx.arc(s[0], s[1], r, 0, Math.PI * 2); ctx.fillStyle = C.sand; ctx.fill();
-    ctx.beginPath(); ctx.arc(s[0], s[1], r * 0.92, 0, Math.PI * 2); ctx.fillStyle = C.grass; ctx.fill();
-    ctx.beginPath(); ctx.arc(s[0], s[1], r * 0.72, 0, Math.PI * 2); ctx.fillStyle = "#6b564b"; ctx.fill();
-    ctx.beginPath(); ctx.arc(s[0], s[1], r * 0.18, 0, Math.PI * 2); ctx.fillStyle = "#ff7a1a"; ctx.fill();
-    if (on) ring(s, r, C.sel, true);
   } else if (p.type === "rock_arch") {
     const a = ((p.angle ?? 0) * Math.PI) / 180, span = (p.span ?? 40);
     const dx = [Math.cos(a) * span, -Math.sin(a) * span];
@@ -724,8 +692,35 @@ function drawPiece(p, C, on) {
     ctx.restore();
     if (on) ring(s, 10 * k, C.sel, false);
   } else {
-    ctx.fillStyle = C.bad; ctx.beginPath(); ctx.arc(s[0], s[1], 6, 0, Math.PI * 2); ctx.fill();
+    // Pieza sin dibujo propio (una nueva): un punto con su nombre.
+    ctx.beginPath(); ctx.arc(s[0], s[1], 7, 0, Math.PI * 2); ctx.fillStyle = PIECES[p.type] ? "rgba(255,255,255,0.9)" : C.bad; ctx.fill();
+    ctx.strokeStyle = C.out; ctx.lineWidth = 2; ctx.stroke();
+    pieceLabel(p, s, -11);
+    if (on) ring(s, 7, C.sel, false);
   }
+}
+function pieceLabel(p, s, dy) {
+  ctx.fillStyle = "#fff"; ctx.font = "600 11px Inter, sans-serif"; ctx.textAlign = "center";
+  ctx.fillText((PIECES[p.type]?.name || p.type).toLowerCase(), s[0], s[1] + dy); ctx.textAlign = "start";
+}
+// Pieza nueva dibujada con puntos (sin dibujo propio): su figura o su línea.
+function drawShapeGeneric(p, poly, C, on) {
+  if (!poly || poly.length < 2) return;
+  const closed = isClosed(p);
+  pathLine(poly, closed);
+  if (closed) { ctx.fillStyle = "rgba(255,255,255,0.28)"; ctx.fill(); }
+  ctx.strokeStyle = on ? C.sel : "rgba(255,255,255,0.9)"; ctx.lineWidth = on ? 2.4 : 1.6;
+  if (!closed) ctx.setLineDash([6, 4]);
+  ctx.stroke(); ctx.setLineDash([]);
+  pieceLabel(p, toScreen(closed ? centroid(poly) : poly[Math.floor(poly.length / 2)]), 4);
+}
+// Pieza nueva de dos puntas (sin dibujo propio): una línea entre las dos.
+function drawTwoGeneric(p, C, on) {
+  const a = toScreen(p.a), b = toScreen(p.b);
+  ctx.strokeStyle = on ? C.sel : "rgba(255,255,255,0.9)"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+  for (const q of [a, b]) { ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(q[0], q[1], 5, 0, Math.PI * 2); ctx.fill(); }
+  pieceLabel(p, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], -8);
 }
 function drawRock(p, poly, line, C, on) {
   if (!poly || poly.length < 3) return;
@@ -898,14 +893,9 @@ function hitTest(s) {
     const h = hitNodes(map.path, s);
     if (h) return { kind: "path", ...h };
   }
-  // Manija de tamaño de la isla o del volcán seleccionados.
-  if (sel?.kind === "island") {
-    const isl = map.islands[sel.i], hs = toScreen([isl.x, isl.z]);
-    if (dist([hs[0] + isl.radius * cam.zoom + 3, hs[1]], s) < 9) return { kind: "island", i: sel.i, resize: true };
-  }
+  // Manijas de giro de las piezas seleccionadas.
   if (sel?.kind === "piece") {
     const p = map.pieces[sel.i];
-    if (p.type === "volcano") { const hs = toScreen([p.x, p.z]); if (dist([hs[0] + (p.radius ?? 40) * cam.zoom + 3, hs[1]], s) < 9) return { kind: "piece", i: sel.i, resize: true }; }
     if (p.type === "rock_arch" || p.type === "waterfall") {
       const a = ((p.angle ?? 0) * Math.PI) / 180, span = p.type === "waterfall" ? (p.width ?? 50) / 2 : p.span ?? 40;
       if (dist(toScreen([p.x + Math.cos(a) * span, p.z - Math.sin(a) * span]), s) < 9) return { kind: "piece", i: sel.i, rotate: true };
@@ -914,7 +904,7 @@ function hitTest(s) {
   // Puntas de las guirnaldas y sus cables.
   for (let i = map.pieces.length - 1; i >= 0; i--) {
     const p = map.pieces[i];
-    if (p.type !== "light_string" || !p.a || !p.b) continue;
+    if (!p.a || !p.b) continue;
     if (dist(toScreen(p.a), s) < 9) return { kind: "piece", i, end: "a" };
     if (dist(toScreen(p.b), s) < 9) return { kind: "piece", i, end: "b" };
     if (distToLine(w, [p.a, p.b], false) < Math.max(3, 8 / cam.zoom)) return { kind: "piece", i };
@@ -923,19 +913,15 @@ function hitTest(s) {
   for (let i = map.pieces.length - 1; i >= 0; i--) {
     const p = map.pieces[i];
     if (!("x" in p)) continue;
-    const r = p.type === "volcano" ? (p.radius ?? 40) : p.type === "rock_arch" || p.type === "waterfall" ? 12 : p.type === "shipwreck" ? 12 : GEYSER_RADIUS + 2;
+    const r = p.type === "rock_arch" || p.type === "waterfall" || p.type === "shipwreck" ? 12 : GEYSER_RADIUS + 2;
     if (dist(w, [p.x, p.z]) < Math.max(r, 9 / cam.zoom)) return { kind: "piece", i };
-  }
-  for (let i = map.islands.length - 1; i >= 0; i--) {
-    const isl = map.islands[i];
-    if (dist(w, [isl.x, isl.z]) < Math.max(isl.radius, 8 / cam.zoom)) return { kind: "island", i };
   }
   const { shapes, line } = computed();
   for (let i = map.pieces.length - 1; i >= 0; i--) {
     const p = map.pieces[i];
-    if (p.type === "island_split" && shapes[i]?.length >= 2 && distToLine(w, shapes[i], false) < Math.max((p.width ?? 14) / 2 + 2, 8 / cam.zoom)) return { kind: "piece", i };
+    if (DRAWN[p.type] && !isClosed(p) && shapes[i]?.length >= 2 && distToLine(w, shapes[i], false) < Math.max((p.width ?? 14) / 2 + 2, 8 / cam.zoom)) return { kind: "piece", i };
   }
-  for (let i = map.pieces.length - 1; i >= 0; i--) if (shapes[i] && map.pieces[i].type !== "island_split" && pointInPoly(w, shapes[i])) return { kind: "piece", i };
+  for (let i = map.pieces.length - 1; i >= 0; i--) if (shapes[i] && isClosed(map.pieces[i]) && pointInPoly(w, shapes[i])) return { kind: "piece", i };
   if (line.length > 2 && distToLine(w, line) < map.half_width) return { kind: "path" };
   return null;
 }
@@ -952,26 +938,30 @@ function onDown(e) {
     if (hit?.kind === "start") { sel = { kind: "start" }; refreshPanel(); drag = { kind: "start", part: hit.part, start: w, orig: { ...map.start }, moved: false }; draw(); return; }
     placeStart(w); return;
   }
-  if (tool === "track" || tool === "rock" || tool === "tropical_island" || tool === "island_split") return penDown(s, w, e);
-  if (tool === "light_string") {
-    const isle = tropicalAt(w);
-    if (isle < 0) { toast("Tocá adentro de una isla tropical."); return; }
-    if (!pendingLights) { pendingLights = { a: w, i: isle }; toast("Ahora tocá la otra isla."); draw(); return; }
-    if (isle === pendingLights.i) { toast("La otra punta tiene que ir en otra isla."); return; }
-    map.pieces.push({ type: "light_string", a: pendingLights.a, b: w, lines: 1, style: "calida" });
+  if (tool === "track" || DRAWN[tool]) return penDown(s, w, e);
+  if (PIECES[tool]?.place === "two_points") {
+    // La guirnalda va de una isla tropical a otra; otras piezas de dos puntas, donde sea.
+    const isles = tool === "light_string";
+    const isle = isles ? tropicalAt(w) : -1;
+    if (isles && isle < 0) { toast("Tocá adentro de una isla tropical."); return; }
+    if (!pendingLights) { pendingLights = { a: w, i: isle }; toast(isles ? "Ahora tocá la otra isla." : "Ahora tocá la otra punta."); draw(); return; }
+    if (isles && isle === pendingLights.i) { toast("La otra punta tiene que ir en otra isla."); return; }
+    const piece = { type: tool, a: pendingLights.a, b: w };
+    for (const [k, , , d] of PIECES[tool].params) piece[k] = d;
+    map.pieces.push(piece);
     pendingLights = null;
     sel = { kind: "piece", i: map.pieces.length - 1 };
     commit(); setTool("select"); return;
   }
-  if (["island", "geyser", "volcano", "rock_arch", "shipwreck", "waterfall"].includes(tool)) {
-    if (tool === "island") { map.islands.push({ x: w[0], z: w[1], radius: 20, lighthouse: false, seed: Math.floor(Math.random() * 99999) + 1 }); sel = { kind: "island", i: map.islands.length - 1 }; }
+  if (tool === "island" || PIECES[tool]?.place === "point") {
+    // La isla redonda es una isla tropical (arena, palmeras y público) con forma de círculo.
+    if (tool === "island") { map.pieces.push(roundIsland(w, 20)); sel = { kind: "piece", i: map.pieces.length - 1 }; }
     else {
       const p = { type: tool, x: w[0], z: w[1] };
-      if (tool === "volcano") { p.radius = 40; }
       map.pieces.push(p); sel = { kind: "piece", i: map.pieces.length - 1 };
     }
     commit(); refreshPanel(); setTool("select");
-    drag = { kind: "move", start: w, moved: false, orig: JSON.parse(JSON.stringify(sel.kind === "island" ? map.islands[sel.i] : map.pieces[sel.i])) };
+    drag = { kind: "move", start: w, moved: false, orig: JSON.parse(JSON.stringify(map.pieces[sel.i])) };
     return;
   }
   // Seleccionar
@@ -987,10 +977,9 @@ function onDown(e) {
   } else if (hit.sky !== undefined) {
     drag = { kind: "sky", p: map.pieces[hit.i], k: hit.sky, moved: false };
   } else if (hit.end) drag = { kind: "lsend", p: map.pieces[hit.i], end: hit.end, moved: false };
-  else if (hit.resize) drag = { kind: "resize", target: hit.kind === "island" ? map.islands[hit.i] : map.pieces[hit.i], moved: false };
   else if (hit.rotate) drag = { kind: "rotate", target: map.pieces[hit.i], moved: false };
   else {
-    const target = hit.kind === "island" ? map.islands[hit.i] : map.pieces[hit.i];
+    const target = map.pieces[hit.i];
     drag = { kind: "move", start: w, moved: false, orig: JSON.parse(JSON.stringify(target)) };
   }
 }
@@ -1008,7 +997,7 @@ function penDown(s, w, e) {
   if (!drawing) {
     if (isTrack) { map.path = []; drawing = { kind: "path" }; sel = { kind: "path", node: -1 }; }
     else {
-      const type = tool === "rock" ? "rock_formation" : tool;
+      const type = tool;
       const piece = { type, [DRAWN[type].key]: [] };
       if (type === "rock_formation") piece.skylights = [];
       drawing = { kind: "shape", piece };
@@ -1076,6 +1065,7 @@ function onMove(e) {
   const s = [e.offsetX, e.offsetY];
   if (pointers.has(e.pointerId)) pointers.set(e.pointerId, s);
   const w = toWorld(s);
+  mouseWorld = w;
   $("coords").textContent = `x ${Math.round(w[0])} · z ${Math.round(w[1])}`;
   if (!drag) return;
   if (drag.kind === "pinch") { if (pointers.size === 2) applyPinch(drag.start); return; }
@@ -1103,7 +1093,7 @@ function onMove(e) {
   if (drag.kind === "sky") { drag.p.skylights[drag.k] = w; invalidate(); return; }
   if (drag.kind === "lsend") { drag.p[drag.end] = w; invalidate(); return; }
   if (drag.kind === "move") {
-    const t = sel.kind === "island" ? map.islands[sel.i] : map.pieces[sel.i];
+    const t = map.pieces[sel.i];
     const d = sub(w, drag.start);
     if (DRAWN[t.type]) {
       const key = DRAWN[t.type].key;
@@ -1114,7 +1104,6 @@ function onMove(e) {
     else { t.x = drag.orig.x + d[0]; t.z = drag.orig.z + d[1]; }
     invalidate(); refreshFieldsValues(); return;
   }
-  if (drag.kind === "resize") { drag.target.radius = Math.max(4, Math.round(dist(w, [drag.target.x, drag.target.z]))); invalidate(); refreshFieldsValues(); return; }
   if (drag.kind === "start") {
     const st = map.start, o = drag.orig;
     if (drag.part === "center") { st.x = o.x + (w[0] - drag.start[0]); st.z = o.z + (w[1] - drag.start[1]); }
@@ -1183,20 +1172,11 @@ const HINTS = {
   select: "Tocá algo para elegirlo y arrastralo para moverlo. En los puntos: arrastrá las manijas para curvar (Alt las separa), doble clic hace esquina o curva. Supr borra.",
   pan: "Arrastrá para mover la vista. Rueda o pellizco para acercar.",
   track: "Clic: un punto (tramo recto). Clic y arrastrar: punto con manijas (curva). Tocá el primer punto o Enter para cerrar la vuelta. El primer punto es la largada.",
-  rock: "Dibujá la figura de la roca igual que la pista y cerrala tocando el primer punto. Si tapa la pista es una cueva; si no, una roca de paisaje.",
   start: "Tocá la pista para poner ahí la recta de la meta (40 m antes y 60 m después). Arrastrá sus puntas para alargarla o girarla.",
-  tropical_island: "Dibujá la figura de la isla tropical como la pista (clic: punto, arrastrar: curva) y cerrala tocando el primer punto. Puede tener cualquier forma.",
-  light_string: "Tocá una isla tropical y después la otra: la guirnalda va de palmeras de una a palmeras de la otra (de noche se prenden).",
-  island_split: "Dibujá una línea que cruce una isla tropical de mar a mar (clic: punto, arrastrar: curva). Enter o doble clic para terminar: la isla queda partida en dos.",
-  island: "Clic para poner una isla. Después arrastrá el cuadradito del borde para cambiar el tamaño.",
-  geyser: "Clic para poner un géiser (mejor sobre la pista).",
-  volcano: "Clic para poner una isla volcán.",
-  rock_arch: "Clic para poner un arco de roca. El puntito del extremo lo gira.",
-  shipwreck: "Clic para poner un barco hundido.",
-  waterfall: "Clic para poner una cascada. Ponela en la salida de una cueva, cruzando la pista; el puntito del extremo la gira.",
+  island: "Clic para poner una isla tropical redonda (con arena, palmeras y público). Después podés mover sus puntos para cambiarle el tamaño o la forma.",
 };
 function setHint() {
-  let h = HINTS[tool] || "";
+  let h = HINTS[tool] || PIECES[tool]?.hint || "";
   if (drawing) {
     const what = drawing.kind === "path" ? "la pista" : DRAWN[drawing.piece.type].label;
     const count = (drawing.kind === "path" ? map.path : nodesOf(drawing.piece)).length;
@@ -1207,7 +1187,7 @@ function setHint() {
 }
 function setTool(t) {
   if (drawing && t !== tool) cancelDrawing();
-  if (t !== "light_string") pendingLights = null;
+  if (PIECES[t]?.place !== "two_points") pendingLights = null;
   tool = t;
   document.querySelectorAll(".tool").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.tool === t)));
   cv.style.cursor = t === "pan" ? "grab" : t === "select" ? "default" : "crosshair";
@@ -1219,12 +1199,68 @@ function cancelDrawing() {
   if (drawing.kind === "path") { map = JSON.parse(hist.stack[hist.at]); }
   drawing = null; invalidate(); refreshPanel();
 }
+// Un botón por pieza del juego: las que no tienen uno hecho a mano (con su
+// dibujo) llevan uno con sus iniciales. Los botones de piezas que el juego ya
+// no tiene se esconden.
+(function pieceButtons() {
+  const nav = document.querySelector(".tools");
+  const own = ["select", "pan", "track", "start", "island"];
+  nav.querySelectorAll(".tool").forEach((b) => { if (!own.includes(b.dataset.tool) && !PIECES[b.dataset.tool]) b.hidden = true; });
+  for (const c of CATALOG) {
+    if (nav.querySelector(`.tool[data-tool="${c.type}"]`)) continue;
+    const b = document.createElement("button");
+    b.className = "tool"; b.dataset.tool = c.type; b.title = c.name; b.setAttribute("aria-label", c.name);
+    const mark = document.createElement("span");
+    mark.textContent = c.name.split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+    mark.style.cssText = "font: 700 13px var(--f-display)";
+    b.append(mark); nav.append(b);
+  }
+})();
 document.querySelectorAll(".tool").forEach((b) => b.addEventListener("click", () => setTool(b.dataset.tool)));
+// --- Girar, copiar y pegar islas tropicales (y las demás figuras dibujadas).
+let mouseWorld = null;
+let clipboard = null;
+const selectedShape = () => (sel?.kind === "piece" && DRAWN[map.pieces[sel.i]?.type]?.closed ? map.pieces[sel.i] : null);
+function shapeCenter(p) { return centroid(nodesOf(p).map((n) => n.p)); }
+// Gira la figura (puntos y manijas) alrededor de su centro.
+function rotateShape(p, deg) {
+  const a = (deg * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a), o = shapeCenter(p);
+  const rot = (v) => [v[0] * c - v[1] * s, v[0] * s + v[1] * c];
+  const r3 = (v) => [Math.round(v[0] * 1000) / 1000, Math.round(v[1] * 1000) / 1000];
+  p[DRAWN[p.type].key] = nodesOf(p).map((n) => ({
+    p: r3(add(o, rot(sub(n.p, o)))), in: n.in ? r3(rot(n.in)) : null, out: n.out ? r3(rot(n.out)) : null,
+  }));
+  if (p.skylights) p.skylights = p.skylights.map((k) => r3(add(o, rot(sub(k, o)))));
+}
+function rotateSelection(deg) {
+  const p = selectedShape();
+  if (!p) { toast("Elegí una isla tropical (o una roca) para girarla."); return; }
+  rotateShape(p, deg); commit(); refreshPanel(); draw();
+}
+function copySelection() {
+  const p = selectedShape();
+  if (!p) { toast("Elegí una isla tropical (o una roca) para copiarla."); return false; }
+  clipboard = JSON.parse(JSON.stringify(p));
+  toast("Copiada. Ctrl+V (o Pegar) la pone donde está el mouse.");
+  return true;
+}
+// Pega la copia centrada en `at` (o un poco al costado de la original).
+function pasteClipboard(at) {
+  if (!clipboard) { toast("Primero copiá una isla (Ctrl+C)."); return; }
+  const p = JSON.parse(JSON.stringify(clipboard));
+  const c = shapeCenter(p);
+  const to = at || add(c, [25, 25]);
+  const d = sub(to, c);
+  p[DRAWN[p.type].key] = nodesOf(p).map((n) => ({ ...n, p: add(n.p, d) }));
+  if (p.skylights) p.skylights = p.skylights.map((k) => add(k, d));
+  if ("shape_seed" in p || p.type === "tropical_island") p.shape_seed = Math.floor(Math.random() * 99999) + 1;
+  map.pieces.push(p); sel = { kind: "piece", i: map.pieces.length - 1 };
+  commit(); refreshPanel(); draw();
+}
 function deleteSelection() {
   if (!sel) return;
   if (sel.kind === "path" && sel.node >= 0) { if (map.path.length <= 3) return toast("La pista necesita al menos 3 puntos."); map.path.splice(sel.node, 1); sel.node = -1; }
   else if (sel.kind === "path") { map.path = []; sel = { kind: "map" }; }
-  else if (sel.kind === "island") { map.islands.splice(sel.i, 1); sel = { kind: "map" }; }
   else if (sel.kind === "piece") {
     const p = map.pieces[sel.i];
     if (p.type === "rock_formation" && sel.sky !== undefined && sel.sky !== null) { p.skylights.splice(sel.sky, 1); sel.sky = null; }
@@ -1256,7 +1292,12 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && drawing) { finishDrawing(); return; }
   if (e.key === "Escape") { if (drawing) cancelDrawing(); else { sel = { kind: "map" }; refreshPanel(); draw(); } return; }
   if (e.key === "Delete" || e.key === "Backspace") { deleteSelection(); return; }
-  const map_ = { v: "select", h: "pan", p: "track", r: "rock", t: "tropical_island", m: "start", i: "island", g: "geyser" };
+  const isC = e.code === "KeyC" || k === "c", isV = e.code === "KeyV" || k === "v", isD = e.code === "KeyD" || k === "d";
+  if (mod && isC) { if (selectedShape()) { e.preventDefault(); copySelection(); } return; }
+  if (mod && isV) { e.preventDefault(); pasteClipboard(mouseWorld); return; }
+  if (mod && isD) { e.preventDefault(); if (copySelection()) pasteClipboard(null); return; }
+  if (selectedShape() && (k === "q" || k === "e")) { rotateSelection(k === "q" ? -15 : 15); return; }
+  const map_ = { v: "select", h: "pan", p: "track", r: "rock_formation", t: "tropical_island", m: "start", i: "island", g: "geyser" };
   if (map_[k]) setTool(map_[k]);
   if (k === "f") fit();
   if (k === "+" || k === "=") zoomAt([W / 2, H / 2], 1.25);
@@ -1277,17 +1318,29 @@ function field(label, kind, value, onChange, opts = {}) {
   const wrap = document.createElement("div"); wrap.className = "field";
   const id = "f_" + (opts.id || label).replace(/[^a-z0-9]/gi, "_");
   const l = document.createElement("label"); l.textContent = label; l.htmlFor = id;
-  const inp = document.createElement(kind === "choice" ? "select" : "input"); inp.id = id;
-  if (kind === "choice") {
-    for (const [v, text] of opts.choices || []) { const o = document.createElement("option"); o.value = v; o.textContent = text; inp.append(o); }
-    inp.value = value;
+  const inp = document.createElement(kind === "choice" || kind === "level" ? "select" : "input"); inp.id = id;
+  if (kind === "variant") {
+    // Número de variante: un botón la cambia por otra al azar (no hace falta saber qué es).
+    const b = btn("Otra variante", () => { onChange(Math.floor(Math.random() * 99999) + 1); commit(); refreshPanel(); });
+    wrap.append(l, b);
+    return wrap;
   }
+  if (kind === "choice" || kind === "level") {
+    for (const [v, text] of opts.choices || []) { const o = document.createElement("option"); o.value = v; o.textContent = text; inp.append(o); }
+    // "level": opciones con nombre para un número (si el número no es una de
+    // ellas, se marca la más cercana; no se cambia hasta que elijan otra).
+    if (kind === "level") {
+      const near = (opts.choices || []).reduce((a, c) => (Math.abs(c[0] - value) < Math.abs(a[0] - value) ? c : a), (opts.choices || [[value]])[0]);
+      inp.value = near[0];
+    } else inp.value = value;
+  }
+  else if (kind === "numbool") { inp.type = "checkbox"; inp.checked = Number(value) > 0; }
   else if (kind === "bool") { inp.type = "checkbox"; inp.checked = !!value; }
   else if (kind === "color") { inp.type = "color"; inp.value = (value || "#000000").slice(0, 7); }
   else if (kind === "text") { inp.type = "text"; inp.value = value ?? ""; }
   else { inp.type = "number"; inp.step = kind === "int" ? "1" : "any"; inp.value = value ?? ""; }
   inp.addEventListener("change", () => {
-    let v = kind === "bool" ? inp.checked : kind === "color" || kind === "text" || kind === "choice" ? inp.value : Number(inp.value);
+    let v = kind === "bool" ? inp.checked : kind === "numbool" ? (inp.checked ? 1 : 0) : kind === "color" || kind === "text" || kind === "choice" ? inp.value : Number(inp.value);
     if ((kind === "num" || kind === "int") && !Number.isFinite(v)) return;
     if (kind === "int") v = Math.round(v);
     onChange(v); commit(); refreshPanel();
@@ -1317,7 +1370,7 @@ function refreshPanel() {
         (v) => strings.forEach((p) => (p.lines = Math.max(1, Math.min(20, v)))), { id: "all_lines" }));
       if (counts.length > 1) box.append(note("Ahora tienen cantidades distintas (" + counts.join(", ") + "). Poné un número para igualarlas todas."));
     }
-    box.append(note(`Archivo: world/maps/${map.id || slug(map.name)}.json. El número de mapa no se cambia en mapas que ya están en el juego (es el de los récords).`));
+    box.append(note(`Archivo: world/maps/${map.id || slug(map.name)}.json. El número de mapa es el lugar en el menú: se puede cambiar (los récords siguen al mapa por su nombre), pero no a la vez que el nombre del archivo.`));
   } else if (s.kind === "start" && map.start) {
     const st = map.start;
     title.textContent = "Recta de la meta";
@@ -1346,15 +1399,6 @@ function refreshPanel() {
       btn("Borrar pista", () => { map.path = []; sel = { kind: "map" }; commit(); refreshPanel(); }));
     box.append(row);
     box.append(note("La línea fina es la que dibujás; la banda celeste es la pista tal como queda en el juego (con el redondeo). La flecha marca el sentido de la carrera."));
-  } else if (s.kind === "island") {
-    const isl = map.islands[s.i];
-    title.textContent = `Isla ${s.i + 1}`;
-    box.append(field("x (m)", "num", round(isl.x), (v) => (isl.x = v), { bind: "x" }));
-    box.append(field("z (m)", "num", round(isl.z), (v) => (isl.z = v), { bind: "z" }));
-    box.append(field("Radio (m)", "num", isl.radius, (v) => (isl.radius = Math.max(4, v)), { bind: "radius" }));
-    box.append(field("Faro", "bool", isl.lighthouse, (v) => (isl.lighthouse = v)));
-    box.append(field("Semilla palmeras", "int", isl.seed, (v) => (isl.seed = v)));
-    box.append(btn("Borrar isla", deleteSelection));
   } else if (s.kind === "piece") {
     const p = map.pieces[s.i];
     const def = PIECES[p.type];
@@ -1366,7 +1410,11 @@ function refreshPanel() {
     for (const [k, label, kind, d, choices] of def?.params || []) {
       let set = (v) => (p[k] = v);
       if (p.type === "light_string" && k === "lines") set = (v) => (p[k] = Math.max(1, Math.min(20, v)));
-      box.append(field(label, kind, p[k] ?? d, set, { id: k, bind: k, choices }));
+      const auto = autoValue(p, s.i, k);
+      box.append(field(label, kind, auto !== null ? auto : p[k] ?? d, set, { id: k, bind: k, choices }));
+      // Automático: se muestra lo que va a pasar en el juego, dicho en palabras.
+      if (auto !== null) box.append(note(auto ? "Automático: tiene público porque está cerca de la pista." : "Automático: sin público porque está lejos de la pista."));
+      else if (def.auto?.[k]) box.append(btn("Volver a automático (según la distancia a la pista)", () => { delete p[k]; commit(); refreshPanel(); }));
     }
     if (p.type === "rock_formation") {
       const { line, shapes } = computed();
@@ -1382,6 +1430,14 @@ function refreshPanel() {
       box.append(row);
     }
     if (p.type === "tropical_island") box.append(note("Arena en toda la figura y selva adentro. Del lado que da a la pista va más tupida; atrás, más rala. Se choca como una isla."));
+    if (DRAWN[p.type]?.closed) {
+      const rr = document.createElement("div"); rr.className = "row";
+      rr.append(btn("Girar a la izquierda (Q)", () => rotateSelection(-15)), btn("Girar a la derecha (E)", () => rotateSelection(15)));
+      box.append(rr);
+      const cr = document.createElement("div"); cr.className = "row";
+      cr.append(btn("Copiar (Ctrl+C)", copySelection), btn("Pegar (Ctrl+V)", () => pasteClipboard(null)), btn("Duplicar (Ctrl+D)", () => { if (copySelection()) pasteClipboard(null); }));
+      box.append(cr);
+    }
     if (p.type === "light_string") box.append(note("Cada cable sale atado a una palmera alta cerca de una punta y llega a otra cerca de la otra punta. De día se ven los focos de color; de noche (o al atardecer) se prenden. Arrastrá las puntas para moverlas."));
     if (p.type === "island_split") box.append(note("Cada isla tropical que la línea cruza de lado a lado queda partida en islas separadas, con mar en el medio. Si entra desde el mar sin cruzarla, le hace una bahía."));
     if (DRAWN[p.type] && s.node >= 0) {
@@ -1397,10 +1453,24 @@ function refreshPanel() {
   refreshReview();
   updateButtons();
 }
+// Valor automático de un parámetro (el juego lo decide si el mapa no lo dice):
+// el que va a tener ahora, o null si el mapa ya lo dice.
+function autoValue(p, i, k) {
+  const rule = PIECES[p.type]?.auto?.[k];
+  const row = PIECES[p.type]?.params.find((q) => q[0] === k);
+  if (!rule || (p[k] !== undefined && p[k] !== row?.[3])) return null;
+  const { line, shapes } = computed();
+  const poly = shapes[i];
+  if (!poly || poly.length < 3 || line.length < 3) return 1;
+  // Igual que el juego (TropicalIslandPiece.track_gap): de la orilla al borde de la pista.
+  let gap = Infinity;
+  for (const q of poly) gap = Math.min(gap, distToLine(q, line) - map.half_width);
+  return Math.max(gap, 0) < rule.near_track ? 1 : 0;
+}
 function refreshFieldsValues() {
   // Mientras se arrastra: actualizar números sin rearmar el panel.
   const s = sel; if (!s) return;
-  const t = s.kind === "island" ? map.islands[s.i] : s.kind === "piece" ? map.pieces[s.i] : s.kind === "start" ? map.start : null;
+  const t = s.kind === "piece" ? map.pieces[s.i] : s.kind === "start" ? map.start : null;
   if (!t) return;
   document.querySelectorAll("#selFields input[data-bind]").forEach((inp) => {
     const b = inp.dataset.bind; if (b in t && typeof t[b] === "number") inp.value = round(t[b]);
@@ -1417,17 +1487,16 @@ function review() {
   const { line, shapes, length } = computed();
   if (map.path.length && map.path.length < (map.start ? 1 : 3)) out.push(["bad", "La pista necesita al menos 3 puntos."]);
   if (map.path.length && !map.start) out.push(["warn", "La pista no tiene recta de meta: los surfistas pueden arrancar mirando para cualquier lado si la largada está en una curva. Usá la herramienta Meta."]);
-  if (!map.path.length && !map.islands.length) out.push(["bad", "Un mapa de anillo necesita una isla en el medio."]);
   if (line.length > 2) {
-    map.islands.forEach((isl, i) => {
-      const d = distToLine([isl.x, isl.z], line);
-      if (d < map.half_width + isl.radius + 0.5) out.push(["bad", `La isla ${i + 1} pisa la pista.`]);
-    });
     map.pieces.forEach((p, i) => {
-      if (p.type === "volcano" && distToLine([p.x, p.z], line) < map.half_width + (p.radius ?? 40) + 0.5) out.push(["bad", "El volcán pisa la pista."]);
       if (p.type === "geyser" && distToLine([p.x, p.z], line) > map.half_width - 2) out.push(["warn", "Hay un géiser fuera de la pista: nadie va a pasar por arriba."]);
-      if (p.type === "tropical_island" && shapes[i]?.length >= 3 && rockTouchesTrack(shapes[i], line))
-        out.push(["bad", "Una isla tropical pisa la pista."]);
+      // Lo que se choca no puede pisar la pista.
+      const c = PIECES[p.type];
+      if (!c) out.push(["bad", `Pieza desconocida: "${p.type}" (el juego no la tiene).`]);
+      else if (c.solid && c.place === "shape" && shapes[i]?.length >= 3 && rockTouchesTrack(shapes[i], line))
+        out.push(["bad", `${c.name}: pisa la pista.`]);
+      else if (c.solid && c.place === "point" && distToLine([p.x, p.z], line) < map.half_width + 2)
+        out.push(["bad", `${c.name}: pisa la pista.`]);
       if (p.type === "light_string" && p.a && p.b) {
         const isles = map.pieces.map((q, k) => (q.type === "tropical_island" ? shapes[k] : null));
         const ia = isles.findIndex((q) => q && q.length >= 3 && pointInPoly(p.a, q));
@@ -1471,7 +1540,7 @@ function refreshReview() {
   const geysers = map.pieces.filter((p) => p.type === "geyser").length;
   const caves = map.pieces.filter((p, i) => p.type === "rock_formation" && computed().line.length > 2 && computed().shapes[i]?.length >= 3 && rockTouchesTrack(computed().shapes[i], computed().line)).length;
   $("stats").innerHTML = "";
-  for (const [v, l] of [[Math.round(length), "m por vuelta"], [map.islands.length, "islas"], [caves, caves === 1 ? "cueva" : "cuevas"], [map.laps, "vueltas"], [map.path.length, "puntos"], [geysers, "géiseres"]]) {
+  for (const [v, l] of [[Math.round(length), "m por vuelta"], [map.pieces.filter((p) => p.type === "tropical_island").length, "islas"], [caves, caves === 1 ? "cueva" : "cuevas"], [map.laps, "vueltas"], [map.path.length, "puntos"], [geysers, "géiseres"]]) {
     const d = document.createElement("div"); d.className = "stat";
     const b = document.createElement("b"); b.textContent = v; const sp = document.createElement("span"); sp.textContent = l;
     d.append(b, sp); $("stats").append(d);
@@ -1507,7 +1576,7 @@ const cap = (t) => (t ? t[0].toUpperCase() + t.slice(1) : t);
 function openMap(key) {
   if (key === "new") {
     const next = Math.max(...BUILTIN.map((b) => b.order), ...[...saved.values()].map((d) => d.order ?? 0)) + 1;
-    map = fromJSON({ id: "mapa_nuevo", name: "mapa nuevo", order: next, laps: 3, half_width: 20, smoothing: 20, ring_count: 12, rock_count: 10, path: [], islands: [], pieces: [] });
+    map = fromJSON({ id: "mapa_nuevo", name: "mapa nuevo", order: next, laps: 3, half_width: 20, smoothing: 20, ring_count: 12, rock_count: 10, path: [], pieces: [] });
     currentKey = "draft"; setTool("track");
   } else if (key.startsWith("builtin:")) { map = fromJSON(BUILTIN[+key.slice(8)]); currentKey = key; }
   else if (key.startsWith("saved:")) { map = fromJSON(saved.get(key.slice(6))); currentKey = key; }
@@ -1535,7 +1604,7 @@ $("importBtn").onclick = showImport;
 $("jsonLoad").onclick = () => {
   try {
     const d = JSON.parse($("jsonText").value);
-    if (!d || typeof d !== "object" || (!d.path && !d.islands)) throw new Error("no parece un mapa");
+    if (!d || typeof d !== "object" || (!d.path && !d.pieces && !d.islands)) throw new Error("no parece un mapa");
     map = fromJSON(d); currentKey = "draft"; sel = { kind: "map" };
     resetHistory(); fillPicker(); invalidate(); refreshPanel(); fit(); saveDraft();
     $("jsonDlg").close(); toast("Mapa importado.");

@@ -8,8 +8,10 @@ código, salvo que el mapa necesite una pieza que todavía no existe.
 
 El editor de mapas lee y escribe este mismo formato. Es un artefacto en Claude:
 https://claude.ai/artifact/AWpL9C2N5dKRnid5Fdxyo7. Su código está en
-`tools/map_editor/`. Cuando una pieza nueva entra al juego, se suma también ahí
-y se vuelve a publicar.
+`tools/map_editor/`. Las piezas no se escriben en el editor: salen del código
+del juego (la constante `EDITOR` de cada pieza) cuando se arma con
+`python3 tools/map_editor/build.py`. Después de un cambio en mapas o piezas,
+Claude lo arma y lo vuelve a publicar.
 
 Para pasar un mapa del editor al juego:
 
@@ -37,20 +39,24 @@ puede abrir en el editor para cambiarlo.
   "half_width": 20,         // mitad del ancho de la pista (m)
   "ring_count": 14,         // círculos de nitro
   "rock_count": 12,         // rocas sobre la pista
-  "islands": [
-    {"x": 330, "z": 0, "radius": 40, "lighthouse": true, "seed": 130}
-  ],
-  "pieces": [
-    {"type": "volcano", "x": 0, "z": 0, "radius": 40},
+  "pieces": [               // islas, géiseres, cuevas... (ver Piezas)
+    {"type": "tropical_island", "shape": [[300, -40], [360, 0], [300, 40]]},
     {"type": "geyser", "x": -85.2, "z": -44.4, "phase": 0}
   ]
 }
 ```
 
 - **Coordenadas**: metros, vistas desde arriba. `x` hacia la derecha, `z` hacia abajo.
-- **`order`**: el juego guarda el mapa elegido y los récords de contrarreloj por
-  este número. Un mapa nuevo lleva el siguiente número libre, y **nunca se le
-  cambia el número a un mapa que ya existe**.
+- **Nombre del archivo y `order`**: el juego guarda el mapa elegido y los
+  récords de contrarreloj por el nombre del archivo, con el número (`order`) al
+  lado como salvavidas. Se puede cambiar el número (reordenar el menú) o el
+  nombre del archivo, de a uno por vez: el otro sirve para encontrar los datos
+  y se actualizan solos. Dos mapas no pueden tener el mismo número; uno nuevo
+  lleva el siguiente libre.
+- **Récords y cambios de pista**: un récord vale solo en la pista donde se hizo.
+  Si cambian el recorrido (más de unos 3 m), las vueltas o el ancho, los
+  récords de antes quedan archivados y se empieza de cero; si la pista vuelve a
+  ser la de antes, vuelven. Las islas, piezas, rocas y aros no cuentan.
 - **Recorrido**: es cerrado (el último punto se une con el primero). La largada
   está en el primer punto. Cada punto puede tener manijas Bézier, relativas al
   punto, como en Illustrator o Figma:
@@ -67,10 +73,12 @@ puede abrir en el editor para cambiarlo.
   pista sale de la punta de adelante, pasa por los puntos de `path` y vuelve
   por la de atrás. El suavizado no toca la recta, así los surfistas arrancan
   mirando hacia donde va la pista. Sin `start`, la meta va en el primer punto.
-- **Sin `path`**: la pista es un anillo de radio `ring_radius` alrededor de la
-  primera isla (el mapa "isla").
-- **Islas**: `lighthouse` pone un faro. `seed` cambia dónde salen las palmeras;
-  si no está, sale del lugar de la isla.
+- **Sin `path`**: la pista es un anillo de radio `ring_radius` alrededor del
+  centro del mapa (0, 0), como el mapa "Anillo". Una isla en el medio es
+  opcional: se dibuja como cualquier otra.
+- **Islas**: todas son piezas `tropical_island` (ver abajo). Ya no hay islas
+  redondas aparte (`islands`): un mapa que las tenga no se carga. El editor
+  las pasa solo a islas tropicales redondas al importarlo.
 
 ## Piezas
 
@@ -81,7 +89,6 @@ pieza se puede repetir todas las veces que haga falta.
 
 | Pieza | Qué es | Parámetros |
 |---|---|---|
-| `volcano` | Isla volcán (se choca como una isla) | `x`, `z`, `radius`; `island_seed` |
 | `geyser` | Géiser que explota cada tanto y lanza al que pasa | `x`, `z`; `phase`, `calm`, `warn`, `erupt` (s), `launch_speed` |
 | `rock_arch` | Arco de roca de paisaje, se pasa por debajo | `x`, `z`; `angle` (grados), `span`, `height`, `shape_seed`, `stone_color`, `moss_color` |
 | `shipwreck` | Barco hundido de paisaje | `x`, `z`; `angle` (grados), `size` |
@@ -138,7 +145,9 @@ adentro (a `beach_width` de la orilla, un poco irregular) empieza la selva.
 Del lado que da a la pista la vegetación va tupida; atrás, más rala (pesa
 menos y casi no se ve). En la orilla que mira a la pista hay público (gente
 alentando, sillas, reposeras, toallas, sombrillas y banderas): `crowd` dice
-cuánto (1 normal, 0 nadie, 2 el doble).
+cuánto (1 normal, 0 nadie, 2 el doble). Si el mapa no lo dice es automático:
+hay público si la isla queda a menos de 20 m de la pista y no hay si está más
+lejos (ahí no se ve y pesa).
 
 Para partir una isla en dos se dibuja un corte (`island_split`): una línea
 abierta que cruce la isla de mar a mar. Cada isla tropical que cruza queda
@@ -154,12 +163,22 @@ lista de piezas esté el corte: las islas lo buscan al prepararse (ver
 2. Sus variables son sus parámetros. Los que el mapa tiene que dar sí o sí van en
    `const REQUIRED := ["x", "z"]`.
 3. Hacer lo que necesite, todo dentro de la pieza:
-   - `build(course)`: construirse. Se llama apenas está el recorrido, antes que
-     las islas del mapa.
+   - `build(course)`: construirse. Se llama apenas está el recorrido.
    - `finish(course)`: si necesita ver el mapa entero.
    - `affect_rider(course, rider)`: qué le pasa a un surfista que la toca.
      Devuelve `true` si eso corta el resto del paso, por ejemplo si se cayó.
    - `update(course, delta)`: algo que haga sola en cada paso.
-4. Sumarla a la tabla de arriba y al editor de mapas.
+   - `blocks_track(samples)`: si se choca, el punto de la pista que tapa (o
+     `null`). Lo usa el validador de mapas antes de publicar.
+   - Si es tierra: anotarse como `"ground"` en `prepare` y tener `ground_y(p)`
+     y `outline()` (así el agua y las olas la tienen en cuenta).
+4. Decir cómo se ve en el editor, con `const EDITOR := {...}`: su nombre,
+   cómo se pone (`"place"`: `"point"`, `"shape"`, `"path"` o `"two_points"`),
+   si se choca (`"solid"`) y la ayuda (`"hint"`). Cada parámetro lleva un
+   comentario `##` arriba: es su etiqueta en el editor (o se da en
+   `EDITOR.fields`, ver `MapPiece.editor_entry`). El editor la toma sola, con
+   un botón y un dibujo genéricos; un ícono o un dibujo propio son opcionales
+   (en `editor.src.html`). Un test revisa que no falte nada.
+5. Sumarla a la tabla de arriba.
 
 `Course` no sabe qué hace cada pieza: solo las arma y las llama.

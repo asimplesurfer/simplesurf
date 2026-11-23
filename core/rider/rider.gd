@@ -39,6 +39,12 @@ signal crashed
 signal geyser_launched
 ## Cambió la cantidad de vueltas del truco en curso (en el aire).
 signal live_spins_changed(spins: int)
+## Entró a un tubo (ver TubeWave).
+signal tube_entered
+## Salió del tubo: success = llegó al final (sale con turbo); si no, se cayó.
+signal tube_exited(success: bool)
+## Se cayó adentro del tubo: lip = lo tapó el labio (si no, lo escupió la espuma).
+signal tube_wiped_out(lip: bool)
 
 ## En qué punto de la recuperación está: en el agua, acostado sobre la tabla o parado.
 enum RecoveryStage { IN_WATER, PRONE, STANDING }
@@ -57,6 +63,14 @@ const TURBO_CHARGE := NITRO_MAX / TURBO_CHARGES
 
 ## Rumbo en radianes (rotación alrededor de Y). 0 = mirando hacia -Z.
 var heading: float = 0.0
+## Posición y rumbo del paso de física anterior: lo visual (personaje y cámara)
+## se dibuja entre ese paso y el actual, así se mueve parejo aunque los cuadros
+## por segundo no coincidan con los pasos de física (si no, va a tirones).
+var _prev_pos: Vector3
+var _prev_heading: float = 0.0
+var _has_prev: bool = false
+## Más que esto entre dos pasos es un salto a propósito (reaparecer): sin mezcla.
+const RENDER_SNAP_DISTANCE := 4.0
 var speed: float = 0.0
 var vertical_speed: float = 0.0
 ## true si está apoyado en el agua (no en el aire).
@@ -129,6 +143,9 @@ const HARD_LAND_SPEED := 11.0
 const SHOVE_DECEL := 7.0
 ## Cuánto gira (rad) el chocado hacia donde lo empujan, con un choque fuerte.
 const BUMP_TURN := 0.5
+## Al decidir quién choca a quién: cuánto pesa estar doblando hacia el otro
+## (además de hacia dónde apunta).
+const BUMP_STEER_WEIGHT := 0.35
 ## true mientras el turbo está empujando (para efectos visuales).
 var turbo_active: bool = false
 ## true cuando ya cruzó la meta (festeja).
@@ -180,6 +197,12 @@ const PUNCH_SEEN_DISTANCE := 60.0
 const PUNCH_MIN_GAP := 0.3
 ## La cara estaba adentro de una ola el frame anterior.
 var _face_in_wave: bool = false
+## El tubo en el que está (null si no está en ninguno).
+var tube: TubeWave = null
+## Equilibrio adentro del tubo (-1..1; ver el estado `tube`) y cuánto peligro
+## hay de caerse (0..1, para el aviso del HUD).
+var tube_balance: float = 0.0
+var tube_danger: float = 0.0
 var _steer_smoothed: float = 0.0
 
 @onready var controller: BaseController = $Controller
@@ -199,6 +222,11 @@ func _ready() -> void:
 	paddling.set_script(preload("res://core/rider/states/state_paddling.gd"))
 	paddling.name = "Paddling"
 	state_machine.add_child(paddling)
+	# Adentro de un tubo (ver TubeWave).
+	var tubing := RiderState.new()
+	tubing.set_script(preload("res://core/rider/states/state_tube.gd"))
+	tubing.name = "Tube"
+	state_machine.add_child(tubing)
 	visual.setup(self)
 	state_machine.setup(self)
 	var sounds := RiderAudio.new()
@@ -211,6 +239,9 @@ func _physics_process(delta: float) -> void:
 	# La física va en pasos fijos (1/60 s, ver project.godot): la misma altura,
 	# velocidad y distancia con cualquier cantidad de FPS. Lo visual (animación,
 	# cámara, HUD) se dibuja en _process y solo lee este estado.
+	_prev_pos = position
+	_prev_heading = heading
+	_has_prev = true
 	input = controller.get_input(delta)
 	if controls_locked:
 		input = RiderInput.new()
@@ -230,7 +261,7 @@ func _physics_process(delta: float) -> void:
 	_top_up_first_charge(delta)
 	# Turbo en ráfagas: cada toque dispara una (mantener no hace nada).
 	turbo_time = maxf(0.0, turbo_time - delta)
-	if input.turbo_pressed and not is_fallen() and not fire_turbo():
+	if input.turbo_pressed and not is_fallen() and not in_tube() and not fire_turbo():
 		turbo_blocked.emit()
 	if wave_air_time >= 0.0:
 		wave_air_time += delta
@@ -352,11 +383,12 @@ func _bump_riders() -> void:
 		_bump_cooldown[k] = float(_bump_cooldown[k]) - get_physics_process_delta_time()
 		if _bump_cooldown[k] <= 0.0:
 			_bump_cooldown.erase(k)
-	if is_fallen():
+	# Adentro del tubo no se choca (van todos a la misma velocidad).
+	if is_fallen() or in_tube():
 		return
 	for node in get_tree().get_nodes_in_group("riders"):
 		var other := node as Rider
-		if other == null or other == self or other.is_fallen() or other.get_instance_id() < get_instance_id():
+		if other == null or other == self or other.is_fallen() or other.in_tube() or other.get_instance_id() < get_instance_id():
 			continue
 		# Solo los de la misma partida (en los tests puede haber varias abiertas).
 		if other.water != water:
@@ -379,13 +411,23 @@ func _bump_riders() -> void:
 		if closing < 0.6 or _bump_cooldown.has(other) or other._bump_cooldown.has(self):
 			continue
 		_bump_cooldown[other] = 0.45
-		# El que más va hacia el otro es el que choca.
-		var a_in := va.dot(n)
-		var b_in := -vb.dot(n)
+		# Choca el que se mueve contra el otro (hacia dónde apunta y si dobla
+		# hacia él), aunque vaya más lento: el otro sale empujado y gira.
+		var a_in := _aim_at(n)
+		var b_in := other._aim_at(-n)
 		if a_in >= b_in:
 			_shove_pair(self, other, n, closing)
 		else:
 			_shove_pair(other, self, -n, closing)
+
+
+## Cuánto va en contra de lo que está en la dirección `n` (de él hacia el
+## otro): hacia dónde apunta (sin importar la velocidad) más si está doblando
+## hacia ese lado.
+func _aim_at(n: Vector3) -> float:
+	var toward := forward().dot(n)
+	var steer_toward := steer_amount * signf(n.dot(right()))
+	return toward + BUMP_STEER_WEIGHT * steer_toward
 
 
 static func _shove_pair(hitter: Rider, victim: Rider, n: Vector3, closing: float) -> void:
@@ -398,6 +440,24 @@ static func _shove_pair(hitter: Rider, victim: Rider, n: Vector3, closing: float
 	victim.heading -= side * BUMP_TURN * strength
 	victim.bumped.emit(n, strength)
 	hitter.bumped_other.emit(victim)
+
+
+## Transform con que se dibuja: entre el paso de física anterior y el actual
+## (según cuánto del próximo paso ya pasó). Lo usan el personaje y la cámara.
+func render_transform() -> Transform3D:
+	if not _has_prev or not is_physics_processing() or _prev_pos.distance_to(position) > RENDER_SNAP_DISTANCE:
+		return global_transform
+	var f := clampf(Engine.get_physics_interpolation_fraction(), 0.0, 1.0)
+	var local := Transform3D(
+		Basis(Vector3.UP, lerp_angle(_prev_heading, heading, f)), _prev_pos.lerp(position, f)
+	)
+	var parent := get_parent() as Node3D
+	return parent.global_transform * local if parent else local
+
+
+## Hacia dónde mira lo que se dibuja (ver render_transform).
+func render_forward() -> Vector3:
+	return -render_transform().basis.z
 
 
 func forward() -> Vector3:
@@ -569,7 +629,7 @@ func _check_wave_punch() -> void:
 		return
 	# Solo atravesando una ola grande de pie o en el aire: caerse al agua o
 	# nadar no cuenta (aunque la cabeza se moje).
-	if is_fallen():
+	if is_fallen() or in_tube():
 		_face_in_wave = false
 		return
 	var face := visual.face_position()
@@ -773,6 +833,18 @@ func fall() -> void:
 
 func is_fallen() -> bool:
 	return state_machine.current_name == &"fallen"
+
+
+## true mientras está adentro de un tubo.
+func in_tube() -> bool:
+	return state_machine.current_name == &"tube"
+
+
+## Entra al tubo (lo llama TubeWave cuando pasa por la boca).
+func enter_tube(wave: TubeWave) -> void:
+	tube = wave
+	state_machine.transition_to(&"tube")
+	tube_entered.emit()
 
 
 func set_recovery_stage(stage: RecoveryStage) -> void:

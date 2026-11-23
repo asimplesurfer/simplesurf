@@ -27,12 +27,12 @@ func _test_menu_choice() -> void:
 	# Elegir un mapa en la lista deja exactamente ese (antes pasaba al siguiente).
 	var saved_layout := GameSettings.track_layout
 	for want in [TrackMap.count() - 1, 0, mini(2, TrackMap.count() - 1)]:
-		GameSettings.track_layout = GameSettings.TrackLayout.ARCHIPELAGO
+		GameSettings.track_layout = TrackMap.index_of("archipelago")
 		menu.set_track_layout(want)
 		_check(GameSettings.track_layout == want, "elegir el mapa %d en el menú deja ese mapa" % want)
 	# Con flechas o mando: el mapa con el foco es el que se juega; pasar por
 	# otras filas no cambia nada.
-	GameSettings.track_layout = GameSettings.TrackLayout.ARCHIPELAGO
+	GameSettings.track_layout = TrackMap.index_of("archipelago")
 	var level := GameSettings.bot_level
 	menu.go_setup()
 	await process_frame
@@ -65,7 +65,7 @@ func _test_menu_choice() -> void:
 
 func _test_explore() -> void:
 	print("Explorar un mapa:")
-	GameSettings.track_layout = GameSettings.TrackLayout.ARCHIPELAGO
+	GameSettings.track_layout = TrackMap.index_of("archipelago")
 	var config := RaceConfig.explore()
 	var m: Node = load("res://main.tscn").instantiate()
 	var race := m.get_node("RaceManager") as RaceManager
@@ -146,7 +146,7 @@ func _test_explore() -> void:
 	_check(config.laps >= 99, "no hay final")
 	m.queue_free()
 	await process_frame
-	GameSettings.track_layout = GameSettings.TrackLayout.CLASSIC
+	GameSettings.track_layout = TrackMap.index_of("classic")
 
 
 func _phys_key(code: Key, down: bool) -> void:

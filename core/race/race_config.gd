@@ -13,7 +13,8 @@ extends Resource
 enum Mode { RACE, DEMO, SANDBOX, TIME_TRIAL, EXPLORE }
 
 @export var mode: Mode = Mode.RACE
-@export var layout: GameSettings.TrackLayout = GameSettings.TrackLayout.ARCHIPELAGO
+## El mapa: su lugar en la lista de mapas (TrackMap.for_layout).
+@export var layout: int = 0
 @export var weather: GameSettings.Weather = GameSettings.Weather.SUNNY
 @export var time_of_day: GameSettings.TimeOfDay = GameSettings.TimeOfDay.DAY
 @export var laps: int = 5
@@ -154,7 +155,7 @@ static func _shuffle(list: Array[int], rng: RandomNumberGenerator) -> void:
 static func demo() -> RaceConfig:
 	var config := create(0, GameSettings.DEMO_BOTS, GameSettings.DEMO_LEVEL)
 	config.mode = Mode.DEMO
-	config.layout = GameSettings.DEMO_LAYOUT
+	config.layout = TrackMap.find(GameSettings.DEMO_MAP)
 	config.weather = GameSettings.DEMO_WEATHER
 	config.time_of_day = GameSettings.TimeOfDay.DAY
 	config.laps = GameSettings.laps_for(config.layout)

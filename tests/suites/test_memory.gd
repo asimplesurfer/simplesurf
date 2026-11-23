@@ -18,7 +18,7 @@ func _test_memory() -> void:
 		# vuelve al menú), en la isla y con sol, como siempre midió este test.
 		var cfg := RaceConfig.demo()
 		cfg.mode = RaceConfig.Mode.RACE
-		cfg.layout = GameSettings.TrackLayout.CLASSIC
+		cfg.layout = TrackMap.index_of("classic")
 		cfg.weather = GameSettings.Weather.SUNNY
 		(m.get_node("RaceManager") as RaceManager).config = cfg
 		root.add_child(m)

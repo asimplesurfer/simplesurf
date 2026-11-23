@@ -14,7 +14,7 @@ func run() -> void:
 		"por defecto las olas son grandes que aparecen solas"
 	)
 	_check(
-		defaults.track_layout == GameSettings.TrackLayout.ARCHIPELAGO,
+		defaults.track_layout == TrackMap.index_of("archipelago"),
 		"por defecto el mapa es el archipiélago"
 	)
 	_test_glyphs()
