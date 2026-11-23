@@ -6,7 +6,11 @@ extends RiderState
 ##   ve: ya no puede tirarlo). Si toca el agua con A todavía apretada: truco
 ##   fallido, nitro a 0 y al agua.
 ##  TERMINAR: la tabla termina el truco en curso a velocidad normal. Si toca
-##   el agua sin haber terminado el giro: truco fallido, nitro a 0 y al agua. El nitro del truco se cobra al aterrizar bien
+##   el agua sin haber terminado el giro: truco fallido, nitro a 0 y al agua.
+##  LIMPIO_JUSTO: como SOLTAR, pero cortar un truco a la mitad lo
+##   desequilibra un momento (rider.trick_recover). Si toca el agua todavía
+##   acomodándose: aterrizaje justo (no se cae, pero pierde velocidad y parte
+##   del nitro). El nitro del truco se cobra al aterrizar bien
 ## (así no alimenta el turbo en el mismo salto).
 ## El turbo en el aire acelera hacia adelante y, la primera ráfaga de cada salto,
 ## da un solo empujón hacia arriba. La gravedad nunca cambia: el salto siempre
@@ -37,6 +41,7 @@ func enter(_previous: StringName) -> void:
 	rider.trick_scored = 0
 	rider.trick_hold_start = 0.0
 	rider.trick_releasing = false
+	rider.trick_recover = 0.0
 
 
 func exit() -> void:
@@ -47,6 +52,7 @@ func exit() -> void:
 	rider.trick_scored = 0
 	rider.trick_hold_start = 0.0
 	rider.trick_releasing = false
+	rider.trick_recover = 0.0
 	rider.trick_kinds.clear()
 
 
@@ -75,7 +81,7 @@ func update(delta: float, input: RiderInput) -> void:
 	var spinning := rider.trick_angle > 0.0 and not rider.trick_releasing
 	if not spinning and fit_units < 1:
 		_hold_time = 0.0
-	elif input.trick and rider.can_trick and not rider.trick_releasing:
+	elif input.trick and rider.can_trick and not rider.trick_releasing and rider.trick_recover <= 0.0:
 		_hold_time += delta
 	else:
 		_hold_time = 0.0
@@ -86,7 +92,7 @@ func update(delta: float, input: RiderInput) -> void:
 		input.trick = not done and not rider.trick_releasing
 		_hold_time = maxf(_hold_time, stats.trick_hold_delay) if input.trick else 0.0
 	var holding := input.trick and rider.can_trick and not rider.trick_releasing \
-		and _hold_time >= stats.trick_hold_delay
+		and rider.trick_recover <= 0.0 and _hold_time >= stats.trick_hold_delay
 	# Empieza un truco nuevo: se elige uno que llegue a terminarse.
 	if holding and not spinning:
 		rider.trick_hold_start = rider.trick_units_now()
@@ -126,6 +132,7 @@ func update(delta: float, input: RiderInput) -> void:
 			rider.trick_units_done += roundi(target / TAU)
 			rider.trick_angle = 0.0
 			rider.trick_releasing = false
+	rider.trick_recover = maxf(rider.trick_recover - delta, 0.0)
 
 	# Contador del HUD: tiempos de truco completos que ya cuentan (los largos
 	# suman más). Con SOLTAR, mientras la tabla vuelve a su lugar no sube.
@@ -185,6 +192,13 @@ func update(delta: float, input: RiderInput) -> void:
 			rider.trick_failed.emit()
 			state_machine.transition_to(&"fallen")
 		else:
+			rider.last_landing_clean = true
+			if Rider.sloppy_landings() and rider.trick_recover > rider.trick_grace():
+				# Aterrizaje justo: cortó un truco y no llegó a acomodarse.
+				rider.last_landing_clean = false
+				rider.speed *= stats.trick_sloppy_speed_mult
+				_pending_nitro *= stats.trick_sloppy_nitro_mult
+				rider.sloppy_landed.emit()
 			if _pending_nitro > 0.0:
 				rider.add_nitro(_pending_nitro)
 				_pending_nitro = 0.0
@@ -203,9 +217,29 @@ func _held_units() -> int:
 
 
 ## Suelta el truco: suma lo completado y la tabla vuelve a su lugar.
+## Con LIMPIO_JUSTO corta el truco en el acto (la tabla vuelve a su lugar de
+## golpe) y, si iba por la mitad, queda desequilibrado un momento.
 func _release() -> void:
 	rider.trick_scored += _held_units()
-	rider.trick_releasing = true
+	if not Rider.sloppy_landings():
+		rider.trick_releasing = true
+		return
+	var stats := rider.stats
+	var u := rider.trick_units_now()
+	var t := rider.trick_at(u)
+	var recover := 0.0
+	if t[0] >= 0:
+		# El truco cortado no pasó: la cuenta vuelve a su principio.
+		var into := u - float(t[1])
+		if into > stats.trick_cut_clean_units:
+			recover = lerpf(stats.trick_recover_min, stats.trick_recover_max, clampf(into, 0.0, 1.0))
+		rider.trick_units_done = t[1]
+		rider.trick_kinds.resize(t[0])
+	else:
+		rider.trick_units_done = roundi(u)
+	rider.trick_angle = 0.0
+	rider.trick_recover = recover
+	rider.trick_cut.emit(recover)
 
 
 ## 0 por debajo de air_soft_height, 1 en air_max_height (y sigue creciendo un

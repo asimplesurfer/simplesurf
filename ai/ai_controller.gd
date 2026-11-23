@@ -870,7 +870,9 @@ func _air(delta: float, input: RiderInput) -> void:
 	if _trick_will_fail:
 		input.trick = true
 		return
-	if Rider.release_tricks():
+	if Rider.sloppy_landings():
+		_air_trick_clean(input, t_land, full_turn)
+	elif Rider.release_tricks():
 		_air_trick_release(input, t_land, full_turn)
 	else:
 		_air_trick_finish(delta, input, t_land, full_turn)
@@ -895,6 +897,28 @@ func _air_trick_release(input: RiderInput, t_land: float, full_turn: float) -> v
 	# sueltan hasta el último momento seguro (aunque no sume otro tiempo).
 	if not input.trick and difficulty.holds_to_trick_end:
 		input.trick = t_land > difficulty.trick_margin
+
+
+## Trucos con el estilo LIMPIO_JUSTO: cuenta lo completado al soltar, y
+## apunta a aterrizar limpio (ya acomodado después de cortar el truco).
+func _air_trick_clean(input: RiderInput, t_land: float, full_turn: float) -> void:
+	var stats := rider.stats
+	if rider.trick_angle <= 0.0:
+		# ¿Le da el tiempo para empezar y completar una vuelta?
+		input.trick = rider.trick_recover <= 0.0 \
+			and t_land > stats.trick_hold_delay + full_turn + difficulty.trick_margin
+		return
+	# Sigue si le da para completar otro tiempo y, soltando ahí, acomodarse
+	# antes de tocar el agua (con margen). Soltar justo al final de un truco
+	# no desequilibra.
+	var u := rider.trick_units_now()
+	var next: float = floorf(u + 0.0001) + 1.0
+	var to_next: float = (next - u) * full_turn
+	var t := rider.trick_at(next - 0.0001)
+	var recover := 0.0
+	if t[0] >= 0 and next < float(t[1] + t[2]) - 0.0001:
+		recover = lerpf(stats.trick_recover_min, stats.trick_recover_max, clampf(next - float(t[1]), 0.0, 1.0))
+	input.trick = t_land > to_next + recover + difficulty.trick_margin
 
 
 ## Trucos con el estilo TERMINAR: al soltar, el truco en curso se termina.

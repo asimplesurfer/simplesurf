@@ -16,6 +16,12 @@ signal jumped
 signal landed
 signal trick_landed(spins: int)
 signal trick_failed
+## Trucos LIMPIO_JUSTO: cortó el truco al soltar A; queda desequilibrado
+## `recover` segundos (0 si lo cortó justo al terminar uno).
+signal trick_cut(recover: float)
+## Trucos LIMPIO_JUSTO: aterrizó todavía desequilibrado (no se cae, pero
+## pierde velocidad y parte del nitro; tambalea).
+signal sloppy_landed
 signal nitro_changed(value: float, max_value: float)
 signal drift_started(side: int)
 signal drift_ended
@@ -113,8 +119,15 @@ signal trick_preview_started(trick_name: String, index: int, total: int)
 ##  2 = SOLTAR: al soltar A cuenta lo completado (lo que muestra el contador)
 ##      y la tabla vuelve rápido a su lugar sin poder tirarlo; solo se cae si
 ##      toca el agua con A apretada. Bajando salen trucos más cortos.
-enum TrickStyle { TERMINAR = 1, SOLTAR = 2 }
-static var trick_style: TrickStyle = TrickStyle.SOLTAR
+##  3 = LIMPIO_JUSTO: como SOLTAR (cuenta lo completado y solo te caés si
+##      tocás el agua con A apretada), pero al soltar el truco se corta en el
+##      acto: si iba por la mitad, queda desequilibrado un momento. Si se
+##      acomoda antes de tocar el agua: aterrizaje limpio (todo el premio).
+##      Si no: aterrizaje justo (pierde velocidad y parte del nitro).
+enum TrickStyle { TERMINAR = 1, SOLTAR = 2, LIMPIO_JUSTO = 3 }
+static var trick_style: TrickStyle = TrickStyle.LIMPIO_JUSTO
+## El último aterrizaje con trucos fue limpio (con LIMPIO_JUSTO puede ser justo).
+var last_landing_clean: bool = true
 ## Cuántos tiempos dura cada truco.
 const TRICK_UNITS: Array[int] = [1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 2, 2]
 ## Trucos del salto actual, en orden (se eligen al empezar cada uno).
@@ -133,6 +146,9 @@ var trick_hold_start: float = 0.0
 ## Soltó A con un truco a medias: la tabla vuelve rápido a su lugar (solo se
 ## ve; ya no cuenta ni puede tirarlo al agua).
 var trick_releasing: bool = false
+## Trucos LIMPIO_JUSTO: segundos que le faltan para acomodarse después de
+## cortar un truco a la mitad (mientras, no puede empezar otro).
+var trick_recover: float = 0.0
 ## Lado del derrape: -1 izquierda, 1 derecha, 0 sin derrapar.
 var drift_side: int = 0
 ## Entrada del frame actual (la leen los estados al entrar).
@@ -295,7 +311,7 @@ func _physics_process(delta: float) -> void:
 ## Elige el próximo truco del salto: al azar entre los que duran como mucho
 ## `max_units` tiempos (los que llegan a terminarse antes de caer), nunca el
 ## mismo que el anterior. Devuelve false si no entra ninguno.
-## Estilo SOLTAR: bajando, deja afuera los que ocupan todo el aire que queda:
+## Estilos SOLTAR y LIMPIO_JUSTO: bajando, deja afuera los que ocupan todo el aire que queda:
 ## así en el final del salto salen cortos, que se terminan y suman, en vez de uno
 ## largo que queda a medias al soltar.
 func choose_next_trick(max_units: int) -> bool:
@@ -815,18 +831,24 @@ func speed_mult() -> float:
 	return 1.0 + catchup * stats.catchup_speed_bonus
 
 
-## Tolerancia del handicap al caer de un truco. Estilo SOLTAR: segundos antes
-## de tocar el agua en los que el juego suelta el truco solo. Estilo TERMINAR:
-## radianes que le pueden faltar al giro para que igual cuente.
+## Tolerancia del handicap al caer de un truco. Estilos SOLTAR y LIMPIO_JUSTO:
+## segundos antes de tocar el agua en los que el juego suelta el truco solo
+## (con LIMPIO_JUSTO, también lo que le puede faltar para acomodarse).
+## Estilo TERMINAR: radianes que le pueden faltar al giro para que igual cuente.
 func trick_grace() -> float:
 	if release_tricks():
 		return catchup * stats.catchup_trick_grace
 	return catchup * stats.catchup_trick_grace_angle
 
 
-## Los trucos van con el estilo SOLTAR (si no, TERMINAR).
+## Al soltar cuenta lo completado (estilos SOLTAR y LIMPIO_JUSTO; si no, TERMINAR).
 static func release_tricks() -> bool:
-	return trick_style == TrickStyle.SOLTAR
+	return trick_style != TrickStyle.TERMINAR
+
+
+## Hay aterrizaje limpio y justo (estilo LIMPIO_JUSTO).
+static func sloppy_landings() -> bool:
+	return trick_style == TrickStyle.LIMPIO_JUSTO
 
 
 ## Multiplicador de la altura de los saltos por el handicap.
