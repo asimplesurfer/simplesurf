@@ -40,6 +40,9 @@ extends Resource
 ## Cuánto se sale de su línea (m) para ir a buscar una ola o un aro. Los
 ## mejores no se desvían: las olas les llegan solas a la línea.
 @export var detour: float = 40.0
+## Cuánto se sale de su línea (m) para ir a buscar un aro (si es más que
+## `detour`). Un aro da nitro y un sprint: vale la pena desviarse.
+@export var ring_detour: float = 0.0
 ## Tira el turbo apenas tiene una carga (sobre todo en el aire), sin guardar.
 ## Así juegan los que mejor juegan: turbo casi todo el tiempo.
 @export var eager_turbo: bool = false
@@ -53,6 +56,10 @@ extends Resource
 ## Probabilidad de salirse del cono del derrape del rival de adelante (para que
 ## no lo tire).
 @export_range(0.0, 1.0) var evade_skill: float = 0.0
+## Metros extra (más allá del alcance del derrape) a los que ya ve que el de
+## adelante ocupa su línea y se va a una paralela (no ir en fila: el de
+## adelante te tira con un derrape).
+@export var shadow_look: float = 0.0
 ## Espacio extra (m) que deja al esquivar rocas.
 @export var rock_margin: float = 0.0
 ## Calcula el aterrizaje con el agua de adelante (no la de abajo): no lo
@@ -127,10 +134,12 @@ static func preset(level: int) -> AIDifficulty:
 			d.mash_rate = 8.5
 			d.line_skill = 0.75
 			d.detour = 9.0
+			d.ring_detour = 12.0
 			d.eager_turbo = true
 			d.trick_margin = 0.11
 			d.rock_throttle = 0.7
 			d.evade_skill = 0.75
+			d.shadow_look = 12.0
 			d.rock_margin = 0.6
 		4:
 			# Lo mejor que se puede jugar, sin ninguna ventaja: la línea más corta
@@ -152,11 +161,13 @@ static func preset(level: int) -> AIDifficulty:
 			d.mash_rate = 10.0
 			d.line_skill = 1.0
 			d.detour = 3.0
+			d.ring_detour = 16.0
 			d.eager_turbo = true
 			d.trick_margin = 0.1
 			d.rock_throttle = 0.9
-			d.saves_turbo_for_waves = false
+			d.saves_turbo_for_waves = true
 			d.evade_skill = 1.0
+			d.shadow_look = 22.0
 			d.rock_margin = 1.5
 			d.reads_landing = true
 	return d
