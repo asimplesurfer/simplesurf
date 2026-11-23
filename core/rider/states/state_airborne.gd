@@ -1,9 +1,12 @@
 extends RiderState
 ## En el aire (por salto o lanzado por una ola).
 ## Mantener A hace trucos (el contador sube con cada tiempo completo). Al
-## soltar, cuenta lo completado y la tabla vuelve rápido a su lugar (solo se
-## ve: ya no puede tirarlo). Si toca el agua con A todavía apretada: truco
-## fallido, nitro a 0 y al agua. El nitro del truco se cobra al aterrizar bien
+## soltar, depende del estilo de trucos (Rider.trick_style):
+##  SOLTAR: cuenta lo completado y la tabla vuelve rápido a su lugar (solo se
+##   ve: ya no puede tirarlo). Si toca el agua con A todavía apretada: truco
+##   fallido, nitro a 0 y al agua.
+##  TERMINAR: la tabla termina el truco en curso a velocidad normal. Si toca
+##   el agua sin haber terminado el giro: truco fallido, nitro a 0 y al agua. El nitro del truco se cobra al aterrizar bien
 ## (así no alimenta el turbo en el mismo salto).
 ## El turbo en el aire acelera hacia adelante y, la primera ráfaga de cada salto,
 ## da un solo empujón hacia arriba. La gravedad nunca cambia: el salto siempre
@@ -49,6 +52,7 @@ func exit() -> void:
 
 func update(delta: float, input: RiderInput) -> void:
 	var stats := rider.stats
+	var release := Rider.release_tricks()
 	# Pop tardío: A apenas la ola lo lanzó.
 	if (
 		input.jump_pressed
@@ -102,10 +106,17 @@ func update(delta: float, input: RiderInput) -> void:
 				rider.trick_angle = (end_units - rider.trick_units_done) * TAU
 			elif not rider.choose_next_trick(fit_units):
 				rider.choose_next_trick(1)
-	elif spinning:
+	elif spinning and release:
 		# Soltó A: cuenta lo que completó (lo que muestra el contador) y la
 		# tabla vuelve rápido a su lugar.
 		_release()
+	elif spinning:
+		# Estilo TERMINAR. Soltó A: termina el truco en curso (cuenta entero).
+		var end := rider.trick_end_angle()
+		rider.trick_angle = minf(rider.trick_angle + stats.trick_spin_speed * delta, end)
+		if rider.trick_angle >= end - 0.0001:
+			rider.trick_units_done += roundi(end / TAU)
+			rider.trick_angle = 0.0
 	if rider.trick_releasing:
 		var target := rider.trick_end_angle()
 		rider.trick_angle = minf(
@@ -117,8 +128,11 @@ func update(delta: float, input: RiderInput) -> void:
 			rider.trick_releasing = false
 
 	# Contador del HUD: tiempos de truco completos que ya cuentan (los largos
-	# suman más). Mientras la tabla vuelve a su lugar, no sube.
-	rider.live_spins = rider.trick_scored + _held_units()
+	# suman más). Con SOLTAR, mientras la tabla vuelve a su lugar no sube.
+	if release:
+		rider.live_spins = rider.trick_scored + _held_units()
+	else:
+		rider.live_spins = int(floor(rider.trick_units_now() + 0.0001))
 
 	var thin := 0.0 if rider.trick_preview else _thin_air()
 	if thin > 0.0:
@@ -147,7 +161,8 @@ func update(delta: float, input: RiderInput) -> void:
 	# Handicap: si le falta muy poco para tocar el agua con A apretada, el
 	# juego suelta solo (como si hubiera soltado apenas a tiempo).
 	if (
-		rider.trick_angle > 0.0
+		release
+		and rider.trick_angle > 0.0
 		and not rider.trick_releasing
 		and rider.trick_grace() > 0.0
 		and rider.time_to_land() <= rider.trick_grace()
@@ -156,8 +171,16 @@ func update(delta: float, input: RiderInput) -> void:
 		rider.live_spins = rider.trick_scored
 
 	if rider.update_air(delta):
+		if not release and rider.trick_angle > 0.0:
+			# Estilo TERMINAR. Handicap: si al truco le falta poco, cuenta
+			# como terminado.
+			var end := rider.trick_end_angle()
+			if end - rider.trick_angle <= rider.trick_grace():
+				rider.trick_units_done += roundi(end / TAU)
+				rider.trick_angle = 0.0
 		if rider.trick_angle > 0.0 and not rider.trick_releasing:
-			# Tocó el agua con A apretada: truco fallido.
+			# Tocó el agua con A apretada (SOLTAR) o sin terminar el giro
+			# (TERMINAR): truco fallido.
 			rider.reset_nitro()
 			rider.trick_failed.emit()
 			state_machine.transition_to(&"fallen")
@@ -165,9 +188,10 @@ func update(delta: float, input: RiderInput) -> void:
 			if _pending_nitro > 0.0:
 				rider.add_nitro(_pending_nitro)
 				_pending_nitro = 0.0
-			if rider.trick_scored > 0:
-				rider.best_combo = maxi(rider.best_combo, rider.trick_scored)
-				rider.trick_landed.emit(rider.trick_scored)
+			var score := rider.trick_scored if release else rider.trick_units_done
+			if score > 0:
+				rider.best_combo = maxi(rider.best_combo, score)
+				rider.trick_landed.emit(score)
 			state_machine.transition_to(&"riding")
 
 

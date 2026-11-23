@@ -106,6 +106,15 @@ const TRICK_PREVIEW_TIME_SCALE := 0.35
 ## Visor de trucos: salta solo y hace este truco, en cámara lenta.
 var trick_preview: bool = false
 signal trick_preview_started(trick_name: String, index: int, total: int)
+## Cómo funcionan los trucos en el aire. Hay dos estilos para probar y
+## elegir; se cambia acá (`trick_style`) y listo:
+##  1 = TERMINAR: al soltar A, el truco en curso se termina a velocidad normal
+##      y cuenta entero; si toca el agua antes de terminarlo, se cae.
+##  2 = SOLTAR: al soltar A cuenta lo completado (lo que muestra el contador)
+##      y la tabla vuelve rápido a su lugar sin poder tirarlo; solo se cae si
+##      toca el agua con A apretada. Bajando salen trucos más cortos.
+enum TrickStyle { TERMINAR = 1, SOLTAR = 2 }
+static var trick_style: TrickStyle = TrickStyle.SOLTAR
 ## Cuántos tiempos dura cada truco.
 const TRICK_UNITS: Array[int] = [1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 2, 2]
 ## Trucos del salto actual, en orden (se eligen al empezar cada uno).
@@ -286,11 +295,11 @@ func _physics_process(delta: float) -> void:
 ## Elige el próximo truco del salto: al azar entre los que duran como mucho
 ## `max_units` tiempos (los que llegan a terminarse antes de caer), nunca el
 ## mismo que el anterior. Devuelve false si no entra ninguno.
-## Bajando, deja afuera los que ocupan todo el aire que queda: así en el
-## final del salto salen cortos, que se terminan y suman, en vez de uno
+## Estilo SOLTAR: bajando, deja afuera los que ocupan todo el aire que queda:
+## así en el final del salto salen cortos, que se terminan y suman, en vez de uno
 ## largo que queda a medias al soltar.
 func choose_next_trick(max_units: int) -> bool:
-	if vertical_speed < 0.0 and max_units > 1:
+	if release_tricks() and vertical_speed < 0.0 and max_units > 1:
 		max_units -= 1
 	var options: Array[int] = []
 	var last: int = trick_kinds[-1] if not trick_kinds.is_empty() else -1
@@ -806,10 +815,18 @@ func speed_mult() -> float:
 	return 1.0 + catchup * stats.catchup_speed_bonus
 
 
-## Segundos antes de tocar el agua en los que el juego suelta el truco solo
-## (handicap: si soltó apenas tarde, igual aterriza bien).
+## Tolerancia del handicap al caer de un truco. Estilo SOLTAR: segundos antes
+## de tocar el agua en los que el juego suelta el truco solo. Estilo TERMINAR:
+## radianes que le pueden faltar al giro para que igual cuente.
 func trick_grace() -> float:
-	return catchup * stats.catchup_trick_grace
+	if release_tricks():
+		return catchup * stats.catchup_trick_grace
+	return catchup * stats.catchup_trick_grace_angle
+
+
+## Los trucos van con el estilo SOLTAR (si no, TERMINAR).
+static func release_tricks() -> bool:
+	return trick_style == TrickStyle.SOLTAR
 
 
 ## Multiplicador de la altura de los saltos por el handicap.

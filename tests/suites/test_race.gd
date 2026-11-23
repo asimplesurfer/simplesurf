@@ -271,11 +271,13 @@ func _test_jump_and_tricks() -> void:
 	_set_action(&"p1_a", true)
 	await _wait(0.3)
 	_check(_rider.trick_angle > 0.0, "mantener ESPACIO en el aire gira la tabla")
-	# Cuenta lo completado al soltar: suelta apenas completa una vuelta.
-	for i in int(1.0 * FPS):
-		if _rider.live_spins >= 1 or _state() != &"airborne":
-			break
-		await process_frame
+	# Con trucos SOLTAR cuenta lo completado al soltar: suelta apenas completa
+	# una vuelta. (Con TERMINAR, al soltar el truco se termina solo.)
+	if Rider.release_tricks():
+		for i in int(1.0 * FPS):
+			if _rider.live_spins >= 1 or _state() != &"airborne":
+				break
+			await process_frame
 	_set_action(&"p1_a", false)
 	await _wait_until_state(&"riding", 2.0)
 	_check(not _rider.is_fallen(), "soltar a tiempo: aterriza bien")

@@ -117,8 +117,11 @@ func _test_rare_transitions() -> void:
 	_check(_state() == &"fallen" and r.nitro == 0.0, "aterrizar a mitad de una vuelta: se cae y pierde el nitro")
 	await _mash_until_standing(12.0, 6.0)
 
-	# 8. Soltar justo antes de tocar el agua, a mitad de un truco: aterriza
-	# bien y cuenta solo lo completado (lo que mostraba el contador).
+	# 8. Trucos SOLTAR. Soltar justo antes de tocar el agua, a mitad de un
+	# truco: aterriza bien y cuenta solo lo completado (lo que mostraba el
+	# contador).
+	var saved_style := Rider.trick_style
+	Rider.trick_style = Rider.TrickStyle.SOLTAR
 	landed_spins.clear()
 	r.position.y += 1.0
 	r.vertical_speed = 9.0
@@ -141,6 +144,28 @@ func _test_rare_transitions() -> void:
 		shown >= 1 and landed_spins.size() == 1 and landed_spins[0] == shown,
 		"cuenta lo que mostraba el contador al soltar (%d, %s)" % [shown, str(landed_spins)]
 	)
+
+	# 9. Trucos TERMINAR. Soltar a mitad de un truco justo antes de tocar el
+	# agua: no llega a terminarlo y se cae.
+	Rider.trick_style = Rider.TrickStyle.TERMINAR
+	r.position.y += 1.0
+	r.vertical_speed = 9.0
+	r.grounded = false
+	r.can_trick = true
+	r.state_machine.transition_to(&"airborne")
+	_set_action(&"p1_a", true)
+	var late := false
+	for i in int(4.0 * FPS):
+		await process_frame
+		if _state() != &"airborne":
+			break
+		late = r.trick_angle > 0.0 and fmod(r.trick_units_now(), 1.0) > 0.3
+		if late and r.time_to_land() < 0.05:
+			break
+	_set_action(&"p1_a", false)
+	await _wait(1.0)
+	_check(late and _state() == &"fallen", "trucos TERMINAR: soltar a mitad de un truco justo antes del agua te tira")
+	Rider.trick_style = saved_style
 
 	m.queue_free()
 	await process_frame

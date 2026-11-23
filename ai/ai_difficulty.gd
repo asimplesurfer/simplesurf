@@ -49,11 +49,12 @@ extends Resource
 ## Elige por dónde cruzar cada ola grande (el punto alto más cercano a su
 ## línea, si el desvío vale el salto). Si no, solo se desvía `detour` metros.
 @export var reads_waves: bool = false
-## Mantiene el truco apretado hasta el último momento seguro antes de tocar
-## el agua (el nitro se carga solo mientras se aprieta). Si no, suelta apenas
-## completa el último tiempo que le da.
+## Mantiene el truco apretado lo más posible (el nitro se carga solo
+## mientras se aprieta): con trucos SOLTAR, hasta el último momento seguro
+## antes de tocar el agua; con TERMINAR, hasta que termina el truco.
 @export var holds_to_trick_end: bool = false
-## Margen (s) que deja entre soltar el truco y tocar el agua.
+## Margen (s) que deja antes de tocar el agua (con trucos SOLTAR, entre
+## soltar y tocar el agua; con TERMINAR, para terminar la vuelta).
 ## Menos margen = más vueltas (y más nitro), con más riesgo.
 @export var trick_margin: float = 0.12
 ## Cuánto acelera mientras esquiva una roca de cerca (1 = no afloja).

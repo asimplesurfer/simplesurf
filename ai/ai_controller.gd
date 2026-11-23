@@ -870,24 +870,49 @@ func _air(delta: float, input: RiderInput) -> void:
 	if _trick_will_fail:
 		input.trick = true
 		return
+	if Rider.release_tricks():
+		_air_trick_release(input, t_land, full_turn)
+	else:
+		_air_trick_finish(delta, input, t_land, full_turn)
+
+
+## Trucos con el estilo SOLTAR: cuenta lo completado al soltar.
+func _air_trick_release(input: RiderInput, t_land: float, full_turn: float) -> void:
 	if rider.trick_releasing:
 		# Ya soltó: la tabla vuelve sola a su lugar.
 		input.trick = false
 		return
+	if rider.trick_angle <= 0.0:
+		# ¿Le da el tiempo para empezar y completar una vuelta antes de soltar?
+		input.trick = t_land > rider.stats.trick_hold_delay + full_turn + difficulty.trick_margin
+		return
+	# Sigue si le da para completar otro tiempo y soltar con margen antes de
+	# tocar el agua.
+	var u := rider.trick_units_now()
+	var to_next: float = (floorf(u + 0.0001) + 1.0 - u) * full_turn
+	input.trick = t_land > to_next + difficulty.trick_margin
+	# El nitro se carga mientras se mantiene el botón: los mejores no
+	# sueltan hasta el último momento seguro (aunque no sume otro tiempo).
+	if not input.trick and difficulty.holds_to_trick_end:
+		input.trick = t_land > difficulty.trick_margin
+
+
+## Trucos con el estilo TERMINAR: al soltar, el truco en curso se termina.
+func _air_trick_finish(delta: float, input: RiderInput, t_land: float, full_turn: float) -> void:
+	var spin := rider.stats.trick_spin_speed
 	var a := rider.trick_angle
 	if a <= 0.0:
-		# ¿Le da el tiempo para empezar y completar una vuelta antes de soltar?
-		input.trick = t_land > stats.trick_hold_delay + full_turn + difficulty.trick_margin
-	else:
-		# Cuenta lo completado al soltar: sigue si le da para completar otro
-		# tiempo y soltar con margen antes de tocar el agua.
-		var u := rider.trick_units_now()
-		var to_next: float = (floorf(u + 0.0001) + 1.0 - u) * full_turn
-		input.trick = t_land > to_next + difficulty.trick_margin
-		# El nitro se carga mientras se mantiene el botón: los mejores no
-		# sueltan hasta el último momento seguro (aunque no sume otro tiempo).
-		if not input.trick and difficulty.holds_to_trick_end:
-			input.trick = t_land > difficulty.trick_margin
+		# ¿Le da el tiempo para empezar y completar una vuelta?
+		input.trick = t_land > rider.stats.trick_hold_delay + full_turn + difficulty.trick_margin
+		return
+	var remaining := (rider.trick_end_angle() - a) / spin
+	# Seguir si alcanza para terminar este truco y hacer otro (al menos uno corto).
+	input.trick = t_land > remaining + full_turn + difficulty.trick_margin * 0.85
+	# El nitro se carga solo mientras se mantiene el botón: los mejores no
+	# sueltan hasta el último cuadro del truco (si siguen apretando cuando
+	# termina, empieza otro).
+	if not input.trick and difficulty.holds_to_trick_end:
+		input.trick = remaining > delta * 1.5
 
 
 ## Segundos girando en este salto (el nitro que va a sumar al aterrizar).
