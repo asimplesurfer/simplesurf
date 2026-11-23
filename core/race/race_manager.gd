@@ -83,8 +83,8 @@ func _ready() -> void:
 		add_child(recorder)
 	# Olas tubo para el que va último: en la carrera (y la demo), no en la
 	# contrarreloj (los tiempos dejarían de compararse). En el modo libre no
-	# aparecen solas (solo con la tecla de prueba).
-	if not config.is_time_trial():
+	# aparecen solas (solo con la tecla de prueba). Por ahora apagadas (TUBO.md).
+	if TubeDirector.ENABLED and not config.is_time_trial():
 		tubes = TubeDirector.new()
 		tubes.name = "Tubes"
 		tubes.automatic = not config.is_explore()

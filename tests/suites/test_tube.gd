@@ -1,4 +1,5 @@
 extends "res://tests/test_base.gd"
+## (Fuera de la corrida mientras la ola tubo está apagada: ver TUBO.md.)
 ## Ola tubo: cuándo aparece en la carrera, entrar por la boca (varios), el
 ## equilibrio, caerse (pierde el nitro de adentro), salir con turbo, los
 ## obstáculos que desaparecen, el aviso del HUD y los bots.
