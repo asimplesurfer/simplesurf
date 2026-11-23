@@ -46,12 +46,21 @@ extends Resource
 ## Tira el turbo apenas tiene una carga (sobre todo en el aire), sin guardar.
 ## Así juegan los que mejor juegan: turbo casi todo el tiempo.
 @export var eager_turbo: bool = false
+## Elige por dónde cruzar cada ola grande (el punto alto más cercano a su
+## línea, si el desvío vale el salto). Si no, solo se desvía `detour` metros.
+@export var reads_waves: bool = false
+## Mantiene el truco apretado hasta que termina (el nitro se carga solo
+## mientras se aprieta). Si no, suelta apenas no le da para otra vuelta y la
+## tabla termina de girar sin cargar.
+@export var holds_to_trick_end: bool = false
 ## Margen (s) que deja antes de tocar el agua para terminar una vuelta de truco.
 ## Menos margen = más vueltas (y más nitro), con más riesgo.
 @export var trick_margin: float = 0.12
 ## Cuánto acelera mientras esquiva una roca de cerca (1 = no afloja).
 @export_range(0.0, 1.0) var rock_throttle: float = 0.6
-## Guarda el turbo para usarlo justo antes de que la ola lo lance (sale más alto).
+## Usa el turbo donde rinde: andando todo el tiempo en el agua (y al salir de
+## la ola, que sale el doble de alto); en el aire solo justo antes de caer o
+## si el nitro de los trucos se pasaría del tope.
 @export var saves_turbo_for_waves: bool = false
 ## Probabilidad de salirse del cono del derrape del rival de adelante (para que
 ## no lo tire).
@@ -60,6 +69,9 @@ extends Resource
 ## adelante ocupa su línea y se va a una paralela (no ir en fila: el de
 ## adelante te tira con un derrape).
 @export var shadow_look: float = 0.0
+## Metros que deja hasta el borde de la pista (los mejores van más pegados:
+## la línea más corta es más corta).
+@export var edge_margin: float = 3.0
 ## Espacio extra (m) que deja al esquivar rocas.
 @export var rock_margin: float = 0.0
 ## Calcula el aterrizaje con el agua de adelante (no la de abajo): no lo
@@ -139,7 +151,7 @@ static func preset(level: int) -> AIDifficulty:
 			d.trick_margin = 0.11
 			d.rock_throttle = 0.7
 			d.evade_skill = 0.75
-			d.shadow_look = 12.0
+			d.shadow_look = 6.0
 			d.rock_margin = 0.6
 		4:
 			# Lo mejor que se puede jugar, sin ninguna ventaja: la línea más corta
@@ -167,7 +179,10 @@ static func preset(level: int) -> AIDifficulty:
 			d.rock_throttle = 0.9
 			d.saves_turbo_for_waves = true
 			d.evade_skill = 1.0
-			d.shadow_look = 22.0
-			d.rock_margin = 1.5
+			d.shadow_look = 8.0
+			d.rock_margin = 1.0
+			d.edge_margin = 3.0
 			d.reads_landing = true
+			d.holds_to_trick_end = true
+			d.reads_waves = true
 	return d
