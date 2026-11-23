@@ -32,9 +32,10 @@ const START_GRACE := 10.0
 ## Segundos entre que termina una ola y puede aparecer otra.
 const COOLDOWN := 4.0
 ## A cuántos metros adelante del último aparece la boca (según su velocidad).
-const AHEAD_TIME := 2.2
-const AHEAD_MIN := 22.0
-const AHEAD_MAX := 42.0
+## (Aparece más adelante que lo que tarda en nacer: se la ve venir y formarse.)
+const AHEAD_TIME := 3.4
+const AHEAD_MIN := 38.0
+const AHEAD_MAX := 70.0
 ## La línea del tubo queda a esta distancia del borde de la pista, como mínimo (m).
 const EDGE_MARGIN := 7.0
 
@@ -57,7 +58,7 @@ func setup(p_race: RaceManager) -> void:
 func _physics_process(delta: float) -> void:
 	if race == null or not automatic or race.state != RaceManager.State.RACING:
 		return
-	if current != null and is_instance_valid(current):
+	if current != null and is_instance_valid(current) and not current.done:
 		return
 	current = null
 	_cooldown = maxf(_cooldown - delta, 0.0)
@@ -155,7 +156,7 @@ func spawn_for(r: Rider, forced_gap: float = -1.0) -> TubeWave:
 	var loc := track.locate(r.position)
 	var mouth := loc.x + ahead / track.length() * TAU
 	var length := TubeWave.OPEN_LENGTH + speed * (time + TubeWave.ENTRY_WINDOW) + TubeWave.AHEAD_START
-	var lane := pick_lateral(mouth, loc.y, length)
+	var lane := pick_lateral(mouth, 0.0, length)
 	if is_nan(lane):
 		# No hay una línea libre (tierra en el medio): se prueba más adelante.
 		_cooldown = 1.0
@@ -166,10 +167,30 @@ func spawn_for(r: Rider, forced_gap: float = -1.0) -> TubeWave:
 	race.get_parent().add_child(wave)
 	# La pared hacia el borde más cercano: el lado abierto mira al medio de la pista.
 	var side := 1.0 if lane >= 0.0 else -1.0
-	wave.setup(race.course, mouth, lane, side, time, speed, r, ahead / maxf(r.speed, 4.0) + 4.0)
+	# Cuánto puede ir y venir a lo ancho sin pisar tierra ni salirse.
+	var reach := pick_sway(mouth, lane, length)
+	wave.setup(race.course, mouth, lane, side, time, speed, r, ahead / maxf(r.speed, 4.0) + TubeWave.SWAY_PERIOD, reach)
 	wave.finished.connect(func() -> void: _cooldown = COOLDOWN)
 	current = wave
 	return wave
+
+
+## Cuánto se puede mover la ola a cada lado de `lane` (m) con todo el tubo libre.
+func pick_sway(mouth: float, lane: float, length: float) -> float:
+	var track := race.course.track
+	var limit := maxf(track.half_width - EDGE_MARGIN, 0.0)
+	var water := GameSession.find_in_scene(race, "water") as Water
+	var reach := minf(limit - lane, limit + lane)
+	while reach > 0.5:
+		var ok := true
+		for lat in [lane - reach, lane - reach * 0.5, lane + reach * 0.5, lane + reach]:
+			if not _clear(track, water, mouth, lat, length):
+				ok = false
+				break
+		if ok:
+			return reach
+		reach -= 3.0
+	return 0.0
 
 
 ## Línea del tubo: lo más cerca posible de donde va el surfista, dentro de la

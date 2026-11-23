@@ -26,14 +26,14 @@ const OPEN_LENGTH := 30.0
 ## Tiempo que tarda en levantarse (s).
 const RISE_TIME := 0.9
 ## Tiempo que tarda en desarmarse al final (s).
-const COLLAPSE_TIME := 0.8
+const COLLAPSE_TIME := 0.45
 ## Después del primero que entra, la boca sigue abierta este tiempo (los que
 ## vienen cerca pueden entrar).
 const ENTRY_WINDOW := 2.2
 ## Ancho de la boca: cuánto se puede estar corrido de la línea del tubo para
 ## entrar (hacia el lado abierto y hacia la pared).
-const MOUTH_OPEN_SIDE := 4.5
-const MOUTH_WALL_SIDE := 3.2
+const MOUTH_OPEN_SIDE := 5.0
+const MOUTH_WALL_SIDE := 1.6
 ## Para entrar hay que estar cerca del agua (no muy alto en un salto).
 const MOUTH_MAX_AIR := 1.6
 ## Cuánto tubo hay delante del primero: al principio, y al final (la salida se
@@ -69,7 +69,36 @@ var opener: Rider
 ## Hasta cuándo se espera que alguien entre (s desde que aparece).
 var open_timeout: float = 6.0
 
+## Antes de que entre alguien la ola nace lejos y después va y viene a lo ancho
+## de la pista (ver `sway`). Línea alrededor de la que se mueve, cuánto se aleja
+## de ella para cada lado (m; -1: quieta, la ola ya está formada) y cuánto tarda
+## en ir y volver (s).
+var center_lateral: float = 0.0
+var sway: float = -1.0
+const SWAY_PERIOD := 9.0
+## Nace a esta distancia (m) afuera de la pista y tarda esto en llegar (s).
+const BIRTH_DISTANCE := 32.0
+const BIRTH_TIME := 3.2
+## Largo del recorrido mientras espera (después se arma el entero, al entrar).
+const OPENING_SPINE := 150.0
+## 0..1: qué tan formada está (0 = oleaje lejos, 1 = tubo adentro de la pista).
+var formed: float = 1.0
+
 var phase: Phase = Phase.OPENING
+## Ya terminó (no se ve; queda solo hasta devolver los aros y rocas).
+var done: bool = false
+var _color_tick: int = 0
+## Al terminar: dónde quedó y cuánto espera entera antes de desarmarse (s).
+var _closing_span := Vector2.ZERO
+var _hold: float = 0.0
+## Escupió a alguien (salió bien por adelante).
+var _spat: bool = false
+const SPIT_HOLD := 1.1
+var _restore_time: float = 0.0
+## Un aro o roca vuelve cuando no hay nadie a menos de esto (m), o a más tardar
+## a los RESTORE_TIMEOUT segundos.
+const RESTORE_CLEARANCE := 30.0
+const RESTORE_TIMEOUT := 25.0
 ## Tiempo desde que apareció.
 var age: float = 0.0
 ## Tiempo desde que entró el primero (-1 si nadie entró todavía).
@@ -85,15 +114,11 @@ const SHADER := preload("res://world/tube/tube_wave.gdshader")
 var _mesh_instance: MeshInstance3D
 var _mesh: ArrayMesh
 var _material: ShaderMaterial
-## La luz del final del tubo (un brillo que se acerca).
-var _glow: MeshInstance3D
-var _glow_mat: StandardMaterial3D
 ## Espuma donde la ola ya rompió (atrás), gotas que caen del labio y la
 ## escupida de la salida.
 var _back_foam: CPUParticles3D
 var _lip_drops: CPUParticles3D
 var _spit: CPUParticles3D
-var _spit_mist: CPUParticles3D
 var _collapse: float = 0.0
 ## Aros y rocas que se escondieron (para volver a mostrarlos).
 var _hidden: Array[Node3D] = []
@@ -147,7 +172,8 @@ func _ready() -> void:
 ## hacia qué lado está la pared (+1 hacia el lateral positivo).
 func setup(
 	p_course: Course, p_mouth_angle: float, p_lateral: float, p_side: float,
-	p_duration: float, p_speed: float, p_opener: Rider = null, p_open_timeout: float = 6.0
+	p_duration: float, p_speed: float, p_opener: Rider = null, p_open_timeout: float = 6.0,
+	p_sway: float = -1.0
 ) -> void:
 	course = p_course
 	track = course.track
@@ -159,10 +185,18 @@ func setup(
 	speed = p_speed
 	opener = p_opener
 	open_timeout = p_open_timeout
+	center_lateral = p_lateral
+	sway = p_sway
+	# Los obstáculos y las olas comunes se sacan de todo el tramo posible.
 	_build_spine()
 	_clear_swells()
-	_build_visual()
 	_hide_obstacles()
+	if sway >= 0.0:
+		# Nace lejos, afuera de la pista del lado de la pared, y viene cruzando.
+		lateral = center_lateral + side * (track.half_width + BIRTH_DISTANCE)
+		formed = 0.0
+		_build_spine(OPENING_SPINE)
+	_build_visual()
 	_rebuild()
 
 
@@ -233,8 +267,10 @@ static func _turn_sign(p_track: TrackSpace, p_mouth: float, p_lateral: float, pt
 	return 1.0 if Vector3(-t.z, 0.0, t.x).dot(lat_dir) >= 0.0 else -1.0
 
 
-func _build_spine() -> void:
-	_spine = make_spine(track, mouth_angle, lateral, max_length() + 40.0)
+func _build_spine(length: float = -1.0) -> void:
+	if length < 0.0:
+		length = max_length() + 40.0
+	_spine = make_spine(track, mouth_angle, lateral, length)
 	_turn = _turn_sign(track, mouth_angle, lateral, _spine)
 	_arc = PackedFloat32Array()
 	_arc.resize(_spine.size())
@@ -344,7 +380,7 @@ func base_height(p: Vector3) -> float:
 ## true mientras se puede entrar por la boca.
 func accepting() -> bool:
 	if phase == Phase.OPENING:
-		return age >= RISE_TIME * 0.5
+		return age >= RISE_TIME * 0.5 and formed >= 0.85
 	return phase == Phase.RIDING and ride_time < ENTRY_WINDOW
 
 
@@ -370,6 +406,10 @@ func enter(rider: Rider, s: float = 0.0) -> void:
 	if phase == Phase.OPENING:
 		phase = Phase.RIDING
 		ride_time = 0.0
+		formed = 1.0
+		# Se queda en la línea donde entró: ahora sí, el recorrido entero.
+		if sway >= 0.0:
+			_build_spine()
 	rider.enter_tube(self)
 	rider_entered.emit(rider)
 
@@ -377,6 +417,7 @@ func enter(rider: Rider, s: float = 0.0) -> void:
 ## Salió por adelante: la ola lo escupe (chorro de espuma).
 func _on_rider_exited(success: bool, rider: Rider) -> void:
 	if success and is_instance_valid(rider):
+		_spat = true
 		spit_at(rider)
 
 
@@ -386,7 +427,7 @@ func spit_at(rider: Rider) -> void:
 		return
 	var fwd := rider.forward()
 	var xf := Transform3D(Basis.looking_at(fwd, Vector3.UP), rider.global_position + Vector3.UP * 1.2 - fwd * 1.5)
-	for p in [_spit, _spit_mist]:
+	for p in [_spit]:
 		var part := p as CPUParticles3D
 		part.global_transform = xf
 		part.restart()
@@ -415,6 +456,8 @@ func _physics_process(delta: float) -> void:
 	age += delta
 	match phase:
 		Phase.OPENING:
+			if sway >= 0.0:
+				_move_while_waiting()
 			_check_entries()
 			if age > open_timeout:
 				_start_collapse()
@@ -432,13 +475,40 @@ func _physics_process(delta: float) -> void:
 				# Seguro: el estado de cada uno sale solo al terminar el tiempo.
 				_start_collapse()
 		Phase.CLOSING:
+			if done:
+				_restore_when_clear(delta)
+				return
+			if _hold > 0.0:
+				_hold -= delta
+				return
 			_collapse += delta / COLLAPSE_TIME
 			if _collapse >= 1.0:
 				_finish()
 
 
 func _process(_delta: float) -> void:
+	# La tormenta cambia los colores del agua de a poco: la ola la sigue.
+	_color_tick += 1
+	if _color_tick % 20 == 0:
+		_copy_water_colors()
 	_rebuild()
+
+
+## Mientras nadie entra: nace lejos y viene cruzando (creciendo); al llegar a la
+## pista se forma el tubo y después va y viene a lo ancho de la pista.
+func _move_while_waiting() -> void:
+	var far := center_lateral + side * (track.half_width + BIRTH_DISTANCE)
+	var arrive := center_lateral + side * sway
+	if age < BIRTH_TIME:
+		var k := age / BIRTH_TIME
+		lateral = lerpf(far, arrive, 1.0 - (1.0 - k) * (1.0 - k))
+	else:
+		# Ya en la pista: va hacia el otro lado y vuelve (empieza del lado de la pared).
+		var t := (age - BIRTH_TIME) / SWAY_PERIOD * TAU
+		lateral = center_lateral + side * sway * cos(t)
+	var edge := track.half_width
+	formed = 1.0 - smoothstep(edge - 8.0, edge + 6.0, absf(lateral))
+	_build_spine(OPENING_SPINE)
 
 
 ## Los que pasan por la boca (cerca de la línea y del agua) entran.
@@ -463,15 +533,50 @@ func _check_entries() -> void:
 func _start_collapse() -> void:
 	if phase == Phase.CLOSING:
 		return
+	# Queda quieta donde estaba (no sigue avanzando mientras se desarma).
+	_closing_span = span()
+	# Si escupió a alguien, se queda un momento entera mientras se aleja con el
+	# turbo (si se desarmara enseguida, el techo le bajaría encima a la cámara).
+	_hold = SPIT_HOLD if _spat else 0.0
 	phase = Phase.CLOSING
 	_collapse = 0.0
 
 
+## Terminó la ola: se deja de ver y de contar. Los aros y rocas que escondió
+## vuelven de a uno, cuando no hay nadie cerca (si no, aparecerían encima de
+## alguien); después se borra.
 func _finish() -> void:
-	set_physics_process(false)
+	if done:
+		return
+	done = true
+	remove_from_group("tube_waves")
 	set_process(false)
+	_mesh.clear_surfaces()
+	for p in [_back_foam, _lip_drops]:
+		(p as CPUParticles3D).emitting = false
 	finished.emit()
-	queue_free()
+
+
+func _restore_when_clear(delta: float) -> void:
+	_restore_time += delta
+	var riders := get_tree().get_nodes_in_group("riders")
+	var still: Array[Node3D] = []
+	for item in _hidden:
+		if not is_instance_valid(item):
+			continue
+		var near := false
+		for node in riders:
+			var r := node as Rider
+			if r and r.water == water and r.global_position.distance_to(item.global_position) < RESTORE_CLEARANCE:
+				near = true
+				break
+		if near and _restore_time < RESTORE_TIMEOUT:
+			still.append(item)
+		else:
+			item.visible = true
+	_hidden = still
+	if _hidden.is_empty():
+		queue_free()
 
 
 func _exit_tree() -> void:
@@ -482,7 +587,8 @@ func _exit_tree() -> void:
 
 ## Los aros y rocas del tramo del tubo desaparecen mientras está.
 func _hide_obstacles() -> void:
-	var from := -6.0
+	# También un poco antes de la boca (no aparecen al lado del que llega).
+	var from := -30.0
 	var to := max_length() + 20.0
 	var items: Array[Node3D] = []
 	for ring in course.rings:
@@ -544,23 +650,7 @@ func _build_visual() -> void:
 	_mesh_instance.global_transform = Transform3D.IDENTITY
 	_material = ShaderMaterial.new()
 	_material.shader = SHADER
-	_material.set_shader_parameter("flow", speed)
-	if course and DayTime.is_night(course):
-		_material.set_shader_parameter("brightness", 0.55)
-	elif course and course.time_of_day == GameSettings.TimeOfDay.SUNSET:
-		_material.set_shader_parameter("brightness", 0.85)
-
-	# La luz del final: un brillo redondo que siempre mira a la cámara.
-	_glow_mat = glow_material()
-	var quad := QuadMesh.new()
-	quad.size = Vector2(1.0, 1.0)
-	_glow = MeshInstance3D.new()
-	_glow.name = "ExitLight"
-	_glow.mesh = quad
-	_glow.material_override = _glow_mat
-	_glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_glow.top_level = true
-	add_child(_glow)
+	_copy_water_colors()
 
 	_back_foam = _particles(48, 0.9, 0.55, Color(0.96, 0.99, 1.0))
 	_back_foam.name = "BackFoam"
@@ -584,7 +674,7 @@ func _build_visual() -> void:
 	_lip_drops.gravity = Vector3(0.0, -12.0, 0.0)
 	_lip_drops.emitting = false
 
-	_spit = _particles(70, 0.9, 0.4, Color(0.97, 1.0, 1.0))
+	_spit = _particles(110, 0.7, 0.16, Color(0.97, 1.0, 1.0))
 	_spit.name = "Spit"
 	_spit.one_shot = true
 	_spit.explosiveness = 0.85
@@ -600,54 +690,39 @@ func _build_visual() -> void:
 	_spit.damping_max = 10.0
 	_spit.emitting = false
 
-	_spit_mist = _particles(24, 1.3, 1.1, Color(0.9, 0.97, 1.0, 0.6))
-	_spit_mist.name = "SpitMist"
-	_spit_mist.one_shot = true
-	_spit_mist.explosiveness = 0.9
-	_spit_mist.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	_spit_mist.emission_sphere_radius = 1.5
-	_spit_mist.direction = Vector3(0.0, 0.2, -1.0)
-	_spit_mist.spread = 30.0
-	_spit_mist.initial_velocity_min = 6.0
-	_spit_mist.initial_velocity_max = 12.0
-	_spit_mist.damping_min = 5.0
-	_spit_mist.damping_max = 8.0
-	_spit_mist.emitting = false
-
-
-## Material del brillo de la salida.
-static func glow_material() -> StandardMaterial3D:
-	var grad := Gradient.new()
-	grad.set_color(0, Color(1.0, 1.0, 0.95, 1.0))
-	grad.set_color(1, Color(1.0, 0.95, 0.7, 0.0))
-	grad.add_point(0.35, Color(1.0, 0.98, 0.85, 0.7))
-	var tex := GradientTexture2D.new()
-	tex.gradient = grad
-	tex.fill = GradientTexture2D.FILL_RADIAL
-	tex.fill_from = Vector2(0.5, 0.5)
-	tex.fill_to = Vector2(1.0, 0.5)
-	tex.width = 64
-	tex.height = 64
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
-	mat.albedo_texture = tex
-	mat.albedo_color = Color(1.0, 1.0, 1.0, 0.0)
-	return mat
 
 
 ## Materiales de la ola (para prepararlos antes de que aparezca: sin tirones).
 static func warmup_materials() -> Array[Material]:
 	var wave := ShaderMaterial.new()
 	wave.shader = SHADER
-	return [wave, glow_material()]
+	return [wave]
+
+
+## Colores del agua que usa también la ola (ver tube_wave.gdshader).
+const WATER_COLORS := [
+	"deep_color", "shallow_color", "wave_color", "glow_color", "glow_strength",
+	"foam_color", "sky_tint", "sky_reflect",
+]
+
+
+## La ola se pinta con los colores del agua de ahora (la hora, la tormenta).
+func _copy_water_colors() -> void:
+	if water == null or _material == null:
+		return
+	var wm := water.shader_material()
+	if wm == null:
+		return
+	for k in WATER_COLORS:
+		var v: Variant = wm.get_shader_parameter(k)
+		if v != null:
+			_material.set_shader_parameter(k, v)
 
 
 ## Partículas blancas simples (bolitas de espuma que se achican al final).
 func _particles(amount: int, lifetime: float, size: float, color: Color) -> CPUParticles3D:
 	var p := CPUParticles3D.new()
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	p.amount = amount
 	p.lifetime = lifetime
 	p.local_coords = false
@@ -655,8 +730,8 @@ func _particles(amount: int, lifetime: float, size: float, color: Color) -> CPUP
 	var mesh := SphereMesh.new()
 	mesh.radius = size * 0.5
 	mesh.height = size
-	mesh.radial_segments = 6
-	mesh.rings = 3
+	mesh.radial_segments = 12
+	mesh.rings = 6
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.albedo_color = color
@@ -677,6 +752,8 @@ func _particles(amount: int, lifetime: float, size: float, color: Color) -> CPUP
 
 ## Tramo que se dibuja ahora [desde, hasta] (m desde la boca).
 func span() -> Vector2:
+	if phase == Phase.CLOSING and _closing_span != Vector2.ZERO:
+		return _closing_span
 	if phase == Phase.OPENING or ride_time < 0.0:
 		return Vector2(0.0, OPEN_LENGTH)
 	var lo := INF
@@ -734,13 +811,18 @@ func _rebuild() -> void:
 	var sp := span()
 	drawn_from = sp.x
 	drawn_to = sp.y
-	var hs := _height_scale()
+	# Lejos, recién nacida, es un oleaje más bajo que va creciendo.
+	var hs := _height_scale() * lerpf(0.4, 1.0, formed)
 	_mesh.clear_surfaces()
 	if hs <= 0.001:
 		_place_effects(sp, hs)
 		return
 	# Más allá de la parte "llena", la ola baja hasta el agua de los dos lados.
-	var lo := sp.x - BACK_DROP
+	# En la boca (mientras se puede entrar) el tubo empieza de golpe, abierto:
+	# desde atrás se ve la boca, y la cámara del que llega no se mete en la ola.
+	var at_mouth := sp.x <= 0.01
+	var back_drop := 0.0 if at_mouth else BACK_DROP
+	var lo := sp.x - back_drop
 	var hi := sp.y + FRONT_DROP
 	var rings := maxi(int(ceil((hi - lo) / RING_STEP)), 2)
 	var count := FACE_US.size() + REST_CLOSED.size()
@@ -760,8 +842,14 @@ func _rebuild() -> void:
 		var to_front := sp.y + FRONT_DROP - s
 		var from_back := s - lo
 		# Atrás el labio se cae (se abre) mientras baja: espuma, no una aleta.
-		var closed := smoothstep(FRONT_DROP, FRONT_DROP + FRONT_OPEN, to_front) * smoothstep(0.0, BACK_DROP, from_back)
-		var h := hs * sqrt(smoothstep(0.0, FRONT_DROP, to_front)) * smoothstep(0.0, BACK_DROP, from_back)
+		var closed := smoothstep(FRONT_DROP, FRONT_DROP + FRONT_OPEN, to_front) * formed
+		if not at_mouth:
+			closed *= smoothstep(0.0, back_drop, from_back)
+		var h := hs * sqrt(smoothstep(0.0, FRONT_DROP, to_front))
+		# Atrás baja (rompió); en la boca empieza entera, de golpe (si no, el
+		# techo bajaría hasta la cámara del que entra).
+		if not at_mouth:
+			h *= smoothstep(0.0, back_drop, from_back)
 		var f := frame_at(s)
 		var o: Vector3 = f[0]
 		var w: Vector3 = f[1]
@@ -804,23 +892,13 @@ func _rebuild() -> void:
 	_material.set_shader_parameter("back_s", sp.x if phase != Phase.OPENING else -1000.0)
 	_material.set_shader_parameter("front_s", sp.y)
 	_material.set_shader_parameter("exit_light", progress())
+	_material.set_shader_parameter("collapse", _collapse if phase == Phase.CLOSING else 0.0)
 	_place_effects(sp, hs)
 
 
 ## La luz de la salida, la espuma de atrás y las gotas del labio siguen al tubo.
 func _place_effects(sp: Vector2, hs: float) -> void:
 	var riding := phase == Phase.RIDING and not inside.is_empty()
-	# La luz: en la boca de adelante, adentro del tubo. Más grande y fuerte
-	# cuanto más cerca está la salida.
-	var f := frame_at(sp.y - FRONT_OPEN * 0.55)
-	var o: Vector3 = f[0]
-	var w: Vector3 = f[1]
-	var k := progress() if riding else 0.15
-	_glow.global_position = o + w * 0.3 + Vector3.UP * (base_height(o) + 2.6 * hs)
-	var size := lerpf(4.0, 7.5, k) * hs
-	_glow.scale = Vector3(size, size, size)
-	_glow_mat.albedo_color = Color(1.0, 1.0, 1.0, lerpf(0.45, 1.0, k) * hs)
-	_glow.visible = hs > 0.05 and phase != Phase.CLOSING
 	# La espuma: donde la ola ya rompió, atrás.
 	_back_foam.emitting = riding
 	if riding:
