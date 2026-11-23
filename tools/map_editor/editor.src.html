@@ -1072,7 +1072,9 @@ function rasterPaint(strokes, hw) {
       if (!g[j] && !seen[j]) { seen[j] = 1; q.push(j); }
     }
   }
-  const maxHole = (3 * hw * 3 * hw) / (cell * cell);
+  // (Hasta unos 80 x 80 m con la pista de siempre: las islas de verdad entre
+  // dos canales son mucho más grandes.)
+  const maxHole = (5 * hw * 5 * hw) / (cell * cell);
   for (let i = 0; i < W * H; i++) {
     if (g[i] || seen[i]) continue;
     const comp = [i]; seen[i] = 1;
@@ -1166,11 +1168,15 @@ function skeletonGraph(r, sk, hw) {
     const inComp = new Set(comp);
     const inner = (i) => nbs(i).filter((j) => inComp.has(j));
     const touch = (i) => { for (const j of nbs(i)) if (zone[j] >= 0) return zone[j]; return null; };
-    let ends = comp.filter((i) => inner(i).length < 2);
+    // Los nudos que toca (un tramo de dos píxeles de ancho no tiene "puntas":
+    // lo que cuenta es a qué nudos llega).
+    const touching = comp.filter((i) => touch(i) !== null);
+    const zones = [...new Set(touching.map(touch))];
+    const ends = comp.filter((i) => inner(i).length < 2 || touch(i) !== null);
     const closed = ends.length === 0;
     if (comp.length < 2 && !nbs(i0).some((j) => zone[j] >= 0)) continue;
-    // Recorrido ordenado desde una punta (o desde cualquier lado si es una vuelta).
-    const start = closed ? comp[0] : ends[0];
+    // Recorrido ordenado desde una punta (mejor una que toca un nudo).
+    const start = closed ? comp[0] : (touching[0] ?? ends[0]);
     const order = [start], vis = new Set([start]);
     for (;;) {
       const cur = order[order.length - 1];
@@ -1184,7 +1190,10 @@ function skeletonGraph(r, sk, hw) {
     for (let it = 0; it < 3; it++) pts = pts.map((p, k) => (k === 0 || k === pts.length - 1) && !closed ? p
       : [(pts[(k - 1 + pts.length) % pts.length][0] + 2 * p[0] + pts[(k + 1) % pts.length][0]) / 4, (pts[(k - 1 + pts.length) % pts.length][1] + 2 * p[1] + pts[(k + 1) % pts.length][1]) / 4]);
     const a = closed ? null : touch(order[0]);
-    const b = closed ? null : touch(order[order.length - 1]);
+    let b = closed ? null : touch(order[order.length - 1]);
+    // Si el recorrido no terminó justo en el otro nudo, igual llega a él.
+    if (!closed && b === null && zones.length) b = zones.find((z) => z !== a) ?? (zones.length === 1 && a === null ? zones[0] : null);
+    if (!closed && b === a && zones.length > 1) b = zones.find((z) => z !== a);
     if (a !== null) pts.unshift(nodes[a].pos.slice());
     if (b !== null) pts.push(nodes[b].pos.slice());
     edges.push({ a, b, pts, closed, alive: true });
@@ -1290,7 +1299,11 @@ function simplify(pts, eps, keep = new Set()) {
 }
 // Puntos de control para una línea: los de la simplificación, sin huecos de más de `gap` m.
 function controlPoints(pts, keepIdx, eps, gap) {
-  const idx = simplify(pts, eps, new Set(keepIdx));
+  // Sin puntos pegados a los que hay que dejar (las salidas de los caminos):
+  // quedan dos cuadraditos juntos que no aportan nada.
+  const keep = new Set(keepIdx);
+  const idx = simplify(pts, eps, keep).filter((i) => keep.has(i) || i === 0 || i === pts.length - 1
+    || ![...keep].some((k) => dist(pts[k], pts[i]) < Math.max(12, eps * 2.5)));
   const cum = [0];
   for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + dist(pts[i - 1], pts[i]));
   const out = [];
