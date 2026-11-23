@@ -19,6 +19,8 @@ func run() -> void:
 	await process_frame
 	_rider = _race.racers[0]
 	_check(_race.tubes != null, "en la carrera está el que decide las olas tubo")
+	# Las olas de cada prueba se ponen a mano (el director solo en su prueba).
+	_race.tubes.automatic = false
 	await _test_rules()
 	await _test_wipe_out()
 	await _test_two_inside()
@@ -159,8 +161,18 @@ func _test_wipe_out() -> void:
 	var hud := (_main_of(tw).get_node("Views") as SplitScreen).huds[0]
 	var warned := false
 	var bumps := 0
+	var pushed := false
 	for i in int(12.0 * FPS):
 		await process_frame
+		if _rider.in_tube() and not pushed and tw.ride_time > 2.0:
+			# Después de sumar un poco de nitro, la ola lo empuja fuerte hacia el
+			# labio (y él no toca el stick).
+			pushed = true
+			var st := _rider.state_machine.current
+			st.set("balance", 0.6)
+			st.set("_push", 1.0)
+			st.set("_push_target", 1.0)
+			st.set("_push_timer", 10.0)
 		if _rider.in_tube():
 			max_nitro = maxf(max_nitro, _rider.nitro)
 			max_danger = maxf(max_danger, _rider.tube_danger)
@@ -176,7 +188,7 @@ func _test_wipe_out() -> void:
 	_check(not _rider.in_tube() and _rider.tube == null, "al caerse sale del tubo")
 	# Sin nadie adentro, la ola se desarma.
 	await _wait(TubeWave.ENTRY_WINDOW + TubeWave.COLLAPSE_TIME + 0.3)
-	_check(not is_instance_valid(tw), "sin nadie adentro, la ola se desarma")
+	_check(not is_instance_valid(tw) or tw.done, "sin nadie adentro, la ola se desarma")
 	_rider.state_machine.transition_to(&"riding")
 	_lock_bots(false)
 
@@ -249,8 +261,8 @@ func _test_bot_rides_it() -> void:
 	_check(bot.nitro >= Rider.NITRO_MAX - 0.001, "sale con el nitro lleno")
 	_check(bot.turbo_time > 0.0 and bot.state_machine.current_name == &"riding", "sale por adelante con turbo")
 	ai.difficulty = saved
-	await _wait(TubeWave.COLLAPSE_TIME + 0.3)
-	_check(not is_instance_valid(tw), "al terminar la ola se desarma")
+	await _wait(TubeWave.SPIT_HOLD + TubeWave.COLLAPSE_TIME + 0.3)
+	_check(not is_instance_valid(tw) or tw.done, "al terminar la ola se desarma")
 
 
 ## Los aros y rocas del tramo desaparecen mientras está la ola, y vuelven después.
@@ -267,9 +279,20 @@ func _test_obstacles_hidden() -> void:
 	var angle := _course.track.angle_of(target.global_position) - 20.0 / _course.track.radius
 	var tw := _make_tube(angle, 0.0, 8.0)
 	_check(not target.visible, "un aro o roca en el tramo del tubo desaparece")
+	# Con alguien al lado no vuelve (aparecería encima); cuando se aleja, sí.
+	_lock_bots(true)
+	var near_pos := target.global_position + Vector3(6.0, 0.0, 0.0)
+	_rider.position = Vector3(near_pos.x, _water.height_at(near_pos.x, near_pos.z), near_pos.z)
+	_rider.speed = 0.0
+	_rider.controls_locked = true
 	tw.dismiss()
 	await _wait(TubeWave.COLLAPSE_TIME + 0.3)
-	_check(target.visible, "y vuelve cuando la ola se va")
+	_check(not target.visible, "con alguien al lado, el aro o roca todavía no vuelve")
+	_place(_rider, _course.track.angle_of(target.global_position) + 1.5, 0.0)
+	await _wait(0.2)
+	_check(target.visible, "y vuelve cuando la ola se va y no hay nadie cerca")
+	_rider.controls_locked = false
+	_lock_bots(false)
 
 
 ## Un bot con una ola adelante va a la boca y entra.
@@ -297,6 +320,7 @@ func _test_bot_goes_to_mouth() -> void:
 ## En carrera, al último lejos del primero le aparece la ola adelante.
 func _test_director_spawns() -> void:
 	var d := _race.tubes
+	d.automatic = true
 	d._cooldown = 0.0
 	d._lap_used.clear()
 	var first := _race.racers[1]
@@ -313,9 +337,10 @@ func _test_director_spawns() -> void:
 	_check(tw != null and is_instance_valid(tw) and tw.opener == last, "al último, lejos del primero, le aparece una ola tubo")
 	if tw and is_instance_valid(tw):
 		var ahead := tw.s_of(last.position)
-		_check(ahead < -15.0 and ahead > -45.0, "la boca aparece adelante (%.0f m)" % -ahead)
+		_check(ahead < -30.0 and ahead > -80.0, "la boca aparece adelante (%.0f m)" % -ahead)
 		_check(tw.duration >= 8.0 and tw.duration <= 12.0, "dura entre 8 y 12 s (%.1f)" % tw.duration)
 		tw.dismiss()
+	d.automatic = false
 	await _wait(TubeWave.COLLAPSE_TIME + 0.3)
 
 

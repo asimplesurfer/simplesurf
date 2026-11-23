@@ -70,6 +70,11 @@ func _run() -> void:
 		root.get_texture().get_image().save_png(dir.path_join(name + ".png"))
 		print("captura ", name)
 	# Llegando a una ola que espera en la boca (lo que ve el jugador antes de entrar).
+	# (Una ola por vez, como en el juego: la de recién es muy larga y pasaría por acá.)
+	tw.dismiss()
+	tw.queue_free()
+	for i in 3:
+		await process_frame
 	var tw2 := TubeWave.new()
 	m.add_child(tw2)
 	tw2.setup(course, 3.0, 0.0, 1.0, 10.0, 18.0, null, 60.0)
