@@ -384,6 +384,7 @@ function trackLine(m) {
     for (let i = 0; i < 180; i++) { const a = (i / 180) * Math.PI * 2; pts.push([Math.cos(a) * m.ring_radius, Math.sin(a) * m.ring_radius]); }
     return pts;
   }
+  if (m.open) return openTrackLine(m);
   if (m.path.length < (m.start ? 1 : 3)) return [];
   let raw = [];
   const fixed = [];
@@ -422,6 +423,28 @@ function trackLine(m) {
   }
   raw.atControl = atControl;
   return raw;
+}
+// Pista sin cerrar: solo lo dibujado (desde la recta de la meta, si hay), sin
+// unir el último punto con la meta.
+function openTrackLine(m) {
+  const out = [];
+  const chain = [];
+  if (m.start) {
+    const [pts, f] = startStrip(m.start);
+    for (let i = f; i < pts.length; i++) out.push(pts[i]);
+    const last = pts.length - 1, d = sub(pts[last], pts[last - 1]), l = len(d) || 1;
+    chain.push({ p: pts[last], in: null, out: mul(d, 1 / l) });
+  }
+  chain.push(...m.path);
+  for (let i = 0; i + 1 < chain.length; i++) {
+    let c = segControls(chain, i, false);
+    if (m.start && i === 0) c = [c[0], add(c[0], mul(chain[0].out, dist(c[0], c[3]) / 3)), c[2], c[3]];
+    for (let j = 1; j <= 24; j++) out.push(bez(c, j / 24));
+  }
+  if (!m.start && chain.length === 1) out.push(chain[0].p);
+  out.open = true;
+  out.atControl = [];
+  return out;
 }
 // Un camino alternativo tal como lo arma el juego (PathTrack._add_branch): sale
 // de la pista en el punto `from`, pasa por sus puntos y vuelve en `to`,
@@ -565,8 +588,22 @@ function commit() {
   invalidate();
   saveDraft();
 }
-function undo() { if (hist.at > 0) { hist.at--; map = JSON.parse(hist.stack[hist.at]); sel = null; drawing = null; invalidate(); refreshPanel(); } }
-function redo() { if (hist.at < hist.stack.length - 1) { hist.at++; map = JSON.parse(hist.stack[hist.at]); sel = null; drawing = null; invalidate(); refreshPanel(); } }
+function undo() { if (hist.at > 0) { hist.at--; map = JSON.parse(hist.stack[hist.at]); afterHistory(); } }
+function redo() { if (hist.at < hist.stack.length - 1) { hist.at++; map = JSON.parse(hist.stack[hist.at]); afterHistory(); } }
+// Después de deshacer o rehacer: si la pista sigue sin cerrar y está la
+// herramienta Pista, se sigue dibujando desde el último punto.
+function afterHistory() {
+  sel = drawing?.kind === "path" || map.open ? { kind: "path", node: -1 } : null;
+  drawing = null;
+  syncPathDrawing();
+  invalidate(); refreshPanel(); setHint(); saveDraft();
+}
+// La pista se dibuja por partes: mientras no está cerrada (map.open), la
+// herramienta Pista sigue agregando puntos al final.
+function syncPathDrawing() {
+  if (tool === "track" && map.open) { if (!drawing) drawing = { kind: "path" }; }
+  else if (drawing?.kind === "path") drawing = null;
+}
 function resetHistory() { hist.stack = [snapshot()]; hist.at = 0; }
 function invalidate() { cache = null; draw(); updateButtons(); }
 
@@ -575,7 +612,7 @@ function computed() {
   const line = trackLine(map);
   const shapes = map.pieces.map((p) => (DRAWN[p.type] ? shapePolygon(nodesOf(p), 4, isClosed(p)) : null));
   const branches = (map.branches || []).map((b) => (line.length > 2 ? branchLine(line, b, map.smoothing) : []));
-  cache = { line, shapes, branches, length: line.length ? lineLength(line) : 0 };
+  cache = { line, shapes, branches, length: !line.length ? 0 : line.open ? openLength(line) : lineLength(line) };
   return cache;
 }
 
@@ -624,7 +661,7 @@ function draw() {
   // caminos alternativos, igual (primero todos los bordes, después el agua:
   // así donde se abren o se cruzan no queda corchera atravesada).
   if (line.length > 2) {
-    const all = [[line, true], ...branches.filter((l) => l.length > 1).map((l) => [l, false])];
+    const all = [[line, !line.open], ...branches.filter((l) => l.length > 1).map((l) => [l, false])];
     ctx.lineJoin = "round"; ctx.lineCap = "round";
     for (const [l, closed] of all) { pathLine(l, closed); ctx.strokeStyle = C.rope; ctx.lineWidth = (hw * 2 + 1.4) * cam.zoom; ctx.stroke(); }
     for (const [l, closed] of all) { pathLine(l, closed); ctx.strokeStyle = C.lane; ctx.lineWidth = hw * 2 * cam.zoom; ctx.stroke(); }
@@ -636,7 +673,7 @@ function draw() {
     for (const [l, closed] of all) { pathLine(l, closed); ctx.stroke(); }
     ctx.setLineDash([]);
     for (const [l, closed] of all) drawArrows(l, closed);
-    drawStart(line, hw);
+    if (map.start || !line.open) drawStart(line, hw);
   }
 
   // Piezas (las rocas, semitransparentes, encima de la pista).
@@ -659,7 +696,7 @@ function draw() {
 
   // Puntos y manijas de la pista.
   const editingPath = tool === "track" || tool === "branch" || sel?.kind === "path" || drawing?.kind === "path";
-  if (map.path.length && editingPath) drawNodes(map.path, C, sel?.kind === "path" ? sel.node : drawing?.kind === "branch" ? drawing.from : -1, !(drawing?.kind === "path") && !map.start, !map.start);
+  if (map.path.length && editingPath) drawNodes(map.path, C, sel?.kind === "path" ? sel.node : drawing?.kind === "branch" ? drawing.from : -1, !map.open && !map.start, !map.start && !map.open);
   if (map.path.length && tool === "branch") drawNumbers(map.path);
   if (sel?.kind === "branch" && map.branches[sel.i]) drawBranchNodes(map.branches[sel.i], C, sel.node ?? -1);
   if (drawing?.kind === "branch") drawBranchNodes({ from: drawing.from, to: -1, path: drawing.nodes }, C, -1);
@@ -1028,10 +1065,10 @@ function hitTest(s) {
   const { branches } = computed();
   for (let i = branches.length - 1; i >= 0; i--) if (branches[i].length > 1 && distToLine(w, branches[i], false) < map.half_width) {
     // En la parte que comparte con la pista (donde se abre) gana la pista.
-    if (line.length > 2 && distToLine(w, line) < distToLine(w, branches[i], false)) continue;
+    if (line.length > 2 && distToLine(w, line, !line.open) < distToLine(w, branches[i], false)) continue;
     return { kind: "branch", i };
   }
-  if (line.length > 2 && distToLine(w, line) < map.half_width) return { kind: "path" };
+  if (line.length > 2 && distToLine(w, line, !line.open) < map.half_width) return { kind: "path" };
   return null;
 }
 
@@ -1106,7 +1143,7 @@ function penDown(s, w, e) {
     return;
   }
   if (!drawing) {
-    if (isTrack) { map.path = []; map.branches = []; drawing = { kind: "path" }; sel = { kind: "path", node: -1 }; }
+    if (isTrack) { map.path = []; map.branches = []; map.open = true; drawing = { kind: "path" }; sel = { kind: "path", node: -1 }; }
     else {
       const type = tool;
       const piece = { type, [DRAWN[type].key]: [] };
@@ -1117,7 +1154,19 @@ function penDown(s, w, e) {
   const nodes = drawing.kind === "path" ? map.path : nodesOf(drawing.piece);
   // Tocar el primer punto cierra la figura (un corte se termina con Enter o doble clic).
   const closedShape = drawing.kind === "path" || isClosed(drawing.piece);
-  if (closedShape && nodes.length >= 3 && dist(toScreen(nodes[0].p), s) < 10) { finishDrawing(); return; }
+  const minClose = drawing.kind === "path" && map.start ? 1 : 3;
+  if (closedShape && nodes.length >= minClose && dist(toScreen(nodes[0].p), s) < 10) { finishDrawing(); return; }
+  if (drawing.kind === "path") {
+    // Pista a medio dibujar: tocar un punto (o una manija) lo elige y se puede
+    // arrastrar, sin agregar otro.
+    const h = hitNodes(nodes, s);
+    if (h) {
+      sel = { kind: "path", node: h.node }; refreshPanel();
+      drag = { kind: "node", nodes, node: h.node, handle: h.handle, start: w, orig: JSON.parse(JSON.stringify(nodes[h.node])), alt: e.altKey, moved: false };
+      draw(); return;
+    }
+    sel = { kind: "path", node: -1 };
+  }
   nodes.push({ p: w, in: [0, 0], out: [0, 0] });
   drag = { kind: "pen", nodes, node: nodes.length - 1, start: w };
   invalidate();
@@ -1128,6 +1177,7 @@ function penDown(s, w, e) {
 // se toca el punto de la pista donde vuelve a entrar.
 function branchDown(s, w, e) {
   if (!map.path.length) { toast("Primero dibujá la pista."); return; }
+  if (map.open) { toast("Primero cerrá la pista (herramienta Pista: tocá el primer punto o Enter)."); return; }
   const h = hitNodes(map.path, s);
   const onMain = h && !h.handle ? h.node : -1;
   if (!drawing) {
@@ -1160,8 +1210,11 @@ function finishDrawing() {
   if (!drawing) return;
   if (drawing.kind === "branch") { toast("Para terminar, tocá el punto de la pista donde vuelve a entrar el camino."); return; }
   if (drawing.kind === "path") {
-    if (map.path.length < (map.start ? 1 : 3)) { toast(map.start ? "Poné al menos un punto." : "La pista necesita al menos 3 puntos."); return; }
+    // Un doble clic para terminar deja puntos repetidos al final: se sacan.
+    while (map.path.length > 1 && dist(map.path[map.path.length - 1].p, map.path[map.path.length - 2].p) < 1.5) map.path.pop();
+    if (map.path.length < (map.start ? 1 : 3)) { toast(map.start ? "Poné al menos un punto." : "Para cerrar la vuelta hacen falta al menos 3 puntos."); return; }
     if (map.smoothing === 60 && map.path.some((n) => n.in || n.out)) map.smoothing = 20;
+    map.open = false;
     sel = { kind: "path", node: -1 };
   } else {
     const p = drawing.piece;
@@ -1273,7 +1326,11 @@ function onUp(e) {
   pointers.delete(e.pointerId);
   if (!drag) return;
   const d = drag; drag = null;
-  if (d.kind === "pen") { setHint(); return; }
+  if (d.kind === "pen") {
+    // Cada punto de la pista queda en el historial: Ctrl+Z saca el último.
+    if (drawing?.kind === "path") { commit(); refreshPanel(); }
+    setHint(); return;
+  }
   if (d.moved) { commit(); refreshPanel(); }
 }
 function pinchState() { const [a, b] = [...pointers.values()]; return { d: dist(a, b), mid: mul(add(a, b), 0.5), cam: { ...cam } }; }
@@ -1329,6 +1386,11 @@ function setHint() {
     h = drawing.nodes.length
       ? `Camino alternativo desde el punto ${drawing.from + 1}: ${drawing.nodes.length} puntos. Tocá el punto de la pista donde vuelve a entrar (más adelante que el ${drawing.from + 1}). Esc cancela.`
       : `Sale del punto ${drawing.from + 1}. Clic pone un punto del camino (arrastrá para hacer curva). Esc cancela.`;
+  } else if (drawing?.kind === "path") {
+    const n = map.path.length;
+    h = n
+      ? `Dibujando la pista: ${n} ${n === 1 ? "punto" : "puntos"}. Clic: otro punto (arrastrá para hacer curva). Ctrl+Z o Supr saca el último. Para cerrar la vuelta, tocá el primero o Enter. Podés cambiar de herramienta y seguir después.`
+      : "Clic: el primer punto de la pista (arrastrá para hacer curva).";
   } else if (drawing) {
     const what = drawing.kind === "path" ? "la pista" : DRAWN[drawing.piece.type].label;
     const count = (drawing.kind === "path" ? map.path : nodesOf(drawing.piece)).length;
@@ -1341,6 +1403,7 @@ function setTool(t) {
   if (drawing && t !== tool) cancelDrawing();
   if (PIECES[t]?.place !== "two_points") pendingLights = null;
   tool = t;
+  syncPathDrawing();
   document.querySelectorAll(".tool").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.tool === t)));
   cv.style.cursor = t === "pan" ? "grab" : t === "select" ? "default" : "crosshair";
   if (t === "track" && map.path.length) sel = { kind: "path", node: -1 };
@@ -1348,7 +1411,11 @@ function setTool(t) {
 }
 function cancelDrawing() {
   if (!drawing) return;
-  if (drawing.kind === "path") { map = JSON.parse(hist.stack[hist.at]); }
+  // La pista a medio dibujar no se pierde: queda sin cerrar y se sigue después.
+  if (drawing.kind === "path") {
+    if (map.path.length) toast("La pista quedó sin cerrar. Con la herramienta Pista (P) seguís desde el último punto.");
+    else map.open = false;
+  }
   if (drawing.kind === "branch") toast("Camino cancelado.");
   drawing = null; invalidate(); refreshPanel();
 }
@@ -1411,7 +1478,16 @@ function pasteClipboard(at) {
   commit(); refreshPanel(); draw();
 }
 function deleteSelection() {
+  if (!sel && drawing?.kind === "path") sel = { kind: "path", node: -1 };
   if (!sel) return;
+  if (map.open && (drawing?.kind === "path" || sel.kind === "path")) {
+    // Pista sin cerrar: se borra el punto elegido o, si no hay, el último.
+    if (!map.path.length) return;
+    const i = sel.kind === "path" && sel.node >= 0 && sel.node < map.path.length ? sel.node : map.path.length - 1;
+    map.path.splice(i, 1);
+    sel = { kind: "path", node: -1 };
+    commit(); refreshPanel(); setHint(); return;
+  }
   if (sel.kind === "path" && sel.node >= 0) { if (map.path.length <= 3) return toast("La pista necesita al menos 3 puntos."); const before = map.path.slice(); map.path.splice(sel.node, 1); fixBranches(before); sel.node = -1; }
   else if (sel.kind === "path") { map.path = []; map.branches = []; sel = { kind: "map" }; }
   else if (sel.kind === "branch") {
@@ -1448,7 +1524,7 @@ window.addEventListener("keydown", (e) => {
   const k = e.key.toLowerCase();
   if (e.key === " ") { spaceDown = true; cv.style.cursor = "grab"; e.preventDefault(); return; }
   if (e.key === "Enter" && drawing) { finishDrawing(); return; }
-  if (e.key === "Escape") { if (drawing) cancelDrawing(); else { sel = { kind: "map" }; refreshPanel(); draw(); } return; }
+  if (e.key === "Escape") { if (drawing?.kind === "path") setTool("select"); else if (drawing) cancelDrawing(); else { sel = { kind: "map" }; refreshPanel(); draw(); } return; }
   if (e.key === "Delete" || e.key === "Backspace") { deleteSelection(); return; }
   const isC = e.code === "KeyC" || k === "c", isV = e.code === "KeyV" || k === "v", isD = e.code === "KeyD" || k === "d";
   if (mod && isC) { if (selectedShape()) { e.preventDefault(); copySelection(); } return; }
@@ -1549,6 +1625,13 @@ function refreshPanel() {
         btn("Curva automática", () => { n.in = null; n.out = null; commit(); refreshPanel(); }),
         btn("Largada acá", () => { const before = map.path.slice(); map.path = map.path.slice(s.node).concat(map.path.slice(0, s.node)); fixBranches(before); sel.node = 0; commit(); refreshPanel(); }));
       box.append(row);
+    }
+    if (map.open) {
+      box.append(note(`La pista está sin cerrar (${map.path.length} ${map.path.length === 1 ? "punto" : "puntos"}). Podés seguirla cuando quieras desde el último punto.`));
+      const orow = document.createElement("div"); orow.className = "row";
+      orow.append(btn("Seguir dibujando", () => setTool("track"), true),
+        btn("Cerrar la vuelta", () => { if (tool !== "track") setTool("track"); finishDrawing(); }));
+      box.append(orow);
     }
     box.append(field("Redondeo de curvas", "int", map.smoothing, (v) => (map.smoothing = Math.max(0, v)), { id: "smoothing" }));
     box.append(field("Mitad del ancho (m)", "num", map.half_width, (v) => (map.half_width = Math.max(6, v)), { id: "half_width" }));
@@ -1672,7 +1755,9 @@ function review() {
   const { line, shapes, length } = computed();
   if (map.path.length && map.path.length < (map.start ? 1 : 3)) out.push(["bad", "La pista necesita al menos 3 puntos."]);
   if (map.path.length && !map.start) out.push(["warn", "La pista no tiene recta de meta: los surfistas pueden arrancar mirando para cualquier lado si la largada está en una curva. Usá la herramienta Meta."]);
-  if (line.length > 2) {
+  // Pista sin cerrar: se puede seguir otro día, pero el juego necesita la vuelta cerrada.
+  if (map.open && map.path.length) out.push(["bad", "La pista todavía no está cerrada. Con la herramienta Pista (P) seguís desde el último punto; para cerrar la vuelta, tocá el primer punto o apretá Enter."]);
+  if (line.length > 2 && !line.open) {
     map.pieces.forEach((p, i) => {
       if (p.type === "geyser" && distToLine([p.x, p.z], line) > map.half_width - 2) out.push(["warn", "Hay un géiser fuera de la pista: nadie va a pasar por arriba."]);
       // Lo que se choca no puede pisar la pista.
@@ -1881,11 +1966,11 @@ async function connectDb() {
 }
 
 // Borrador local (por si se cierra la página).
-function saveDraft() { try { localStorage.setItem("simplesurf-editor-draft", JSON.stringify({ key: currentKey, map: toJSON(map) })); } catch {} }
+function saveDraft() { try { localStorage.setItem("simplesurf-editor-draft", JSON.stringify({ key: currentKey, map: toJSON(map), open: !!map.open })); } catch {} }
 function loadDraft() {
   try {
     const d = JSON.parse(localStorage.getItem("simplesurf-editor-draft") || "null");
-    if (d?.map) { map = fromJSON(d.map); currentKey = d.key?.startsWith("builtin:") ? d.key : "draft"; return true; }
+    if (d?.map) { map = fromJSON(d.map); map.open = !!d.open && map.path.length > 0; currentKey = d.key?.startsWith("builtin:") ? d.key : "draft"; return true; }
   } catch {}
   return false;
 }
