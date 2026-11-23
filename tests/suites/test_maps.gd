@@ -13,6 +13,7 @@ func run() -> void:
 	await _test_cave()
 	await _test_cave_map()
 	await _test_tropical_island()
+	await _test_jungle_bank()
 	await _test_night()
 	await _test_archipelago()
 	await _test_atoll()
@@ -93,6 +94,25 @@ func _test_water_palette() -> void:
 		_check(all_keys and leaked.is_empty() and own_kept, "%s: todos los colores del agua, propios o sacados de la base %s" % [climate, leaked])
 	var sunset_far: Color = WaterPalette.colors(WaterPalette.SUNSET).ocean_color
 	_check(sunset_far.r > sunset_far.b + 0.2, "al atardecer el mar lejano es naranja (no celeste)")
+	# Agua de río: su propia base, más oscura que el mar, y los climas la cambian igual.
+	var lum := func(c: Color) -> float: return c.r * 0.3 + c.g * 0.59 + c.b * 0.11
+	var darker := true
+	var changes := true
+	for climate in [WaterPalette.DAY] + WaterPalette.CLIMATES.keys():
+		var sea := WaterPalette.colors(climate)
+		var river := WaterPalette.colors(climate, WaterPalette.RIVER)
+		darker = darker and sea.keys().all(func(k: String) -> bool: return river.has(k))
+		darker = darker and lum.call(river.deep_color) < lum.call(sea.deep_color) and lum.call(river.shallow_color) < lum.call(sea.shallow_color)
+		if climate != WaterPalette.DAY:
+			changes = changes and river.deep_color != WaterPalette.RIVER_BASE.deep_color
+	_check(darker, "el agua de río es más oscura que el mar con cualquier clima")
+	_check(changes, "los climas también cambian el agua de río")
+	var rm := TrackMap.from_dict({"id": "r", "path": [[0, 0], [100, 0], [50, 80]], "water": "rio"})
+	_check(rm.water == WaterPalette.RIVER and TrackMap.from_dict(rm.to_dict()).water == WaterPalette.RIVER, "un mapa puede tener agua de río (y se guarda)")
+	var bad := PackedStringArray()
+	TrackMap.from_dict({"id": "x", "water": "lago"}, bad)
+	_check(not bad.is_empty(), "un agua desconocida da error")
+	_check(TrackMap.for_layout(TrackMap.index_of("atoll")).water == WaterPalette.SEA, "los mapas de siempre son de mar")
 
 
 func _test_pieces() -> void:
@@ -851,3 +871,38 @@ func _test_editor_catalog() -> void:
 	for pr in problems:
 		print("    " + pr)
 	_check(problems.is_empty(), "cada pieza dice cómo se pone y cada parámetro tiene su etiqueta en el editor")
+
+
+## Orilla de selva: tierra como la isla tropical (se choca, apaga las olas), con
+## árboles de jungla y bambú; en un mapa de río.
+func _test_jungle_bank() -> void:
+	print("Orilla de selva:")
+	var d := {
+		"id": "selva", "name": "selva", "order": 60, "laps": 1, "half_width": 14, "water": "rio",
+		"path": [[200, -100], [260, 0], [200, 100], [-200, 100], [-260, 0], [-200, -100]],
+		"pieces": [
+			{"type": "jungle_bank", "shape": [[-200, -117], [200, -117], [200, -190], [-200, -190]], "shape_seed": 3},
+			{"type": "jungle_bank", "shape": [[-150, -60], [150, -60], [150, 60], [-150, 60]], "bamboo": 2, "tree_density": 1.6},
+		],
+	}
+	var errors := PackedStringArray()
+	var map := TrackMap.from_dict(d, errors)
+	_check(errors.is_empty(), "el mapa con orillas de selva se lee sin errores %s" % str(errors))
+	var m: Node = load("res://main.tscn").instantiate()
+	(m.get_node("Course") as Course).map = map
+	root.add_child(m)
+	await process_frame
+	await process_frame
+	var course := m.get_node("Course") as Course
+	var banks: Array = course.pieces.filter(func(p: MapPiece) -> bool: return p is JungleBankPiece)
+	_check(banks.size() == 2 and course.registered("ground").size() == 2, "las orillas son tierra (el agua sabe dónde están)")
+	_check(banks.all(func(b: JungleBankPiece) -> bool: return b.tree_count() > 50), "tienen árboles de selva (%s)" % str(banks.map(func(b: JungleBankPiece) -> int: return b.tree_count())))
+	var near: JungleBankPiece = banks[0]
+	_check(near._solid, "la orilla pegada a la pista se choca")
+	_check(near.ground_y(Vector2(0, -150)) > 0.5 and near.ground_y(Vector2(0, 0)) == -INF, "el suelo está donde está la orilla")
+	var water := m.get_node("Water") as Water
+	_check(water.palette == WaterPalette.RIVER
+		and water.shader_material().get_shader_parameter("deep_color") == WaterPalette.RIVER_BASE.deep_color,
+		"el mapa de río tiene el agua de río")
+	m.queue_free()
+	await process_frame

@@ -15,11 +15,23 @@ extends RefCounted
 ##
 ## "ocean_color" es el mar lejano (hasta el horizonte): lo lee el cielo y
 ## Horizon se lo pasa al agua.
+##
+## Hay dos aguas: el mar (SEA, la de siempre) y el río (RIVER: más oscura,
+## verdosa, para los mapas de selva). Cada mapa elige la suya (TrackMap.water).
+## El río tiene su propia base (RIVER_BASE) y los climas la cambian igual que
+## al mar: con el cambio general de cada clima (grade), sacado de sus colores
+## propios del mar. Así un atardecer o una tormenta oscurecen y tiñen el río
+## de la misma manera que el mar, sin anotar colores aparte para cada uno.
 
 const DAY := "dia"
 const SUNSET := "atardecer"
 const NIGHT := "noche"
 const STORM := "tormenta"
+
+## Las aguas que puede elegir un mapa.
+const SEA := "mar"
+const RIVER := "rio"
+const WATERS := [SEA, RIVER]
 
 ## El agua de día.
 const BASE := {
@@ -34,6 +46,26 @@ const BASE := {
 	"glow_color": Color(0.25, 0.95, 0.8),
 	"ocean_color": Color(0.4, 0.72, 0.84),
 }
+
+## El agua de río de día: más oscura que el mar y verdosa (agua de selva).
+const RIVER_BASE := {
+	"deep_color": Color(0.03, 0.11, 0.11),
+	"shallow_color": Color(0.07, 0.2, 0.17),
+	"wave_color": Color(0.12, 0.32, 0.26),
+	"rising_color": Color(0.02, 0.08, 0.08),
+	"outside_color": Color(0.03, 0.09, 0.08),
+	"sky_tint": Color(0.5, 0.62, 0.6),
+	"reef_color": Color(0.24, 0.44, 0.34),
+	"foam_color": Color(0.86, 0.9, 0.84),
+	"glow_color": Color(0.2, 0.7, 0.55),
+	"ocean_color": Color(0.26, 0.45, 0.44),
+}
+
+
+## La base de un agua (el mar si no la conoce).
+static func base(water: String = SEA) -> Dictionary:
+	return RIVER_BASE if water == RIVER else BASE
+
 
 ## Lo que cada clima decide por su cuenta. "colors": colores propios (los que
 ## faltan salen de la base); "values": otros ajustes del agua.
@@ -86,8 +118,11 @@ const CLIMATES := {
 }
 
 
-## Todos los colores del agua de un clima (DAY = la base).
-static func colors(climate: String) -> Dictionary:
+## Todos los colores del agua de un clima (DAY = la base). `water`: el mar
+## o el río (ver RIVER_BASE).
+static func colors(climate: String, water: String = SEA) -> Dictionary:
+	if water == RIVER:
+		return _river(climate)
 	var out := BASE.duplicate()
 	if not CLIMATES.has(climate):
 		return out
@@ -101,6 +136,19 @@ static func colors(climate: String) -> Dictionary:
 			out[k] = Color(
 				clampf(b.r * gain.x, 0.0, 1.0), clampf(b.g * gain.y, 0.0, 1.0), clampf(b.b * gain.z, 0.0, 1.0)
 			)
+	return out
+
+
+## El río con un clima: su base con el cambio general del clima (el mismo que
+## le aplica al mar).
+static func _river(climate: String) -> Dictionary:
+	var out := RIVER_BASE.duplicate()
+	if not CLIMATES.has(climate):
+		return out
+	var gain := grade(climate)
+	for k in out:
+		var b: Color = out[k]
+		out[k] = Color(clampf(b.r * gain.x, 0.0, 1.0), clampf(b.g * gain.y, 0.0, 1.0), clampf(b.b * gain.z, 0.0, 1.0))
 	return out
 
 
@@ -135,8 +183,8 @@ static func grade(climate: String) -> Vector3:
 ## Pone en el material del agua los colores y ajustes del clima (menos el mar
 ## lejano, que va en el cielo). `setter` (opcional) hace el cambio en vez de
 ## ponerlo directo: lo usa la tormenta para recordar lo que había.
-static func apply_to_water(mat: ShaderMaterial, climate: String, setter: Callable = Callable()) -> void:
-	var all := colors(climate)
+static func apply_to_water(mat: ShaderMaterial, climate: String, setter: Callable = Callable(), water: String = SEA) -> void:
+	var all := colors(climate, water)
 	all.erase("ocean_color")
 	all.merge(values(climate), true)
 	for k in all:

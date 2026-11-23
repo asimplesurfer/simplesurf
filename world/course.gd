@@ -60,15 +60,19 @@ func _ready() -> void:
 	if layout < 0:
 		layout = _session_config().layout
 	_water = GameSession.find_in_scene(self, "water") as Water
+	# Un mapa ya puesto antes de entrar (tests, probar un mapa nuevo) se usa tal cual.
+	if map == null:
+		map = TrackMap.for_layout(layout)
+	# El agua del mapa (mar o río) va antes que la hora: la hora y el clima la
+	# cambian a partir de su base (ver WaterPalette).
+	if _water:
+		_water.set_palette(map.water)
 	# La hora va primero: las piezas (las guirnaldas) miran si es de noche.
 	if time_of_day < 0:
 		time_of_day = _session_config().time_of_day
 	if get_parent() and get_parent().get_node_or_null("WorldEnvironment"):
 		DayTime.apply(get_parent(), time_of_day)
 
-	# Un mapa ya puesto antes de entrar (tests, probar un mapa nuevo) se usa tal cual.
-	if map == null:
-		map = TrackMap.for_layout(layout)
 	half_width = map.half_width
 	if map.is_ring():
 		track_radius = map.ring_radius

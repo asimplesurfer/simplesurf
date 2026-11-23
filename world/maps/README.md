@@ -90,6 +90,10 @@ puede abrir en el editor para cambiarlo.
   los aros y rocas se reparten también por ahí (según su largo) y los bots
   eligen un camino en cada vuelta (los mejores, más seguido el más corto).
   En el editor: herramienta **Camino alternativo** (B).
+- **Agua** (`water`, opcional): `"mar"` (la de siempre) o `"rio"` (más oscura
+  y verdosa, para mapas de selva). Los climas (atardecer, noche, tormenta)
+  cambian cualquiera de las dos a partir de su base (ver
+  `world/water/water_palette.gd`).
 - **Sin `path`**: la pista es un anillo de radio `ring_radius` alrededor del
   centro del mapa (0, 0), como el mapa "Anillo". Una isla en el medio es
   opcional: se dibuja como cualquier otra.

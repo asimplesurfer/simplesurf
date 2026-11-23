@@ -49,6 +49,8 @@ var smoothing: int = 60
 var ring_radius: float = 82.0
 ## Mitad del ancho de la pista (m).
 var half_width: float = 20.0
+## Qué agua tiene: "mar" (la de siempre) o "rio" (más oscura; ver WaterPalette).
+var water: String = "mar"
 var ring_count: int = 10
 var rock_count: int = 12
 ## Piezas del mapa, tal como vienen en el archivo ({"type": ..., parámetros}).
@@ -148,6 +150,10 @@ static func from_dict(d: Dictionary, errors: PackedStringArray = PackedStringArr
 	m.half_width = float(d.get("half_width", 20.0))
 	m.ring_radius = float(d.get("ring_radius", 82.0))
 	m.smoothing = int(d.get("smoothing", 60))
+	m.water = str(d.get("water", WaterPalette.SEA))
+	if not WaterPalette.WATERS.has(m.water):
+		errors.append("agua desconocida: \"%s\" (puede ser \"mar\" o \"rio\")" % m.water)
+		m.water = WaterPalette.SEA
 	m.ring_count = int(d.get("ring_count", 10))
 	m.rock_count = int(d.get("rock_count", 12))
 	for node in d.get("path", []):
@@ -236,6 +242,8 @@ func to_dict() -> Dictionary:
 		"half_width": half_width, "ring_count": ring_count, "rock_count": rock_count,
 		"pieces": pieces,
 	}
+	if water != WaterPalette.SEA:
+		d["water"] = water
 	if path.is_empty():
 		d["ring_radius"] = ring_radius
 	else:
