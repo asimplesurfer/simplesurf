@@ -154,6 +154,7 @@ dialog::backdrop { background: rgba(5, 15, 20, 0.5); }
     <button class="tool" data-tool="pan" title="Mover la vista (H o espacio)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 12V6a1.5 1.5 0 013 0v5M11 11V4.5a1.5 1.5 0 013 0V11M14 11V6a1.5 1.5 0 013 0v7c0 4-2.5 7-6 7s-5-2-6.5-5L3.8 12a1.4 1.4 0 012.3-1.6L8 13"/></svg><span class="key">H</span></button>
     <hr>
     <button class="tool" data-tool="track" title="Pista: clic pone un punto, arrastrar hace curva (P)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 18c3-9 6 2 9-6s5-4 7-6"/><circle cx="4" cy="18" r="1.8" fill="currentColor"/><circle cx="20" cy="6" r="1.8" fill="currentColor"/></svg><span class="key">P</span></button>
+    <button class="tool" data-tool="branch" title="Camino alternativo: tocá un punto de la pista, poné los puntos del camino y tocá el punto donde vuelve (B)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 12h3c3 0 4-6 7-6h1M7 12c3 0 4 6 7 6h1M15 6c2 0 3 6 5 6M15 18c2 0 3-6 5-6"/><circle cx="4" cy="12" r="1.8" fill="currentColor"/><circle cx="20" cy="12" r="1.8" fill="currentColor"/></svg><span class="key">B</span></button>
     <button class="tool" data-tool="rock_formation" title="Roca o cueva: dibujá la figura (R)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 19l3-8 4-3 3 2 3-5 5 14z"/><path d="M9 19c0-3 1.5-5 3-5s3 2 3 5" /></svg><span class="key">R</span></button>
     <button class="tool" data-tool="start" title="Meta: una recta con la largada (M)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M6 21V4"/><path d="M6 4h12l-2 4 2 4H6"/><path d="M10 4v8M14 4v8" stroke-dasharray="2 2"/></svg><span class="key">M</span></button>
     <button class="tool" data-tool="tropical_island" title="Isla tropical: dibujá la figura (T)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 18c3-3 6-2 9-3s6-3 9-1"/><path d="M8 15V9m0 0c-2-2-4-1.5-5 0m5 0c1.5-2 3.5-2 5-.5M15 14V8m0 0c-1.5-1.8-3.5-1.5-4.5 0m4.5 0c1.5-2 3.5-1.8 4.5-.2" stroke-linecap="round"/></svg><span class="key">T</span></button>
@@ -278,6 +279,8 @@ function fromJSON(d) {
     smoothing: d.smoothing ?? 60, ring_radius: d.ring_radius ?? 82,
     start: d.start ? { x: d.start.x, z: d.start.z, angle: d.start.angle ?? 0, back: d.start.back ?? 40, front: d.start.front ?? 60, bend: d.start.bend ?? 0 } : null,
     path: (d.path || []).map(nodeFrom),
+    // Caminos alternativos: salen del punto `from` de la pista y vuelven en `to`.
+    branches: (d.branches || []).map((b) => ({ from: b.from, to: b.to, path: (b.path || []).map(nodeFrom) })),
     pieces: (d.pieces || []).map((p) => {
       // El volcán ya no existe: pasa a isla tropical redonda en el mismo lugar.
       if (p.type === "volcano") return roundIsland([p.x, p.z], p.radius ?? 40);
@@ -300,6 +303,7 @@ function toJSON(m) {
       d.start = { x: r3(m.start.x), z: r3(m.start.z), angle: r3(m.start.angle), back: r3(m.start.back), front: r3(m.start.front) };
       if (m.start.bend) d.start.bend = r3(m.start.bend);
     }
+    if (m.branches?.length) d.branches = m.branches.map((b) => ({ from: b.from, to: b.to, path: b.path.map(nodeTo) }));
   }
   else d.ring_radius = m.ring_radius;
   d.half_width = m.half_width; d.ring_count = m.ring_count; d.rock_count = m.rock_count;
@@ -383,6 +387,8 @@ function trackLine(m) {
   if (m.path.length < (m.start ? 1 : 3)) return [];
   let raw = [];
   const fixed = [];
+  // Muestra por la que pasa cada punto de la pista (para los caminos alternativos).
+  const atControl = [];
   if (m.start) {
     // Igual que PathTrack._build_with_start: la recta de la meta queda fija.
     const [pts, f] = startStrip(m.start);
@@ -398,10 +404,11 @@ function trackLine(m) {
       const c1 = i === 0 ? add(p1, mul(dirF, reach)) : add(p1, chain[i].out || mul(sub(p2, p0), 1 / 6));
       const c2 = i + 1 === k ? add(p2, mul(dirB, -reach)) : add(p2, chain[i + 1].in || mul(sub(p1, p3), 1 / 6));
       for (let j = 1; j < (i + 1 === k ? 24 : 25); j++) { raw.push(bez([p1, c1, c2, p2], j / 24)); fixed.push(false); }
+      if (i + 1 < k) atControl.push(raw.length - 1);
     }
     for (let i = 0; i < f; i++) { raw.push(pts[i]); fixed.push(true); }
   } else {
-    for (let i = 0; i < m.path.length; i++) { const c = segControls(m.path, i); for (let j = 0; j < 24; j++) { raw.push(bez(c, j / 24)); fixed.push(false); } }
+    for (let i = 0; i < m.path.length; i++) { atControl.push(raw.length); const c = segControls(m.path, i); for (let j = 0; j < 24; j++) { raw.push(bez(c, j / 24)); fixed.push(false); } }
   }
   const k = raw.length;
   for (let it = 0; it < m.smoothing; it++) {
@@ -413,7 +420,68 @@ function trackLine(m) {
     }
     raw = s;
   }
+  raw.atControl = atControl;
   return raw;
+}
+// Un camino alternativo tal como lo arma el juego (PathTrack._add_branch): sale
+// de la pista en el punto `from`, pasa por sus puntos y vuelve en `to`,
+// mirando para el mismo lado que la pista en las dos puntas. Devuelve su línea
+// (de la salida a la vuelta) o [] si no se puede armar.
+function branchLine(line, b, smoothing) {
+  const at = line.atControl || [];
+  if (!(b.from >= 0 && b.to > b.from && b.to < at.length && b.path.length)) return [];
+  const n = line.length, cum = [0];
+  for (let i = 0; i < n; i++) cum.push(cum[i] + dist(line[i], line[(i + 1) % n]));
+  const total = cum[n];
+  const pointAt = (s) => {
+    s = ((s % total) + total) % total;
+    let lo = 0, hi = n;
+    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (cum[mid] <= s) lo = mid; else hi = mid; }
+    const a = line[lo], c = line[(lo + 1) % n], t = (s - cum[lo]) / Math.max(cum[lo + 1] - cum[lo], 1e-6);
+    return [a[0] + (c[0] - a[0]) * t, a[1] + (c[1] - a[1]) * t];
+  };
+  const dirAt = (s) => { const d = sub(pointAt(s + 1), pointAt(s - 1)); const l = len(d) || 1; return [d[0] / l, d[1] / l]; };
+  const sFrom = cum[at[b.from]], sTo = cum[at[b.to]];
+  const A = pointAt(sFrom), B = pointAt(sTo), dA = dirAt(sFrom), dB = dirAt(sTo);
+  let raw = [];
+  const fixed = [];
+  for (let k = 8; k > 0; k--) { raw.push(pointAt(sFrom - k * 2)); fixed.push(true); }
+  const first = raw.length;
+  const chain = [{ p: A }, ...b.path, { p: B }], last = chain.length - 1;
+  raw.push(A); fixed.push(true);
+  for (let i = 0; i < last; i++) {
+    const p1 = chain[i].p, p2 = chain[i + 1].p, p0 = chain[Math.max(i - 1, 0)].p, p3 = chain[Math.min(i + 2, last)].p;
+    const reach = dist(p1, p2) / 3;
+    const c1 = i === 0 ? add(p1, mul(dA, reach)) : add(p1, chain[i].out || mul(sub(p2, p0), 1 / 6));
+    const c2 = i + 1 === last ? add(p2, mul(dB, -reach)) : add(p2, chain[i + 1].in || mul(sub(p1, p3), 1 / 6));
+    for (let j = 1; j <= 24; j++) { raw.push(bez([p1, c1, c2, p2], j / 24)); fixed.push(i + 1 === last && j === 24); }
+  }
+  const end = raw.length - 1;
+  for (let k = 1; k <= 8; k++) { raw.push(pointAt(sTo + k * 2)); fixed.push(true); }
+  for (let it = 0; it < smoothing; it++) {
+    const s2 = raw.slice();
+    for (let i = 1; i < raw.length - 1; i++) if (!fixed[i]) s2[i] = [(raw[i - 1][0] + 2 * raw[i][0] + raw[i + 1][0]) / 4, (raw[i - 1][1] + 2 * raw[i][1] + raw[i + 1][1]) / 4];
+    raw = s2;
+  }
+  const out = raw.slice(first, end + 1);
+  out.sFrom = sFrom; out.sTo = sTo;
+  return out;
+}
+// Largo de una línea abierta.
+function openLength(line) { let s = 0; for (let i = 1; i < line.length; i++) s += dist(line[i - 1], line[i]); return s; }
+// Después de cambiar los puntos de la pista (agregar, borrar, reordenar), cada
+// camino alternativo sigue saliendo y volviendo de los mismos puntos. Si uno
+// de esos puntos ya no está, el camino se borra.
+function fixBranches(before) {
+  if (!map.branches?.length) return;
+  const kept = [];
+  for (const b of map.branches) {
+    const from = map.path.indexOf(before[b.from]), to = map.path.indexOf(before[b.to]);
+    if (from < 0 || to < 0) continue;
+    kept.push({ ...b, from, to });
+  }
+  if (kept.length < map.branches.length) toast("Se borró el camino alternativo que salía o volvía de ese punto.");
+  map.branches = kept;
 }
 // La recta de la meta (igual que PathTrack.start_strip): puntos de la punta de
 // atrás a la de adelante, cada ~2 m, y el índice de la meta.
@@ -506,7 +574,8 @@ function computed() {
   if (cache) return cache;
   const line = trackLine(map);
   const shapes = map.pieces.map((p) => (DRAWN[p.type] ? shapePolygon(nodesOf(p), 4, isClosed(p)) : null));
-  cache = { line, shapes, length: line.length ? lineLength(line) : 0 };
+  const branches = (map.branches || []).map((b) => (line.length > 2 ? branchLine(line, b, map.smoothing) : []));
+  cache = { line, shapes, branches, length: line.length ? lineLength(line) : 0 };
   return cache;
 }
 
@@ -526,6 +595,7 @@ const toWorld = (s) => [(s[0] - W / 2) / cam.zoom + cam.x, (s[1] - H / 2) / cam.
 function fit() {
   const pts = [];
   computed().line.forEach((p) => pts.push(p));
+  computed().branches.forEach((l) => l.forEach((p) => pts.push(p)));
   map.pieces.forEach((p) => { if ("x" in p) pts.push([p.x, p.z]); (DRAWN[p.type] ? nodesOf(p) : []).forEach((n) => pts.push(n.p)); });
   if (!pts.length) { cam.x = 0; cam.z = 0; cam.zoom = Math.min(W, H) / 600; draw(); return; }
   let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
@@ -547,17 +617,25 @@ function draw() {
   ctx.fillStyle = C.out;
   ctx.fillRect(0, 0, W, H);
   drawGrid(C);
-  const { line, shapes } = computed();
+  const { line, shapes, branches } = computed();
   const hw = map.half_width;
 
-  // Pista: agua clara del ancho de la pista, corcheras en los bordes.
+  // Pista: agua clara del ancho de la pista, corcheras en los bordes. Los
+  // caminos alternativos, igual (primero todos los bordes, después el agua:
+  // así donde se abren o se cruzan no queda corchera atravesada).
   if (line.length > 2) {
-    pathLine(line, true);
+    const all = [[line, true], ...branches.filter((l) => l.length > 1).map((l) => [l, false])];
     ctx.lineJoin = "round"; ctx.lineCap = "round";
-    ctx.strokeStyle = C.rope; ctx.lineWidth = (hw * 2 + 1.4) * cam.zoom; ctx.stroke();
-    ctx.strokeStyle = C.lane; ctx.lineWidth = hw * 2 * cam.zoom; ctx.stroke();
-    ctx.setLineDash([6, 8]); ctx.strokeStyle = "rgba(255,255,255,0.45)"; ctx.lineWidth = 1.2; ctx.stroke(); ctx.setLineDash([]);
-    drawArrows(line);
+    for (const [l, closed] of all) { pathLine(l, closed); ctx.strokeStyle = C.rope; ctx.lineWidth = (hw * 2 + 1.4) * cam.zoom; ctx.stroke(); }
+    for (const [l, closed] of all) { pathLine(l, closed); ctx.strokeStyle = C.lane; ctx.lineWidth = hw * 2 * cam.zoom; ctx.stroke(); }
+    branches.forEach((l, i) => {
+      if (l.length < 2 || !(sel?.kind === "branch" && sel.i === i)) return;
+      pathLine(l, false); ctx.strokeStyle = hexA(C.sel, 0.35); ctx.lineWidth = hw * 2 * cam.zoom; ctx.stroke();
+    });
+    ctx.setLineDash([6, 8]); ctx.strokeStyle = "rgba(255,255,255,0.45)"; ctx.lineWidth = 1.2;
+    for (const [l, closed] of all) { pathLine(l, closed); ctx.stroke(); }
+    ctx.setLineDash([]);
+    for (const [l, closed] of all) drawArrows(l, closed);
     drawStart(line, hw);
   }
 
@@ -580,8 +658,11 @@ function draw() {
   }
 
   // Puntos y manijas de la pista.
-  const editingPath = tool === "track" || sel?.kind === "path" || drawing?.kind === "path";
-  if (map.path.length && editingPath) drawNodes(map.path, C, sel?.kind === "path" ? sel.node : -1, !(drawing?.kind === "path") && !map.start, !map.start);
+  const editingPath = tool === "track" || tool === "branch" || sel?.kind === "path" || drawing?.kind === "path";
+  if (map.path.length && editingPath) drawNodes(map.path, C, sel?.kind === "path" ? sel.node : drawing?.kind === "branch" ? drawing.from : -1, !(drawing?.kind === "path") && !map.start, !map.start);
+  if (map.path.length && tool === "branch") drawNumbers(map.path);
+  if (sel?.kind === "branch" && map.branches[sel.i]) drawBranchNodes(map.branches[sel.i], C, sel.node ?? -1);
+  if (drawing?.kind === "branch") drawBranchNodes({ from: drawing.from, to: -1, path: drawing.nodes }, C, -1);
   if (map.start) drawStartHandles(C, sel?.kind === "start" || tool === "start");
   if (sel?.kind === "piece" && DRAWN[map.pieces[sel.i]?.type]) drawNodes(nodesOf(map.pieces[sel.i]), C, sel.node ?? -1, isClosed(map.pieces[sel.i]), isClosed(map.pieces[sel.i]));
   if (drawing?.kind === "shape") drawNodes(nodesOf(drawing.piece), C, -1, false, isClosed(drawing.piece));
@@ -608,12 +689,11 @@ function pathLine(pts, closed) {
   pts.forEach((p, i) => { const s = toScreen(p); i ? ctx.lineTo(s[0], s[1]) : ctx.moveTo(s[0], s[1]); });
   if (closed) ctx.closePath();
 }
-function drawArrows(line) {
-  const total = lineLength(line);
+function drawArrows(line, closed = true) {
   const every = Math.max(60, 140 / cam.zoom);
   let acc = 0;
   ctx.fillStyle = "rgba(255,255,255,0.75)";
-  for (let i = 0; i < line.length; i++) {
+  for (let i = 0; i < (closed ? line.length : line.length - 1); i++) {
     const a = line[i], b = line[(i + 1) % line.length];
     acc += dist(a, b);
     if (acc < every) continue;
@@ -810,6 +890,25 @@ function hexA(hex, a) {
   const n = parseInt(h.length === 3 ? h.split("").map((c) => c + c).join("") : h.slice(0, 6), 16);
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
+// Número de cada punto de la pista (para ver de dónde sale y adónde vuelve un camino).
+function drawNumbers(nodes) {
+  ctx.font = "600 11px Inter, system-ui, sans-serif"; ctx.textAlign = "left"; ctx.textBaseline = "bottom";
+  nodes.forEach((n, i) => {
+    const s = toScreen(n.p);
+    ctx.lineWidth = 3; ctx.strokeStyle = "rgba(8,30,44,0.85)"; ctx.strokeText(String(i + 1), s[0] + 7, s[1] - 5);
+    ctx.fillStyle = "#fff"; ctx.fillText(String(i + 1), s[0] + 7, s[1] - 5);
+  });
+}
+// Los puntos de un camino alternativo, con una línea fina desde donde sale
+// (y hasta donde vuelve) en la pista.
+function drawBranchNodes(b, C, selNode) {
+  const ends = [map.path[b.from]?.p, map.path[b.to]?.p];
+  ctx.setLineDash([4, 4]); ctx.strokeStyle = "rgba(255,255,255,0.7)"; ctx.lineWidth = 1.2; ctx.beginPath();
+  if (ends[0] && b.path.length) { const a = toScreen(ends[0]), c = toScreen(b.path[0].p); ctx.moveTo(a[0], a[1]); ctx.lineTo(c[0], c[1]); }
+  if (ends[1] && b.path.length) { const a = toScreen(b.path[b.path.length - 1].p), c = toScreen(ends[1]); ctx.moveTo(a[0], a[1]); ctx.lineTo(c[0], c[1]); }
+  ctx.stroke(); ctx.setLineDash([]);
+  drawNodes(b.path, C, selNode, false, false);
+}
 function drawNodes(nodes, C, selNode, closed, closedCurve = true) {
   // La figura de control (fina) para ver las manijas.
   if (nodes.length >= 2) {
@@ -877,6 +976,10 @@ function hitSegment(nodes, s) {
 }
 function hitTest(s) {
   const w = toWorld(s);
+  if (sel?.kind === "branch" && map.branches[sel.i]) {
+    const h = hitNodes(map.branches[sel.i].path, s);
+    if (h) return { kind: "branch", i: sel.i, ...h };
+  }
   // Primero lo que está seleccionado (sus puntos y manijas).
   if (sel?.kind === "piece" && DRAWN[map.pieces[sel.i]?.type]) {
     const p = map.pieces[sel.i];
@@ -922,6 +1025,12 @@ function hitTest(s) {
     if (DRAWN[p.type] && !isClosed(p) && shapes[i]?.length >= 2 && distToLine(w, shapes[i], false) < Math.max((p.width ?? 14) / 2 + 2, 8 / cam.zoom)) return { kind: "piece", i };
   }
   for (let i = map.pieces.length - 1; i >= 0; i--) if (shapes[i] && isClosed(map.pieces[i]) && pointInPoly(w, shapes[i])) return { kind: "piece", i };
+  const { branches } = computed();
+  for (let i = branches.length - 1; i >= 0; i--) if (branches[i].length > 1 && distToLine(w, branches[i], false) < map.half_width) {
+    // En la parte que comparte con la pista (donde se abre) gana la pista.
+    if (line.length > 2 && distToLine(w, line) < distToLine(w, branches[i], false)) continue;
+    return { kind: "branch", i };
+  }
   if (line.length > 2 && distToLine(w, line) < map.half_width) return { kind: "path" };
   return null;
 }
@@ -938,6 +1047,7 @@ function onDown(e) {
     if (hit?.kind === "start") { sel = { kind: "start" }; refreshPanel(); drag = { kind: "start", part: hit.part, start: w, orig: { ...map.start }, moved: false }; draw(); return; }
     placeStart(w); return;
   }
+  if (tool === "branch") return branchDown(s, w, e);
   if (tool === "track" || DRAWN[tool]) return penDown(s, w, e);
   if (PIECES[tool]?.place === "two_points") {
     // La guirnalda va de una isla tropical a otra; otras piezas de dos puntas, donde sea.
@@ -969,10 +1079,11 @@ function onDown(e) {
   if (!hit) { sel = { kind: "map" }; refreshPanel(); draw(); drag = { kind: "pan", s, cam: { ...cam } }; return; }
   if (hit.kind === "path" && hit.node === undefined) { sel = { kind: "path", node: -1 }; refreshPanel(); draw(); drag = { kind: "pan", s, cam: { ...cam } }; return; }
   if (hit.kind === "start") { sel = { kind: "start" }; refreshPanel(); draw(); drag = { kind: "start", part: hit.part, start: w, orig: { ...map.start }, moved: false }; return; }
+  if (hit.kind === "branch" && (hit.node === undefined || hit.node === null)) { sel = { kind: "branch", i: hit.i, node: -1 }; refreshPanel(); draw(); drag = { kind: "pan", s, cam: { ...cam } }; return; }
   sel = { kind: hit.kind, i: hit.i, node: hit.node ?? -1, sky: hit.sky };
   refreshPanel(); draw();
   if (hit.node !== undefined && hit.node !== null) {
-    const nodes = hit.kind === "path" ? map.path : nodesOf(map.pieces[hit.i]);
+    const nodes = hit.kind === "path" ? map.path : hit.kind === "branch" ? map.branches[hit.i].path : nodesOf(map.pieces[hit.i]);
     drag = { kind: "node", nodes, node: hit.node, handle: hit.handle, start: w, orig: JSON.parse(JSON.stringify(nodes[hit.node])), alt: e.altKey, moved: false };
   } else if (hit.sky !== undefined) {
     drag = { kind: "sky", p: map.pieces[hit.i], k: hit.sky, moved: false };
@@ -990,12 +1101,12 @@ function penDown(s, w, e) {
     const h = hitNodes(map.path, s);
     if (h) { sel = { kind: "path", node: h.node }; refreshPanel(); drag = { kind: "node", nodes: map.path, node: h.node, handle: h.handle, start: w, orig: JSON.parse(JSON.stringify(map.path[h.node])), alt: e.altKey, moved: false }; draw(); return; }
     const seg = hitSegment(map.path, s);
-    if (seg) { insertNode(map.path, seg.seg, seg.t); sel = { kind: "path", node: seg.seg + 1 }; commit(); refreshPanel(); return; }
+    if (seg) { const before = map.path.slice(); insertNode(map.path, seg.seg, seg.t); fixBranches(before); sel = { kind: "path", node: seg.seg + 1 }; commit(); refreshPanel(); return; }
     toast("La pista ya está dibujada: tocá un tramo para agregar un punto, o un punto para moverlo.");
     return;
   }
   if (!drawing) {
-    if (isTrack) { map.path = []; drawing = { kind: "path" }; sel = { kind: "path", node: -1 }; }
+    if (isTrack) { map.path = []; map.branches = []; drawing = { kind: "path" }; sel = { kind: "path", node: -1 }; }
     else {
       const type = tool;
       const piece = { type, [DRAWN[type].key]: [] };
@@ -1012,8 +1123,42 @@ function penDown(s, w, e) {
   invalidate();
   setHint();
 }
+// Camino alternativo: primero se toca el punto de la pista de donde sale,
+// después se ponen sus puntos (clic, o clic y arrastrar para curva) y al final
+// se toca el punto de la pista donde vuelve a entrar.
+function branchDown(s, w, e) {
+  if (!map.path.length) { toast("Primero dibujá la pista."); return; }
+  const h = hitNodes(map.path, s);
+  const onMain = h && !h.handle ? h.node : -1;
+  if (!drawing) {
+    if (onMain < 0) {
+      // Tocar un camino ya hecho lo elige (para mover sus puntos).
+      const hit = hitTest(s);
+      if (hit?.kind === "branch") { sel = { kind: "branch", i: hit.i, node: hit.node ?? -1 }; refreshPanel(); draw(); return; }
+      toast("Tocá un punto de la pista (los cuadraditos): de ahí sale el camino.");
+      return;
+    }
+    drawing = { kind: "branch", from: onMain, nodes: [] };
+    sel = null; invalidate(); setHint(); refreshPanel();
+    return;
+  }
+  if (onMain >= 0) {
+    if (onMain === drawing.from) { toast("Ese es el punto de donde sale. Poné los puntos del camino y tocá el punto donde vuelve."); return; }
+    if (onMain < drawing.from) { toast(`Tiene que volver en un punto más adelante en la pista (después del ${drawing.from + 1}, en el sentido de la carrera).`); return; }
+    if (!drawing.nodes.length) { toast("Poné al menos un punto del camino antes de volver a la pista."); return; }
+    map.branches.push({ from: drawing.from, to: onMain, path: drawing.nodes });
+    sel = { kind: "branch", i: map.branches.length - 1, node: -1 };
+    drawing = null;
+    commit(); refreshPanel(); setTool("select");
+    return;
+  }
+  drawing.nodes.push({ p: w, in: [0, 0], out: [0, 0] });
+  drag = { kind: "pen", nodes: drawing.nodes, node: drawing.nodes.length - 1, start: w };
+  invalidate(); setHint();
+}
 function finishDrawing() {
   if (!drawing) return;
+  if (drawing.kind === "branch") { toast("Para terminar, tocá el punto de la pista donde vuelve a entrar el camino."); return; }
   if (drawing.kind === "path") {
     if (map.path.length < (map.start ? 1 : 3)) { toast(map.start ? "Poné al menos un punto." : "La pista necesita al menos 3 puntos."); return; }
     if (map.smoothing === 60 && map.path.some((n) => n.in || n.out)) map.smoothing = 20;
@@ -1042,7 +1187,9 @@ function placeStart(w) {
     let kept = map.path.filter((nd) => dist(nd.p, [st.x, st.z]) > Math.max(st.back, st.front) + 10);
     if (!kept.length) kept = [map.path[Math.floor(map.path.length / 2)]];
     kept.sort((p, q) => ((idxOf(p.p) - best + n) % n) - ((idxOf(q.p) - best + n) % n));
+    const before = map.path;
     map.path = kept;
+    fixBranches(before);
   }
   map.start = st;
   sel = { kind: "start" };
@@ -1157,7 +1304,7 @@ cv.addEventListener("dblclick", (e) => {
   const hit = hitTest(s);
   if (hit && hit.node !== undefined && hit.node !== null && !hit.handle) {
     // Doble clic en un punto: esquina <-> curva automática.
-    const nodes = hit.kind === "path" ? map.path : nodesOf(map.pieces[hit.i]);
+    const nodes = hit.kind === "path" ? map.path : hit.kind === "branch" ? map.branches[hit.i].path : nodesOf(map.pieces[hit.i]);
     const n = nodes[hit.node];
     const corner = n.in && n.out && len(n.in) < 0.01 && len(n.out) < 0.01;
     if (corner) { n.in = null; n.out = null; } else { n.in = [0, 0]; n.out = [0, 0]; }
@@ -1172,12 +1319,17 @@ const HINTS = {
   select: "Tocá algo para elegirlo y arrastralo para moverlo. En los puntos: arrastrá las manijas para curvar (Alt las separa), doble clic hace esquina o curva. Supr borra.",
   pan: "Arrastrá para mover la vista. Rueda o pellizco para acercar.",
   track: "Clic: un punto (tramo recto). Clic y arrastrar: punto con manijas (curva). Tocá el primer punto o Enter para cerrar la vuelta. El primer punto es la largada.",
+  branch: "Camino alternativo: tocá un punto de la pista (los cuadraditos, con su número) de donde sale. Después poné los puntos del camino y tocá el punto de la pista donde vuelve a entrar (más adelante).",
   start: "Tocá la pista para poner ahí la recta de la meta (40 m antes y 60 m después). Arrastrá sus puntas para alargarla o girarla.",
   island: "Clic para poner una isla tropical redonda (con arena, palmeras y público). Después podés mover sus puntos para cambiarle el tamaño o la forma.",
 };
 function setHint() {
   let h = HINTS[tool] || PIECES[tool]?.hint || "";
-  if (drawing) {
+  if (drawing?.kind === "branch") {
+    h = drawing.nodes.length
+      ? `Camino alternativo desde el punto ${drawing.from + 1}: ${drawing.nodes.length} puntos. Tocá el punto de la pista donde vuelve a entrar (más adelante que el ${drawing.from + 1}). Esc cancela.`
+      : `Sale del punto ${drawing.from + 1}. Clic pone un punto del camino (arrastrá para hacer curva). Esc cancela.`;
+  } else if (drawing) {
     const what = drawing.kind === "path" ? "la pista" : DRAWN[drawing.piece.type].label;
     const count = (drawing.kind === "path" ? map.path : nodesOf(drawing.piece)).length;
     const end = drawing.kind === "shape" && !isClosed(drawing.piece) ? "Enter o doble clic para terminar" : "Tocá el primero o Enter para cerrar";
@@ -1197,6 +1349,7 @@ function setTool(t) {
 function cancelDrawing() {
   if (!drawing) return;
   if (drawing.kind === "path") { map = JSON.parse(hist.stack[hist.at]); }
+  if (drawing.kind === "branch") toast("Camino cancelado.");
   drawing = null; invalidate(); refreshPanel();
 }
 // Un botón por pieza del juego: las que no tienen uno hecho a mano (con su
@@ -1204,7 +1357,7 @@ function cancelDrawing() {
 // no tiene se esconden.
 (function pieceButtons() {
   const nav = document.querySelector(".tools");
-  const own = ["select", "pan", "track", "start", "island"];
+  const own = ["select", "pan", "track", "branch", "start", "island"];
   nav.querySelectorAll(".tool").forEach((b) => { if (!own.includes(b.dataset.tool) && !PIECES[b.dataset.tool]) b.hidden = true; });
   for (const c of CATALOG) {
     if (nav.querySelector(`.tool[data-tool="${c.type}"]`)) continue;
@@ -1259,8 +1412,13 @@ function pasteClipboard(at) {
 }
 function deleteSelection() {
   if (!sel) return;
-  if (sel.kind === "path" && sel.node >= 0) { if (map.path.length <= 3) return toast("La pista necesita al menos 3 puntos."); map.path.splice(sel.node, 1); sel.node = -1; }
-  else if (sel.kind === "path") { map.path = []; sel = { kind: "map" }; }
+  if (sel.kind === "path" && sel.node >= 0) { if (map.path.length <= 3) return toast("La pista necesita al menos 3 puntos."); const before = map.path.slice(); map.path.splice(sel.node, 1); fixBranches(before); sel.node = -1; }
+  else if (sel.kind === "path") { map.path = []; map.branches = []; sel = { kind: "map" }; }
+  else if (sel.kind === "branch") {
+    const b = map.branches[sel.i];
+    if (sel.node >= 0 && b.path.length > 1) { b.path.splice(sel.node, 1); sel.node = -1; }
+    else { map.branches.splice(sel.i, 1); sel = { kind: "map" }; }
+  }
   else if (sel.kind === "piece") {
     const p = map.pieces[sel.i];
     if (p.type === "rock_formation" && sel.sky !== undefined && sel.sky !== null) { p.skylights.splice(sel.sky, 1); sel.sky = null; }
@@ -1297,7 +1455,7 @@ window.addEventListener("keydown", (e) => {
   if (mod && isV) { e.preventDefault(); pasteClipboard(mouseWorld); return; }
   if (mod && isD) { e.preventDefault(); if (copySelection()) pasteClipboard(null); return; }
   if (selectedShape() && (k === "q" || k === "e")) { rotateSelection(k === "q" ? -15 : 15); return; }
-  const map_ = { v: "select", h: "pan", p: "track", r: "rock_formation", t: "tropical_island", m: "start", i: "island", g: "geyser" };
+  const map_ = { v: "select", h: "pan", p: "track", b: "branch", r: "rock_formation", t: "tropical_island", m: "start", i: "island", g: "geyser" };
   if (map_[k]) setTool(map_[k]);
   if (k === "f") fit();
   if (k === "+" || k === "=") zoomAt([W / 2, H / 2], 1.25);
@@ -1389,16 +1547,43 @@ function refreshPanel() {
       const row = document.createElement("div"); row.className = "row";
       row.append(btn("Esquina", () => { n.in = [0, 0]; n.out = [0, 0]; commit(); refreshPanel(); }),
         btn("Curva automática", () => { n.in = null; n.out = null; commit(); refreshPanel(); }),
-        btn("Largada acá", () => { map.path = map.path.slice(s.node).concat(map.path.slice(0, s.node)); sel.node = 0; commit(); refreshPanel(); }));
+        btn("Largada acá", () => { const before = map.path.slice(); map.path = map.path.slice(s.node).concat(map.path.slice(0, s.node)); fixBranches(before); sel.node = 0; commit(); refreshPanel(); }));
       box.append(row);
     }
     box.append(field("Redondeo de curvas", "int", map.smoothing, (v) => (map.smoothing = Math.max(0, v)), { id: "smoothing" }));
     box.append(field("Mitad del ancho (m)", "num", map.half_width, (v) => (map.half_width = Math.max(6, v)), { id: "half_width" }));
     const row = document.createElement("div"); row.className = "row";
-    row.append(btn("Invertir sentido", () => { map.path.reverse(); map.path.forEach((n) => { const t = n.in; n.in = n.out; n.out = t; }); commit(); refreshPanel(); }),
-      btn("Borrar pista", () => { map.path = []; sel = { kind: "map" }; commit(); refreshPanel(); }));
+    row.append(btn("Invertir sentido", () => {
+      const before = map.path.slice();
+      map.path.reverse(); map.path.forEach((n) => { const t = n.in; n.in = n.out; n.out = t; });
+      // Los caminos alternativos también se dan vuelta (salen de donde volvían).
+      for (const b of map.branches) { const f = b.from; b.from = b.to; b.to = f; b.path.reverse(); b.path.forEach((n) => { const t = n.in; n.in = n.out; n.out = t; }); }
+      fixBranches(before);
+      commit(); refreshPanel();
+    }),
+      btn("Borrar pista", () => { map.path = []; map.branches = []; sel = { kind: "map" }; commit(); refreshPanel(); }));
     box.append(row);
     box.append(note("La línea fina es la que dibujás; la banda celeste es la pista tal como queda en el juego (con el redondeo). La flecha marca el sentido de la carrera."));
+    box.append(note(map.branches.length
+      ? `Tiene ${map.branches.length === 1 ? "un camino alternativo" : map.branches.length + " caminos alternativos"}. Para agregar otro, usá la herramienta Camino alternativo (B).`
+      : "Para que haya más de un camino posible, usá la herramienta Camino alternativo (B): sale de un punto de la pista y vuelve en otro más adelante."));
+  } else if (s.kind === "branch" && map.branches[s.i]) {
+    const b = map.branches[s.i];
+    const { branches, line } = computed();
+    const bl = branches[s.i] || [];
+    title.textContent = s.node >= 0 ? `Camino alternativo · punto ${s.node + 1}` : "Camino alternativo";
+    const same = map.branches.filter((o) => o.from === b.from && o.to === b.to).length;
+    box.append(note(`Sale del punto ${b.from + 1} de la pista y vuelve a entrar en el ${b.to + 1}.` + (bl.length > 1 ? ` Mide ${Math.round(openLength(bl))} m; por la pista, ese tramo mide ${Math.round(bl.sTo - bl.sFrom)} m.` : "")));
+    box.append(note(same > 1 ? `En este tramo hay ${same + 1} caminos para elegir (la pista y ${same} alternativos).` : "En este tramo hay 2 caminos para elegir: la pista y este."));
+    box.append(note("En el juego: tiene corcheras como la pista y se abren solas donde se separa (y donde se cruza con otro camino). Los bots eligen por dónde ir en cada vuelta: los mejores, más seguido por el más corto. Los aros y las rocas se reparten también por acá."));
+    if (s.node >= 0) {
+      const n = b.path[s.node];
+      const row = document.createElement("div"); row.className = "row";
+      row.append(btn("Esquina", () => { n.in = [0, 0]; n.out = [0, 0]; commit(); refreshPanel(); }),
+        btn("Curva automática", () => { n.in = null; n.out = null; commit(); refreshPanel(); }));
+      box.append(row);
+    }
+    box.append(btn(s.node >= 0 && b.path.length > 1 ? "Borrar punto" : "Borrar camino", deleteSelection));
   } else if (s.kind === "piece") {
     const p = map.pieces[s.i];
     const def = PIECES[p.type];
@@ -1529,6 +1714,23 @@ function review() {
       if (dist(line[i], line[jj]) < map.half_width * 2) cross = true;
     }
     if (cross) out.push(["warn", "La pista pasa muy cerca de sí misma: los tramos se pueden tocar."]);
+    // Caminos alternativos (lo mismo que revisa el juego al leer el mapa).
+    const { branches } = computed();
+    const spans = [];
+    map.branches.forEach((b, i) => {
+      const name = `El camino alternativo ${i + 1}`;
+      if (!(b.from >= 0 && b.to > b.from && b.to < map.path.length)) { out.push(["bad", `${name} vuelve a la pista antes de salir (pasa por encima de la meta). Borralo y dibujalo de nuevo saliendo después de la meta.`]); return; }
+      if (spans.some(([f, t]) => (f !== b.from || t !== b.to) && b.from < t && f < b.to)) out.push(["bad", `${name} se pisa con otro: los caminos que comparten tramo tienen que salir y volver de los mismos puntos de la pista.`]);
+      spans.push([b.from, b.to]);
+      const bl = branches[i];
+      if (bl.length > 1 && openLength(bl) < 40) out.push(["bad", `${name} es muy corto: alejá sus puntos de la pista.`]);
+      map.pieces.forEach((p, k) => {
+        const c = PIECES[p.type];
+        if (!c?.solid || bl.length < 2) return;
+        if (c.place === "shape" && shapes[k]?.length >= 3 && rockTouchesTrack(shapes[k], bl)) out.push(["bad", `${c.name}: pisa ${name.toLowerCase()}.`]);
+        else if (c.place === "point" && distToLine([p.x, p.z], bl, false) < map.half_width + 2) out.push(["bad", `${c.name}: pisa ${name.toLowerCase()}.`]);
+      });
+    });
   }
   const taken = Object.values(BUILTIN).filter((b) => b.id !== map.id).map((b) => b.order);
   if (taken.includes(map.order)) out.push(["bad", `El número de mapa ${map.order} ya lo usa otro mapa del juego. Usá ${Math.max(...taken) + 1}.`]);

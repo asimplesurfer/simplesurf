@@ -150,10 +150,24 @@ func spawn_test(r: Rider) -> TubeWave:
 	return spawn_for(r, 120.0)
 
 
+## La pista por la que va a ir la ola de `r`: con bifurcaciones, la vuelta
+## que sigue el camino donde está ahora (en los demás tramos, la principal).
+func track_for(r: Rider) -> TrackSpace:
+	var track := race.course.track
+	var groups := track.groups()
+	if groups.is_empty():
+		return track
+	var route := int(track.locate_route(r.position).z)
+	var choices: Array = []
+	for g in groups:
+		choices.append(route if (g.routes as Array).has(route) else 0)
+	return track.variant(choices)
+
+
 ## Hace aparecer una ola adelante de `r`. Devuelve la ola (o null si no hay lugar).
 ## `forced_gap`: distancia al primero a usar (si no, la de verdad).
 func spawn_for(r: Rider, forced_gap: float = -1.0) -> TubeWave:
-	var track := race.course.track
+	var track := track_for(r)
 	var gap := gap_of(r) if forced_gap < 0.0 else forced_gap
 	var time := duration_for(gap)
 	var speed := speed_for(gap, time, r.stats.max_speed)
@@ -161,7 +175,7 @@ func spawn_for(r: Rider, forced_gap: float = -1.0) -> TubeWave:
 	var loc := track.locate(r.position)
 	var mouth := loc.x + ahead / track.length() * TAU
 	var length := TubeWave.OPEN_LENGTH + speed * (time + TubeWave.ENTRY_WINDOW) + TubeWave.AHEAD_START
-	var lane := pick_lateral(mouth, 0.0, length)
+	var lane := pick_lateral(mouth, 0.0, length, track)
 	if is_nan(lane):
 		# No hay una línea libre (tierra en el medio): se prueba más adelante.
 		_cooldown = 1.0
@@ -173,16 +187,16 @@ func spawn_for(r: Rider, forced_gap: float = -1.0) -> TubeWave:
 	# La pared hacia el borde más cercano: el lado abierto mira al medio de la pista.
 	var side := 1.0 if lane >= 0.0 else -1.0
 	# Cuánto puede ir y venir a lo ancho sin pisar tierra ni salirse.
-	var reach := pick_sway(mouth, lane, length)
-	wave.setup(race.course, mouth, lane, side, time, speed, r, ahead / maxf(r.speed, 4.0) + TubeWave.SWAY_PERIOD, reach)
+	var reach := pick_sway(mouth, lane, length, track)
+	wave.setup(race.course, mouth, lane, side, time, speed, r, ahead / maxf(r.speed, 4.0) + TubeWave.SWAY_PERIOD, reach, track)
 	wave.finished.connect(func() -> void: _cooldown = COOLDOWN)
 	current = wave
 	return wave
 
 
 ## Cuánto se puede mover la ola a cada lado de `lane` (m) con todo el tubo libre.
-func pick_sway(mouth: float, lane: float, length: float) -> float:
-	var track := race.course.track
+func pick_sway(mouth: float, lane: float, length: float, p_track: TrackSpace = null) -> float:
+	var track := p_track if p_track else race.course.track
 	var limit := maxf(track.half_width - EDGE_MARGIN, 0.0)
 	var water := GameSession.find_in_scene(race, "water") as Water
 	var reach := minf(limit - lane, limit + lane)
@@ -200,8 +214,8 @@ func pick_sway(mouth: float, lane: float, length: float) -> float:
 
 ## Línea del tubo: lo más cerca posible de donde va el surfista, dentro de la
 ## pista y sin pasar por tierra en todo el largo. NAN si no hay ninguna.
-func pick_lateral(mouth: float, near: float, length: float) -> float:
-	var track := race.course.track
+func pick_lateral(mouth: float, near: float, length: float, p_track: TrackSpace = null) -> float:
+	var track := p_track if p_track else race.course.track
 	var limit := maxf(track.half_width - EDGE_MARGIN, 0.0)
 	var water := GameSession.find_in_scene(race, "water") as Water
 	var start := clampf(near, -limit, limit)

@@ -51,3 +51,42 @@ func heading_at(angle: float) -> float:
 
 func length() -> float:
 	return TAU * radius
+
+
+# ---------------------------------------------------- caminos (bifurcaciones)
+# Un circuito puede tener tramos con más de un camino (ver PathTrack). Cada
+# camino es una "ruta": la 0 es la principal. El anillo tiene una sola.
+
+func route_count() -> int:
+	return 1
+
+
+## Ángulo, lateral y ruta juntos: Vector3(ángulo, lateral, ruta), sobre el
+## camino más cercano.
+func locate_route(p: Vector3) -> Vector3:
+	var l := locate(p)
+	return Vector3(l.x, l.y, 0.0)
+
+
+## Como position_at, pero sobre esa ruta (en su tramo; fuera de él, la principal).
+func position_on(_route: int, angle: float, lateral: float = 0.0) -> Vector3:
+	return position_at(angle, lateral)
+
+
+func tangent_on(_route: int, angle: float) -> Vector3:
+	return tangent_at(angle)
+
+
+func heading_on(route: int, angle: float) -> float:
+	var t := tangent_on(route, angle)
+	return atan2(-t.x, -t.z)
+
+
+## Tramos con más de un camino (ver PathTrack.groups). El anillo no tiene.
+func groups() -> Array[Dictionary]:
+	return []
+
+
+## La vuelta entera eligiendo un camino en cada tramo (ver PathTrack.variant).
+func variant(_choices: Array) -> TrackSpace:
+	return self

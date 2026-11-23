@@ -18,6 +18,8 @@ var hud: Hud
 var _course: Course
 ## La pista ya pasada a coordenadas del minimapa.
 var _line := PackedVector2Array()
+## Caminos alternativos (bifurcaciones), en coordenadas del minimapa.
+var _branch_lines: Array[PackedVector2Array] = []
 var _scale: float = 1.0
 var _offset := Vector2.ZERO
 
@@ -61,11 +63,19 @@ func _fit() -> void:
 	if pts.size() < 3:
 		_line.clear()
 		return
+	var branch_src: Array[PackedVector2Array] = []
+	if track is PathTrack:
+		for b in (track as PathTrack).branches:
+			branch_src.append(b.points)
 	var lo := pts[0]
 	var hi := pts[0]
 	for p in pts:
 		lo = lo.min(p)
 		hi = hi.max(p)
+	for bl in branch_src:
+		for p in bl:
+			lo = lo.min(p)
+			hi = hi.max(p)
 	var pad := 16.0
 	var span := (hi - lo).max(Vector2.ONE)
 	_scale = minf((size.x - pad * 2.0) / span.x, (size.y - pad * 2.0) / span.y)
@@ -74,6 +84,13 @@ func _fit() -> void:
 	for p in pts:
 		_line.append(p * _scale + _offset)
 	_line.append(_line[0])
+	_branch_lines.clear()
+	for bl in branch_src:
+		var line := PackedVector2Array()
+		for i in range(0, bl.size(), maxi(bl.size() / 60, 1)):
+			line.append(bl[i] * _scale + _offset)
+		line.append(bl[bl.size() - 1] * _scale + _offset)
+		_branch_lines.append(line)
 
 
 func _to_map(world: Vector3) -> Vector2:
@@ -85,8 +102,12 @@ func _draw() -> void:
 		return
 	# La pista: una línea blanca finita con un contorno oscuro (se lee sobre el
 	# cielo y el agua claros).
-	draw_polyline(_line, OUTLINE, 4.0, true)
-	draw_polyline(_line, LINE, 1.8, true)
+	var lines: Array[PackedVector2Array] = [_line]
+	lines.append_array(_branch_lines)
+	for line in lines:
+		draw_polyline(line, OUTLINE, 4.0, true)
+	for line in lines:
+		draw_polyline(line, LINE, 1.8, true)
 	# Rivales: puntos blancos con borde; este jugador, amarillo y un poco más grande.
 	var me: Rider = hud.rider if hud else null
 	var session := hud.session if hud else null

@@ -58,6 +58,10 @@ func _ready() -> void:
 	# La línea de carrera de los bots se calcula ahora (al cargar), no al largar.
 	if course and course.track:
 		RacingLine.for_track(course.track, course.half_width - 3.0)
+		# Y la de cada combinación de caminos (si la pista tiene bifurcaciones).
+		if course.track is PathTrack:
+			for choice in (course.track as PathTrack).all_choices():
+				RacingLine.for_track(course.track.variant(choice), course.half_width - 3.0)
 	_countdown = countdown_time
 	if config.is_time_trial():
 		time_trial = TimeTrial.new()
@@ -204,7 +208,8 @@ func _update_progress(r: Rider, delta: float) -> void:
 		lap_started.emit(r, lap_now)
 
 	# Al revés: mirando contra el sentido de la carrera y avanzando.
-	var tangent := course.track.tangent_at(angle)
+	var route := int(course.track.locate_route(r.global_position).z) if course.track.route_count() > 1 else 0
+	var tangent := course.track.tangent_on(route, angle)
 	if r.speed > 2.0 and r.forward().dot(tangent) < -0.3 and not r.is_fallen():
 		_wrong_way_time[r] = float(_wrong_way_time[r]) + delta
 	else:

@@ -52,6 +52,14 @@ func _check_track(file: String, m: TrackMap) -> void:
 	for i in 300:
 		var p := track.position_at(-PI + TAU * i / 300.0)
 		samples.append(Vector2(p.x, p.z))
+	# Los caminos alternativos tampoco pueden quedar tapados.
+	if track is PathTrack:
+		for k in (track as PathTrack).branches.size():
+			var b: PathTrack.Branch = (track as PathTrack).branches[k]
+			if b.length < 40.0:
+				_fail(file, "el camino alternativo %d es muy corto (%.0f m)" % [k + 1, b.length])
+			for i in range(0, b.points.size(), 2):
+				samples.append(b.points[i])
 	# Cada pieza sabe si tapa la pista (ver MapPiece.blocks_track).
 	for d in m.pieces:
 		var piece := MapPiece.create(d)

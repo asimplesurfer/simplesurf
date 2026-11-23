@@ -38,6 +38,12 @@ var handles_out: Array = []
 ## Recta de la meta (opcional; ver PathTrack.start_strip). Vacío: la meta va
 ## en el primer punto del recorrido (como en los primeros mapas).
 var start: Dictionary = {}
+## Bifurcaciones: caminos alternativos. Cada uno sale de un punto del
+## recorrido y vuelve a entrar en otro más adelante: {"from", "to": índices de
+## esos puntos en `path` (from < to); "path": sus puntos; "in" / "out": sus
+## manijas (como las del recorrido)}. Varios con las mismas puntas = varios
+## caminos en el mismo tramo. Ver PathTrack.
+var branches: Array[Dictionary] = []
 ## Cuánto se redondean las curvas del recorrido (pasadas de suavizado).
 var smoothing: int = 60
 var ring_radius: float = 82.0
@@ -164,6 +170,42 @@ static func from_dict(d: Dictionary, errors: PackedStringArray = PackedStringArr
 		m.start = st
 	if not m.path.is_empty() and m.path.size() < (1 if not m.start.is_empty() else 3):
 		errors.append("el recorrido necesita al menos 3 puntos")
+	var spans: Array[Vector2i] = []
+	for i in (d.get("branches", []) as Array).size():
+		var bd: Variant = d.branches[i]
+		var label := "el camino alternativo %d" % (i + 1)
+		if not bd is Dictionary:
+			errors.append("%s está mal escrito" % label)
+			continue
+		var br := {"from": int(bd.get("from", -1)), "to": int(bd.get("to", -1)),
+			"path": PackedVector2Array(), "in": [], "out": []}
+		for node in bd.get("path", []):
+			if node is Array:
+				br.path.append(Vector2(float(node[0]), float(node[1])))
+				br["in"].append(null)
+				br["out"].append(null)
+			elif node is Dictionary and node.has("p"):
+				br.path.append(_vec(node.p))
+				br["in"].append(_vec(node["in"]) if node.get("in") != null else null)
+				br["out"].append(_vec(node["out"]) if node.get("out") != null else null)
+			else:
+				errors.append("punto de %s mal escrito: %s" % [label, str(node)])
+		if m.path.is_empty():
+			errors.append("%s necesita un recorrido (no va en una pista anillo)" % label)
+			continue
+		if br.from < 0 or br.to >= m.path.size() or br.from >= br.to:
+			errors.append("%s tiene que salir de un punto del recorrido y volver en uno de más adelante" % label)
+			continue
+		if (br.path as PackedVector2Array).is_empty():
+			errors.append("%s no tiene puntos" % label)
+			continue
+		var span := Vector2i(br.from, br.to)
+		for other in spans:
+			if other != span and span.x < other.y and other.x < span.y:
+				errors.append("%s se cruza con otro tramo de caminos: los que se pisan tienen que salir y volver de los mismos puntos" % label)
+				break
+		spans.append(span)
+		m.branches.append(br)
 	var round_islands: Variant = d.get("islands")
 	if round_islands is Array and not (round_islands as Array).is_empty():
 		errors.append("las islas redondas ya no existen: las islas son piezas \"tropical_island\"")
@@ -201,6 +243,25 @@ func to_dict() -> Dictionary:
 		d["smoothing"] = smoothing
 		if not start.is_empty():
 			d["start"] = start
+		if not branches.is_empty():
+			var out := []
+			for br in branches:
+				var pts := []
+				for i in (br.path as PackedVector2Array).size():
+					var q: Vector2 = br.path[i]
+					var hi: Variant = br["in"][i]
+					var ho: Variant = br["out"][i]
+					if hi == null and ho == null:
+						pts.append([q.x, q.y])
+					else:
+						var node := {"p": [q.x, q.y]}
+						if hi != null:
+							node["in"] = [hi.x, hi.y]
+						if ho != null:
+							node["out"] = [ho.x, ho.y]
+						pts.append(node)
+				out.append({"from": br.from, "to": br.to, "path": pts})
+			d["branches"] = out
 	return d
 
 
@@ -241,7 +302,7 @@ static func default_index() -> int:
 func make_track() -> TrackSpace:
 	if is_ring():
 		return TrackSpace.new(ring_radius, half_width)
-	return PathTrack.new(path, half_width, handles_in, handles_out, smoothing, start)
+	return PathTrack.new(path, half_width, handles_in, handles_out, smoothing, start, branches)
 
 
 ## Separación entre los puntos de la huella (m).
@@ -266,6 +327,17 @@ func track_shape() -> Dictionary:
 			var p := track.position_at(TAU * i / n)
 			pts.append(Vector2(snappedf(p.x, 0.1), snappedf(p.z, 0.1)))
 		_shape = {"points": pts, "length": snappedf(total, 0.1), "laps": laps, "half_width": half_width}
+		# Los caminos alternativos también son parte de la pista.
+		if track is PathTrack and not (track as PathTrack).branches.is_empty():
+			var bs := []
+			for b in (track as PathTrack).branches:
+				var bp := PackedVector2Array()
+				var k := maxi(int(b.length / SHAPE_STEP), 2)
+				for i in k + 1:
+					var q := (track as PathTrack).branch_position(b, b.length * i / k)
+					bp.append(Vector2(snappedf(q.x, 0.1), snappedf(q.z, 0.1)))
+				bs.append(bp)
+			_shape["branches"] = bs
 	return _shape
 
 
@@ -290,7 +362,32 @@ static func same_shape(a: Dictionary, b: Dictionary) -> bool:
 		return false
 	if (pa[1] - pa[0]).normalized().dot((pb[1] - pb[0]).normalized()) < 0.8:
 		return false
-	return _farthest(pa, pb) <= SHAPE_TOLERANCE and _farthest(pb, pa) <= SHAPE_TOLERANCE
+	if not (_farthest(pa, pb) <= SHAPE_TOLERANCE and _farthest(pb, pa) <= SHAPE_TOLERANCE):
+		return false
+	# Caminos alternativos: los mismos, en el mismo orden y casi en el mismo lugar.
+	var ba: Array = a.get("branches", [])
+	var bb: Array = b.get("branches", [])
+	if ba.size() != bb.size():
+		return false
+	for i in ba.size():
+		var la2: PackedVector2Array = ba[i]
+		var lb2: PackedVector2Array = bb[i]
+		if _farthest_open(la2, lb2) > SHAPE_TOLERANCE or _farthest_open(lb2, la2) > SHAPE_TOLERANCE:
+			return false
+	return true
+
+
+## La mayor distancia de un punto de `a` a la línea abierta `b`.
+static func _farthest_open(a: PackedVector2Array, b: PackedVector2Array) -> float:
+	if b.size() < 2:
+		return INF
+	var worst := 0.0
+	for p in a:
+		var best := INF
+		for i in b.size() - 1:
+			best = minf(best, p.distance_squared_to(Geometry2D.get_closest_point_to_segment(p, b[i], b[i + 1])))
+		worst = maxf(worst, best)
+	return sqrt(worst)
 
 
 ## La mayor distancia de un punto de `a` a la línea (cerrada) de `b`. Las dos

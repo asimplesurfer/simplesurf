@@ -247,7 +247,8 @@ func _targets() -> Array[Rider]:
 func _track_dir(r: Rider) -> Vector2:
 	var course := GameSession.find_in_scene(self, "course") as Course
 	if course:
-		var t := course.track.tangent_at(course.track.angle_of(r.global_position))
+		var loc := course.track.locate_route(r.global_position)
+		var t := course.track.tangent_on(int(loc.z), loc.x)
 		return Vector2(t.x, t.z).normalized()
 	var f := r.forward()
 	return Vector2(f.x, f.z).normalized()

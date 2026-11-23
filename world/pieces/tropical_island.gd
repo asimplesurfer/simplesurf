@@ -767,6 +767,11 @@ func _sample_track(track: TrackSpace) -> void:
 	for i in n:
 		var q := track.position_at(-PI + TAU * i / n)
 		_track_pts.append(Vector2(q.x, q.z))
+	# Los caminos alternativos también se ven de cerca.
+	if track is PathTrack:
+		for b in (track as PathTrack).branches:
+			for i in range(0, b.points.size(), 4):
+				_track_pts.append(b.points[i])
 
 
 ## 1 = cerca de la pista (se ve de cerca), 0 = lejos (atrás de la isla).

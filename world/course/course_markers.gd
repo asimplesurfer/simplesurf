@@ -94,16 +94,34 @@ func _build_buoys() -> void:
 	_add_rope(half_width, red)
 	_add_buoy_circle(-half_width, yellow, 24.0)
 	_add_buoy_circle(half_width, red, 24.0)
+	# Caminos alternativos: sus bordes, con los mismos colores. Donde se abren
+	# de la principal, cada corchera se corta sola (ver _on_edge).
+	for route in range(1, track.route_count()):
+		_add_rope(-half_width, yellow, route)
+		_add_rope(half_width, red, route)
+		_add_buoy_circle(-half_width, yellow, 24.0, route)
+		_add_buoy_circle(half_width, red, 24.0, route)
 
 
 ## Largo del borde a esa distancia de la línea central.
-func _edge_length(lateral: float) -> float:
+func _edge_length(lateral: float, route: int = 0) -> float:
+	if route > 0:
+		return (track as PathTrack).branches[route - 1].length
 	return track.length() * maxf(1.0 + lateral / track.radius, 0.2)
 
 
+## Punto del borde número i de `count` (de una vuelta, o de punta a punta del
+## camino alternativo `route`).
+func _edge_point(i: int, count: int, lateral: float, route: int) -> Vector3:
+	if route > 0:
+		var b: PathTrack.Branch = (track as PathTrack).branches[route - 1]
+		return (track as PathTrack).branch_position(b, b.length * i / maxf(count - 1, 1), lateral)
+	return track.position_at(TAU * i / count, lateral)
+
+
 ## Corchera: muchos flotadores chicos alternando color y blanco.
-func _add_rope(lateral: float, color: Color) -> void:
-	var count := int(_edge_length(lateral) / float_spacing)
+func _add_rope(lateral: float, color: Color, route: int = 0) -> void:
+	var count := int(_edge_length(lateral, route) / float_spacing)
 	var mesh := SphereMesh.new()
 	mesh.radius = 0.3
 	mesh.height = 0.45
@@ -121,7 +139,7 @@ func _add_rope(lateral: float, color: Color) -> void:
 	var kept: Array[Vector3] = []
 	var colors: Array[Color] = []
 	for i in count:
-		var p := track.position_at(TAU * i / count, lateral)
+		var p := _edge_point(i, count, lateral, route)
 		if not _on_edge(p, lateral):
 			continue
 		kept.append(p)
@@ -151,8 +169,8 @@ func _on_edge(p: Vector3, lateral: float) -> bool:
 	return signf(lat) == signf(lateral) and absf(absf(lat) - absf(lateral)) < EDGE_TOLERANCE
 
 
-func _add_buoy_circle(lateral: float, color: Color, spacing: float) -> void:
-	var count := int(_edge_length(lateral) / spacing)
+func _add_buoy_circle(lateral: float, color: Color, spacing: float, route: int = 0) -> void:
+	var count := int(_edge_length(lateral, route) / spacing)
 	var base_mesh := CylinderMesh.new()
 	base_mesh.top_radius = 0.35
 	base_mesh.bottom_radius = 0.6
@@ -169,7 +187,7 @@ func _add_buoy_circle(lateral: float, color: Color, spacing: float) -> void:
 	# llamadas de dibujo. Flotan igual que las corcheras.
 	var points: Array[Vector3] = []
 	for i in count:
-		var p := track.position_at(TAU * i / count, lateral)
+		var p := _edge_point(i, count, lateral, route)
 		if _on_edge(p, lateral):
 			points.append(p)
 	_add_floating_multimesh(base_mesh, points, 0.4, "BuoyBases")
