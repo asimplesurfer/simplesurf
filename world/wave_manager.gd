@@ -402,18 +402,18 @@ func _make_incoming_retry(target: Rider) -> Swell:
 	return null
 
 
-## Elige al azar un jugador humano alrededor del cual crear la ola
-## (si solo hay bots, como en la demo, cualquiera).
+## Elige al azar un corredor (persona o bot, de los que siguen corriendo)
+## alrededor del cual crear la ola: así todos tienen las mismas olas.
 func _pick_target() -> Rider:
-	var humans: Array[Rider] = []
+	var racing: Array[Rider] = []
 	var everyone: Array[Rider] = []
 	for node in get_tree().get_nodes_in_group("riders"):
 		var r := node as Rider
 		if r:
 			everyone.append(r)
-			if r.is_human:
-				humans.append(r)
-	var pool := humans if not humans.is_empty() else everyone
+			if not r.race_finished:
+				racing.append(r)
+	var pool := racing if not racing.is_empty() else everyone
 	if pool.is_empty():
 		return null
 	return pool[_rng.randi() % pool.size()]
