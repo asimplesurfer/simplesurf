@@ -63,6 +63,9 @@ func _test_bot_paths() -> void:
 	_check(inside, "la línea de carrera no se sale de la pista")
 	_check(length < track.length() * 0.88, "la línea de carrera es mucho más corta que el centro (%d m / %d m)" % [length, track.length()])
 	_check(imp.eager_turbo and imp.line_skill >= 1.0 and pro.line_skill > 0.5, "los mejores bots siguen la línea y usan el turbo apenas pueden")
+	_check(imp.saves_turbo_for_waves and imp.ring_detour > imp.detour, "Imposible guarda turbo para salir de las olas y va a buscar los aros")
+	_check(imp.shadow_look > pro.shadow_look and pro.shadow_look > 0.0 and AIDifficulty.preset(2).shadow_look == 0.0,
+		"los mejores ven de lejos al de adelante y van por una paralela (no en fila)")
 
 
 ## Los bots usan los estilos armados, sin repetir y sin el de las personas.

@@ -86,8 +86,21 @@ var _shadow_side: Dictionary = {}
 ## cuánto margen deja al costado del cono.
 const SHADOW_EXTRA := 6.0
 const SHADOW_MARGIN := 1.4
+## Rivales que lo tiraron con un derrape: id -> hasta cuándo (race_time) les
+## da más espacio (los mira desde más lejos y se abre más).
+var _wary_until: Dictionary = {}
+var _rivals_watched: bool = false
+## Metros que tiene que dejarlo atrás para volver a su línea.
+const PASS_CLEAR := 4.0
+const WARY_TIME := 25.0
+const WARY_EXTRA := 10.0
+const WARY_MARGIN := 1.5
 ## El destino de ahora es su línea (no una ola, un aro, una roca o un rival).
 var _on_line: bool = false
+## Para ir a un aro: metros de costado que puede moverse por metro de avance.
+const RING_REACH_SLOPE := 0.45
+## Metros de más que vale la pena hacer para agarrar un aro (nitro y sprint).
+const RING_WORTH := 5.0
 ## Siguiendo su línea, apunta a este punto más adelante (m).
 const AIM_DISTANCE := 14.0
 ## Largada: segundos que sigue por su carril antes de ir a su línea (y lo que
@@ -235,9 +248,17 @@ func _drive(delta: float, input: RiderInput) -> void:
 
 	# Turbo en ráfagas: lo mejor es justo antes de que una ola lo lance; si no,
 	# en una recta cuando junta suficiente nitro.
-	if difficulty.eager_turbo and rider.turbo_time <= 0.0 and rider.turbo_charges() >= 1:
-		# Como juegan los mejores: turbo apenas hay una carga (salvo en una
-		# curva cerrada o frenando por una roca).
+	if difficulty.saves_turbo_for_waves and rider.turbo_time <= 0.0 and rider.turbo_charges() >= 1:
+		# Como juegan los mejores: el turbo tiene que estar andando justo
+		# cuando la ola lo lanza (sale el doble de alto, más vueltas, más
+		# nitro). Se guarda una carga para eso; las que sobran, enseguida.
+		var eta := _wave_eta()
+		var for_launch := eta > LAUNCH_TURBO_MIN and eta < rider.stats.turbo_burst_time - LAUNCH_TURBO_SLACK
+		if for_launch or (rider.turbo_charges() >= 2 and absf(input.steer) < 0.8 and not _brake):
+			input.turbo_pressed = true
+	elif difficulty.eager_turbo and rider.turbo_time <= 0.0 and rider.turbo_charges() >= 1:
+		# Turbo apenas hay una carga (salvo en una curva cerrada o frenando
+		# por una roca).
 		if absf(input.steer) < 0.8 and not _brake:
 			input.turbo_pressed = true
 	elif difficulty.uses_turbo and rider.turbo_time <= 0.0 and rider.turbo_charges() >= 1:
@@ -384,7 +405,16 @@ func _think(angle: float, lateral: float) -> void:
 		if not _ring_choice.has(id):
 			_ring_choice[id] = _rng.randf() < difficulty.ring_seek
 		var ring_lat := track.lateral_of(ring.position)
-		if _ring_choice[id] and absf(ring_lat - line_here) < difficulty.detour:
+		var ring_ahead := _arc_ahead(angle, track.angle_of(ring.position), lateral)
+		# Un aro da nitro y un sprint: los mejores se desvían bastante para
+		# agarrarlo, si les da el giro para llegar.
+		var reach := maxf(difficulty.detour, difficulty.ring_detour)
+		var can_reach := absf(ring_lat - lateral) < ring_ahead * RING_REACH_SLOPE + 2.0
+		# Los que lo calculan van solo si el desvío (ir y volver a la línea)
+		# cuesta menos de lo que da el aro.
+		var off := absf(ring_lat - line_here)
+		var worth := difficulty.ring_detour <= 0.0 or 2.0 * (sqrt(ring_ahead * ring_ahead + off * off) - ring_ahead) < RING_WORTH
+		if _ring_choice[id] and off < reach and can_reach and worth:
 			target = ring_lat
 			_on_line = false
 
@@ -420,8 +450,9 @@ func _think(angle: float, lateral: float) -> void:
 	# borde del cono que menos lo aparta de donde quería ir, y lo mantiene hasta
 	# pasarlo. Cada rival se decide una vez (los mejores casi siempre lo
 	# esquivan). Atrás y cerca: derraparle encima (a quien sea, bot o persona).
-	var range_back := rider.stats.drift_range + SHADOW_EXTRA
+	var close_range := rider.stats.drift_range + SHADOW_EXTRA
 	var tan_cone := tan(deg_to_rad(rider.stats.drift_cone_half_angle))
+	_watch_rivals()
 	for other in race.racers if race else []:
 		if other == rider or other.is_fallen():
 			continue
@@ -429,10 +460,24 @@ func _think(angle: float, lateral: float) -> void:
 		var ahead := _arc_ahead(angle, track.angle_of(other.position), lateral)
 		var other_lat := track.lateral_of(other.position)
 		var dlat := other_lat - lateral
-		if ahead > 0.0 and ahead < range_back:
+		# Los que planean ven de lejos que la línea buena ya está ocupada y van
+		# por una paralela; más lejos todavía de quien ya los tiró.
+		var wary: bool = race.race_time < float(_wary_until.get(id, -1.0))
+		var range_back := close_range + difficulty.shadow_look + (WARY_EXTRA if wary else 0.0)
+		# Pasándolo, sigue por su paralela hasta dejarlo atrás (si se cierra
+		# a mitad de la pasada, le queda justo en el derrape).
+		var passed := -PASS_CLEAR if difficulty.shadow_look > 0.0 else 0.0
+		if ahead > passed and ahead < range_back:
 			if not _shadow_choice.has(id):
-				_shadow_choice[id] = _rng.randf() < difficulty.evade_skill
-			var cone := 0.8 + ahead * tan_cone + SHADOW_MARGIN
+				_shadow_choice[id] = wary or _rng.randf() < difficulty.evade_skill
+			# El ancho del cono cuando lo alcance (no el de ahora, que de lejos
+			# es enorme): una línea paralela, al costado de su derrape.
+			var reach := minf(ahead, rider.stats.drift_range)
+			if difficulty.shadow_look > 0.0:
+				reach = rider.stats.drift_range
+			var cone := 0.8 + reach * tan_cone + SHADOW_MARGIN
+			if wary:
+				cone += WARY_MARGIN
 			if _shadow_choice[id] and absf(target - other_lat) < cone:
 				var left := other_lat - cone
 				var right := other_lat + cone
@@ -474,6 +519,9 @@ func _think(angle: float, lateral: float) -> void:
 			continue
 		if ahead <= 0.0 or ahead > difficulty.look_ahead:
 			continue
+		# Volando bien por arriba: no hace falta esquivarla.
+		if _clears_rock(rock, ahead):
+			continue
 		var rock_lat := track.lateral_of(rock.position)
 		var clearance := rock.radius + 2.6 + difficulty.rock_margin
 		var lo := minf(lateral, target) - clearance
@@ -489,7 +537,12 @@ func _think(angle: float, lateral: float) -> void:
 		if not _rock_side.has(id):
 			var left := rock_lat - clearance
 			var right := rock_lat + clearance
-			var side := -1 if absf(left - lateral) < absf(right - lateral) else 1
+			# Los que siguen la línea la pasan del lado que menos los aparta de
+			# su línea (allá, en la roca); los demás, del lado que tienen más cerca.
+			var ref := lateral
+			if difficulty.line_skill > 0.0:
+				ref = _line_target(track.angle_of(nearest.position), lane)
+			var side := -1 if absf(left - ref) < absf(right - ref) else 1
 			# Si de ese lado no hay lugar (borde de la pista), el otro.
 			if side < 0 and left < -lane:
 				side = 1
@@ -510,6 +563,35 @@ func _think(angle: float, lateral: float) -> void:
 		_brake = false
 
 	_target_lateral = clampf(target, -lane, lane)
+
+
+## true si va en el aire y pasa por encima de la roca sin tocarla (los
+## que calculan el vuelo; los demás la esquivan igual).
+func _clears_rock(rock: Rock, ahead: float) -> bool:
+	if not difficulty.reads_landing or rider.grounded or rider.speed < 1.0:
+		return false
+	var t := ahead / rider.speed
+	if t > _simulate_landing(3.0):
+		return false
+	var g := rider.stats.gravity
+	var y := rider.position.y + rider.vertical_speed * t - 0.5 * g * t * t
+	return y > rock.position.y + rock.height + 0.6
+
+
+## Se entera cuando un rival lo tira con un derrape (para cuidarse de él).
+func _watch_rivals() -> void:
+	if _rivals_watched or race == null or race.racers.is_empty():
+		return
+	_rivals_watched = true
+	for other in race.racers:
+		if other == rider:
+			continue
+		var id := other.get_instance_id()
+		other.drift_hit.connect(func(victim: Rider) -> void:
+			if victim == rider and race:
+				_wary_until[id] = race.race_time + WARY_TIME
+				_shadow_choice.erase(id)
+		)
 
 
 ## Desvío lateral al que va según su habilidad: entre su camino (que cambia
@@ -614,10 +696,21 @@ func _clear_ahead(angle: float, lateral: float, distance: float) -> bool:
 	return true
 
 
+## Metros adelante a los que apunta el volante (y para los mejores, cuántos
+## segundos de camino, hasta STEER_LOOK_MAX).
+const STEER_LOOK := 14.0
+const STEER_LOOK_TIME := 1.15
+const STEER_LOOK_MAX := 21.0
+
+
 ## Volante hacia un punto de la pista unos metros adelante, en el desvío pedido.
 func _steer_towards(angle: float, lateral: float, target_lateral: float) -> float:
 	var track := _track
-	var look := 14.0
+	var look := STEER_LOOK
+	if difficulty.reads_landing:
+		# Los mejores miran más lejos cuanto más rápido van: empiezan a doblar
+		# antes (en el aire se gira la mitad y una curva cerrada no da).
+		look = clampf(rider.speed * STEER_LOOK_TIME, STEER_LOOK, STEER_LOOK_MAX)
 	var aim_angle := angle + look / maxf(track.radius + lateral, 10.0)
 	var aim := track.position_at(aim_angle, target_lateral)
 	var to_aim := aim - rider.position
@@ -628,10 +721,17 @@ func _steer_towards(angle: float, lateral: float, target_lateral: float) -> floa
 
 # --- En el aire --------------------------------------------------------------
 
-func _air(_delta: float, input: RiderInput) -> void:
+func _air(delta: float, input: RiderInput) -> void:
 	var track := _track
 	var angle := track.angle_of(rider.position)
 	var lateral := track.lateral_of(rider.position)
+	# Los mejores siguen mirando en el aire (aros, rocas, rivales): casi la
+	# mitad de la carrera va volando.
+	if difficulty.reads_landing:
+		_think_timer -= delta
+		if _think_timer <= 0.0:
+			_think_timer = difficulty.think_interval
+			_think(angle, lateral)
 	# En el aire también sigue su línea (más de la mitad del tiempo va volando).
 	var aim_lateral := _target_lateral
 	if _on_line and difficulty.line_skill > 0.0:
@@ -648,8 +748,18 @@ func _air(_delta: float, input: RiderInput) -> void:
 	var spin := stats.trick_spin_speed
 	var full_turn := TAU / spin
 	var t_land := _time_to_land()
+	# Pop tardío: apenas la ola lo lanzó todavía vale (sale igual de alto).
+	if GameSettings.jump_style == GameSettings.JumpStyle.WAVES and rider.pop_ready() and not _pop_tried:
+		_pop_tried = true
+		if _rng.randf() < difficulty.pop_skill:
+			input.jump_pressed = true
 	# Turbo en el aire para subir más y tener tiempo para más vueltas.
-	if difficulty.uses_turbo and rider.vertical_speed > -2.0:
+	if difficulty.saves_turbo_for_waves:
+		# Guarda una carga para la próxima ola; la que sobra, bajando (el
+		# empujón para arriba rinde más cayendo que subiendo).
+		if rider.turbo_time <= 0.0 and rider.turbo_charges() >= 2 and rider.vertical_speed < 0.0:
+			input.turbo_pressed = true
+	elif difficulty.uses_turbo and rider.vertical_speed > -2.0:
 		var ready := rider.turbo_charges() >= 1 if difficulty.eager_turbo else rider.nitro > maxf(difficulty.turbo_threshold, Rider.TURBO_CHARGE)
 		if rider.turbo_time <= 0.0 and ready:
 			input.turbo_pressed = true
@@ -668,6 +778,33 @@ func _air(_delta: float, input: RiderInput) -> void:
 		input.trick = t_land > remaining + full_turn + difficulty.trick_margin * 0.85
 
 
+## Turbo para salir de una ola: se tira si la cresta llega entre estos
+## segundos (así la ráfaga sigue andando cuando lo lanza).
+const LAUNCH_TURBO_MIN := 0.1
+const LAUNCH_TURBO_SLACK := 0.25
+## Altura (m) de ola grande que ya lo lanza.
+const LAUNCH_SWELL_HEIGHT := 1.2
+
+
+## Segundos hasta subir a una ola grande yendo derecho como va (mirando cómo
+## avanzan las olas). INF si no viene ninguna en los próximos 2 s.
+func _wave_eta() -> float:
+	if _water == null or _water.swells.is_empty():
+		return INF
+	var f := rider.forward() * maxf(rider.speed, 1.0)
+	var t := 0.1
+	while t <= 2.0:
+		var p := rider.position + f * t
+		var q := Vector2(p.x, p.z)
+		var h := 0.0
+		for s in _water.swells:
+			h += s.height_at(q - s.direction * s.speed * t)
+		if h > LAUNCH_SWELL_HEIGHT:
+			return t
+		t += 0.1
+	return INF
+
+
 ## Estimación del tiempo hasta tocar el agua (tiro vertical). Los buenos
 ## miran el agua donde van a caer (una ola que se levanta adelante los
 ## alcanza antes).
@@ -675,13 +812,34 @@ func _time_to_land() -> float:
 	var g := rider.stats.gravity
 	var vy := rider.vertical_speed
 	var water_y := rider.water_height()
-	var t := _fall_time(vy, rider.position.y - water_y, g)
 	if difficulty.reads_landing and _water:
-		for i in 2:
-			var land := rider.position + rider.forward() * rider.speed * t
-			var ahead_y := _water.height_at(land.x, land.z)
-			t = minf(t, _fall_time(vy, rider.position.y - maxf(water_y, ahead_y), g))
-	return t
+		return _simulate_landing()
+	return _fall_time(vy, rider.position.y - water_y, g)
+
+
+## Sigue el vuelo paso a paso como lo mueve el juego (gravedad y el aire fino
+## que frena la subida en los saltos altos) contra el agua que se mueve: así
+## ven cuánto tiempo tienen de verdad antes de tocar el agua.
+func _simulate_landing(max_t: float = 4.0) -> float:
+	var stats := rider.stats
+	var dt := 1.0 / 30.0
+	var span := maxf(stats.air_max_height - stats.air_soft_height, 0.1)
+	var y := rider.position.y
+	var vy := rider.vertical_speed
+	var f := rider.forward() * rider.speed
+	var t := 0.0
+	while t < max_t:
+		t += dt
+		var p := rider.position + f * t
+		var water_y := _water.height_ahead(p.x, p.z, t)
+		var thin := clampf((y - water_y - stats.air_soft_height) / span, 0.0, 1.5)
+		if thin > 0.0 and vy > 0.0:
+			vy = maxf(vy - (stats.gravity * stats.air_thin_gravity + vy * stats.air_thin_drag) * thin * dt, 0.0)
+		vy -= stats.gravity * dt
+		y += vy * dt
+		if y <= water_y + Rider.BODY_IN_WATER:
+			return t
+	return max_t
 
 
 func _fall_time(vy: float, h: float, g: float) -> float:
