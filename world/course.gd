@@ -90,7 +90,8 @@ func _ready() -> void:
 		_water.set_land(land_outlines())
 		if uses_path():
 			_water.set_track(Vector2.ZERO, 0.0, 0.0)
-			_water.set_track_path((track as PathTrack).points, half_width)
+			# Con los caminos alternativos (el agua de la pista es una banda por todos).
+			_water.set_track_path((track as PathTrack).all_points(), half_width)
 		else:
 			_water.set_track(track.center, inner_limit(), outer_limit())
 	markers = CourseMarkers.new()
@@ -191,13 +192,15 @@ func _apply_to_rider(rider: Rider) -> void:
 
 	# Las corcheras no dejan salir de la pista (por ningún lado).
 	if bounds_enabled:
-		var loc := track.locate(rider.position)
+		# Sobre el camino más cercano (en una bifurcación, por el que va).
+		var loc := track.locate_route(rider.position)
+		var route := int(loc.z)
 		var limit := half_width - 0.6
 		if absf(loc.y) > limit:
-			var p := track.position_at(loc.x, clampf(loc.y, -limit, limit))
+			var p := track.position_on(route, loc.x, clampf(loc.y, -limit, limit))
 			rider.position.x = p.x
 			rider.position.z = p.z
-			_slide_along_edge(rider, loc, signf(loc.y))
+			_slide_along_edge(rider, Vector2(loc.x, loc.y), signf(loc.y), route)
 		elif absf(loc.y) < limit - 1.5:
 			_leave_edge(rider)
 
@@ -221,9 +224,9 @@ func _apply_to_rider(rider: Rider) -> void:
 ## resbalar pegado al borde. Frena solo un poco y una sola vez, al primer toque
 ## (seguir apretando contra la corchera no lo frena más). La cámara sigue sola
 ## el rumbo nuevo.
-func _slide_along_edge(rider: Rider, loc: Vector2, side: float) -> void:
-	var edge := track.position_at(loc.x, side * half_width)
-	var center := track.position_at(loc.x, 0.0)
+func _slide_along_edge(rider: Rider, loc: Vector2, side: float, route: int = 0) -> void:
+	var edge := track.position_on(route, loc.x, side * half_width)
+	var center := track.position_on(route, loc.x, 0.0)
 	var out := Vector2(edge.x - center.x, edge.z - center.z).normalized()
 	var f := rider.forward()
 	var fwd := Vector2(f.x, f.z)
@@ -233,7 +236,7 @@ func _slide_along_edge(rider: Rider, loc: Vector2, side: float) -> void:
 	if into <= 0.0:
 		return
 	# Hacia donde avanza la carrera, apenas hacia adentro (así se despega).
-	var t := track.tangent_at(loc.x)
+	var t := track.tangent_on(route, loc.x)
 	var race_dir := Vector2(t.x, t.z).normalized()
 	var dir := (race_dir - out * EDGE_INWARD).normalized()
 	rider.heading = atan2(-dir.x, -dir.y)
@@ -270,15 +273,16 @@ func _crash(rider: Rider, safe_position: Vector3) -> void:
 		push_warning("choque ignorado: lo mandaba %.0f m lejos" % shift)
 		return
 	rider.crash(safe_position)
-	rider.heading = track.heading_at(track.angle_of(rider.position))
+	var loc := track.locate_route(rider.position)
+	rider.heading = track.heading_on(int(loc.z), loc.x)
 
 
 ## Al lado de la roca, hacia adentro o afuera de la pista (del lado donde estaba
 ## el Rider). Así, al seguir en el sentido de la carrera, se aleja de la roca.
 func _safe_position_beside(rock: Rock, rider: Rider) -> Vector3:
 	# Dirección "de costado" de la pista donde está la roca.
-	var a := track.angle_of(rock.position)
-	var side_dir := track.position_at(a, 1.0) - track.position_at(a, 0.0)
+	var loc := track.locate_route(rock.position)
+	var side_dir := track.position_on(int(loc.z), loc.x, 1.0) - track.position_on(int(loc.z), loc.x, 0.0)
 	var radial := Vector2(side_dir.x, side_dir.z).normalized()
 	var rel := Vector2(rider.position.x - rock.position.x, rider.position.z - rock.position.z)
 	var side := 1.0 if rel.dot(radial) >= 0.0 else -1.0

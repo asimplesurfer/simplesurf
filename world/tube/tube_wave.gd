@@ -173,10 +173,11 @@ func _ready() -> void:
 func setup(
 	p_course: Course, p_mouth_angle: float, p_lateral: float, p_side: float,
 	p_duration: float, p_speed: float, p_opener: Rider = null, p_open_timeout: float = 6.0,
-	p_sway: float = -1.0
+	p_sway: float = -1.0, p_track: TrackSpace = null
 ) -> void:
 	course = p_course
-	track = course.track
+	# Con bifurcaciones, la vuelta por el camino donde nace (ver TubeDirector.track_for).
+	track = p_track if p_track else course.track
 	water = GameSession.find_in_scene(course, "water") as Water
 	mouth_angle = p_mouth_angle
 	lateral = p_lateral

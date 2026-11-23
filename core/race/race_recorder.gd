@@ -151,6 +151,14 @@ func to_dict() -> Dictionary:
 		for i in range(0, src.size(), 5):
 			pts.append([_r(src[i].x), _r(src[i].y)])
 		track["path"] = pts
+		var branches: Array = []
+		for b in (course.track as PathTrack).branches:
+			var bp: Array = []
+			for i in range(0, b.points.size(), 5):
+				bp.append([_r(b.points[i].x), _r(b.points[i].y)])
+			branches.append(bp)
+		if not branches.is_empty():
+			track["branches"] = branches
 	else:
 		track["center"] = [_r(course.track.center.x), _r(course.track.center.y)]
 		track["radius"] = course.track.radius

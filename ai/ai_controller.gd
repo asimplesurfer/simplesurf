@@ -11,6 +11,9 @@ extends BaseController
 ##   5. Ir al próximo círculo de velocidad (según dificultad).
 ##   6. Si no, seguir su "camino" (hay 5 distintos; cambia en cada vuelta).
 ## Llegando a la meta va derecho al punto de la línea que tiene más cerca.
+## Con bifurcaciones, en cada vuelta elige un camino en cada tramo (según su
+## estilo: los más agresivos y los que mejor juegan van más por el más corto)
+## y ve la pista como esa vuelta (ver PathTrack.variant).
 ## En el aire hace trucos: mantiene mientras le da el tiempo para completar el
 ## giro antes de tocar el agua (a veces se equivoca, según la dificultad).
 
@@ -33,6 +36,16 @@ var path_index: int = 0
 var rider: Rider
 var course: Course
 var race: RaceManager
+## La pista como la ve: la vuelta por los caminos que eligió (sin
+## bifurcaciones, la pista de siempre).
+var _track: TrackSpace:
+	get:
+		return _view if _view else (course.track if course else null)
+	set(value):
+		_view = value
+var _view: TrackSpace
+## Camino elegido en cada tramo con bifurcación (ruta por grupo; ver PathTrack.groups).
+var route_choices: Array = []
 
 var _rng := RandomNumberGenerator.new()
 var _think_timer: float = 0.0
@@ -97,6 +110,9 @@ func get_input(delta: float) -> RiderInput:
 	var input := RiderInput.new()
 	if rider == null or course == null or rider.controls_locked:
 		return input
+	if route_choices.size() != course.track.groups().size():
+		pick_routes()
+	_track = course.track.variant(route_choices)
 	var state := rider.state_machine.current_name
 	if state != &"tube":
 		_in_tube_before = false
@@ -193,7 +209,7 @@ func _tube(delta: float, input: RiderInput) -> void:
 # --- En el agua -------------------------------------------------------------
 
 func _drive(delta: float, input: RiderInput) -> void:
-	var track := course.track
+	var track := _track
 	var angle := track.angle_of(rider.position)
 	var lateral := track.lateral_of(rider.position)
 
@@ -270,6 +286,40 @@ func _pick_path() -> void:
 	_path_phase = _rng.randf_range(0.0, TAU)
 
 
+## Elige un camino en cada tramo con bifurcación: muchas veces el más corto
+## (más cuanto más agresivo y mejor juega), si no uno cualquiera.
+func pick_routes() -> void:
+	var track := course.track
+	var groups := track.groups()
+	route_choices.clear()
+	for g in groups.size():
+		var routes: Array = groups[g].routes
+		var shortest: int = routes[0]
+		for r in routes:
+			if (track as PathTrack).route_length(r, g) < (track as PathTrack).route_length(shortest, g):
+				shortest = r
+		var prefer := clampf(0.3 + 0.35 * difficulty.aggression + 0.35 * difficulty.line_skill, 0.0, 0.9)
+		route_choices.append(shortest if _rng.randf() < prefer else routes[_rng.randi() % routes.size()])
+	_track = track.variant(route_choices)
+
+
+## Si terminó en otro camino (lo empujaron, no llegó a doblar), sigue por ese:
+## no intenta volver cruzando la tierra que los separa.
+func _stay_on_route(lateral: float) -> void:
+	if route_choices.is_empty() or absf(lateral) < course.track.half_width + 2.0:
+		return
+	var loc := course.track.locate_route(rider.position)
+	var g := (course.track as PathTrack).group_at(loc.x)
+	if g < 0:
+		return
+	var route := int(loc.z)
+	if not (course.track.groups()[g].routes as Array).has(route):
+		route = 0
+	if route_choices[g] != route:
+		route_choices[g] = route
+		_track = course.track.variant(route_choices)
+
+
 ## Desvío lateral del camino actual en ese ángulo.
 func path_lateral(angle: float, lane: float) -> float:
 	var p: Dictionary = PATHS[path_index]
@@ -281,9 +331,10 @@ func path_lateral(angle: float, lane: float) -> float:
 
 ## Decide a qué desvío lateral apuntar.
 func _think(angle: float, lateral: float) -> void:
-	var track := course.track
+	var track := _track
 	var lane := track.half_width - 3.0
 	_noise = _rng.randf_range(-1.0, 1.0) * difficulty.steer_noise * 4.0
+	_stay_on_route(lateral)
 
 	# Cada vuelta, otro camino (así no van siempre por el mismo lado).
 	if race:
@@ -291,6 +342,7 @@ func _think(angle: float, lateral: float) -> void:
 		if lap != _last_lap:
 			if _last_lap >= 0:
 				_pick_path()
+				pick_routes()
 			_last_lap = lap
 
 	var target := _line_target(angle, lane) + _noise
@@ -438,14 +490,14 @@ func _line_target(angle: float, lane: float) -> float:
 	var base := path_lateral(angle, lane)
 	if difficulty.line_skill <= 0.0:
 		return base
-	var line := RacingLine.for_track(course.track, lane).lateral_at(angle)
+	var line := RacingLine.for_track(_track, lane).lateral_at(angle)
 	return lerpf(base, line, difficulty.line_skill)
 
 
 ## Desvío lateral que va por adentro de la curva que viene (0 si es recta):
 ## compara el largo de ir por un borde o por el otro en los próximos metros.
 func _inside_line(angle: float, lane: float) -> float:
-	var track := course.track
+	var track := _track
 	var step := 18.0 / maxf(track.radius, 10.0)
 	var left := 0.0
 	var right := 0.0
@@ -468,7 +520,7 @@ func _inside_line(angle: float, lane: float) -> float:
 ## Metros por delante (siguiendo la pista) de un punto en otro ángulo. Negativo = detrás.
 func _arc_ahead(from_angle: float, to_angle: float, lateral: float) -> float:
 	var d := wrapf(to_angle - from_angle, -PI, PI)
-	return d * (course.track.radius + lateral)
+	return d * (_track.radius + lateral)
 
 
 func _next_ring(angle: float) -> NitroRing:
@@ -477,7 +529,7 @@ func _next_ring(angle: float) -> NitroRing:
 	for ring in course.rings:
 		if not ring.visible:
 			continue
-		var d := _arc_ahead(angle, course.track.angle_of(ring.position), 0.0)
+		var d := _arc_ahead(angle, _track.angle_of(ring.position), 0.0)
 		if d > 4.0 and d < 70.0 and d < best_d:
 			best_d = d
 			best = ring
@@ -494,9 +546,9 @@ func _next_swell(angle: float, lateral: float) -> Swell:
 		if s.amplitude < 1.5:
 			continue
 		var pos := Vector3(s.center.x, 0.0, s.center.y)
-		if absf(course.track.lateral_of(pos)) > course.track.half_width:
+		if absf(_track.lateral_of(pos)) > _track.half_width:
 			continue
-		var d := _arc_ahead(angle, course.track.angle_of(pos), lateral)
+		var d := _arc_ahead(angle, _track.angle_of(pos), lateral)
 		if d < 12.0 or d > 55.0 or d >= best_d:
 			continue
 		var id := s.get_instance_id()
@@ -521,22 +573,22 @@ func _ring_wave_target(angle: float, lateral: float) -> float:
 	_ring_peak_angle = peak
 	var d := _arc_ahead(angle, peak, lateral)
 	if _ring_peak_choice and d > 4.0 and d < 45.0:
-		return rw.radius - course.track.radius - 0.5
+		return rw.radius - _track.radius - 0.5
 	return NAN
 
 
 func _clear_ahead(angle: float, lateral: float, distance: float) -> bool:
 	for rock in course.rocks:
-		var ahead := _arc_ahead(angle, course.track.angle_of(rock.position), lateral)
+		var ahead := _arc_ahead(angle, _track.angle_of(rock.position), lateral)
 		if ahead > 0.0 and ahead < distance:
-			if absf(course.track.lateral_of(rock.position) - lateral) < rock.radius + 4.0:
+			if absf(_track.lateral_of(rock.position) - lateral) < rock.radius + 4.0:
 				return false
 	return true
 
 
 ## Volante hacia un punto de la pista unos metros adelante, en el desvío pedido.
 func _steer_towards(angle: float, lateral: float, target_lateral: float) -> float:
-	var track := course.track
+	var track := _track
 	var look := 14.0
 	var aim_angle := angle + look / maxf(track.radius + lateral, 10.0)
 	var aim := track.position_at(aim_angle, target_lateral)
@@ -549,7 +601,7 @@ func _steer_towards(angle: float, lateral: float, target_lateral: float) -> floa
 # --- En el aire --------------------------------------------------------------
 
 func _air(_delta: float, input: RiderInput) -> void:
-	var track := course.track
+	var track := _track
 	var angle := track.angle_of(rider.position)
 	var lateral := track.lateral_of(rider.position)
 	# En el aire también sigue su línea (más de la mitad del tiempo va volando).

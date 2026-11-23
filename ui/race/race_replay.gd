@@ -38,6 +38,8 @@ var _paths: Array[PackedVector2Array] = []
 var _places: Array[PackedInt32Array] = []
 var _times := PackedFloat32Array()
 var _line := PackedVector2Array()
+## Caminos alternativos (bifurcaciones), en coordenadas del recuadro.
+var _branch_lines: Array[PackedVector2Array] = []
 var _t: float = 0.0
 
 
@@ -107,11 +109,19 @@ func _fit() -> void:
 	for i in 160:
 		var q := track.position_at(-PI + TAU * i / 160.0)
 		pts.append(Vector2(q.x, q.z))
+	var branch_src: Array[PackedVector2Array] = []
+	if track is PathTrack:
+		for b in (track as PathTrack).branches:
+			branch_src.append(b.points)
 	var lo := pts[0]
 	var hi := pts[0]
 	for p in pts:
 		lo = lo.min(p)
 		hi = hi.max(p)
+	for bl in branch_src:
+		for p in bl:
+			lo = lo.min(p)
+			hi = hi.max(p)
 	var box := size if size.x > 10.0 else custom_minimum_size
 	var top := 30.0
 	var pad := 14.0
@@ -121,6 +131,13 @@ func _fit() -> void:
 	for p in pts:
 		_line.append(p * _scale + _offset)
 	_line.append(_line[0])
+	_branch_lines.clear()
+	for bl in branch_src:
+		var line := PackedVector2Array()
+		for i in range(0, bl.size(), maxi(bl.size() / 60, 1)):
+			line.append(bl[i] * _scale + _offset)
+		line.append(bl[bl.size() - 1] * _scale + _offset)
+		_branch_lines.append(line)
 
 
 func _resized_fit() -> void:
@@ -142,7 +159,11 @@ func _draw() -> void:
 		return
 	var w := clampf(_course.track.half_width * 2.0 * _scale, 4.0, 10.0)
 	draw_polyline(_line, LINE, w + 3.0, true)
+	for line in _branch_lines:
+		draw_polyline(line, LINE, w + 3.0, true)
 	draw_polyline(_line, ROAD, w, true)
+	for line in _branch_lines:
+		draw_polyline(line, ROAD, w, true)
 	var n := _times.size()
 	if n < 2:
 		return

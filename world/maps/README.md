@@ -73,6 +73,23 @@ puede abrir en el editor para cambiarlo.
   pista sale de la punta de adelante, pasa por los puntos de `path` y vuelve
   por la de atrás. El suavizado no toca la recta, así los surfistas arrancan
   mirando hacia donde va la pista. Sin `start`, la meta va en el primer punto.
+- **Caminos alternativos** (`branches`, opcional): bifurcaciones. Cada uno
+  sale de un punto del recorrido y vuelve a entrar en otro más adelante:
+  `{"from": 2, "to": 5, "path": [[x, z], ...]}` (`from` y `to` son el número
+  de punto en `path`, contando desde 0; los puntos del camino pueden tener
+  manijas como los del recorrido). Varios con las mismas puntas = varios
+  caminos en el mismo tramo. Reglas:
+  - `from` < `to`: un tramo con varios caminos no puede pasar por la meta.
+  - Dos tramos distintos no se pueden pisar (o tienen las mismas puntas, o uno
+    termina antes de que empiece el otro).
+  - Los caminos se pueden cruzar entre sí (como una X): ahí las corcheras se
+    abren solas y se puede pasar de uno al otro.
+
+  En el juego, el avance por un camino cuenta como el tramo que reemplaza
+  (vueltas y posiciones no cambian), las corcheras se abren donde se separa,
+  los aros y rocas se reparten también por ahí (según su largo) y los bots
+  eligen un camino en cada vuelta (los mejores, más seguido el más corto).
+  En el editor: herramienta **Camino alternativo** (B).
 - **Sin `path`**: la pista es un anillo de radio `ring_radius` alrededor del
   centro del mapa (0, 0), como el mapa "Anillo". Una isla en el medio es
   opcional: se dibuja como cualquier otra.
