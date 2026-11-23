@@ -71,6 +71,7 @@ func run() -> void:
 	menu.queue_free()
 	await process_frame
 
+	_test_fixed_sets()
 	_test_identity()
 	_test_shape()
 	_test_settings()
@@ -137,6 +138,29 @@ func _run_trial(seconds: float, check_ghost: bool = false) -> Array:
 	return [time, waves, ghost_ok, hair, hud_ok]
 
 
+## Olas fijas en series: más olas y más grandes que en la carrera, siempre iguales.
+func _test_fixed_sets() -> void:
+	var course := Course.new()
+	course.map = TrackMap.for_layout(0)
+	var a := WaveManager.new()
+	var b := WaveManager.new()
+	a._build_fixed(course, 1000.0)
+	b._build_fixed(course, 1000.0)
+	_check(a._fixed == b._fixed, "las olas fijas son siempre las mismas")
+	var big := 0
+	var total_amp := 0.0
+	for f in a._fixed:
+		total_amp += float(f[3])
+		if float(f[3]) >= WaveManager.FIXED_LAST_AMP.x:
+			big += 1
+	var avg := total_amp / maxf(a._fixed.size(), 1)
+	_check(a._fixed.size() >= 25, "hay muchas olas (%d en 1 km)" % a._fixed.size())
+	_check(avg > 4.0 and big >= 8, "y son grandes (promedio %.1f m, %d de las grandes)" % [avg, big])
+	course.free()
+	a.free()
+	b.free()
+
+
 func _record(time: float) -> Dictionary:
 	return {"time": time, "date": "", "character": {}}
 
@@ -151,8 +175,12 @@ func _test_identity() -> void:
 	var data := TimeTrial.load_data()
 	_check(int(data.get("format", 0)) == TimeTrial.SAVE_FORMAT and (data.maps as Dictionary).has("atoll"),
 		"los récords del formato de antes pasan al mapa por su nombre")
-	_check(float(TimeTrial.records_of(atoll).top[0].time) == 90.0 and TimeTrial.records_of(atoll).has("ghost"),
-		"y se siguen viendo (con su fantasma)")
+	var migrated: Dictionary = data.maps.atoll.versions[0]
+	_check(float(migrated.top[0].time) == 90.0 and migrated.has("ghost"), "y quedan guardados (con su fantasma)")
+	_check(TimeTrial.records_of(atoll).is_empty(),
+		"pero hechos con las olas de antes de las series, quedan archivados (no se comparan)")
+	# Los que siguen hacen de cuenta que son de las olas de ahora.
+	migrated["waves"] = WaveManager.FIXED_VERSION
 	_check(int(TimeTrial._read().get("format", 0)) == TimeTrial.SAVE_FORMAT, "el archivo queda guardado en el formato nuevo")
 	# Reordenar: el mapa se encuentra por nombre y el número se actualiza.
 	data.maps.atoll.order = 77
