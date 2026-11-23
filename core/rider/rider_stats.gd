@@ -59,6 +59,9 @@ extends Resource
 @export var trick_spin_speed: float = 20.0
 ## Nitro que carga por segundo girando (1.0 = barra llena).
 @export var trick_nitro_rate: float = 0.5
+## Al soltar A a mitad de un truco, la tabla vuelve a su lugar así de rápido
+## (veces la velocidad del truco). Es solo para verse: ya no cuenta.
+@export var trick_release_speed_mult: float = 3.0
 
 @export_group("Turbo y motivación")
 ## Multiplica la velocidad máxima con el turbo.
@@ -107,9 +110,10 @@ extends Resource
 @export var catchup_jump_bonus: float = 0.15
 ## Velocidad máxima extra con el handicap al máximo (0.2 = +20%).
 @export var catchup_speed_bonus: float = 0.08
-## Tolerancia al caer de un truco con el handicap al máximo (radianes que le
-## pueden faltar al giro para que igual cuente como bien hecho; ~70°).
-@export var catchup_trick_grace: float = 0.6
+## Tolerancia al caer de un truco con el handicap al máximo: si le falta
+## menos que esto para tocar el agua (s) y sigue con A apretada, el juego
+## suelta el truco solo y aterriza bien.
+@export var catchup_trick_grace: float = 0.1
 
 @export_group("Derrape")
 ## Velocidad mínima para poder derrapar (m/s).

@@ -116,6 +116,14 @@ var _did_first_trick: bool = false
 static var _first_tricks_taken: Array[int] = []
 ## Tiempos de truco ya completos en este salto (lo lleva el estado del aire).
 var trick_units_done: int = 0
+## Tiempos de truco que ya cuentan en este salto: los completos de las veces
+## que soltó A (lo que quedaba a medias al soltar no cuenta).
+var trick_scored: int = 0
+## Tiempos de truco (trick_units_now) cuando empezó a mantener A esta vez.
+var trick_hold_start: float = 0.0
+## Soltó A con un truco a medias: la tabla vuelve rápido a su lugar (solo se
+## ve; ya no cuenta ni puede tirarlo al agua).
+var trick_releasing: bool = false
 ## Lado del derrape: -1 izquierda, 1 derecha, 0 sin derrapar.
 var drift_side: int = 0
 ## Entrada del frame actual (la leen los estados al entrar).
@@ -278,7 +286,12 @@ func _physics_process(delta: float) -> void:
 ## Elige el próximo truco del salto: al azar entre los que duran como mucho
 ## `max_units` tiempos (los que llegan a terminarse antes de caer), nunca el
 ## mismo que el anterior. Devuelve false si no entra ninguno.
+## Bajando, deja afuera los que ocupan todo el aire que queda: así en el
+## final del salto salen cortos, que se terminan y suman, en vez de uno
+## largo que queda a medias al soltar.
 func choose_next_trick(max_units: int) -> bool:
+	if vertical_speed < 0.0 and max_units > 1:
+		max_units -= 1
 	var options: Array[int] = []
 	var last: int = trick_kinds[-1] if not trick_kinds.is_empty() else -1
 	for k in Trick.size():
@@ -793,7 +806,8 @@ func speed_mult() -> float:
 	return 1.0 + catchup * stats.catchup_speed_bonus
 
 
-## Radianes que le pueden faltar a un truco al caer para que igual cuente (handicap).
+## Segundos antes de tocar el agua en los que el juego suelta el truco solo
+## (handicap: si soltó apenas tarde, igual aterriza bien).
 func trick_grace() -> float:
 	return catchup * stats.catchup_trick_grace
 

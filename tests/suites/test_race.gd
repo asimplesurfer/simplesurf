@@ -271,6 +271,11 @@ func _test_jump_and_tricks() -> void:
 	_set_action(&"p1_a", true)
 	await _wait(0.3)
 	_check(_rider.trick_angle > 0.0, "mantener ESPACIO en el aire gira la tabla")
+	# Cuenta lo completado al soltar: suelta apenas completa una vuelta.
+	for i in int(1.0 * FPS):
+		if _rider.live_spins >= 1 or _state() != &"airborne":
+			break
+		await process_frame
 	_set_action(&"p1_a", false)
 	await _wait_until_state(&"riding", 2.0)
 	_check(not _rider.is_fallen(), "soltar a tiempo: aterriza bien")
@@ -1237,7 +1242,7 @@ func _test_split_screen() -> void:
 	race._progress[last] = race.progress_of(first) - TAU
 	await process_frame
 	_check(last.catchup > 0.99, "con una vuelta de atraso el handicap es el máximo")
-	_check(last.trick_grace() > 0.5, "con handicap hay tolerancia al caer de un truco")
+	_check(last.trick_grace() > 0.05, "con handicap hay tolerancia al soltar tarde un truco")
 	_check(
 		split.huds[1]._nitro_label.text.begins_with("×"),
 		"el HUD muestra el multiplicador de nitro"
