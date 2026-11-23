@@ -39,6 +39,11 @@ const AHEAD_MAX := 70.0
 ## La línea del tubo queda a esta distancia del borde de la pista, como mínimo (m).
 const EDGE_MARGIN := 7.0
 
+## APAGADO: la ola tubo está guardada para más adelante (ver TUBO.md). Con
+## false no aparece en ninguna partida (tampoco con la tecla Y). Para volver a
+## probarla: true (y sumar tests/suites/test_tube.gd a tests/run_tests.gd).
+const ENABLED := false
+
 var race: RaceManager
 ## Si aparece sola (en carrera). En el modo libre solo con la tecla de prueba.
 var automatic: bool = true
