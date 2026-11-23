@@ -103,6 +103,25 @@ func shader_material() -> ShaderMaterial:
 	return _material
 
 
+## Colores del agua que levanta la tabla (giros, derrape, estela, salpicones):
+## "foam" (lo blanco) y "spray" (el celeste del borde), ya con el brillo del
+## clima (spray_light; ver WaterPalette). Salen del material del agua (el
+## shader del mar no los usa, pero ahí los ponen la hora y la tormenta, y la
+## tormenta los devuelve al irse), así siguen a la hora y al clima de ahora.
+func fx_colors() -> Dictionary:
+	var base := WaterPalette.base(palette)
+	var foam: Variant = _material.get_shader_parameter("foam_color")
+	var spray: Variant = _material.get_shader_parameter("spray_color")
+	var light: Variant = _material.get_shader_parameter("spray_light")
+	var f: Color = foam if foam is Color else base.foam_color
+	var s: Color = spray if spray is Color else base.spray_color
+	var k: float = float(light) if light != null else 1.0
+	return {
+		"foam": Color(f.r * k, f.g * k, f.b * k),
+		"spray": Color(s.r * k, s.g * k, s.b * k),
+	}
+
+
 ## Paso de la grilla fina del agua (m). Los vértices finos están siempre en
 ## (n + 0,5) · step del mundo, para todas las cámaras.
 func grid_step() -> float:

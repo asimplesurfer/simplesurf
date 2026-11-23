@@ -258,6 +258,10 @@ func _roughen(water: Water) -> void:
 	w.apply_to(mat)
 	# Colores del agua de la tormenta (los que no decide, salen de la base: ver WaterPalette).
 	WaterPalette.apply_to_water(mat, WaterPalette.STORM, _set_water, water.palette)
+	# El agua que levanta la tabla no recibe luz: de noche (o al atardecer) la
+	# tormenta la oscurece más, como al cielo.
+	var light: float = WaterPalette.values(WaterPalette.STORM).spray_light
+	_set_water(mat, "spray_light", light * lerpf(1.0, 0.8, DayTime.darkness(self)))
 	# Espuma solo en las crestas más altas (si no, el mar picado se llena de manchas).
 	_set_water(mat, "foam_height", 0.42 * CHOP_SCALE * 0.5)
 	# Las gotas pegan en el mar: circulitos que se abren y salpicaduras.

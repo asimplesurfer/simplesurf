@@ -76,6 +76,8 @@ const CARVE_ANGLE := 55.0
 ## Chapuzón al atravesar una ola que rompe.
 var _splash: CPUParticles3D
 var _ring_splash: CPUParticles3D
+## Colores del agua con que están pintados los efectos (ver _sync_water_colors).
+var _water_colors: Dictionary = {}
 ## Tiempo que queda de la animación de atravesar la ola (agachado, brazos sobre la cabeza).
 var duck_time: float = 0.0
 const DUCK_DURATION := 0.45
@@ -588,7 +590,32 @@ func _idle_offset(stage: Rider.RecoveryStage) -> Vector3:
 			return Vector3(0.0, sin(_time * 3.0) * 0.02, 0.0)
 
 
+## Pinta el agua que levanta la tabla con los colores del agua de ahora (la
+## hora, el clima, mar o río; ver Water.fx_colors). Solo cuando cambian (la
+## tormenta llega y se va en plena carrera).
+func _sync_water_colors() -> void:
+	if rider.water == null:
+		return
+	var c := rider.water.fx_colors()
+	if c == _water_colors:
+		return
+	_water_colors = c
+	var foam: Color = c.foam
+	var spray: Color = c.spray
+	_trail.set_water_colors(foam, spray)
+	_spray.set_water_colors(foam, spray)
+	_carve.set_water_colors(foam, spray)
+	for p in [_wake, _splash, _ring_splash]:
+		WaterFx.tint(p, foam)
+
+
+## Colores con que están pintados ahora los efectos de agua (para los tests).
+func water_colors() -> Dictionary:
+	return _water_colors
+
+
 func _update_particles(delta: float) -> void:
+	_sync_water_colors()
 	var on_water := rider.grounded and rider.recovery_stage == Rider.RecoveryStage.STANDING
 
 	# Cortina de agua del derrape: sale de la cola de la tabla, recta hacia atrás

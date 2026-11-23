@@ -12,6 +12,14 @@ static func emit(p: CPUParticles3D, on: bool) -> void:
 		p.visible = true
 
 
+## Pinta unas partículas de soft_particles con el color del agua de ahora
+## (Water.fx_colors().foam).
+static func tint(p: CPUParticles3D, color: Color) -> void:
+	var quad := p.mesh as QuadMesh
+	if quad and quad.material is StandardMaterial3D:
+		(quad.material as StandardMaterial3D).albedo_color = color
+
+
 ## Partículas de bruma/gotas: cuadrados siempre de frente a la cámara con un
 ## círculo difuminado, que crecen y se desvanecen.
 static func soft_particles(amount: int, lifetime: float, size: float) -> CPUParticles3D:
@@ -35,7 +43,7 @@ static func soft_particles(amount: int, lifetime: float, size: float) -> CPUPart
 	material.billboard_keep_scale = true
 	material.vertex_color_use_as_albedo = true
 	material.albedo_texture = tex
-	material.albedo_color = Color(0.92, 0.97, 1.0)
+	material.albedo_color = WaterPalette.BASE.foam_color
 
 	var quad := QuadMesh.new()
 	quad.size = Vector2(size, size)
