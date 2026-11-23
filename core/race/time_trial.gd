@@ -11,8 +11,8 @@ extends Node
 ## Los récords van por el nombre del mapa (su id), con su número (order) al
 ## lado como salvavidas (ver _map_entry). Y cada récord vale solo en la pista
 ## donde se hizo: se guarda con la huella de la pista (TrackMap.track_shape).
-## Si el mapa cambia de recorrido, de vueltas o de ancho, los récords viejos
-## quedan archivados (no se borran, no se muestran y no hay fantasma) y se
+## Si el mapa cambia de recorrido, de vueltas o de ancho (o cambian las olas
+## fijas, ver WaveManager.FIXED_VERSION), los récords viejos quedan archivados (no se borran, no se muestran y no hay fantasma) y se
 ## arranca de cero; si la pista vuelve a ser la de antes, vuelven solos.
 
 const SAVE_PATH := "user://contrarreloj.dat"
@@ -164,11 +164,12 @@ static func _version(data: Dictionary, map: TrackMap, create: bool) -> Dictionar
 		return {}
 	var shape := map.track_shape()
 	for v in entry.versions:
-		if TrackMap.same_shape(v.get("shape", {}), shape):
+		# Y con las mismas olas (sin "waves": las de antes de las series).
+		if TrackMap.same_shape(v.get("shape", {}), shape) and int(v.get("waves", 1)) == WaveManager.FIXED_VERSION:
 			return v
 	if not create:
 		return {}
-	var version := {"shape": shape, "top": []}
+	var version := {"shape": shape, "waves": WaveManager.FIXED_VERSION, "top": []}
 	entry.versions.append(version)
 	return version
 

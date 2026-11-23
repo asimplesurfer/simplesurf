@@ -56,8 +56,19 @@ var _fixed: Array = []
 var _next_fixed: int = 0
 ## Dónde nació cada ola fija (x, z), en orden (para comparar intentos).
 var fixed_spawned: Array = []
-## Cada cuántos metros de pista hay una ola fija (al azar entre los dos).
-const FIXED_SPACING := Vector2(42.0, 70.0)
+## Versión de las olas fijas: si cambia la forma de armarlas, los récords
+## hechos con las de antes quedan archivados (ver TimeTrial._version).
+const FIXED_VERSION := 2
+## Las olas fijas vienen en series, como en el mar: de 2 a 4 olas seguidas que
+## van creciendo (la última, la más grande, es la mejor rampa), y un respiro
+## entre series. Cuántas olas por serie (entre los dos).
+const FIXED_SET_SIZE := Vector2i(2, 4)
+## Metros de pista entre olas de una misma serie y entre series.
+const FIXED_SPACING := Vector2(24.0, 34.0)
+const FIXED_SET_GAP := Vector2(42.0, 56.0)
+## Altura (m) de la primera ola de una serie y de la última.
+const FIXED_FIRST_AMP := Vector2(3.4, 4.2)
+const FIXED_LAST_AMP := Vector2(5.0, 6.0)
 
 
 func _ready() -> void:
@@ -219,15 +230,25 @@ func _update_fixed() -> void:
 func _build_fixed(course: Course, total_m: float) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7919 * (course.map.id.hash() % 100000 + 1) + 31
-	var d := 60.0
+	var d := 45.0
 	while d < total_m:
-		var ahead := rng.randf_range(incoming_distance_min, incoming_distance_max)
-		var amp := rng.randf_range(amplitude_min, amplitude_max)
-		_fixed.append([
-			d, d - ahead, rng.randf_range(-6.0, 6.0), amp, rng.randf_range(1.6, 2.0),
-			rng.randf_range(4.0, 6.5), rng.randf_range(18.0, 26.0), rng.randf_range(-0.15, 0.15),
-		])
-		d += rng.randf_range(FIXED_SPACING.x, FIXED_SPACING.y)
+		var count := rng.randi_range(FIXED_SET_SIZE.x, FIXED_SET_SIZE.y)
+		var first := rng.randf_range(FIXED_FIRST_AMP.x, FIXED_FIRST_AMP.y)
+		var last := rng.randf_range(FIXED_LAST_AMP.x, FIXED_LAST_AMP.y)
+		# La serie entra de un mismo lado (cada ola corrida un poco).
+		var side := rng.randf_range(-5.0, 5.0)
+		for i in count:
+			if d >= total_m:
+				break
+			var ahead := rng.randf_range(incoming_distance_min, incoming_distance_max)
+			var amp := lerpf(first, last, float(i) / float(count - 1))
+			_fixed.append([
+				d, d - ahead, clampf(side + rng.randf_range(-2.0, 2.0), -6.0, 6.0), amp,
+				rng.randf_range(1.6, 2.0), rng.randf_range(4.0, 6.5), rng.randf_range(16.0, 22.0),
+				rng.randf_range(-0.15, 0.15),
+			])
+			d += rng.randf_range(FIXED_SPACING.x, FIXED_SPACING.y)
+		d += rng.randf_range(FIXED_SET_GAP.x, FIXED_SET_GAP.y) - FIXED_SPACING.x
 	_next_fixed = 0
 
 
