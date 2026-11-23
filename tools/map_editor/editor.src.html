@@ -159,6 +159,7 @@ dialog::backdrop { background: rgba(5, 15, 20, 0.5); }
     <button class="tool" data-tool="rock_formation" title="Roca o cueva: dibujá la figura (R)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 19l3-8 4-3 3 2 3-5 5 14z"/><path d="M9 19c0-3 1.5-5 3-5s3 2 3 5" /></svg><span class="key">R</span></button>
     <button class="tool" data-tool="start" title="Meta: una recta con la largada (M)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M6 21V4"/><path d="M6 4h12l-2 4 2 4H6"/><path d="M10 4v8M14 4v8" stroke-dasharray="2 2"/></svg><span class="key">M</span></button>
     <button class="tool" data-tool="tropical_island" title="Isla tropical: dibujá la figura (T)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 18c3-3 6-2 9-3s6-3 9-1"/><path d="M8 15V9m0 0c-2-2-4-1.5-5 0m5 0c1.5-2 3.5-2 5-.5M15 14V8m0 0c-1.5-1.8-3.5-1.5-4.5 0m4.5 0c1.5-2 3.5-1.8 4.5-.2" stroke-linecap="round"/></svg><span class="key">T</span></button>
+    <button class="tool" data-tool="jungle_bank" title="Orilla de selva: dibujá la figura (J). Tierra con árboles de jungla y bambú, para los lados del río"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20h20"/><path d="M7 20v-7M17 20v-9"/><path d="M7 13c-3 0-4-2-3-4s4-2 5-1c1-2 4-2 5 0s0 4-3 5H7z"/><path d="M17 11c-2 0-3-1.5-2.5-3S17 5 18 6s3 1 3 3-2 2-4 2z"/><path d="M11 20V9M11 12l-2-1M11 15l2-1"/></svg><span class="key">J</span></button>
     <button class="tool" data-tool="island_split" title="Dividir isla: dibujá una línea que cruce una isla tropical y queda partida en dos, con mar en el medio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 9c2-4 5-5 7-4v14c-3 1-6 0-7-4z"/><path d="M14 5c2-1 5 0 7 4v6c-1 4-4 5-7 4z"/><path d="M12 2v20" stroke-dasharray="2 2"/></svg></button>
     <button class="tool" data-tool="light_string" title="Guirnalda de luces: tocá una isla tropical y después otra (de noche se prenden)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 6c5 6 13 6 18 0"/><circle cx="7" cy="10" r="1.6" fill="currentColor"/><circle cx="12" cy="11.5" r="1.6" fill="currentColor"/><circle cx="17" cy="10" r="1.6" fill="currentColor"/><path d="M3 4v16M21 4v16"/></svg></button>
     <button class="tool" data-tool="island" title="Isla tropical redonda (I)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="16" rx="8" ry="3.5"/><path d="M12 15V8m0 0c-2-2-4-2-5-1m5 1c2-2 4-2 5-1m-5 1c-1-2-1-3.5 0-4.5"/></svg><span class="key">I</span></button>
@@ -277,7 +278,7 @@ function fromJSON(d) {
   const m = {
     format: 1, id: d.id || "", name: d.name || d.id || "mapa nuevo", order: d.order ?? 3, laps: d.laps ?? 3,
     half_width: d.half_width ?? 20, ring_count: d.ring_count ?? 10, rock_count: d.rock_count ?? 12,
-    smoothing: d.smoothing ?? 60, ring_radius: d.ring_radius ?? 82,
+    smoothing: d.smoothing ?? 60, ring_radius: d.ring_radius ?? 82, water: d.water || "mar",
     // Pista anillo: solo si el mapa lo es de verdad (sin recorrido y con radio).
     // Un mapa nuevo arranca vacío.
     ring: !(d.path || []).length && d.ring_radius !== undefined,
@@ -311,6 +312,7 @@ function toJSON(m) {
   }
   else if (m.ring) d.ring_radius = m.ring_radius;
   d.half_width = m.half_width; d.ring_count = m.ring_count; d.rock_count = m.rock_count;
+  if (m.water && m.water !== "mar") d.water = m.water;
   const r = (v) => Math.round(v * 1000) / 1000;
   d.pieces = m.pieces.map((p) => {
     const o = { type: p.type };
@@ -656,6 +658,8 @@ function draw() {
     grass: css("--grass"), rock: css("--rock"), cave: css("--cave"), glow: css("--glow"), sel: css("--sel"),
     accent: css("--accent"), grid: css("--grid"), bad: css("--bad"),
   };
+  // Agua de río: más oscura y verdosa (como en el juego).
+  if (map.water === "rio") { C.out = "#0d3330"; C.sea = "#18524a"; C.lane = "#2f7a68"; }
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.fillStyle = C.out;
   ctx.fillRect(0, 0, W, H);
@@ -684,12 +688,13 @@ function draw() {
 
   // Piezas (las rocas, semitransparentes, encima de la pista).
   map.pieces.forEach((p, i) => { if (p.type === "tropical_island") drawIsle(p, shapes[i], C, sel?.kind === "piece" && sel.i === i); });
+  map.pieces.forEach((p, i) => { if (p.type === "jungle_bank") drawJungle(p, shapes[i], C, sel?.kind === "piece" && sel.i === i); });
   map.pieces.forEach((p, i) => { if (p.type === "island_split") drawSplit(p, shapes[i], C, sel?.kind === "piece" && sel.i === i); });
   map.pieces.forEach((p, i) => {
     const on = sel?.kind === "piece" && sel.i === i;
     if (p.type === "rock_formation") drawRock(p, shapes[i], line, C, on);
     else if (p.type === "light_string") drawLights(p, C, on);
-    else if (p.type === "tropical_island" || p.type === "island_split") return; // ya dibujadas
+    else if (p.type === "tropical_island" || p.type === "island_split" || p.type === "jungle_bank") return; // ya dibujadas
     else if (DRAWN[p.type]) drawShapeGeneric(p, shapes[i], C, on);
     else if (p.a && p.b) drawTwoGeneric(p, C, on);
     else drawPiece(p, C, on);
@@ -870,6 +875,31 @@ function drawRock(p, poly, line, C, on) {
   ctx.font = "600 12px Outfit, sans-serif"; ctx.textAlign = "center"; ctx.fillStyle = "#fff";
   ctx.fillText(cave ? `cueva · techo ${p.ceiling ?? 12} m` : p.opening ? "roca con arco" : "roca", s[0], s[1]);
   ctx.textAlign = "start";
+}
+// Orilla de selva: barro en el borde y adentro la selva (verde oscuro, con
+// copas de árboles dibujadas como manchas).
+function drawJungle(p, poly, C, on) {
+  if (!poly || poly.length < 3) return;
+  ctx.save(); pathLine(poly, true); ctx.clip();
+  ctx.fillStyle = p.ground_color || "#2c4519"; ctx.fill();
+  pathLine(poly, true); ctx.strokeStyle = p.mud_color || "#4e3420"; ctx.lineJoin = "round";
+  ctx.lineWidth = 2 * (p.bank_width ?? 3) * cam.zoom; ctx.stroke();
+  // Copas: manchas en una grilla fija (no cambian al mover la vista).
+  const [x0, z0] = poly.reduce((a, q) => [Math.min(a[0], q[0]), Math.min(a[1], q[1])], [Infinity, Infinity]);
+  const [x1, z1] = poly.reduce((a, q) => [Math.max(a[0], q[0]), Math.max(a[1], q[1])], [-Infinity, -Infinity]);
+  const step = Math.max(9, 14 / cam.zoom);
+  ctx.fillStyle = hexA(p.leaf_color || "#1f5a1a", 0.9);
+  for (let x = Math.floor(x0 / step) * step; x < x1; x += step) for (let z = Math.floor(z0 / step) * step; z < z1; z += step) {
+    const h = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453, f = h - Math.floor(h);
+    const q = [x + f * step * 0.6, z + ((f * 7) % 1) * step * 0.6];
+    if (!pointInPoly(q, poly)) continue;
+    const s = toScreen(q);
+    ctx.beginPath(); ctx.arc(s[0], s[1], Math.max(2, step * 0.42 * cam.zoom), 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+  pathLine(poly, true); ctx.strokeStyle = on ? C.sel : "rgba(255,255,255,0.6)"; ctx.lineWidth = on ? 2.2 : 1.2; ctx.stroke();
+  const c = toScreen(centroid(poly));
+  ctx.font = "600 12px Outfit, sans-serif"; ctx.textAlign = "center"; ctx.fillStyle = "#fff"; ctx.fillText("selva", c[0], c[1]); ctx.textAlign = "start";
 }
 function drawIsle(p, poly, C, on) {
   if (!poly || poly.length < 3) return;
@@ -2133,7 +2163,7 @@ window.addEventListener("keydown", (e) => {
   if (mod && isV) { e.preventDefault(); pasteClipboard(mouseWorld); return; }
   if (mod && isD) { e.preventDefault(); if (copySelection()) pasteClipboard(null); return; }
   if (selectedShape() && (k === "q" || k === "e")) { rotateSelection(k === "q" ? -15 : 15); return; }
-  const map_ = { v: "select", h: "pan", d: "paint", p: "track", b: "branch", r: "rock_formation", t: "tropical_island", m: "start", i: "island", g: "geyser" };
+  const map_ = { v: "select", h: "pan", d: "paint", j: "jungle_bank", p: "track", b: "branch", r: "rock_formation", t: "tropical_island", m: "start", i: "island", g: "geyser" };
   if (map_[k]) setTool(map_[k]);
   if (k === "f") fit();
   if (k === "+" || k === "=") zoomAt([W / 2, H / 2], 1.25);
@@ -2207,6 +2237,7 @@ function refreshPanel() {
         (v) => strings.forEach((p) => (p.lines = Math.max(1, Math.min(20, v)))), { id: "all_lines" }));
       if (counts.length > 1) box.append(note("Ahora tienen cantidades distintas (" + counts.join(", ") + "). Poné un número para igualarlas todas."));
     }
+    box.append(field("Agua", "choice", map.water || "mar", (v) => (map.water = v), { id: "water", choices: [["mar", "Mar"], ["rio", "Río"]] }));
     box.append(note(`Archivo: world/maps/${map.id || slug(map.name)}.json. El número de mapa es el lugar en el menú: se puede cambiar (los récords siguen al mapa por su nombre), pero no a la vez que el nombre del archivo.`));
   } else if (s.kind === "start" && map.start) {
     const st = map.start;

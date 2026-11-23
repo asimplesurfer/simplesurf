@@ -77,7 +77,7 @@ func _ready() -> void:
 	_material.shader = SHADER
 	waves.apply_to(_material)
 	# Los colores del agua de día (la base de todos los climas: ver WaterPalette).
-	WaterPalette.apply_to_water(_material, WaterPalette.DAY)
+	WaterPalette.apply_to_water(_material, WaterPalette.DAY, Callable(), palette)
 
 	_plane = _build_mesh()
 
@@ -85,6 +85,17 @@ func _ready() -> void:
 	if follow:
 		add_follower(follow, -1)
 	_push_swells()
+
+
+## Qué agua es: el mar o el río (WaterPalette.SEA / RIVER). La elige el mapa
+## (ver Course): con set_palette se cambia y se pintan los colores de día.
+var palette: String = WaterPalette.SEA
+
+
+func set_palette(water: String) -> void:
+	palette = water if WaterPalette.WATERS.has(water) else WaterPalette.SEA
+	if _material:
+		WaterPalette.apply_to_water(_material, WaterPalette.DAY, Callable(), palette)
 
 
 ## El material del agua (la tormenta le cambia colores y olitas).

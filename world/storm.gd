@@ -230,7 +230,7 @@ func _paint_sky() -> void:
 		"cloud_warm": Color(0.42, 0.44, 0.5),
 		"island_color": Color(0.12, 0.17, 0.18),
 		"island_far_color": Color(0.3, 0.35, 0.4),
-		"ocean_color": WaterPalette.colors(WaterPalette.STORM).ocean_color,
+		"ocean_color": WaterPalette.colors(WaterPalette.STORM, _water_kind()).ocean_color,
 		"cloud_coverage": 0.86,
 		"cloud_speed": 0.016,
 	}
@@ -257,7 +257,7 @@ func _roughen(water: Water) -> void:
 	var mat := water.shader_material()
 	w.apply_to(mat)
 	# Colores del agua de la tormenta (los que no decide, salen de la base: ver WaterPalette).
-	WaterPalette.apply_to_water(mat, WaterPalette.STORM, _set_water)
+	WaterPalette.apply_to_water(mat, WaterPalette.STORM, _set_water, water.palette)
 	# Espuma solo en las crestas más altas (si no, el mar picado se llena de manchas).
 	_set_water(mat, "foam_height", 0.42 * CHOP_SCALE * 0.5)
 	# Las gotas pegan en el mar: circulitos que se abren y salpicaduras.
@@ -366,3 +366,9 @@ func strike() -> void:
 		_sky_mat.set_shader_parameter("bolt_az", ang)
 		_sky_mat.set_shader_parameter("bolt_seed", float(_rng.randi_range(0, 9999)))
 	_thunder_in.append(dist / SOUND_SPEED * 0.5 + _rng.randf_range(0.2, 0.6))
+
+
+## Qué agua tiene la escena (el mar o el río; ver Water.palette).
+func _water_kind() -> String:
+	var water := GameSession.find_in_scene(self, "water") as Water
+	return water.palette if water else WaterPalette.SEA

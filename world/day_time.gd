@@ -22,7 +22,7 @@ static func apply(main: Node, t: int) -> DayTime:
 		if world_env and world_env.environment and world_env.environment.sky:
 			var sky_mat := world_env.environment.sky.sky_material as ShaderMaterial
 			if sky_mat:
-				sky_mat.set_shader_parameter("ocean_color", WaterPalette.BASE.ocean_color)
+				sky_mat.set_shader_parameter("ocean_color", WaterPalette.base(_water_of(main)).ocean_color)
 		return null
 	var d := DayTime.new()
 	d.name = "DayTime"
@@ -77,7 +77,7 @@ func _paint(main: Node) -> void:
 			for k in (_NIGHT_SKY if night else _SUNSET_SKY):
 				sky.set_shader_parameter(k, (_NIGHT_SKY if night else _SUNSET_SKY)[k])
 			# El mar lejano es un color del agua (ver WaterPalette).
-			sky.set_shader_parameter("ocean_color", WaterPalette.colors(climate()).ocean_color)
+			sky.set_shader_parameter("ocean_color", WaterPalette.colors(climate(), _water_of(main)).ocean_color)
 		world_env.environment = env
 	var sun := main.get_node_or_null("Sun") as DirectionalLight3D
 	if sun:
@@ -93,7 +93,13 @@ func _paint(main: Node) -> void:
 			sun.rotation = Vector3(-0.32, 0.61, 0.0)
 	var water := main.get_node_or_null("Water") as Water
 	if water:
-		WaterPalette.apply_to_water(water.shader_material(), climate())
+		WaterPalette.apply_to_water(water.shader_material(), climate(), Callable(), water.palette)
+
+
+## Qué agua tiene la escena (el mar o el río; ver Water.palette).
+static func _water_of(main: Node) -> String:
+	var water := main.get_node_or_null("Water") as Water
+	return water.palette if water else WaterPalette.SEA
 
 
 ## Nombre del clima del agua para esta hora (ver WaterPalette).
