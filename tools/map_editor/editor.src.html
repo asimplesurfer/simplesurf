@@ -278,6 +278,9 @@ function fromJSON(d) {
     format: 1, id: d.id || "", name: d.name || d.id || "mapa nuevo", order: d.order ?? 3, laps: d.laps ?? 3,
     half_width: d.half_width ?? 20, ring_count: d.ring_count ?? 10, rock_count: d.rock_count ?? 12,
     smoothing: d.smoothing ?? 60, ring_radius: d.ring_radius ?? 82,
+    // Pista anillo: solo si el mapa lo es de verdad (sin recorrido y con radio).
+    // Un mapa nuevo arranca vacío.
+    ring: !(d.path || []).length && d.ring_radius !== undefined,
     start: d.start ? { x: d.start.x, z: d.start.z, angle: d.start.angle ?? 0, back: d.start.back ?? 40, front: d.start.front ?? 60, bend: d.start.bend ?? 0 } : null,
     path: (d.path || []).map(nodeFrom),
     // Caminos alternativos: salen del punto `from` de la pista y vuelven en `to`.
@@ -306,7 +309,7 @@ function toJSON(m) {
     }
     if (m.branches?.length) d.branches = m.branches.map((b) => ({ from: b.from, to: b.to, path: b.path.map(nodeTo) }));
   }
-  else d.ring_radius = m.ring_radius;
+  else if (m.ring) d.ring_radius = m.ring_radius;
   d.half_width = m.half_width; d.ring_count = m.ring_count; d.rock_count = m.rock_count;
   const r = (v) => Math.round(v * 1000) / 1000;
   d.pieces = m.pieces.map((p) => {
@@ -381,6 +384,7 @@ function bez(c, t) {
 // Lo que arma el juego: 24 muestras por tramo y el suavizado.
 function trackLine(m) {
   if (!m.path.length) {
+    if (!m.ring) return [];
     const pts = [];
     for (let i = 0; i < 180; i++) { const a = (i / 180) * Math.PI * 2; pts.push([Math.cos(a) * m.ring_radius, Math.sin(a) * m.ring_radius]); }
     return pts;
@@ -1732,7 +1736,7 @@ function penDown(s, w, e) {
     return;
   }
   if (!drawing) {
-    if (isTrack) { map.path = []; map.branches = []; map.open = true; drawing = { kind: "path" }; sel = { kind: "path", node: -1 }; }
+    if (isTrack) { map.path = []; map.branches = []; map.ring = false; map.open = true; drawing = { kind: "path" }; sel = { kind: "path", node: -1 }; }
     else {
       const type = tool;
       const piece = { type, [DRAWN[type].key]: [] };
@@ -2087,7 +2091,7 @@ function deleteSelection() {
     commit(); refreshPanel(); setHint(); return;
   }
   if (sel.kind === "path" && sel.node >= 0) { if (map.path.length <= 3) return toast("La pista necesita al menos 3 puntos."); const before = map.path.slice(); map.path.splice(sel.node, 1); fixBranches(before); sel.node = -1; }
-  else if (sel.kind === "path") { map.path = []; map.branches = []; sel = { kind: "map" }; }
+  else if (sel.kind === "path") { map.path = []; map.branches = []; map.ring = false; sel = { kind: "map" }; }
   else if (sel.kind === "branch") {
     const b = map.branches[sel.i];
     if (sel.node >= 0 && b.path.length > 1) { b.path.splice(sel.node, 1); sel.node = -1; }
@@ -2194,7 +2198,7 @@ function refreshPanel() {
       if (k === "smoothing" && !map.path.length) continue;
       box.append(field(label, kind, map[k], (v) => { map[k] = v; if (k === "name" && !lockedId()) map.id = slug(v); }, { id: k }));
     }
-    if (!map.path.length) box.append(field("Radio del anillo (m)", "num", map.ring_radius, (v) => (map.ring_radius = v), { id: "ring_radius" }));
+    if (!map.path.length && map.ring) box.append(field("Radio del anillo (m)", "num", map.ring_radius, (v) => (map.ring_radius = v), { id: "ring_radius" }));
     // Todas las guirnaldas a la vez: cuántos cables lleva cada una.
     const strings = map.pieces.filter((p) => p.type === "light_string");
     if (strings.length) {
@@ -2243,7 +2247,7 @@ function refreshPanel() {
       fixBranches(before);
       commit(); refreshPanel();
     }),
-      btn("Borrar pista", () => { map.path = []; map.branches = []; sel = { kind: "map" }; commit(); refreshPanel(); }));
+      btn("Borrar pista", () => { map.path = []; map.branches = []; map.ring = false; sel = { kind: "map" }; commit(); refreshPanel(); }));
     box.append(row);
     box.append(note("La línea fina es la que dibujás; la banda celeste es la pista tal como queda en el juego (con el redondeo). La flecha marca el sentido de la carrera."));
     box.append(note(map.branches.length
@@ -2352,6 +2356,7 @@ function lockedId() { return currentKey.startsWith("builtin:") || currentKey.sta
 function review() {
   const out = [];
   const { line, shapes, length } = computed();
+  if (!map.path.length && !map.ring) out.push(["bad", "Todavía no hay pista: pintala con el pincel (D) o dibujala punto por punto (P)."]);
   if (map.path.length && map.path.length < (map.start ? 1 : 3)) out.push(["bad", "La pista necesita al menos 3 puntos."]);
   if (map.path.length && !map.start) out.push(["warn", "La pista no tiene recta de meta: los surfistas pueden arrancar mirando para cualquier lado si la largada está en una curva. Usá la herramienta Meta."]);
   // Pista sin cerrar: se puede seguir otro día, pero el juego necesita la vuelta cerrada.
@@ -2463,7 +2468,7 @@ function openMap(key) {
   if (key === "new") {
     const next = Math.max(...BUILTIN.map((b) => b.order), ...[...saved.values()].map((d) => d.order ?? 0)) + 1;
     map = fromJSON({ id: "mapa_nuevo", name: "mapa nuevo", order: next, laps: 3, half_width: 20, smoothing: 20, ring_count: 12, rock_count: 10, path: [], pieces: [] });
-    currentKey = "draft"; setTool("track");
+    currentKey = "draft"; setTool("paint");
   } else if (key.startsWith("builtin:")) { map = fromJSON(BUILTIN[+key.slice(8)]); currentKey = key; }
   else if (key.startsWith("saved:")) { map = fromJSON(saved.get(key.slice(6))); currentKey = key; }
   sel = { kind: "map" }; drawing = null;
