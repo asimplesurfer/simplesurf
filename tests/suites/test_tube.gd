@@ -26,6 +26,7 @@ func run() -> void:
 	await _test_obstacles_hidden()
 	await _test_bot_goes_to_mouth()
 	await _test_director_spawns()
+	await _test_no_swells_and_smooth()
 	m.queue_free()
 	await process_frame
 
@@ -315,4 +316,55 @@ func _test_director_spawns() -> void:
 		_check(ahead < -15.0 and ahead > -45.0, "la boca aparece adelante (%.0f m)" % -ahead)
 		_check(tw.duration >= 8.0 and tw.duration <= 12.0, "dura entre 8 y 12 s (%.1f)" % tw.duration)
 		tw.dismiss()
+	await _wait(TubeWave.COLLAPSE_TIME + 0.3)
+
+
+## Con una ola tubo no salen olas comunes, y su recorrido es más suave que la pista.
+func _test_no_swells_and_smooth() -> void:
+	_water.clear_swells()
+	var tw := _make_tube(5.0, 0.0, 10.0)
+	_waves.enabled = true
+	var saved_calm := _race.race_time
+	_race.race_time = 60.0
+	var most := 0
+	for i in int(4.0 * FPS):
+		await process_frame
+		most = maxi(most, _water.swells.size())
+	_check(most == 0, "mientras hay una ola tubo no salen olas comunes")
+	_waves.enabled = false
+	_race.race_time = saved_calm
+	# Cuánto gira (rad) la dirección cada 10 m: en el tubo, menos que en la pista.
+	var track := _course.track
+	var worst_tube := 0.0
+	var worst_track := 0.0
+	var s := 0.0
+	while s < 150.0:
+		var a: Vector3 = tw.frame_at(s)[2]
+		var b: Vector3 = tw.frame_at(s + 10.0)[2]
+		worst_tube = maxf(worst_tube, a.angle_to(b))
+		var ang := 5.0 + s / track.length() * TAU
+		var ta := track.tangent_at(ang)
+		var tb := track.tangent_at(ang + 10.0 / track.length() * TAU)
+		worst_track = maxf(worst_track, ta.angle_to(tb))
+		s += 5.0
+	_check(worst_tube <= worst_track + 0.005, "las curvas del tubo no son más cerradas que las de la pista (%.2f vs %.2f rad cada 10 m)" % [worst_tube, worst_track])
+	# En una pista con curvas cerradas, el recorrido del tubo las suaviza.
+	var zig := PathTrack.new(PackedVector2Array([
+		Vector2(0, 0), Vector2(60, 0), Vector2(70, 30), Vector2(130, 30), Vector2(140, 0),
+		Vector2(200, 0), Vector2(200, 120), Vector2(0, 120),
+	]), 20.0, [], [], 4)
+	var pts := TubeWave.make_spine(zig, 0.3, 0.0, 200.0)
+	var raw_turn := 0.0
+	var smooth_turn := 0.0
+	var per_m := TAU / zig.length()
+	for i in range(2, pts.size() - 6):
+		var d0 := (pts[i + 2] - pts[i]).normalized()
+		var d1 := (pts[i + 5] - pts[i + 3]).normalized()
+		smooth_turn = maxf(smooth_turn, d0.angle_to(d1))
+		var sm := -TubeWave.SPINE_BEFORE + i * TubeWave.SPINE_STEP
+		var r0 := zig.tangent_at(0.3 + sm * per_m)
+		var r1 := zig.tangent_at(0.3 + (sm + 6.0) * per_m)
+		raw_turn = maxf(raw_turn, r0.angle_to(r1))
+	_check(smooth_turn < raw_turn * 0.7, "en las curvas cerradas el tubo va más suave (%.2f vs %.2f)" % [smooth_turn, raw_turn])
+	tw.dismiss()
 	await _wait(TubeWave.COLLAPSE_TIME + 0.3)

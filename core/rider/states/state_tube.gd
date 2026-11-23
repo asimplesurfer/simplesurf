@@ -10,15 +10,17 @@ extends RiderState
 ## Si aguanta hasta el final, sale por adelante con un turbo y el nitro lleno.
 
 ## Al entrar, un ratito sin empujones (para acomodarse).
-const SETTLE_TIME := 0.6
-## Empujón de la ola (cuánto corre el equilibrio por segundo, en su punto más fuerte).
-const PUSH_SPEED := 0.55
-## Cuánto más empuja hacia el final (de a poco se pone más difícil).
-const PUSH_GROWTH := 0.35
-## Inestable: cuanto más corrido, más se corre solo (por segundo).
-const UNSTABLE := 0.6
+const SETTLE_TIME := 1.5
+## Empujón de la ola (cuánto corre el equilibrio por segundo): al principio
+## suave, y de a poco más fuerte hasta el final.
+const PUSH_START := 0.18
+const PUSH_END := 0.45
+## Inestable: cuanto más corrido, más se corre solo (por segundo). También
+## crece de a poco.
+const UNSTABLE_START := 0.15
+const UNSTABLE_END := 0.45
 ## Cuánto corrige el stick al máximo (por segundo). Siempre puede más que la ola.
-const CONTROL := 1.6
+const CONTROL := 1.8
 ## Los últimos segundos (s) la ola ya no empuja (sale derecho).
 const EXIT_SETTLE := 0.7
 ## Cada cuánto cambia el empujón de la ola (s).
@@ -113,9 +115,11 @@ func _update_balance(delta: float, input: RiderInput) -> void:
 		var dir := -1.0 if _rng.randf() < 0.5 else 1.0
 		_push_target = dir * _rng.randf_range(0.45, 1.0)
 	_push = move_toward(_push, _push_target, delta * 3.0)
-	var strength := PUSH_SPEED * (1.0 + PUSH_GROWTH * tube.progress())
+	var k := smoothstep(0.0, 1.0, tube.progress())
+	var strength := lerpf(PUSH_START, PUSH_END, k)
+	var unstable := lerpf(UNSTABLE_START, UNSTABLE_END, k)
 	var toward_wall := input.steer * wall_on_right_sign()
-	var vel := _push * strength + balance * UNSTABLE + toward_wall * CONTROL
+	var vel := _push * strength + balance * unstable + toward_wall * CONTROL
 	balance = clampf(balance + vel * delta, -1.0, 1.0)
 	rider.tube_balance = balance
 	rider.tube_danger = smoothstep(0.5, 0.95, absf(balance))

@@ -135,6 +135,10 @@ func _physics_process(delta: float) -> void:
 	if fixed_waves:
 		_update_fixed()
 		return
+	# Mientras hay una ola tubo no salen olas nuevas (se mezclarían con el tubo y
+	# así se ve claro adónde ir).
+	if not get_tree().get_nodes_in_group("tube_waves").is_empty():
+		return
 	# Recién largada: unos segundos de calma (si no, al estar todos juntos les
 	# llegan varias olas seguidas antes de poder verlas).
 	var race := GameSession.find_in_scene(self, "race_manager") as RaceManager

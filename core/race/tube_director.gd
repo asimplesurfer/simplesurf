@@ -186,22 +186,24 @@ func pick_lateral(mouth: float, near: float, length: float) -> float:
 			if absf(lat) <= limit:
 				options.append(lat)
 	for lat in options:
-		if water == null or _clear(track, water, mouth, lat, length):
+		if _clear(track, water, mouth, lat, length):
 			return lat
 	return NAN
 
 
-## true si a lo largo del tubo (con su ancho) no hay tierra.
+## true si a lo largo del tubo (con su ancho) no hay tierra y no se sale de la
+## pista (el recorrido del tubo está suavizado: en las curvas se corre).
 func _clear(track: TrackSpace, water: Water, mouth: float, lat: float, length: float) -> bool:
-	var per_m := TAU / track.length()
-	# La pared va hacia el borde más cercano (como en spawn_for).
 	var side := 1.0 if lat >= 0.0 else -1.0
-	var s := -6.0
-	while s < length:
-		var a := mouth + s * per_m
+	var pts := TubeWave.make_spine(track, mouth, lat, length)
+	var dirs := TubeWave.spine_wall_dirs(track, mouth, lat, side, pts)
+	var limit := track.half_width - 3.0
+	for i in range(0, pts.size(), 2):
+		var p := pts[i]
+		if absf(track.lateral_of(p)) > limit:
+			return false
 		for off in [-6.0, 0.0, 4.5]:
-			var p := track.position_at(a, lat + off * side)
-			if water.land_fade(Vector2(p.x, p.z)) < 0.95:
+			var q: Vector3 = p + dirs[i] * off
+			if water and water.land_fade(Vector2(q.x, q.z)) < 0.95:
 				return false
-		s += 4.0
 	return true

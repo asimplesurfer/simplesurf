@@ -157,7 +157,7 @@ func _tube_target(angle: float) -> float:
 			_tube_choice[id] = tw.opener == rider or _rng.randf() < 0.5 + 0.5 * difficulty.wave_seek
 		if _tube_choice[id]:
 			# Un poco hacia el lado abierto (la boca es más ancha de ese lado).
-			return tw.lateral - tw.side * 0.8
+			return tw.mouth_lateral()
 	return NAN
 
 

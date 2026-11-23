@@ -551,6 +551,9 @@ func _test_archipelago() -> void:
 	await process_frame
 	var course := m.get_node("Course") as Course
 	var track := course.track
+	# Sin olas tubo (frenan las olas comunes mientras están): acá se miden las olas.
+	if race.tubes:
+		race.tubes.automatic = false
 	_check(track is PathTrack, "el recorrido no es un círculo")
 	_check(course.registered("ground").size() >= 12, "hay muchas islas (%d)" % course.registered("ground").size())
 	_check(
