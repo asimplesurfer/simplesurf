@@ -21,7 +21,10 @@ const SAVE_PATH := "user://contrarreloj.dat"
 ## "top": [...], "ghost": {...}}, ...]}}}. Sin "format": el de antes (por lugar
 ## en la lista de mapas), que se pasa a este solo (ver _migrate).
 const SAVE_FORMAT := 2
-const RIDER_SCENE := preload("res://core/rider/rider.tscn")
+## La escena del surfista (para el fantasma). Con load al usarla, no preload:
+## en la build web el preload quedaba vacío (referencia circular entre
+## scripts) y el fantasma no se podía armar.
+const RIDER_SCENE_PATH := "res://core/rider/rider.tscn"
 ## Cuántos tiempos se guardan por mapa.
 const TOP := 3
 ## Muestras por segundo del fantasma (la física va a 60).
@@ -289,7 +292,12 @@ func _build_ghost_progress() -> void:
 # ---------------------------------------------------------------- fantasma
 
 func _spawn_ghost(character: CharacterData) -> void:
-	ghost = RIDER_SCENE.instantiate()
+	var scene := load(RIDER_SCENE_PATH) as PackedScene
+	ghost = scene.instantiate() as Rider if scene else null
+	if ghost == null:
+		# Sin fantasma, pero la contrarreloj sigue andando.
+		push_error("Contrarreloj: no se pudo armar el fantasma")
+		return
 	ghost.name = "Fantasma"
 	ghost.display_name = "Récord"
 	ghost.player_index = -1

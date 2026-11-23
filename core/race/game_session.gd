@@ -70,16 +70,20 @@ static func launch(
 ) -> void:
 	if old == null:
 		old = tree.current_scene
+	var replaces_current := old == tree.current_scene or tree.current_scene == null
+	# La escena vieja se borra antes de armar la nueva (se borra al final del
+	# cuadro igual): si algo fallara al armar la nueva, no queda la vieja (el
+	# menú) adelante con la partida corriendo escondida atrás.
+	if old:
+		old.queue_free()
 	var scene: Node = (load(scene_path) as PackedScene).instantiate()
 	for child in scene.get_children():
 		if child is GameSession:
 			(child as GameSession).config = session_config
 			(child as GameSession).with_warmup = warmup
 	tree.root.add_child(scene)
-	if old == tree.current_scene or tree.current_scene == null:
+	if replaces_current:
 		tree.current_scene = scene
-	if old:
-		old.queue_free()
 
 
 ## true en el modo libre (sin vueltas, posiciones ni llegada).
