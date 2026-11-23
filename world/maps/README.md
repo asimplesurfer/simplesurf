@@ -80,8 +80,8 @@ puede abrir en el editor para cambiarlo.
   manijas como los del recorrido). Varios con las mismas puntas = varios
   caminos en el mismo tramo. Reglas:
   - `from` < `to`: un tramo con varios caminos no puede pasar por la meta.
-  - Dos tramos distintos no se pueden pisar (o tienen las mismas puntas, o uno
-    termina antes de que empiece el otro).
+  - Los caminos se pueden pisar en parte (uno sale antes de que vuelva otro):
+    en cada vuelta se toma uno de ellos.
   - Los caminos se pueden cruzar entre sí (como una X): ahí las corcheras se
     abren solas y se puede pasar de uno al otro.
 

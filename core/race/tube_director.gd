@@ -154,14 +154,10 @@ func spawn_test(r: Rider) -> TubeWave:
 ## que sigue el camino donde está ahora (en los demás tramos, la principal).
 func track_for(r: Rider) -> TrackSpace:
 	var track := race.course.track
-	var groups := track.groups()
-	if groups.is_empty():
+	if track.route_count() <= 1:
 		return track
 	var route := int(track.locate_route(r.position).z)
-	var choices: Array = []
-	for g in groups:
-		choices.append(route if (g.routes as Array).has(route) else 0)
-	return track.variant(choices)
+	return track.variant([route] if route > 0 else [])
 
 
 ## Hace aparecer una ola adelante de `r`. Devuelve la ola (o null si no hay lugar).

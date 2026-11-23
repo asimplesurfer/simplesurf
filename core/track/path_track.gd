@@ -33,10 +33,7 @@ var _grid: Dictionary = {}
 var _control_s: PackedFloat32Array = PackedFloat32Array()
 ## Ramales (la ruta k es branches[k - 1]).
 var branches: Array[Branch] = []
-## Tramos con más de un camino, en orden: {"from", "to": metros de la
-## principal; "routes": las rutas que se pueden tomar (la 0 primero)}.
-var _groups: Array[Dictionary] = []
-## Recorridos completos de una vuelta eligiendo un camino en cada tramo (ver variant).
+## Recorridos completos de una vuelta por algunos ramales (ver variant).
 var _variants: Dictionary = {}
 
 
@@ -81,7 +78,6 @@ func _init(
 		_build(control, handles_in, handles_out, smoothing, start)
 		for b in p_branches:
 			_add_branch(b, smoothing)
-		_build_groups()
 
 
 ## Una pista armada directo con sus muestras (una vuelta cerrada, ya suave).
@@ -512,52 +508,37 @@ func _main_dir(s: float) -> Vector2:
 	return Vector2(t.x, t.z).normalized()
 
 
-## Junta los ramales que salen y llegan a los mismos puntos: cada tramo con
-## más de un camino es un grupo.
-func _build_groups() -> void:
-	_groups.clear()
-	var by_key := {}
-	for k in branches.size():
-		var b := branches[k]
-		var key := Vector2i(b.from_index, b.to_index)
-		if not by_key.has(key):
-			by_key[key] = {"from": b.s_from, "to": b.s_to, "routes": [0]}
-			_groups.append(by_key[key])
-		(by_key[key].routes as Array).append(k + 1)
-	_groups.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a.from) < float(b.from))
-
-
 func route_count() -> int:
 	return branches.size() + 1
 
 
-func groups() -> Array[Dictionary]:
-	return _groups
+## Metros de la principal entre la salida y la vuelta de un ramal (lo que
+## reemplaza).
+func main_span(route: int) -> float:
+	var b := branches[route - 1]
+	return b.s_to - b.s_from
 
 
-## Grupo (índice en groups()) al que pertenece la ruta (-1 si es la principal).
-func group_of_route(route: int) -> int:
-	for g in _groups.size():
-		if route != 0 and (_groups[g].routes as Array).has(route):
-			return g
-	return -1
+## Cuántos metros más (o menos, si es negativo) se hacen yendo por ese ramal
+## que por la principal.
+func route_extra(route: int) -> float:
+	return branches[route - 1].length - main_span(route)
 
 
-## Grupo en el que está ese "ángulo" de la principal (-1 si en ninguno).
-func group_at(angle: float) -> int:
-	var s := wrapf(angle, 0.0, TAU) / TAU * _total
-	for g in _groups.size():
-		if s > float(_groups[g].from) and s < float(_groups[g].to):
-			return g
-	return -1
-
-
-## Largo (m) de una ruta en su tramo: el ramal entero, o la principal entre
-## las puntas del grupo.
-func route_length(route: int, group: int) -> float:
-	if route > 0 and route <= branches.size():
-		return branches[route - 1].length
-	return float(_groups[group].to) - float(_groups[group].from)
+## Los ramales que salen del próximo punto de salida a partir de `s` metros de
+## la principal (todos los que salen de ese mismo punto). Vacío si no hay más.
+func next_departures(s: float) -> Array[int]:
+	var first := INF
+	for b in branches:
+		if b.s_from >= s - 0.01:
+			first = minf(first, b.s_from)
+	var out: Array[int] = []
+	if first == INF:
+		return out
+	for k in branches.size():
+		if absf(branches[k].s_from - first) < 0.5:
+			out.append(k + 1)
+	return out
 
 
 ## Los puntos de la línea central de un ramal (de la salida a la vuelta).
@@ -619,34 +600,29 @@ func _branch_at(route: int, angle: float) -> Branch:
 	return b
 
 
-## Una vuelta entera eligiendo un camino en cada tramo: `choices[g]` es la
-## ruta del grupo g. Es una pista común (sin ramales) que empieza en la meta;
-## sus "ángulos" son los suyos, no los de esta. La usan los bots para seguir
-## el camino que eligieron y las olas tubo. Se arma una vez por combinación.
-func variant(choices: Array) -> TrackSpace:
-	if _groups.is_empty():
+## Una vuelta entera por los ramales de `taken` (rutas, en el orden en que
+## se pasan; no se pueden pisar) y por la principal en el resto. Es una pista
+## común (sin ramales) que empieza en la meta; sus "ángulos" son los suyos, no
+## los de esta. La usan los bots para seguir el camino que eligieron y las
+## olas tubo. Se arma una vez por combinación.
+func variant(taken: Array) -> TrackSpace:
+	if branches.is_empty():
 		return self
-	var key := str(choices)
+	var key := str(taken)
 	if _variants.has(key):
 		return _variants[key]
 	var pts := PackedVector2Array()
-	var g := 0
+	var t := 0
 	var i := 0
 	var count := points.size()
 	while i < count:
 		var s := i * _seg_len
-		if g < _groups.size() and s >= float(_groups[g].from):
-			var route: int = choices[g] if g < choices.size() else 0
-			if route == 0:
-				# Por la principal: sigue normal hasta el final del tramo.
-				while i < count and i * _seg_len < float(_groups[g].to):
-					pts.append(points[i])
-					i += 1
-			else:
-				pts.append_array(branches[route - 1].points)
-				while i < count and i * _seg_len <= float(_groups[g].to):
-					i += 1
-			g += 1
+		if t < taken.size() and s >= branches[int(taken[t]) - 1].s_from:
+			var b := branches[int(taken[t]) - 1]
+			pts.append_array(b.points)
+			while i < count and i * _seg_len <= b.s_to:
+				i += 1
+			t += 1
 			continue
 		pts.append(points[i])
 		i += 1
@@ -655,15 +631,22 @@ func variant(choices: Array) -> TrackSpace:
 	return v
 
 
-## Todas las combinaciones de caminos (para calcular de antemano lo de los bots).
-func all_choices() -> Array:
-	var out: Array = [[]]
-	for grp in _groups:
-		var next: Array = []
-		for c in out:
-			for r in grp.routes:
-				next.append((c as Array) + [r])
-		out = next
+## Todas las vueltas posibles (listas de ramales que se pueden tomar seguidos,
+## sin pisarse), hasta `limit`. Para calcular de antemano lo de los bots.
+func all_choices(limit: int = 48) -> Array:
+	var out: Array = []
+	var order: Array[int] = []
+	for k in branches.size():
+		order.append(k + 1)
+	order.sort_custom(func(a: int, b: int) -> bool: return branches[a - 1].s_from < branches[b - 1].s_from)
+	var walk := func(rec: Callable, s: float, taken: Array) -> void:
+		if out.size() >= limit:
+			return
+		out.append(taken)
+		for r in order:
+			if branches[r - 1].s_from >= s - 0.01:
+				rec.call(rec, branches[r - 1].s_to, taken + [r])
+	walk.call(walk, 0.0, [])
 	return out
 
 
