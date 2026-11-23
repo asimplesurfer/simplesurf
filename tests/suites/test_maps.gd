@@ -9,10 +9,12 @@ func run() -> void:
 	_test_bezier()
 	_test_start_straight()
 	_test_edges_on_border()
+	_test_edges_never_stick()
 	_test_water_palette()
 	await _test_cave()
 	await _test_cave_map()
 	await _test_tropical_island()
+	await _test_tropical_buoys_stuck()
 	await _test_jungle_bank()
 	await _test_night()
 	await _test_archipelago()
@@ -51,6 +53,51 @@ func _test_map_files() -> void:
 		and again.laps == atoll.laps,
 		"un mapa se puede exportar y volver a leer igual"
 	)
+
+
+## Las corcheras nunca traban: en todos los mapas, por los dos bordes y por
+## cada ramal, alguien que va a fondo empujando contra las boyas siempre sigue
+## avanzando. (En el Tropical, del lado de afuera de un quiebre del camino, el
+## borde lo devolvía cada cuadro al mismo punto y quedaba quieto con turbo.)
+func _test_edges_never_stick() -> void:
+	print("Corcheras que no traban:")
+	const STEP := 0.3  # m por cuadro (18 m/s a 60 cuadros por segundo)
+	const STUCK_STEPS := 12  # 0,2 s sin avanzar
+	for m in TrackMap.all():
+		var t := m.make_track()
+		var limit: float = m.half_width - Course.EDGE_MARGIN
+		var worst := 0
+		var where := Vector2.ZERO
+		for route in t.route_count():
+			for side in [-1.0, 1.0]:
+				var a0 := 0.0
+				if route > 0:
+					var b = (t as PathTrack).branches[route - 1]
+					a0 = (b.s_from + 2.0) / t.length() * TAU
+				var p := t.position_on(route, a0, side * (limit - 0.3))
+				var run := 0
+				var n := int(t.length() / STEP)
+				for i in n:
+					var loc := t.locate_route(p)
+					var r := int(loc.z)
+					var tan := t.tangent_on(r, loc.x)
+					var out := t.position_on(r, loc.x, side) - t.position_on(r, loc.x, 0.0)
+					# A fondo, un poco torcido hacia la corchera.
+					var dir := (Vector2(tan.x, tan.z).normalized() + Vector2(out.x, out.z).normalized() * 0.15).normalized()
+					var before := Vector2(p.x, p.z)
+					p += Vector3(dir.x, 0.0, dir.y) * STEP
+					loc = t.locate_route(p)
+					if absf(loc.y) > limit:
+						p = Course.edge_clamp(t, p, loc, limit)
+					var moved := (Vector2(p.x, p.z) - before).dot(Vector2(tan.x, tan.z).normalized())
+					run = run + 1 if moved < STEP * 0.25 else 0
+					if run > worst:
+						worst = run
+						where = Vector2(p.x, p.z)
+					# Un ramal que vuelve a la principal termina su recorrido ahí.
+					if route > 0 and int(t.locate_route(p).z) != route and i > 20:
+						break
+		_check(worst < STUCK_STEPS, "%s: contra las boyas nunca queda quieto (peor: %d cuadros en %s)" % [m.name, worst, where])
 
 
 ## Boyas y corcheras: todas en el borde real de la pista. En las curvas
@@ -887,6 +934,45 @@ func _test_editor_catalog() -> void:
 	for pr in problems:
 		print("    " + pr)
 	_check(problems.is_empty(), "cada pieza dice cómo se pone y cada parámetro tiene su etiqueta en el editor")
+
+
+## El lugar exacto del Tropical donde un jugador quedó trabado contra las boyas
+## (registro del 23/11, 2.a vuelta): a fondo, pegado al borde, sigue de largo.
+func _test_tropical_buoys_stuck() -> void:
+	print("Tropical: boyas que trababan:")
+	GameSettings.track_layout = TrackMap.index_of("tropical")
+	var m: Node = load("res://main.tscn").instantiate()
+	root.add_child(m)
+	await process_frame
+	await process_frame
+	var race := m.get_node("RaceManager") as RaceManager
+	var course := m.get_node("Course") as Course
+	race.skip_countdown()
+	await process_frame
+	var rider: Rider = null
+	for r in race.racers:
+		if r.is_human and rider == null:
+			rider = r
+		else:
+			r.position = Vector3(0.0, 0.0, 3000.0)
+			r.controls_locked = true
+	rider.position = Vector3(-100.17, 0.0, -13.18)
+	rider.heading = -0.038
+	rider.speed = 16.9
+	var start := rider.position
+	var still := 0
+	var worst := 0
+	var last := rider.position
+	for i in 60:
+		await get_tree().physics_frame
+		# Ahí la pista va hacia -z: avanzar es que z baje.
+		still = still + 1 if last.z - rider.position.z < 0.05 else 0
+		worst = maxi(worst, still)
+		last = rider.position
+	var gone := start.z - rider.position.z
+	_check(gone > 10.0 and worst < 6, "pasa de largo pegado a las boyas (%.1f m en 1 s, quieto %d cuadros)" % [gone, worst])
+	m.queue_free()
+	await process_frame
 
 
 ## Orilla de selva: tierra como la isla tropical (se choca, apaga las olas), con

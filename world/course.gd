@@ -199,12 +199,13 @@ func _apply_to_rider(rider: Rider) -> void:
 		# Sobre el camino más cercano (en una bifurcación, por el que va).
 		var loc := track.locate_route(rider.position)
 		var route := int(loc.z)
-		var limit := half_width - 0.6
+		var limit := half_width - EDGE_MARGIN
 		if absf(loc.y) > limit:
-			var p := track.position_on(route, loc.x, clampf(loc.y, -limit, limit))
+			var p := edge_clamp(track, rider.position, loc, limit)
 			rider.position.x = p.x
 			rider.position.z = p.z
 			_slide_along_edge(rider, Vector2(loc.x, loc.y), signf(loc.y), route)
+			_unstick(rider, Vector2(loc.x, loc.y), route, limit)
 		elif absf(loc.y) < limit - 1.5:
 			_leave_edge(rider)
 
@@ -256,6 +257,72 @@ func _slide_along_edge(rider: Rider, loc: Vector2, side: float, route: int = 0) 
 func _leave_edge(rider: Rider) -> void:
 	if rider.has_meta("on_edge"):
 		rider.remove_meta("on_edge")
+	if rider.has_meta("edge_stuck"):
+		rider.remove_meta("edge_stuck")
+
+
+## Distancia de la corchera a la que choca el surfista (m, adentro del borde).
+const EDGE_MARGIN := 0.6
+
+
+## Devuelve `p` metido adentro del borde: le saca SOLO lo que se pasó hacia
+## afuera (de costado) y le deja todo el avance a lo largo de la pista.
+## Antes lo ponía en el punto del borde que daba la proyección; del lado de
+## afuera de un quiebre del camino todos los puntos cercanos se proyectan al
+## mismo punto, así que cada cuadro volvía al mismo lugar: quedaba trabado
+## contra las boyas aunque fuera a fondo y con turbo (mapa Tropical).
+static func edge_clamp(t: TrackSpace, p: Vector3, loc: Vector3, limit: float) -> Vector3:
+	var route := int(loc.z)
+	var lat := clampf(loc.y, -limit, limit)
+	var edge := t.position_on(route, loc.x, lat)
+	var center := t.position_on(route, loc.x, 0.0)
+	var out := Vector2(edge.x - center.x, edge.z - center.z)
+	if out.length_squared() < 0.0001:
+		return Vector3(edge.x, p.y, edge.z)
+	out = out.normalized() * signf(lat)
+	var past := Vector2(p.x - edge.x, p.z - edge.z).dot(out)
+	if past <= 0.0:
+		return p
+	return Vector3(p.x - out.x * past, p.y, p.z - out.y * past)
+
+
+## Seguro contra trabarse en la corchera: si pegado al borde casi no avanza en
+## el sentido de la carrera durante EDGE_STUCK_TIME, lo mete hacia adentro y lo
+## pone mirando hacia donde sigue la pista. Ningún borde puede dejarlo quieto.
+const EDGE_STUCK_TIME := 0.2
+const EDGE_STUCK_MIN_SPEED := 2.0
+
+
+func _unstick(rider: Rider, loc: Vector2, route: int, limit: float) -> void:
+	if rider.is_fallen() or rider.speed < EDGE_STUCK_MIN_SPEED:
+		return
+	var now := Vector2(rider.position.x, rider.position.z)
+	var frame := Engine.get_physics_frames()
+	var info: Array = rider.get_meta("edge_stuck", [now, 0.0, frame - 1])
+	# Si el último toque no fue el cuadro anterior, empieza a contar de nuevo.
+	if int(info[2]) != frame - 1:
+		info = [now, 0.0, frame - 1]
+	var last: Vector2 = info[0]
+	var stuck: float = info[1]
+	var t3 := track.tangent_on(route, loc.x)
+	var along := (now - last).dot(Vector2(t3.x, t3.z).normalized())
+	var dt := get_physics_process_delta_time()
+	# Casi no se mueve a lo largo de la pista (ni para adelante ni para atrás,
+	# así ir al revés pegado al borde no cuenta): está trabado.
+	if absf(along) < rider.speed * dt * 0.25:
+		stuck += dt
+	else:
+		stuck = 0.0
+	if stuck >= EDGE_STUCK_TIME:
+		var inside := signf(loc.y) * (limit - 2.5)
+		var ahead := rider.speed * dt * 3.0 / maxf(track.length() / TAU, 1.0)
+		var p := track.position_on(route, loc.x + ahead, inside)
+		rider.position.x = p.x
+		rider.position.z = p.z
+		rider.heading = track.heading_on(route, loc.x)
+		stuck = 0.0
+		now = Vector2(p.x, p.z)
+	rider.set_meta("edge_stuck", [now, stuck, frame])
 
 
 ## Choque: se cae, queda fuera del obstáculo y mirando en el sentido de la
