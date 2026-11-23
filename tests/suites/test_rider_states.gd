@@ -115,6 +115,32 @@ func _test_rare_transitions() -> void:
 	await _wait_until_state(&"fallen", 3.0)
 	_set_action(&"p1_a", false)
 	_check(_state() == &"fallen" and r.nitro == 0.0, "aterrizar a mitad de una vuelta: se cae y pierde el nitro")
+	await _mash_until_standing(12.0, 6.0)
+
+	# 8. Soltar justo antes de tocar el agua, a mitad de un truco: aterriza
+	# bien y cuenta solo lo completado (lo que mostraba el contador).
+	landed_spins.clear()
+	r.position.y += 1.0
+	r.vertical_speed = 9.0
+	r.grounded = false
+	r.can_trick = true
+	r.state_machine.transition_to(&"airborne")
+	_set_action(&"p1_a", true)
+	var shown := 0
+	var partial := false
+	for i in int(4.0 * FPS):
+		await process_frame
+		if _state() != &"airborne" or r.time_to_land() < 0.05:
+			break
+		shown = r.live_spins
+		partial = r.trick_angle > 0.0 and fmod(r.trick_units_now(), 1.0) > 0.05
+	_set_action(&"p1_a", false)
+	await _wait_until_state(&"riding", 3.0)
+	_check(_state() == &"riding", "soltar justo antes de tocar el agua: aterriza bien (aunque el truco iba a medias: %s)" % partial)
+	_check(
+		shown >= 1 and landed_spins.size() == 1 and landed_spins[0] == shown,
+		"cuenta lo que mostraba el contador al soltar (%d, %s)" % [shown, str(landed_spins)]
+	)
 
 	m.queue_free()
 	await process_frame

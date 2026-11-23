@@ -1,9 +1,10 @@
 extends RiderState
 ## En el aire (por salto o lanzado por una ola).
-## Mantener A hace girar la tabla bajo el jugador (truco). El nitro del truco
-## se cobra al aterrizar bien (así no alimenta el turbo en el mismo salto).
-## Al soltar, la tabla termina el giro hasta quedar mirando al frente.
-## Si toca el agua sin haber terminado el giro: truco fallido, nitro a 0 y al agua.
+## Mantener A hace trucos (el contador sube con cada tiempo completo). Al
+## soltar, cuenta lo completado y la tabla vuelve rápido a su lugar (solo se
+## ve: ya no puede tirarlo). Si toca el agua con A todavía apretada: truco
+## fallido, nitro a 0 y al agua. El nitro del truco se cobra al aterrizar bien
+## (así no alimenta el turbo en el mismo salto).
 ## El turbo en el aire acelera hacia adelante y, la primera ráfaga de cada salto,
 ## da un solo empujón hacia arriba. La gravedad nunca cambia: el salto siempre
 ## es una parábola (nada de flotar). Muy arriba el aire es "fino": la subida se
@@ -30,6 +31,9 @@ func enter(_previous: StringName) -> void:
 	# Trucos nuevos al azar para este salto.
 	rider.trick_kinds.clear()
 	rider.trick_units_done = 0
+	rider.trick_scored = 0
+	rider.trick_hold_start = 0.0
+	rider.trick_releasing = false
 
 
 func exit() -> void:
@@ -37,6 +41,9 @@ func exit() -> void:
 	rider.trick_angle = 0.0
 	rider.live_spins = 0
 	rider.trick_units_done = 0
+	rider.trick_scored = 0
+	rider.trick_hold_start = 0.0
+	rider.trick_releasing = false
 	rider.trick_kinds.clear()
 
 
@@ -53,19 +60,18 @@ func update(delta: float, input: RiderInput) -> void:
 	rider.move_forward(delta)
 
 	# Cada truco solo arranca si da el tiempo de terminarlo antes de tocar el
-	# agua (si no, ni empieza: así no te caés por algo imposible). Los largos
-	# salen en los saltos grandes. En el saltito no se puede.
+	# agua (si no, ni empieza). Los largos salen en los saltos grandes; en el
+	# saltito no se puede. Se mira el agua de verdad (una ola que sube adelante
+	# o viene detrás lo alcanza antes).
 	var unit_time := TAU / stats.trick_spin_speed
-	# Mirando el agua de verdad (una ola que sube adelante o viene detrás lo
-	# alcanza antes): si te chocaría a mitad del truco, ni empieza. Tocando el
-	# agua, tampoco. (Ya girando, sigue: el riesgo de seguir es del jugador.)
 	var land_t := rider.time_to_land()
-	if rider.trick_angle <= 0.0 and input.trick and rider.can_trick:
+	if input.trick and rider.can_trick and not rider.trick_releasing:
 		land_t = minf(land_t, rider.time_to_land_ahead(unit_time * 3.0 + 0.5))
 	var fit_units := int(floor((land_t - 0.08) / unit_time))
-	if rider.trick_angle <= 0.0 and fit_units < 1:
+	var spinning := rider.trick_angle > 0.0 and not rider.trick_releasing
+	if not spinning and fit_units < 1:
 		_hold_time = 0.0
-	elif input.trick and rider.can_trick:
+	elif input.trick and rider.can_trick and not rider.trick_releasing:
 		_hold_time += delta
 	else:
 		_hold_time = 0.0
@@ -73,10 +79,13 @@ func update(delta: float, input: RiderInput) -> void:
 	if rider.trick_preview:
 		# Visor de trucos: mantiene el truco solo hasta terminarlo (uno solo).
 		var done := rider.trick_units_now() >= Rider.TRICK_UNITS[rider.trick_kinds[0]] - 0.001
-		input.trick = not done and rider.trick_angle >= 0.0
+		input.trick = not done and not rider.trick_releasing
 		_hold_time = maxf(_hold_time, stats.trick_hold_delay) if input.trick else 0.0
-	var holding := input.trick and rider.can_trick and _hold_time >= stats.trick_hold_delay
+	var holding := input.trick and rider.can_trick and not rider.trick_releasing \
+		and _hold_time >= stats.trick_hold_delay
 	# Empieza un truco nuevo: se elige uno que llegue a terminarse.
+	if holding and not spinning:
+		rider.trick_hold_start = rider.trick_units_now()
 	if holding and rider.trick_at(rider.trick_units_now() + 0.0001)[0] < 0:
 		holding = rider.choose_next_trick(fit_units)
 	if holding:
@@ -84,8 +93,8 @@ func update(delta: float, input: RiderInput) -> void:
 		rider.trick_angle += stats.trick_spin_speed * delta
 		_pending_nitro += stats.trick_nitro_rate * delta
 		# Si sigue apretando al terminar uno, encadena otro: uno que llegue a
-		# terminarse si hay, y si no, uno corto igual (el riesgo es del jugador:
-		# si toca el agua a mitad de un truco, se cae).
+		# terminarse si hay, y si no, uno corto igual (el riesgo es del
+		# jugador: si toca el agua con A apretada, se cae).
 		if rider.trick_at(rider.trick_units_now())[0] < 0:
 			if rider.trick_preview:
 				# Visor: un solo truco; se queda justo al final.
@@ -93,16 +102,23 @@ func update(delta: float, input: RiderInput) -> void:
 				rider.trick_angle = (end_units - rider.trick_units_done) * TAU
 			elif not rider.choose_next_trick(fit_units):
 				rider.choose_next_trick(1)
-	elif rider.trick_angle > 0.0:
-		# Soltó el botón: termina el truco en curso.
+	elif spinning:
+		# Soltó A: cuenta lo que completó (lo que muestra el contador) y la
+		# tabla vuelve rápido a su lugar.
+		_release()
+	if rider.trick_releasing:
 		var target := rider.trick_end_angle()
-		rider.trick_angle = minf(rider.trick_angle + stats.trick_spin_speed * delta, target)
+		rider.trick_angle = minf(
+			rider.trick_angle + stats.trick_spin_speed * stats.trick_release_speed_mult * delta, target
+		)
 		if rider.trick_angle >= target - 0.0001:
 			rider.trick_units_done += roundi(target / TAU)
 			rider.trick_angle = 0.0
+			rider.trick_releasing = false
 
-	# Contador del HUD: tiempos de truco ya completos (los largos suman más).
-	rider.live_spins = int(floor(rider.trick_units_now() + 0.0001))
+	# Contador del HUD: tiempos de truco completos que ya cuentan (los largos
+	# suman más). Mientras la tabla vuelve a su lugar, no sube.
+	rider.live_spins = rider.trick_scored + _held_units()
 
 	var thin := 0.0 if rider.trick_preview else _thin_air()
 	if thin > 0.0:
@@ -128,14 +144,20 @@ func update(delta: float, input: RiderInput) -> void:
 		var brake := stats.gravity * stats.air_thin_gravity + rider.vertical_speed * stats.air_thin_drag
 		rider.vertical_speed = maxf(rider.vertical_speed - brake * thin * delta, 0.0)
 
+	# Handicap: si le falta muy poco para tocar el agua con A apretada, el
+	# juego suelta solo (como si hubiera soltado apenas a tiempo).
+	if (
+		rider.trick_angle > 0.0
+		and not rider.trick_releasing
+		and rider.trick_grace() > 0.0
+		and rider.time_to_land() <= rider.trick_grace()
+	):
+		_release()
+		rider.live_spins = rider.trick_scored
+
 	if rider.update_air(delta):
-		# Handicap: si al truco le falta poco, cuenta como terminado.
-		if rider.trick_angle > 0.0:
-			var target := rider.trick_end_angle()
-			if target - rider.trick_angle <= rider.trick_grace():
-				rider.trick_units_done += roundi(target / TAU)
-				rider.trick_angle = 0.0
-		if rider.trick_angle > 0.0:
+		if rider.trick_angle > 0.0 and not rider.trick_releasing:
+			# Tocó el agua con A apretada: truco fallido.
 			rider.reset_nitro()
 			rider.trick_failed.emit()
 			state_machine.transition_to(&"fallen")
@@ -143,10 +165,23 @@ func update(delta: float, input: RiderInput) -> void:
 			if _pending_nitro > 0.0:
 				rider.add_nitro(_pending_nitro)
 				_pending_nitro = 0.0
-			if rider.trick_units_done > 0:
-				rider.best_combo = maxi(rider.best_combo, rider.trick_units_done)
-				rider.trick_landed.emit(rider.trick_units_done)
+			if rider.trick_scored > 0:
+				rider.best_combo = maxi(rider.best_combo, rider.trick_scored)
+				rider.trick_landed.emit(rider.trick_scored)
 			state_machine.transition_to(&"riding")
+
+
+## Tiempos completos desde que empezó a mantener A esta vez.
+func _held_units() -> int:
+	if rider.trick_angle <= 0.0 or rider.trick_releasing:
+		return 0
+	return maxi(int(floor(rider.trick_units_now() - rider.trick_hold_start + 0.0001)), 0)
+
+
+## Suelta el truco: suma lo completado y la tabla vuelve a su lugar.
+func _release() -> void:
+	rider.trick_scored += _held_units()
+	rider.trick_releasing = true
 
 
 ## 0 por debajo de air_soft_height, 1 en air_max_height (y sigue creciendo un

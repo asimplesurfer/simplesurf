@@ -870,19 +870,24 @@ func _air(delta: float, input: RiderInput) -> void:
 	if _trick_will_fail:
 		input.trick = true
 		return
+	if rider.trick_releasing:
+		# Ya soltó: la tabla vuelve sola a su lugar.
+		input.trick = false
+		return
 	var a := rider.trick_angle
 	if a <= 0.0:
-		# ¿Le da el tiempo para empezar y completar una vuelta?
+		# ¿Le da el tiempo para empezar y completar una vuelta antes de soltar?
 		input.trick = t_land > stats.trick_hold_delay + full_turn + difficulty.trick_margin
 	else:
-		var remaining := (rider.trick_end_angle() - a) / spin
-		# Seguir si alcanza para terminar este truco y hacer otro (al menos uno corto).
-		input.trick = t_land > remaining + full_turn + difficulty.trick_margin * 0.85
-		# El nitro se carga solo mientras se mantiene el botón: los mejores no
-		# sueltan hasta el último cuadro del truco (si siguen apretando cuando
-		# termina, empieza otro).
+		# Cuenta lo completado al soltar: sigue si le da para completar otro
+		# tiempo y soltar con margen antes de tocar el agua.
+		var u := rider.trick_units_now()
+		var to_next: float = (floorf(u + 0.0001) + 1.0 - u) * full_turn
+		input.trick = t_land > to_next + difficulty.trick_margin
+		# El nitro se carga mientras se mantiene el botón: los mejores no
+		# sueltan hasta el último momento seguro (aunque no sume otro tiempo).
 		if not input.trick and difficulty.holds_to_trick_end:
-			input.trick = remaining > delta * 1.5
+			input.trick = t_land > difficulty.trick_margin
 
 
 ## Segundos girando en este salto (el nitro que va a sumar al aterrizar).
