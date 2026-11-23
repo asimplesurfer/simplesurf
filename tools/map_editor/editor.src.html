@@ -153,6 +153,7 @@ dialog::backdrop { background: rgba(5, 15, 20, 0.5); }
     <button class="tool" data-tool="select" title="Seleccionar y mover (V)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M5 3l14 8-6 1.5L10 19z"/></svg><span class="key">V</span></button>
     <button class="tool" data-tool="pan" title="Mover la vista (H o espacio)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 12V6a1.5 1.5 0 013 0v5M11 11V4.5a1.5 1.5 0 013 0V11M14 11V6a1.5 1.5 0 013 0v7c0 4-2.5 7-6 7s-5-2-6.5-5L3.8 12a1.4 1.4 0 012.3-1.6L8 13"/></svg><span class="key">H</span></button>
     <hr>
+    <button class="tool" data-tool="paint" title="Pintar pista: pintá el recorrido con el pincel y el editor lo pasa a pista (D)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4.5l5 5L11 18l-5-5z"/><path d="M6 13c-2 0-3 1.5-3 3.5S2 20 2 20s3.5.5 5-1 1-3 1-3"/></svg><span class="key">D</span></button>
     <button class="tool" data-tool="track" title="Pista: clic pone un punto, arrastrar hace curva (P)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 18c3-9 6 2 9-6s5-4 7-6"/><circle cx="4" cy="18" r="1.8" fill="currentColor"/><circle cx="20" cy="6" r="1.8" fill="currentColor"/></svg><span class="key">P</span></button>
     <button class="tool" data-tool="branch" title="Camino alternativo: tocá un punto de la pista, poné los puntos del camino y tocá el punto donde vuelve (B)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 12h3c3 0 4-6 7-6h1M7 12c3 0 4 6 7 6h1M15 6c2 0 3 6 5 6M15 18c2 0 3-6 5-6"/><circle cx="4" cy="12" r="1.8" fill="currentColor"/><circle cx="20" cy="12" r="1.8" fill="currentColor"/></svg><span class="key">B</span></button>
     <button class="tool" data-tool="rock_formation" title="Roca o cueva: dibujá la figura (R)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 19l3-8 4-3 3 2 3-5 5 14z"/><path d="M9 19c0-3 1.5-5 3-5s3 2 3 5" /></svg><span class="key">R</span></button>
@@ -596,6 +597,7 @@ function afterHistory() {
   sel = drawing?.kind === "path" || map.open ? { kind: "path", node: -1 } : null;
   drawing = null;
   syncPathDrawing();
+  if (tool === "paint") schedulePaintView();
   invalidate(); refreshPanel(); setHint(); saveDraft();
 }
 // La pista se dibuja por partes: mientras no está cerrada (map.open), la
@@ -688,6 +690,7 @@ function draw() {
     else if (p.a && p.b) drawTwoGeneric(p, C, on);
     else drawPiece(p, C, on);
   });
+  drawPaint(C);
   if (pendingLights) {
     const q = toScreen(pendingLights.a);
     ctx.beginPath(); ctx.arc(q[0], q[1], 7, 0, Math.PI * 2); ctx.fillStyle = "#ffd36b"; ctx.fill();
@@ -979,6 +982,585 @@ function drawNodes(nodes, C, selNode, closed, closedCurve = true) {
 }
 
 // ---------------------------------------------------------------------------
+// Pintar la pista: se pinta con un pincel del ancho de la pista y el editor lo
+// interpreta (la vuelta, los caminos que se separan y vuelven, los cruces). Al
+// confirmar, lo pasa a pista con sus puntos y curvas.
+//
+// Cómo interpreta: pasa lo pintado a una grilla, la afina hasta quedarse con la
+// línea del medio (esqueleto) y arma un grafo: los lugares donde se juntan tres
+// o más caminos son nudos y lo demás, tramos. Si en un nudo se juntan cuatro
+// tramos que siguen derecho de a pares, es un cruce (una X) y no una
+// bifurcación. La vuelta principal es la que pasa por donde se empezó a
+// pintar; cada tramo que sale de ella y vuelve a ella es un camino alternativo.
+// ---------------------------------------------------------------------------
+let paintStroke = null;
+let paintErase = false;
+let paintView = null;
+let paintTimer = 0;
+
+function paintStrokes() { return (map.paint ||= []); }
+
+// Lo pintado en una grilla (1 = agua de pista).
+function rasterPaint(strokes, hw) {
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  for (const st of strokes) if (!st.erase) for (const p of st.pts) { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); z0 = Math.min(z0, p[1]); z1 = Math.max(z1, p[1]); }
+  if (!Number.isFinite(x0)) return null;
+  let cell = Math.min(4, Math.max(1.5, hw / 6));
+  const pad = hw * 1.6 + 8;
+  x0 -= pad; z0 -= pad; x1 += pad; z1 += pad;
+  while (((x1 - x0) / cell) * ((z1 - z0) / cell) > 2.5e6) cell *= 1.25;
+  const W = Math.ceil((x1 - x0) / cell) + 1, H = Math.ceil((z1 - z0) / cell) + 1;
+  const g = new Uint8Array(W * H);
+  const stamp = (cx, cz, r, v) => {
+    const gx = (cx - x0) / cell, gz = (cz - z0) / cell, rr = r / cell, r2 = rr * rr;
+    for (let y = Math.max(0, Math.floor(gz - rr)); y <= Math.min(H - 1, Math.ceil(gz + rr)); y++)
+      for (let x = Math.max(0, Math.floor(gx - rr)); x <= Math.min(W - 1, Math.ceil(gx + rr)); x++)
+        if ((x - gx) * (x - gx) + (y - gz) * (y - gz) <= r2) g[y * W + x] = v;
+  };
+  for (const st of strokes) {
+    const r = st.erase ? hw * 1.2 : hw, v = st.erase ? 0 : 1, pts = st.pts;
+    stamp(pts[0][0], pts[0][1], r, v);
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i], d = dist(a, b), n = Math.max(1, Math.ceil(d / (r * 0.35)));
+      for (let k = 1; k <= n; k++) stamp(a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n, r, v);
+    }
+  }
+  // Agujeritos que quedan entre trazos (no son islas): se rellenan.
+  const seen = new Uint8Array(W * H), q = [];
+  for (let x = 0; x < W; x++) for (const y of [0, H - 1]) if (!g[y * W + x]) { seen[y * W + x] = 1; q.push(y * W + x); }
+  for (let y = 0; y < H; y++) for (const x of [0, W - 1]) if (!g[y * W + x] && !seen[y * W + x]) { seen[y * W + x] = 1; q.push(y * W + x); }
+  while (q.length) {
+    const i = q.pop(), x = i % W, y = (i / W) | 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+      const j = ny * W + nx;
+      if (!g[j] && !seen[j]) { seen[j] = 1; q.push(j); }
+    }
+  }
+  const maxHole = (3 * hw * 3 * hw) / (cell * cell);
+  for (let i = 0; i < W * H; i++) {
+    if (g[i] || seen[i]) continue;
+    const comp = [i]; seen[i] = 1;
+    for (let k = 0; k < comp.length; k++) {
+      const c = comp[k], x = c % W, y = (c / W) | 0;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const j = (y + dy) * W + x + dx;
+        if (!g[j] && !seen[j]) { seen[j] = 1; comp.push(j); }
+      }
+    }
+    if (comp.length < maxHole) for (const c of comp) g[c] = 1;
+  }
+  return { g, W, H, x0, z0, cell };
+}
+
+// Afinar hasta la línea del medio (Zhang-Suen).
+function thin(r) {
+  const { W, H } = r, g = r.g.slice();
+  const N = (i) => [g[i - W], g[i - W + 1], g[i + 1], g[i + W + 1], g[i + W], g[i + W - 1], g[i - 1], g[i - W - 1]];
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const step of [0, 1]) {
+      const del = [];
+      for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+        const i = y * W + x;
+        if (!g[i]) continue;
+        const p = N(i);
+        const b = p[0] + p[1] + p[2] + p[3] + p[4] + p[5] + p[6] + p[7];
+        if (b < 2 || b > 6) continue;
+        let a = 0;
+        for (let k = 0; k < 8; k++) if (!p[k] && p[(k + 1) % 8]) a++;
+        if (a !== 1) continue;
+        if (step === 0 ? p[0] * p[2] * p[4] || p[2] * p[4] * p[6] : p[0] * p[2] * p[6] || p[0] * p[4] * p[6]) continue;
+        del.push(i);
+      }
+      for (const i of del) g[i] = 0;
+      if (del.length) changed = true;
+    }
+  }
+  return g;
+}
+
+// El esqueleto como grafo: nudos (donde se juntan 3 o más) y tramos (líneas).
+function skeletonGraph(r, sk, hw) {
+  const { W, H, x0, z0, cell } = r;
+  const OFF = [-W, -W + 1, 1, W + 1, W, W - 1, -1, -W - 1];
+  const world = (i) => [x0 + (i % W) * cell, z0 + ((i / W) | 0) * cell];
+  const pix = [];
+  for (let i = 0; i < W * H; i++) if (sk[i]) pix.push(i);
+  const nbs = (i) => OFF.map((o) => i + o).filter((j) => sk[j]);
+  // Nudos: píxeles con 3 o más ramas alrededor.
+  const zoneDist = new Float32Array(W * H).fill(Infinity);
+  const q = [];
+  for (const i of pix) {
+    let t = 0;
+    for (let k = 0; k < 8; k++) if (!sk[i + OFF[k]] && sk[i + OFF[(k + 1) % 8]]) t++;
+    if (t >= 3) { zoneDist[i] = 0; q.push(i); }
+  }
+  // Zona de cada nudo: los píxeles del esqueleto a menos de R (así un nudo
+  // "gordo" o dos muy juntos quedan como uno).
+  const R = (hw * 1.1) / cell;
+  for (let k = 0; k < q.length; k++) {
+    const i = q[k];
+    for (const o of OFF) {
+      const j = i + o;
+      if (!sk[j]) continue;
+      const d = zoneDist[i] + (o === 1 || o === -1 || o === W || o === -W ? 1 : 1.414);
+      if (d <= R && d < zoneDist[j]) { zoneDist[j] = d; q.push(j); }
+    }
+  }
+  const zone = new Int32Array(W * H).fill(-1);
+  const nodes = [];
+  for (const i of pix) {
+    if (zoneDist[i] === Infinity || zone[i] >= 0) continue;
+    const id = nodes.length, comp = [i];
+    zone[i] = id;
+    for (let k = 0; k < comp.length; k++) for (const j of nbs(comp[k])) if (zoneDist[j] !== Infinity && zone[j] < 0) { zone[j] = id; comp.push(j); }
+    let sx = 0, sz = 0;
+    for (const c of comp) { const w = world(c); sx += w[0]; sz += w[1]; }
+    nodes.push({ id, pos: [sx / comp.length, sz / comp.length], alive: true });
+  }
+  // Tramos: lo que queda fuera de los nudos.
+  const edges = [];
+  const used = new Uint8Array(W * H);
+  for (const i0 of pix) {
+    if (zone[i0] >= 0 || used[i0]) continue;
+    const comp = [i0];
+    used[i0] = 1;
+    for (let k = 0; k < comp.length; k++) for (const j of nbs(comp[k])) if (zone[j] < 0 && !used[j]) { used[j] = 1; comp.push(j); }
+    const inComp = new Set(comp);
+    const inner = (i) => nbs(i).filter((j) => inComp.has(j));
+    const touch = (i) => { for (const j of nbs(i)) if (zone[j] >= 0) return zone[j]; return null; };
+    let ends = comp.filter((i) => inner(i).length < 2);
+    const closed = ends.length === 0;
+    if (comp.length < 2 && !nbs(i0).some((j) => zone[j] >= 0)) continue;
+    // Recorrido ordenado desde una punta (o desde cualquier lado si es una vuelta).
+    const start = closed ? comp[0] : ends[0];
+    const order = [start], vis = new Set([start]);
+    for (;;) {
+      const cur = order[order.length - 1];
+      const nx = inner(cur).filter((j) => !vis.has(j));
+      if (!nx.length) break;
+      nx.sort((a, b) => (Math.abs(a - cur) === 1 || Math.abs(a - cur) === W ? 0 : 1) - (Math.abs(b - cur) === 1 || Math.abs(b - cur) === W ? 0 : 1));
+      vis.add(nx[0]); order.push(nx[0]);
+    }
+    let pts = order.map(world);
+    // Suavizar los escalones de la grilla.
+    for (let it = 0; it < 3; it++) pts = pts.map((p, k) => (k === 0 || k === pts.length - 1) && !closed ? p
+      : [(pts[(k - 1 + pts.length) % pts.length][0] + 2 * p[0] + pts[(k + 1) % pts.length][0]) / 4, (pts[(k - 1 + pts.length) % pts.length][1] + 2 * p[1] + pts[(k + 1) % pts.length][1]) / 4]);
+    const a = closed ? null : touch(order[0]);
+    const b = closed ? null : touch(order[order.length - 1]);
+    if (a !== null) pts.unshift(nodes[a].pos.slice());
+    if (b !== null) pts.push(nodes[b].pos.slice());
+    edges.push({ a, b, pts, closed, alive: true });
+  }
+  // Nudos que se tocan directamente (sin tramo en el medio): un tramo cortito.
+  return { nodes, edges };
+}
+
+function polyLen(pts) { let s = 0; for (let i = 1; i < pts.length; i++) s += dist(pts[i - 1], pts[i]); return s; }
+// Dirección con la que un tramo sale de su punta (start = desde pts[0]).
+function edgeDir(e, atStart, reach) {
+  const pts = atStart ? e.pts : e.pts.slice().reverse();
+  let s = 0, k = 1;
+  for (; k < pts.length - 1 && s < reach; k++) s += dist(pts[k - 1], pts[k]);
+  const d = sub(pts[Math.min(k, pts.length - 1)], pts[0]), l = len(d) || 1;
+  return [d[0] / l, d[1] / l];
+}
+
+// Limpia el grafo: saca puntitas sueltas, junta nudos pegados, resuelve los
+// cruces (X) y une los tramos que pasan por un nudo de solo dos.
+function tidyGraph(G, hw) {
+  const { nodes, edges } = G;
+  let crossings = 0;
+  const live = () => edges.filter((e) => e.alive);
+  const endsAt = (n) => { const out = []; for (const e of live()) { if (e.a === n) out.push([e, true]); if (e.b === n) out.push([e, false]); } return out; };
+  // Une dos puntas de tramos en el nudo n (la primera llega, la segunda sale).
+  const join = (n, [e1, s1], [e2, s2]) => {
+    const p1 = s1 ? e1.pts.slice().reverse() : e1.pts.slice();
+    const other1 = s1 ? e1.b : e1.a;
+    e1.alive = false;
+    if (e1 === e2) { edges.push({ a: null, b: null, pts: p1.slice(0, -1), closed: true, alive: true }); return; }
+    const p2 = s2 ? e2.pts.slice() : e2.pts.slice().reverse();
+    const other2 = s2 ? e2.b : e2.a;
+    e2.alive = false;
+    edges.push({ a: other1, b: other2, pts: p1.concat(p2.slice(1)), closed: false, alive: true });
+  };
+  for (let round = 0; round < 40; round++) {
+    let changed = false;
+    // 1. Puntitas sueltas (un borde del pincel, un trazo que se pasó).
+    for (const e of live()) {
+      if (e.closed) continue;
+      const dead = (e.a === null) !== (e.b === null);
+      if ((dead && polyLen(e.pts) < hw * 3) || (e.a === null && e.b === null && polyLen(e.pts) < hw * 3)) { e.alive = false; changed = true; }
+    }
+    // 2. Nudos pegados (un tramo cortito entre dos nudos): uno solo.
+    for (const e of live()) {
+      if (e.closed || e.a === null || e.b === null || e.a === e.b || polyLen(e.pts) > hw * 1.6) continue;
+      const A = nodes[e.a], B = nodes[e.b];
+      A.pos = mul(add(A.pos, B.pos), 0.5); B.alive = false; e.alive = false;
+      for (const f of live()) { if (f.a === B.id) { f.a = A.id; f.pts[0] = A.pos.slice(); } if (f.b === B.id) { f.b = A.id; f.pts[f.pts.length - 1] = A.pos.slice(); } }
+      for (const f of live()) { if (f.a === A.id) f.pts[0] = A.pos.slice(); if (f.b === A.id) f.pts[f.pts.length - 1] = A.pos.slice(); }
+      changed = true; break;
+    }
+    if (changed) continue;
+    // 3. Cruces: cuatro tramos que siguen derecho de a pares.
+    for (const n of nodes) {
+      if (!n.alive) continue;
+      const ends = endsAt(n.id);
+      if (ends.length !== 4) continue;
+      const dirs = ends.map(([e, s]) => edgeDir(e, s, hw * 2.5));
+      let best = null;
+      for (const [[i, j], [k, l]] of [[[0, 1], [2, 3]], [[0, 2], [1, 3]], [[0, 3], [1, 2]]]) {
+        const st = Math.min(-(dirs[i][0] * dirs[j][0] + dirs[i][1] * dirs[j][1]), -(dirs[k][0] * dirs[l][0] + dirs[k][1] * dirs[l][1]));
+        if (!best || st > best.st) best = { st, pairs: [[i, j], [k, l]] };
+      }
+      if (best.st < 0.55) continue;
+      n.alive = false;
+      const [[i, j], [k, l]] = best.pairs;
+      // Si las dos parejas son el mismo tramo, ya no hay nada que unir.
+      join(n.id, ends[i], ends[j]);
+      const e3 = ends[k], e4 = ends[l];
+      if (!e3[0].alive || !e4[0].alive) {
+        // Algún tramo ya se unió (un tramo que vuelve al mismo nudo): se busca de nuevo.
+        const again = endsAt(n.id);
+        if (again.length === 2) join(n.id, again[0], again[1]);
+      } else join(n.id, e3, e4);
+      crossings++; changed = true; break;
+    }
+    if (changed) continue;
+    // 4. Nudos con solo dos tramos: no son nudos.
+    for (const n of nodes) {
+      if (!n.alive) continue;
+      const ends = endsAt(n.id);
+      if (ends.length === 2 && !(ends[0][0] === ends[1][0])) { n.alive = false; join(n.id, ends[0], ends[1]); changed = true; break; }
+      if (ends.length === 0) { n.alive = false; changed = true; }
+    }
+    if (!changed) break;
+  }
+  return crossings;
+}
+
+// Simplifica una línea abierta (Ramer-Douglas-Peucker) sin sacar los puntos `keep`.
+function simplify(pts, eps, keep = new Set()) {
+  const out = new Set([0, pts.length - 1, ...keep]);
+  const rec = (i, j) => {
+    let best = -1, bd = eps;
+    for (let k = i + 1; k < j; k++) { const d = segDist(pts[k], pts[i], pts[j]); if (d > bd) { bd = d; best = k; } }
+    if (best >= 0) { out.add(best); rec(i, best); rec(best, j); }
+  };
+  const idx = [...out].sort((a, b) => a - b);
+  for (let k = 0; k + 1 < idx.length; k++) rec(idx[k], idx[k + 1]);
+  return [...out].sort((a, b) => a - b);
+}
+// Puntos de control para una línea: los de la simplificación, sin huecos de más de `gap` m.
+function controlPoints(pts, keepIdx, eps, gap) {
+  const idx = simplify(pts, eps, new Set(keepIdx));
+  const cum = [0];
+  for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + dist(pts[i - 1], pts[i]));
+  const out = [];
+  for (let k = 0; k < idx.length; k++) {
+    if (k > 0) {
+      const s0 = cum[idx[k - 1]], s1 = cum[idx[k]], n = Math.floor((s1 - s0) / gap);
+      for (let m = 1; m <= n; m++) {
+        const s = s0 + ((s1 - s0) * m) / (n + 1);
+        let j = idx[k - 1];
+        while (j < idx[k] && cum[j + 1] < s) j++;
+        out.push({ i: -1, s, p: pointOn(pts, cum, s) });
+      }
+    }
+    out.push({ i: idx[k], s: cum[idx[k]], p: pts[idx[k]] });
+  }
+  return out;
+}
+function pointOn(pts, cum, s) {
+  let j = 0;
+  while (j < pts.length - 2 && cum[j + 1] < s) j++;
+  const t = (s - cum[j]) / Math.max(cum[j + 1] - cum[j], 1e-6);
+  return [pts[j][0] + (pts[j + 1][0] - pts[j][0]) * t, pts[j][1] + (pts[j + 1][1] - pts[j][1]) * t];
+}
+
+// Manijas para que las rectas queden rectas: en cada punto, en la dirección
+// del anterior al siguiente y no más largas que un tercio del tramo más corto
+// de los dos (así una curva no "empuja" la recta larga de al lado).
+function cornerHandles(pts, before, after) {
+  return pts.map((p, i) => {
+    const prev = i ? pts[i - 1] : before, next = i < pts.length - 1 ? pts[i + 1] : after;
+    const d = sub(next, prev), l = len(d) || 1, u = [d[0] / l, d[1] / l];
+    const k = Math.min(dist(p, prev), dist(p, next)) / 3;
+    const r1 = (v) => Math.round(v * 10) / 10;
+    return { in: [r1(-u[0] * k), r1(-u[1] * k)], out: [r1(u[0] * k), r1(u[1] * k)] };
+  });
+}
+// Interpreta lo pintado. Devuelve lo que va a quedar (para mostrarlo) y, si
+// se puede, la pista (puntos, caminos alternativos y meta).
+function interpretPaint() {
+  const strokes = paintStrokes(), hw = map.half_width;
+  const first = strokes.find((s) => !s.erase);
+  if (!first) return null;
+  const r = rasterPaint(strokes, hw);
+  if (!r) return null;
+  const G = skeletonGraph(r, thin(r), hw);
+  const crossings = tidyGraph(G, hw);
+  const nodes = G.nodes, edges = G.edges.filter((e) => e.alive);
+  const warnings = [];
+  const view = { edges, nodes: nodes.filter((n) => n.alive), crossings, warnings, main: null, branches: [], meta: null, ok: false };
+  const firstP = first.pts[0];
+  let fd = [0, 0];
+  for (const p of first.pts) { if (dist(p, firstP) > hw) { fd = sub(p, firstP); break; } }
+  // La vuelta principal: la que pasa por donde se empezó a pintar.
+  const near = (e) => distToLine(firstP, e.pts, e.closed);
+  const candidates = edges.filter((e) => e.closed || (e.a !== null && e.b !== null));
+  if (!candidates.length) { warnings.push("Todavía no hay una vuelta: la pista tiene que cerrarse (terminar donde empezó)."); return view; }
+  candidates.sort((x, y) => near(x) - near(y));
+  const metaEdge = candidates[0];
+  let mainEdges = [];
+  if (metaEdge.closed || metaEdge.a === metaEdge.b) mainEdges = [[metaEdge, true]];
+  else {
+    // El camino más corto que vuelve (sin usar el tramo de la meta).
+    const distTo = new Map([[metaEdge.b, 0]]), prev = new Map(), todo = new Set(nodes.filter((n) => n.alive).map((n) => n.id));
+    while (todo.size) {
+      let u = null;
+      for (const n of todo) if (distTo.has(n) && (u === null || distTo.get(n) < distTo.get(u))) u = n;
+      if (u === null || u === metaEdge.a) break;
+      todo.delete(u);
+      for (const e of edges) {
+        if (e === metaEdge || e.closed || e.a === null || e.b === null) continue;
+        for (const [x, y, fwd] of [[e.a, e.b, true], [e.b, e.a, false]]) {
+          if (x !== u) continue;
+          const d = distTo.get(u) + polyLen(e.pts);
+          if (!distTo.has(y) || d < distTo.get(y)) { distTo.set(y, d); prev.set(y, [e, fwd, u]); }
+        }
+      }
+    }
+    if (!prev.has(metaEdge.a)) { warnings.push("La pista no da la vuelta: unila para que termine donde empieza."); return view; }
+    const path = [];
+    for (let n = metaEdge.a; n !== metaEdge.b; ) { const [e, fwd, from] = prev.get(n); path.unshift([e, fwd]); n = from; }
+    mainEdges = [[metaEdge, true], ...path];
+  }
+  // La línea de la vuelta (y en qué punto de ella está cada nudo).
+  let main = [];
+  const nodeAt = new Map();
+  for (const [e, fwd] of mainEdges) {
+    const p = fwd ? e.pts : e.pts.slice().reverse();
+    const startNode = fwd ? e.a : e.b;
+    if (startNode !== null && !nodeAt.has(startNode)) nodeAt.set(startNode, main.length);
+    main.push(...(main.length ? p.slice(1) : p));
+  }
+  if (main.length > 2 && dist(main[0], main[main.length - 1]) < 1) main.pop();
+  // Sentido: el del primer trazo.
+  const nearestIdx = (pt) => { let bi = 0, bd = Infinity; main.forEach((q, i) => { const d = dist(q, pt); if (d < bd) { bd = d; bi = i; } }); return bi; };
+  const fi = nearestIdx(firstP), M = main.length;
+  const t = sub(main[(fi + 2) % M], main[(fi - 2 + M) % M]);
+  if (t[0] * fd[0] + t[1] * fd[1] < 0) {
+    main.reverse();
+    for (const [n, i] of nodeAt) nodeAt.set(n, (M - 1 - i + M) % M);
+  }
+  const cumOf = (pts) => { const c = [0]; for (let i = 1; i <= pts.length; i++) c.push(c[i - 1] + dist(pts[i - 1], pts[i % pts.length])); return c; };
+  let cum = cumOf(main);
+  const L = cum[M];
+  const fwdDir = (i) => { const d = sub(main[(i + 3) % M], main[(i - 3 + M) % M]); const l = len(d) || 1; return [d[0] / l, d[1] / l]; };
+  // Caminos alternativos: tramos que salen de la vuelta y vuelven a ella.
+  const mainSet = new Set(mainEdges.map(([e]) => e));
+  const branches = [];
+  for (const e of edges) {
+    if (mainSet.has(e)) continue;
+    if (e.closed) { warnings.push("Hay una vuelta pintada aparte que no se une con la pista: la dejé afuera."); continue; }
+    if (e.a === null || e.b === null) { warnings.push("Hay un pedazo pintado que no vuelve a la pista: lo dejé afuera."); continue; }
+    if (!nodeAt.has(e.a) || !nodeAt.has(e.b)) { warnings.push("Hay un camino que sale de otro camino alternativo: por ahora los caminos tienen que salir de la pista y volver a ella. Lo dejé afuera."); continue; }
+    if (e.a === e.b) { warnings.push("Hay un camino que sale y vuelve al mismo lugar: lo dejé afuera."); continue; }
+    // Sale para adelante de uno de los dos nudos: ese es de donde sale.
+    const da = edgeDir(e, true, hw * 2.5), ma = fwdDir(nodeAt.get(e.a));
+    const fromA = da[0] * ma[0] + da[1] * ma[1] >= 0;
+    const pts = fromA ? e.pts.slice() : e.pts.slice().reverse();
+    const from = fromA ? e.a : e.b, to = fromA ? e.b : e.a;
+    const sFrom = cum[nodeAt.get(from)], sTo = cum[nodeAt.get(to)];
+    branches.push({ pts, from, to, sFrom, span: (sTo - sFrom + L) % L });
+  }
+  view.main = main; view.branches = branches;
+  // La meta: donde se empezó a pintar, si ahí no hay caminos alternativos; si
+  // no, en el medio del tramo más largo con un solo camino.
+  const covered = (s, margin) => branches.some((b) => ((s - b.sFrom + L) % L) < b.span + margin || ((b.sFrom - s + L) % L) < margin);
+  let s0 = cum[nearestIdx(firstP)];
+  if (covered(s0, 30)) {
+    let best = -1, bestLen = 0;
+    for (let k = 0; k < 400; k++) {
+      const s = (L * k) / 400;
+      if (covered(s, 0)) continue;
+      let a = 0; while (a < L && !covered((s - a + L) % L, 0)) a += 2;
+      let b = 0; while (b < L && !covered((s + b) % L, 0)) b += 2;
+      if (Math.min(a, b) > bestLen) { bestLen = Math.min(a, b); best = s; }
+    }
+    if (best < 0) { warnings.push("Los caminos alternativos ocupan toda la vuelta: tiene que quedar algún tramo con un solo camino para la meta."); return view; }
+    s0 = best;
+  }
+  // Se da vuelta la línea para que empiece en la meta.
+  let k0 = 0;
+  while (k0 < M - 1 && cum[k0 + 1] <= s0) k0++;
+  main = main.slice(k0).concat(main.slice(0, k0));
+  for (const [n, i] of nodeAt) nodeAt.set(n, (i - k0 + M) % M);
+  cum = cumOf(main);
+  for (const b of branches) b.sFrom = cum[nodeAt.get(b.from)];
+  view.main = main;
+  view.meta = main[0];
+  // Recta de la meta: tan larga como deje la forma pintada (y los caminos).
+  const freeAfter = Math.min(L, ...branches.map((b) => b.sFrom));
+  const freeBefore = L - Math.max(0, ...branches.map((b) => b.sFrom + b.span));
+  const straight = (dir, maxLen) => {
+    let l = 10;
+    const d0 = dir > 0 ? sub(main[3 % M], main[0]) : sub(main[(M - 3) % M], main[0]);
+    const u = mul(d0, 1 / (len(d0) || 1));
+    for (let s = 10; s <= maxLen; s += 2) {
+      const p = pointOn(main.concat([main[0]]), cum, dir > 0 ? s : L - s);
+      const off = sub(p, main[0]), along = off[0] * u[0] + off[1] * u[1];
+      if (Math.abs(off[0] * u[1] - off[1] * u[0]) > hw * 0.3 || along < s * 0.9) break;
+      l = s;
+    }
+    return l;
+  };
+  const front = Math.max(10, Math.min(60, freeAfter - 15, straight(1, 60)));
+  const back = Math.max(10, Math.min(40, freeBefore - 15, straight(-1, 40)));
+  const dirF = sub(main[3 % M], main[(M - 3) % M]);
+  const start = { x: round(main[0][0]), z: round(main[0][1]), angle: round((Math.atan2(-dirF[1], dirF[0]) * 180) / Math.PI), back: Math.round(back), front: Math.round(front), bend: 0 };
+  // Puntos de la pista: entre las puntas de la recta, sin perder los nudos.
+  const closedMain = main.concat([main[0]]);
+  const lo = front + 12, hi = L - back - 12;
+  const keepS = [...nodeAt.values()].map((i) => cum[i]);
+  const sub0 = [], keepIdx = [];
+  for (let i = 0; i < closedMain.length; i++) if (cum[i] >= lo && cum[i] <= hi) sub0.push(i);
+  if (sub0.length < 2) { warnings.push("La vuelta es muy corta."); return view; }
+  const span = sub0.map((i) => closedMain[i]);
+  sub0.forEach((i, k) => { if (keepS.includes(cum[i])) keepIdx.push(k); });
+  // Pocos puntos (más fácil de editar después): solo donde la pista dobla;
+  // en una recta, ninguno en el medio.
+  const eps = Math.max(4, hw * 0.35);
+  const cps = controlPoints(span, keepIdx, eps, Infinity);
+  const path = cps.map((c) => c.p);
+  const rad = (start.angle * Math.PI) / 180, sdir = [Math.cos(rad), -Math.sin(rad)];
+  const pathHandles = cornerHandles(path, add(main[0], mul(sdir, start.front)), sub(main[0], mul(sdir, start.back)));
+  const idxOfNode = (n) => { const i = nodeAt.get(n); const k = sub0.indexOf(i); return cps.findIndex((c) => c.i === k); };
+  const outBranches = [];
+  for (const b of branches) {
+    const from = idxOfNode(b.from), to = idxOfNode(b.to);
+    if (from < 0 || to < 0 || from >= to) { warnings.push("Un camino alternativo queda muy pegado a la meta: alejalo un poco."); continue; }
+    const bl = polyLen(b.pts);
+    const bc = controlPoints(b.pts, [], eps, Infinity).filter((c) => c.s > hw && c.s < bl - hw).map((c) => c.p);
+    if (!bc.length) bc.push(pointOn(b.pts, cumOf(b.pts).slice(0, b.pts.length), bl / 2));
+    outBranches.push({ from, to, path: bc, handles: cornerHandles(bc, b.pts[0], b.pts[b.pts.length - 1]) });
+  }
+  view.ok = true;
+  view.result = { path, handles: pathHandles, branches: outBranches, start };
+  return view;
+}
+
+function schedulePaintView() {
+  clearTimeout(paintTimer);
+  paintTimer = setTimeout(() => { try { paintView = interpretPaint(); } catch (err) { paintView = null; console.error(err); } draw(); if (tool === "paint") refreshPanel(); }, 120);
+}
+
+// Pasa lo interpretado al mapa (se puede deshacer con Ctrl+Z).
+function applyPaint() {
+  const v = interpretPaint();
+  if (!v?.ok) { toast(v?.warnings?.[0] || "Pintá la pista primero."); return; }
+  const r3 = (p) => [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10];
+  map.path = v.result.path.map((p, i) => ({ p: r3(p), ...v.result.handles[i] }));
+  map.branches = v.result.branches.map((b) => ({ from: b.from, to: b.to, path: b.path.map((p, i) => ({ p: r3(p), ...b.handles[i] })) }));
+  map.start = v.result.start;
+  map.smoothing = 10;
+  map.open = false;
+  map.paint = [];
+  paintView = null;
+  sel = { kind: "path", node: -1 };
+  commit(); setTool("select"); fit();
+  const groups = new Set(map.branches.map((b) => b.from + ":" + b.to)).size;
+  toast(`Listo: ${Math.round(computed().length)} m por vuelta` + (map.branches.length ? `, ${map.branches.length} ${map.branches.length === 1 ? "camino alternativo" : "caminos alternativos"} en ${groups} ${groups === 1 ? "tramo" : "tramos"}` : "") + (v.crossings ? `, ${v.crossings} ${v.crossings === 1 ? "cruce" : "cruces"}` : "") + ". Ctrl+Z vuelve a lo pintado.");
+}
+
+// La pista de ahora, como pintura (para corregirla pintando).
+function trackToPaint() {
+  const { line, branches } = computed();
+  if (line.length < 3) { toast("No hay pista para pasar a pintura."); return; }
+  const thinOut = (pts) => pts.filter((p, i) => i % 2 === 0 || i === pts.length - 1).map((p) => [round(p[0]), round(p[1])]);
+  const strokes = [{ erase: false, pts: thinOut(line.open ? line : line.concat([line[0], line[1]])) }];
+  for (const b of branches) if (b.length > 1) strokes.push({ erase: false, pts: thinOut(b) });
+  map.paint = strokes;
+  commit(); schedulePaintView(); refreshPanel();
+  toast("La pista está pintada: agregá o borrá con el pincel y la goma, y después confirmá.");
+}
+
+// Lo pintado, en una capa aparte (la goma borra de verdad lo de abajo).
+let paintLayer = null;
+function drawPaint(C) {
+  const strokes = paintStrokes();
+  if (!strokes.length) return;
+  if (!paintLayer) paintLayer = document.createElement("canvas");
+  if (paintLayer.width !== cv.width || paintLayer.height !== cv.height) { paintLayer.width = cv.width; paintLayer.height = cv.height; }
+  const pc = paintLayer.getContext("2d");
+  pc.setTransform(1, 0, 0, 1, 0, 0); pc.clearRect(0, 0, paintLayer.width, paintLayer.height);
+  pc.setTransform(DPR, 0, 0, DPR, 0, 0);
+  pc.lineCap = "round"; pc.lineJoin = "round";
+  for (const st of strokes) {
+    pc.globalCompositeOperation = st.erase ? "destination-out" : "source-over";
+    const w = 2 * (st.erase ? map.half_width * 1.2 : map.half_width) * cam.zoom;
+    pc.strokeStyle = pc.fillStyle = C.lane;
+    if (st.pts.length === 1) { const s = toScreen(st.pts[0]); pc.beginPath(); pc.arc(s[0], s[1], w / 2, 0, Math.PI * 2); pc.fill(); continue; }
+    pc.lineWidth = w; pc.beginPath();
+    st.pts.forEach((p, i) => { const s = toScreen(p); i ? pc.lineTo(s[0], s[1]) : pc.moveTo(s[0], s[1]); });
+    pc.stroke();
+  }
+  pc.globalCompositeOperation = "source-over";
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = tool === "paint" ? 0.9 : 0.55; ctx.drawImage(paintLayer, 0, 0); ctx.restore();
+  // Lo que el editor entiende: la vuelta (blanco), los caminos alternativos
+  // (naranja), los cruces y la meta.
+  const v = paintView;
+  if (!v || tool !== "paint") return;
+  const line = (pts, color, closed) => {
+    if (!pts || pts.length < 2) return;
+    pathLine(pts, closed); ctx.strokeStyle = color; ctx.lineWidth = 2.4; ctx.setLineDash([8, 6]); ctx.stroke(); ctx.setLineDash([]);
+  };
+  if (v.main) { line(v.main, "#ffffff", true); drawArrows(v.main, true); }
+  v.branches.forEach((b) => { line(b.pts, C.sel, false); drawArrows(b.pts, false); });
+  for (const b of v.branches) for (const p of [b.pts[0], b.pts[b.pts.length - 1]]) {
+    const s = toScreen(p); ctx.beginPath(); ctx.arc(s[0], s[1], 6, 0, Math.PI * 2); ctx.fillStyle = C.sel; ctx.fill(); ctx.strokeStyle = "#0b2230"; ctx.lineWidth = 1.5; ctx.stroke();
+  }
+  if (v.meta) {
+    const s = toScreen(v.meta);
+    ctx.fillStyle = "#fff"; ctx.strokeStyle = "#111"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.rect(s[0] - 7, s[1] - 7, 14, 14); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "#111"; ctx.fillRect(s[0] - 7, s[1] - 7, 7, 7); ctx.fillRect(s[0], s[1], 7, 7);
+  }
+}
+
+function paintPanel(box, title) {
+  title.textContent = "Pintar pista";
+  const row = document.createElement("div"); row.className = "row";
+  const b1 = btn("Pincel", () => { paintErase = false; refreshPanel(); setHint(); }, !paintErase);
+  const b2 = btn("Goma", () => { paintErase = true; refreshPanel(); setHint(); }, paintErase);
+  row.append(b1, b2);
+  box.append(row);
+  box.append(field("Ancho de la pista (m)", "num", map.half_width * 2, (v) => { map.half_width = Math.max(12, v / 2); schedulePaintView(); }, { id: "paint_width" }));
+  const v = paintView;
+  if (!paintStrokes().length) box.append(note("Pintá la pista con el mouse (o el dedo), como un camino de agua. Donde empezás a pintar va la meta, y el sentido de la carrera es para donde pintaste. Si pintás dos caminos que se separan y se vuelven a juntar, son caminos alternativos; si se cruzan, es un cruce."));
+  else if (v) {
+    const parts = [];
+    if (v.main) parts.push(`una vuelta de ${Math.round(polyLen(v.main.concat([v.main[0]])))} m`);
+    if (v.branches.length) parts.push(`${v.branches.length} ${v.branches.length === 1 ? "camino alternativo" : "caminos alternativos"}`);
+    if (v.crossings) parts.push(`${v.crossings} ${v.crossings === 1 ? "cruce" : "cruces"}`);
+    box.append(note(parts.length ? "Veo " + parts.join(", ") + ". En blanco la vuelta, en naranja los caminos alternativos, y el cuadrito es la meta." : "Seguí pintando."));
+    for (const w of v.warnings) box.append(note("Ojo: " + w));
+  }
+  const row2 = document.createElement("div"); row2.className = "row";
+  row2.append(btn("Listo: pasarlo a pista", applyPaint, true));
+  box.append(row2);
+  const row3 = document.createElement("div"); row3.className = "row";
+  if (map.path.length && !paintStrokes().length) row3.append(btn("Pintar sobre la pista de ahora", trackToPaint));
+  if (paintStrokes().length) row3.append(btn("Borrar lo pintado", () => { map.paint = []; paintView = null; commit(); refreshPanel(); }));
+  box.append(row3);
+  box.append(note("Ctrl+Z deshace el último trazo. Clic derecho y arrastrar mueve la vista; la rueda acerca y aleja. Con Shift apretado el pincel borra."));
+}
+
+// ---------------------------------------------------------------------------
 // Tocar y arrastrar
 // ---------------------------------------------------------------------------
 let drag = null;
@@ -1077,7 +1659,14 @@ function onDown(e) {
   pointers.set(e.pointerId, [e.offsetX, e.offsetY]);
   if (pointers.size === 2) { drag = { kind: "pinch", start: pinchState() }; return; }
   const s = [e.offsetX, e.offsetY], w = toWorld(s);
-  if (tool === "pan" || spaceDown || e.button === 1) { drag = { kind: "pan", s, cam: { ...cam } }; return; }
+  // Clic derecho (o la rueda apretada) mueve la vista, con cualquier herramienta.
+  if (tool === "pan" || spaceDown || e.button === 1 || e.button === 2) { drag = { kind: "pan", s, cam: { ...cam } }; return; }
+  if (tool === "paint") {
+    paintStroke = { erase: paintErase || e.shiftKey, pts: [[round(w[0]), round(w[1])]] };
+    paintStrokes().push(paintStroke);
+    drag = { kind: "paint" };
+    draw(); return;
+  }
 
   if (tool === "start") {
     const hit = hitTest(s);
@@ -1269,6 +1858,11 @@ function onMove(e) {
   $("coords").textContent = `x ${Math.round(w[0])} · z ${Math.round(w[1])}`;
   if (!drag) return;
   if (drag.kind === "pinch") { if (pointers.size === 2) applyPinch(drag.start); return; }
+  if (drag.kind === "paint") {
+    const last = paintStroke.pts[paintStroke.pts.length - 1];
+    if (dist(last, w) > Math.max(1, map.half_width * 0.12)) { paintStroke.pts.push([round(w[0]), round(w[1])]); draw(); }
+    return;
+  }
   if (drag.kind === "pan") { cam.x = drag.cam.x - (s[0] - drag.s[0]) / cam.zoom; cam.z = drag.cam.z - (s[1] - drag.s[1]) / cam.zoom; draw(); return; }
   if (drag.kind === "pen") {
     const n = drag.nodes[drag.node], d = sub(w, n.p);
@@ -1326,6 +1920,7 @@ function onUp(e) {
   pointers.delete(e.pointerId);
   if (!drag) return;
   const d = drag; drag = null;
+  if (d.kind === "paint") { paintStroke = null; commit(); schedulePaintView(); return; }
   if (d.kind === "pen") {
     // Cada punto de la pista queda en el historial: Ctrl+Z saca el último.
     if (drawing?.kind === "path") { commit(); refreshPanel(); }
@@ -1351,6 +1946,7 @@ function zoomAt(s, k) {
   draw();
 }
 cv.addEventListener("pointerdown", onDown);
+cv.addEventListener("contextmenu", (e) => e.preventDefault());
 cv.addEventListener("pointermove", onMove);
 cv.addEventListener("pointerup", onUp);
 cv.addEventListener("pointercancel", onUp);
@@ -1375,6 +1971,7 @@ cv.addEventListener("dblclick", (e) => {
 const HINTS = {
   select: "Tocá algo para elegirlo y arrastralo para moverlo. En los puntos: arrastrá las manijas para curvar (Alt las separa), doble clic hace esquina o curva. Supr borra.",
   pan: "Arrastrá para mover la vista. Rueda o pellizco para acercar.",
+  paint: "Pintá la pista arrastrando (Shift: goma). Ctrl+Z deshace el último trazo; clic derecho mueve la vista. Cuando esté, tocá \"Listo: pasarlo a pista\".",
   track: "Clic: un punto (tramo recto). Clic y arrastrar: punto con manijas (curva). Tocá el primer punto o Enter para cerrar la vuelta. El primer punto es la largada.",
   branch: "Camino alternativo: tocá un punto de la pista (los cuadraditos, con su número) de donde sale. Después poné los puntos del camino y tocá el punto de la pista donde vuelve a entrar (más adelante).",
   start: "Tocá la pista para poner ahí la recta de la meta (40 m antes y 60 m después). Arrastrá sus puntas para alargarla o girarla.",
@@ -1404,6 +2001,7 @@ function setTool(t) {
   if (PIECES[t]?.place !== "two_points") pendingLights = null;
   tool = t;
   syncPathDrawing();
+  if (t === "paint") schedulePaintView();
   document.querySelectorAll(".tool").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.tool === t)));
   cv.style.cursor = t === "pan" ? "grab" : t === "select" ? "default" : "crosshair";
   if (t === "track" && map.path.length) sel = { kind: "path", node: -1 };
@@ -1424,7 +2022,7 @@ function cancelDrawing() {
 // no tiene se esconden.
 (function pieceButtons() {
   const nav = document.querySelector(".tools");
-  const own = ["select", "pan", "track", "branch", "start", "island"];
+  const own = ["select", "pan", "paint", "track", "branch", "start", "island"];
   nav.querySelectorAll(".tool").forEach((b) => { if (!own.includes(b.dataset.tool) && !PIECES[b.dataset.tool]) b.hidden = true; });
   for (const c of CATALOG) {
     if (nav.querySelector(`.tool[data-tool="${c.type}"]`)) continue;
@@ -1531,7 +2129,7 @@ window.addEventListener("keydown", (e) => {
   if (mod && isV) { e.preventDefault(); pasteClipboard(mouseWorld); return; }
   if (mod && isD) { e.preventDefault(); if (copySelection()) pasteClipboard(null); return; }
   if (selectedShape() && (k === "q" || k === "e")) { rotateSelection(k === "q" ? -15 : 15); return; }
-  const map_ = { v: "select", h: "pan", p: "track", b: "branch", r: "rock_formation", t: "tropical_island", m: "start", i: "island", g: "geyser" };
+  const map_ = { v: "select", h: "pan", d: "paint", p: "track", b: "branch", r: "rock_formation", t: "tropical_island", m: "start", i: "island", g: "geyser" };
   if (map_[k]) setTool(map_[k]);
   if (k === "f") fit();
   if (k === "+" || k === "=") zoomAt([W / 2, H / 2], 1.25);
@@ -1589,6 +2187,7 @@ function refreshPanel() {
   const box = $("selFields"); box.innerHTML = "";
   const title = $("selTitle");
   const s = sel || { kind: "map" };
+  if (tool === "paint") { paintPanel(box, title); refreshReview(); updateButtons(); return; }
   if (s.kind === "map" || (s.kind === "path" && !map.path.length)) {
     title.textContent = "Mapa";
     for (const [k, label, kind] of MAP_FIELDS) {
@@ -1966,11 +2565,11 @@ async function connectDb() {
 }
 
 // Borrador local (por si se cierra la página).
-function saveDraft() { try { localStorage.setItem("simplesurf-editor-draft", JSON.stringify({ key: currentKey, map: toJSON(map), open: !!map.open })); } catch {} }
+function saveDraft() { try { localStorage.setItem("simplesurf-editor-draft", JSON.stringify({ key: currentKey, map: toJSON(map), open: !!map.open, paint: map.paint || [] })); } catch {} }
 function loadDraft() {
   try {
     const d = JSON.parse(localStorage.getItem("simplesurf-editor-draft") || "null");
-    if (d?.map) { map = fromJSON(d.map); map.open = !!d.open && map.path.length > 0; currentKey = d.key?.startsWith("builtin:") ? d.key : "draft"; return true; }
+    if (d?.map) { map = fromJSON(d.map); map.open = !!d.open && map.path.length > 0; map.paint = Array.isArray(d.paint) ? d.paint : []; currentKey = d.key?.startsWith("builtin:") ? d.key : "draft"; return true; }
   } catch {}
   return false;
 }
