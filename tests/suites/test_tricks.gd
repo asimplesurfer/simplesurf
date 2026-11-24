@@ -17,6 +17,7 @@ func run() -> void:
 
 	_test_rules()
 	await _test_match()
+	await _test_exotic()
 	await _test_launches()
 	await _test_waves_and_lip()
 	await _test_tube()
@@ -318,7 +319,7 @@ func _test_waves_and_lip() -> void:
 	_check(cam_around, "mientras tanto la cámara da la vuelta alrededor")
 	_check(music_up, "y la música sube")
 	var gained := session.score_of(r) - before
-	_check(gained >= TrickAttack.LIP_BONUS + 1000, "puntos por recorrerla y el bonus (%d)" % gained)
+	_check(gained >= ExoticTrick.bonus(ExoticTrick.Kind.LIP) + 1000, "puntos por recorrerla y el bonus (%d)" % gained)
 	_check(r.motivation_timer > 0.0 and not r.grounded, "al completarla sale disparado, con motivación")
 	await _wait(0.3)
 	var cd2 := r.global_position - cam.global_position
@@ -345,7 +346,7 @@ func _test_waves_and_lip() -> void:
 	before = session.score_of(r)
 	await _wait(9.0)
 	_check(r.is_fallen(), "sin corregir con el stick pierde el equilibrio y se cae")
-	_check(session.score_of(r) > before and session.score_of(r) - before < TrickAttack.LIP_BONUS, "se queda con los puntos que hizo, sin bonus (%d)" % (session.score_of(r) - before))
+	_check(session.score_of(r) > before and session.score_of(r) - before < ExoticTrick.bonus(ExoticTrick.Kind.LIP), "se queda con los puntos que hizo, sin bonus (%d)" % (session.score_of(r) - before))
 	_check(not other.keep and other.lip_used, "cada ola se usa una sola vez")
 
 	# La ola de borde especial (apagada por ahora: LIP_SPECIAL_WAVES) sigue
@@ -364,6 +365,48 @@ func _test_waves_and_lip() -> void:
 		r.heading = atan2(-from_wave.x, -from_wave.z)
 		await _wait(1.0)
 		_check(hud._lip_pointer.visible, "si no se la ve, una flecha apunta hacia ella")
+	m.queue_free()
+	await process_frame
+
+
+## Trucos exóticos (el borde, el tubo): la misma lógica para todos.
+func _test_exotic() -> void:
+	var config := RaceConfig.tricks()
+	config.trick_seconds = 300
+	var m: Node = load("res://tricks.tscn").instantiate()
+	(m.get_node("Session") as GameSession).config = config
+	root.add_child(m)
+	await process_frame
+	await process_frame
+	var session := m.get_node("Session") as TrickAttack
+	var r := session.racers[0]
+	session._lip_timer = 1e9
+	session.start()
+	var audio := root.get_node_or_null("AudioManager")
+	for kind in [ExoticTrick.Kind.LIP, ExoticTrick.Kind.TUBE]:
+		var nm := ExoticTrick.display_name(kind)
+		r.motivation_timer = 0.0
+		var before := session.score_of(r)
+		r.start_exotic(kind)
+		r.update_exotic(0.8)
+		await _wait(1.0)
+		var piled := session.score_of(r) - before
+		_check(absf(piled - ExoticTrick.points_per_sec(kind)) < ExoticTrick.points_per_sec(kind) * 0.1,
+			"%s: junta puntos mientras se hace (%d en 1 s)" % [nm, piled])
+		if audio:
+			_check(float(audio.get("target_db")) > -4.0, "%s: la música sube" % nm)
+		r.finish_exotic(true)
+		_check(session.score_of(r) - before - piled == ExoticTrick.bonus(kind), "%s: al terminarlo, el bonus" % nm)
+		_check(r.motivation_timer > 0.0, "%s: al salir, motivación" % nm)
+		# Cayéndose: se queda con lo juntado, sin bonus ni motivación.
+		r.motivation_timer = 0.0
+		before = session.score_of(r)
+		r.start_exotic(kind)
+		await _wait(0.5)
+		r.finish_exotic(false)
+		var kept := session.score_of(r) - before
+		_check(kept > 0 and kept < ExoticTrick.bonus(kind), "%s: al caerse se queda con lo juntado (%d)" % [nm, kept])
+		_check(r.motivation_timer == 0.0 and r.exotic == ExoticTrick.Kind.NONE, "%s: sin motivación" % nm)
 	m.queue_free()
 	await process_frame
 
@@ -618,7 +661,7 @@ func _test_tube() -> void:
 	_check(exited[0] and not r.is_fallen(), "aguantando el equilibrio, sale por adelante")
 	_check(low, "adentro va por el piso, debajo del labio (no arriba)")
 	var gained := session.score_of(r) - before
-	_check(gained >= TrickAttack.TUBE_BONUS + 1500, "suma muchos puntos (%d)" % gained)
+	_check(gained >= ExoticTrick.bonus(ExoticTrick.Kind.TUBE) + 1500, "suma muchos puntos (%d)" % gained)
 	# El tubo termina de soltarlo (TubeWave.SPIT_HOLD + COLLAPSE_TIME) y la ola se deshace.
 	await _wait(TubeWave.SPIT_HOLD + TubeWave.COLLAPSE_TIME + 0.5)
 	_check(giant.lifetime - giant.age <= TrickAttack.TUBE_FADE + 0.1, "al terminar, la ola se deshace")

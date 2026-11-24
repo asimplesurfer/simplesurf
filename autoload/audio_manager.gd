@@ -12,8 +12,8 @@ extends Node
 const NORMAL_DB := -8.0
 const EPIC_DB := -1.0
 const MENU_DB := -16.0
-## Modo trucos: la música en el borde de una ola, al final (va subiendo).
-const LIP_DB := 1.5
+## La música al final de un truco exótico (va subiendo; ver ExoticTrick).
+const EXOTIC_DB := 1.5
 ## Segundos en el aire para que empiece a subir la música.
 const EPIC_AIRTIME := 0.5
 
@@ -280,15 +280,16 @@ func _process(delta: float) -> void:
 		target_db = EPIC_DB
 	else:
 		target_db = NORMAL_DB
-	# Modo trucos: en el borde de una ola la música va subiendo hasta el final.
+	# Trucos exóticos (el borde, el tubo...: ver ExoticTrick): mientras se
+	# hacen, la música va subiendo hasta el final.
 	if _in_race:
-		var lip := 0.0
+		var exotic := 0.0
 		for node in get_tree().get_nodes_in_group("riders"):
 			var rr := node as Rider
-			if rr and rr.is_human and rr.on_lip():
-				lip = maxf(lip, rr.lip_progress)
-		if lip > 0.0:
-			target_db = maxf(target_db, lerpf(NORMAL_DB + 2.0, LIP_DB, lip))
+			if rr and rr.is_human and rr.exotic != ExoticTrick.Kind.NONE:
+				exotic = maxf(exotic, maxf(rr.exotic_progress, 0.01))
+		if exotic > 0.0:
+			target_db = maxf(target_db, lerpf(NORMAL_DB + 2.0, EXOTIC_DB, exotic))
 	# Sube rápido y baja más despacio.
 	var rate := 6.0 if target_db > player.volume_db else 2.0
 	player.volume_db = lerpf(player.volume_db, target_db, 1.0 - exp(-rate * delta))

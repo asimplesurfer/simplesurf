@@ -14,8 +14,9 @@ extends GameSession
 ##   invisible en los saltos.
 ## - Cada LIP_EVERY segundos, una ola de borde (larga y alta): si llegás a la
 ##   cresta desde atrás, te lleva por el borde con un minijuego de equilibrio
-##   (ver el estado `lip`). Da puntos por segundo y un bonus si aguantás hasta
-##   que se disuelve; si te caés, te quedás con lo que hiciste.
+##   (ver el estado `lip`). Es un truco exótico (ver ExoticTrick: puntos
+##   mientras se hace, música que sube, bonus y motivación al completarlo; si te
+##   caés, te quedás con lo juntado). Dura hasta el final de la cresta.
 ##
 ## Por ahora se juega solo (J1). Pensado para después: bots y otros jugadores
 ## (un puntaje por surfista: `scores` ya va por surfista), el clima que cambia
@@ -55,15 +56,11 @@ const LIP_EVERY := 20.0
 ## (y un cartel cuando sale). La idea es sacarla: con el rocío de la cresta
 ## (LipWaveSpray) ya se tiene que reconocer.
 const SHOW_LIP_POINTER := true
-## Puntos por segundo en el borde y bonus si aguanta hasta el final.
-const LIP_POINTS_PER_SEC := 150.0
-const LIP_BONUS := 2000
 ## Tubos: una ola de TUBE_MIN_HEIGHT m o más, después de TUBE_AFTER segundos
 ## entera, se cierra en tubo (la ola tubo, ver TubeWave) a lo largo de su
 ## cresta, con la boca del lado del surfista. Si entra por la boca antes de
 ## TUBE_OPEN_TIME segundos, arranca el minijuego del tubo (ver el estado
-## `tube`): puntos por segundo adentro y un bonus grande si sale. Si se cae,
-## se queda con lo que hizo.
+## `tube`): también es un truco exótico (ver ExoticTrick).
 const TUBE_MIN_HEIGHT := 10.0
 const TUBE_AFTER := 6.0
 const TUBE_OPEN_TIME := 12.0
@@ -77,8 +74,6 @@ const TUBE_FADE := 2.5
 ## Por dónde va el recorrido adentro (veces la altura de la ola, hacia
 ## adelante desde el centro): en el medio del hueco, debajo del labio.
 const TUBE_LINE := 1.25
-const TUBE_POINTS_PER_SEC := 500.0
-const TUBE_BONUS := 6000
 ## Concentración: yendo derecho hacia una ola (a menos de FOCUS_RANGE m, sin
 ## desviarse más de FOCUS_ANGLE rad) durante FOCUS_DELAY segundos, la velocidad
 ## empieza a subir (llega al máximo en FOCUS_RAMP segundos más). Al girar o
@@ -116,11 +111,11 @@ var water: Water
 var lip_wave: Swell = null
 var _lip_timer: float = LIP_FIRST
 ## Puntos del borde que todavía no llegan a uno entero (por surfista).
-var _lip_points: Dictionary = {}
+## Trucos exóticos (ver ExoticTrick): puntos que todavía no llegan a uno
+## entero (por surfista).
+var _exotic_points: Dictionary = {}
 ## El tubo que hay ahora (null si no hay ninguno).
 var tube: TubeWave = null
-## Puntos del tubo que todavía no llegan a uno entero (por surfista).
-var _tube_points: Dictionary = {}
 ## Una ola gigante se empieza a cerrar en tubo, y ya se puede entrar.
 signal tube_curling(wave: Swell)
 signal tube_formed(tube: TubeWave)
@@ -153,8 +148,8 @@ func _ready() -> void:
 		scores[r] = 0
 		r.controls_locked = true
 		r.trick_landed.connect(_on_trick_landed.bind(r))
+		r.exotic_finished.connect(_on_exotic_finished.bind(r))
 		r.lip_exited.connect(_on_lip_exited.bind(r))
-		r.tube_exited.connect(_on_tube_exited.bind(r))
 	water = get_parent().get_node_or_null("Water") as Water
 	waves = get_parent().get_node_or_null("WaveManager") as WaveManager
 	if waves:
@@ -222,6 +217,7 @@ func _physics_process(delta: float) -> void:
 				start()
 		State.PLAYING:
 			time_left = maxf(time_left - delta, 0.0)
+			_update_exotic(delta)
 			_update_lip(delta)
 			_update_tubes(delta)
 			for r in racers:
@@ -250,10 +246,7 @@ func _update_lip(delta: float) -> void:
 				lip_wave_spawned.emit(lip_wave)
 	for r in racers:
 		if r.on_lip():
-			var acc: float = float(_lip_points.get(r, 0.0)) + LIP_POINTS_PER_SEC * delta
-			var whole := int(acc)
-			_lip_points[r] = acc - whole
-			scores[r] = score_of(r) + whole
+			continue
 		elif lip_wave and try_catch_lip(r, lip_wave):
 			pass
 		elif LIP_ANY_WAVE and water:
@@ -277,12 +270,6 @@ func add_lip_spray(wave: Swell) -> LipWaveSpray:
 ## quieta; ya casi cerrada se puede entrar por la punta (la boca). Al terminar
 ## (o si nadie entra) la ola se deshace. Adentro se suman puntos.
 func _update_tubes(delta: float) -> void:
-	for r in racers:
-		if r.in_tube():
-			var acc: float = float(_tube_points.get(r, 0.0)) + TUBE_POINTS_PER_SEC * delta
-			var whole := int(acc)
-			_tube_points[r] = acc - whole
-			scores[r] = score_of(r) + whole
 	if water == null:
 		return
 	if curling != null:
@@ -368,15 +355,6 @@ func make_tube(s: Swell) -> TubeWave:
 	return t
 
 
-## Salió del tubo: si llegó al final, el bonus.
-func _on_tube_exited(success: bool, rider: Rider) -> void:
-	_tube_points[rider] = 0.0
-	if not success or state != State.PLAYING:
-		return
-	scores[rider] = score_of(rider) + TUBE_BONUS
-	scored.emit(rider, TUBE_BONUS, score_of(rider), true)
-
-
 ## Concentración: si va derecho hacia una ola, la velocidad sube de a poco.
 func _update_focus(r: Rider, delta: float) -> void:
 	var t: float = _focus_time.get(r, 0.0)
@@ -449,19 +427,36 @@ func try_catch_lip(r: Rider, s: Swell) -> bool:
 	s.lip_used = true
 	s.keep = true
 	r.lip_wave = s
-	_lip_points[r] = 0.0
 	r.state_machine.transition_to(&"lip")
 	return true
 
 
-## Salió de la ola de borde: si aguantó, el bonus.
-func _on_lip_exited(success: bool, rider: Rider) -> void:
+## Salió de la ola de borde: ya no hay ola de borde (la sacó él).
+func _on_lip_exited(_success: bool, rider: Rider) -> void:
 	if lip_wave and rider.lip_wave == lip_wave:
 		lip_wave = null
+
+
+## Trucos exóticos (ver ExoticTrick): mientras se hacen, se juntan puntos.
+func _update_exotic(delta: float) -> void:
+	for r in racers:
+		if r.exotic == ExoticTrick.Kind.NONE:
+			continue
+		var acc: float = float(_exotic_points.get(r, 0.0)) + ExoticTrick.points_per_sec(r.exotic) * delta
+		var whole := int(acc)
+		_exotic_points[r] = acc - whole
+		scores[r] = score_of(r) + whole
+
+
+## Terminó un truco exótico: si lo completó, el bonus (si se cayó, se queda
+## con lo que juntó). La motivación la da el surfista (Rider.finish_exotic).
+func _on_exotic_finished(kind: ExoticTrick.Kind, success: bool, rider: Rider) -> void:
+	_exotic_points[rider] = 0.0
 	if not success or state != State.PLAYING:
 		return
-	scores[rider] = score_of(rider) + LIP_BONUS
-	scored.emit(rider, LIP_BONUS, score_of(rider), true)
+	var b := ExoticTrick.bonus(kind)
+	scores[rider] = score_of(rider) + b
+	scored.emit(rider, b, score_of(rider), true)
 
 
 ## Arranca (termina la cuenta regresiva).
