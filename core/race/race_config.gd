@@ -9,8 +9,9 @@ extends Resource
 ## (cualquier tecla vuelve). SANDBOX: modo libre (mar abierto). TIME_TRIAL:
 ## contrarreloj (solo J1 contra su fantasma, con las mismas olas siempre).
 ## EXPLORE: modo libre dentro del mapa elegido (sin bots, sin carrera; ver
-## ExploreMode).
-enum Mode { RACE, DEMO, SANDBOX, TIME_TRIAL, EXPLORE }
+## ExploreMode). TRICKS: modo trucos (puntos por trucos contra reloj, ver
+## TrickAttack).
+enum Mode { RACE, DEMO, SANDBOX, TIME_TRIAL, EXPLORE, TRICKS }
 
 @export var mode: Mode = Mode.RACE
 ## El mapa: su lugar en la lista de mapas (TrackMap.for_layout).
@@ -19,6 +20,9 @@ enum Mode { RACE, DEMO, SANDBOX, TIME_TRIAL, EXPLORE }
 @export var time_of_day: GameSettings.TimeOfDay = GameSettings.TimeOfDay.DAY
 @export var laps: int = 5
 @export var slots: Array[RacerSlot] = []
+## Modo trucos: el mapa (su lugar en TrickWorld.MAPS) y cuánto dura (s).
+@export var trick_map: int = 0
+@export var trick_seconds: int = 120
 
 
 ## Una configuración nueva arranca con el mapa y el clima elegidos en el menú.
@@ -185,6 +189,19 @@ static func explore() -> RaceConfig:
 	var config := create(GameSettings.player_count, 0, 0)
 	config.mode = Mode.EXPLORE
 	config.laps = 999
+	return config
+
+
+## Modo trucos: J1 solo (por ahora), en el mapa y con el tiempo elegidos, de
+## día y sin tormenta (el clima que cambia durante la partida viene después).
+static func tricks() -> RaceConfig:
+	var config := create(1, 0, 0)
+	config.mode = Mode.TRICKS
+	config.laps = 1
+	config.weather = GameSettings.Weather.SUNNY
+	config.time_of_day = GameSettings.TimeOfDay.DAY
+	config.trick_map = GameSettings.trick_map
+	config.trick_seconds = GameSettings.trick_seconds()
 	return config
 
 

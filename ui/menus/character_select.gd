@@ -9,17 +9,21 @@ extends Control
 ## 3. "Armá la partida": bots, dificultad, olas, mapa, clima. De ahí arranca la
 ##    carrera (o el modo libre). Cada jugador juega con el dispositivo con el
 ##    que se unió.
+## 4. Modo trucos (desde "Armá la partida"): elegir el mapa y el tiempo.
 ## Sin tocar nada 10 s arranca la demo (carrera de bots). Apenas alguien usa
 ## el juego (teclado, mouse o mando) la demo ya no arranca sola.
 
 signal start_requested
 ## Eligió el modo libre (mar abierto).
 signal sandbox_requested
+## Eligió el modo trucos.
+signal tricks_requested
 ## La configuración de la última partida que se abrió desde este menú.
 var started_config: RaceConfig
 
 const RACE_SCENE := "res://main.tscn"
 const SANDBOX_SCENE := "res://sandbox.tscn"
+const TRICKS_SCENE := "res://tricks.tscn"
 const YELLOW := Palette.BUTTER
 const PANEL_BG := Palette.UI_PANEL
 const IDLE_DEMO_TIME := 10.0
@@ -90,7 +94,7 @@ const SLIDER_ENDS := {
 
 ## Si es false, no cambia de escena al empezar (para tests); solo emite la señal.
 var auto_start: bool = true
-## Pantalla actual: "title", "players" o "setup".
+## Pantalla actual: "title", "players", "setup" o "tricks".
 var screen: String = "title"
 ## En el título: false = botón JUGAR, true = elegir cuántos juegan.
 var choosing_count: bool = false
@@ -146,6 +150,8 @@ func _build() -> void:
 			_build_title()
 		"players":
 			_build_players()
+		"tricks":
+			_build_tricks()
 		_:
 			_build_setup()
 	_demo_label = _label("", 16, Palette.UI_SOFT_TEXT)
@@ -356,6 +362,10 @@ func _build_setup() -> void:
 	free.custom_minimum_size = Vector2(170.0, 48.0)
 	free.pressed.connect(start_sandbox)
 	bar.add_child(free)
+	var tricks := _button("Modo trucos", 22)
+	tricks.custom_minimum_size = Vector2(170.0, 48.0)
+	tricks.pressed.connect(go_tricks)
+	bar.add_child(tricks)
 	var trial := _button("Contrarreloj", 22)
 	trial.custom_minimum_size = Vector2(170.0, 48.0)
 	trial.pressed.connect(start_time_trial)
@@ -369,6 +379,62 @@ func _build_setup() -> void:
 			(b as Button).focus_entered.connect(func() -> void: _focus_row = null)
 	_focus_row = null
 	first.grab_focus.call_deferred()
+
+
+## Modo trucos: el mapa y cuánto dura; abajo, el récord de esa combinación.
+func _build_tricks() -> void:
+	var root := _root_box()
+	root.add_child(_label("Modo trucos", 40, YELLOW))
+	var box := VBoxContainer.new()
+	box.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	box.add_theme_constant_override("separation", 10)
+	root.add_child(_panel(box))
+	box.add_child(_label("Hacé la mayor cantidad de puntos con trucos antes de que se termine el tiempo.\n"
+		+ "Más combo, más puntos. Si caés justo sumás la mitad; si te caés, los perdés.", 20, Color.WHITE))
+	var first := _setup_row(box, "Mapa", TrickWorld.map_names(), GameSettings.trick_map,
+		func(i: int) -> void:
+			GameSettings.trick_map = i
+			_update_trick_record()
+	)
+	_setup_row(box, "Tiempo", GameSettings.TRICK_TIME_NAMES, GameSettings.trick_time,
+		func(i: int) -> void:
+			GameSettings.trick_time = i
+			_update_trick_record()
+	)
+	_trick_record = _label("", 24, YELLOW)
+	_trick_record.name = "TrickRecord"
+	box.add_child(_trick_record)
+	_update_trick_record()
+	var bar := HBoxContainer.new()
+	bar.add_theme_constant_override("separation", 16)
+	root.add_child(bar)
+	var back := _button("Volver", 22)
+	back.custom_minimum_size = Vector2(170.0, 48.0)
+	back.pressed.connect(go_setup)
+	bar.add_child(back)
+	var hint := _label("ESPACIO / A: elegir · ENTER / Start: ¡a surfear! · ESC: volver", 16, Color.WHITE)
+	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar.add_child(hint)
+	var go := _button("¡A surfear!", 28)
+	go.custom_minimum_size = Vector2(220.0, 52.0)
+	go.pressed.connect(start_tricks)
+	bar.add_child(go)
+	for b in bar.get_children():
+		if b is Button:
+			(b as Button).focus_entered.connect(func() -> void: _focus_row = null)
+	_focus_row = null
+	first.grab_focus.call_deferred()
+
+
+## Récord del mapa y tiempo elegidos (pantalla del modo trucos).
+var _trick_record: Label
+
+
+func _update_trick_record() -> void:
+	if _trick_record == null or not is_instance_valid(_trick_record):
+		return
+	var top := TrickAttack.top_scores(String(TrickWorld.map_for(GameSettings.trick_map).id), GameSettings.trick_seconds())
+	_trick_record.text = "Récord: %s pts" % TrickAttack.format_score(int(top[0])) if not top.is_empty() else "Todavía no hay récord"
 
 
 func _capitalized(names: Array) -> Array:
@@ -467,6 +533,12 @@ func go_setup() -> void:
 	_build()
 
 
+func go_tricks() -> void:
+	GameSettings.save_settings()
+	screen = "tricks"
+	_build()
+
+
 func _on_joy_connection_changed(_device: int, _connected: bool) -> void:
 	InputSetup.refresh_player_devices()
 
@@ -484,6 +556,12 @@ func start_sandbox() -> void:
 		_launch(RACE_SCENE, RaceConfig.explore(), sandbox_requested)
 	else:
 		_launch(SANDBOX_SCENE, RaceConfig.sandbox(), sandbox_requested)
+
+
+## Modo trucos: J1 solo, puntos por trucos contra reloj (ver TrickAttack).
+func start_tricks() -> void:
+	GameSettings.save_settings()
+	_launch(TRICKS_SCENE, RaceConfig.tricks(), tricks_requested)
 
 
 ## Contrarreloj: J1 solo contra su mejor tiempo (el fantasma), mismas olas.
@@ -590,6 +668,9 @@ func _input(event: InputEvent) -> void:
 	if screen == "setup":
 		_setup_input(event)
 		return
+	if screen == "tricks":
+		_tricks_input(event)
+		return
 	var read := _read(event)
 	if read.is_empty():
 		return
@@ -627,6 +708,20 @@ func _setup_input(event: InputEvent) -> void:
 		"back":
 			get_viewport().set_input_as_handled()
 			go_players()
+
+
+## Modo trucos: ENTER / Start arranca; ESC / B vuelve a "Armá la partida".
+func _tricks_input(event: InputEvent) -> void:
+	var read := _read(event)
+	if read.is_empty():
+		return
+	match read[1]:
+		"start":
+			get_viewport().set_input_as_handled()
+			start_tricks()
+		"back":
+			get_viewport().set_input_as_handled()
+			go_setup()
 
 
 ## true si el evento viene de tocar la pantalla (o el mouse que imita el toque).
