@@ -310,6 +310,15 @@ func height_ahead(x: float, z: float, dt: float) -> float:
 func swell_height_at(x: float, z: float) -> float:
 	var p := Vector2(x, z)
 	var h := 0.0
+	var crossing := _crossing_drawn(p)
+	if not crossing.is_empty():
+		# Dos o más olas del modo trucos que se cruzan (ver _crossing_source).
+		var src := _crossing_source(p, crossing)
+		for s in swells:
+			h += s.amplitude * s.plain_n(src) if crossing.has(s) else s.height_at(p)
+		if ring_wave:
+			h += ring_wave.height_at(p)
+		return h * _island_fade(p) if h != 0.0 else 0.0
 	for s in swells:
 		h += s.height_at(p)
 	if ring_wave:
@@ -510,6 +519,13 @@ static func _tri_height(p: Vector2, a: Vector3, b: Vector3, c: Vector3) -> float
 func normal_at(x: float, z: float) -> Vector3:
 	var g := waves.gradient_at(x, z, time)
 	var p := Vector2(x, z)
+	if not _crossing_drawn(p).is_empty():
+		# Olas que se cruzan: la pendiente de la superficie que se dibuja.
+		var e := 0.3
+		var gx := (swell_height_at(x + e, z) - swell_height_at(x - e, z)) / (2.0 * e)
+		var gz := (swell_height_at(x, z + e) - swell_height_at(x, z - e)) / (2.0 * e)
+		g += Vector2(gx, gz)
+		return Vector3(-g.x, 1.0, -g.y).normalized()
 	var swell_g := Vector2.ZERO
 	for s in swells:
 		swell_g += s.gradient_at(p)
@@ -518,6 +534,42 @@ func normal_at(x: float, z: float) -> Vector3:
 	if swell_g != Vector2.ZERO:
 		g += swell_g * _island_fade(p)
 	return Vector3(-g.x, 1.0, -g.y).normalized()
+
+
+## Las olas del modo trucos (la física sigue al dibujo: Swell.match_drawn) que
+## pueden estar en `p`, si son dos o más (vacío si no se cruzan).
+func _crossing_drawn(p: Vector2) -> Array[Swell]:
+	var out: Array[Swell] = []
+	for s in swells:
+		if s.match_drawn and s.reaches(p):
+			out.append(s)
+	if out.size() < 2:
+		out.clear()
+	return out
+
+
+## Pasos para encontrar el punto de la malla que se dibuja en `q` cuando se
+## cruzan olas (ver _crossing_source).
+const CROSSING_STEPS := 8
+
+
+## Olas que se cruzan: el dibujo corre cada punto de la malla por la suma de
+## los labios de todas (como en water_surface.gdshaderinc), así que lo que se
+## ve en `q` viene del punto p con p + corrimiento(p) = q. Se arranca desde lo
+## que da cada ola por separado y se ajusta de a poco.
+func _crossing_source(q: Vector2, crossing: Array[Swell]) -> Vector2:
+	var p := q
+	for s in crossing:
+		var uw := s.local_coords(q)
+		var u0 := s._source_u(uw.x, absf(uw.y))
+		p -= s.direction * (uw.x - u0)
+	for k in CROSSING_STEPS:
+		var disp := Vector2.ZERO
+		for s in crossing:
+			var n := s.plain_n(p)
+			disp += s.direction * (s.lean() * n * n * n)
+		p = p.lerp(q - disp, 0.7)
+	return p
 
 
 ## 0 pegado a la tierra, 1 lejos: las olas grandes no se meten en la playa.

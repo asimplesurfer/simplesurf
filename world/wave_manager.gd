@@ -163,6 +163,7 @@ func _physics_process(delta: float) -> void:
 		_update_fixed()
 		return
 	if trick_mode:
+		_dissolve_collisions()
 		_timer -= delta
 		if _timer <= 0.0:
 			_timer = _rng.randf_range(spawn_interval_min, spawn_interval_max)
@@ -514,6 +515,39 @@ func _make_incoming(target: Rider, player: Vector2) -> Swell:
 	return null
 
 
+## Modo trucos: cuando dos olas se chocan (sus crestas se cruzan), las dos se
+## empiezan a disolver (en COLLIDE_FADE segundos), en vez de sumarse en una
+## masa de agua enorme. La que alguien está recorriendo (keep) aguanta.
+const COLLIDE_FADE := 2.0
+
+
+func _dissolve_collisions() -> void:
+	var list := _water.swells
+	for i in list.size():
+		for j in range(i + 1, list.size()):
+			var a: Swell = list[i]
+			var b: Swell = list[j]
+			if a.amplitude <= 0.5 or b.amplitude <= 0.5:
+				continue
+			if not crests_touch(a, b):
+				continue
+			for s in [a, b]:
+				if not s.keep and s.lifetime - s.age > COLLIDE_FADE:
+					s.fade_time = COLLIDE_FADE
+					s.retire()
+
+
+## true si las crestas de dos olas se tocan (están más cerca que la mitad de
+## lo que miden de ancho entre las dos).
+static func crests_touch(a: Swell, b: Swell) -> bool:
+	var pa := Vector2(-a.direction.y, a.direction.x) * (a.half_length - a.edge * 0.5)
+	var pb := Vector2(-b.direction.y, b.direction.x) * (b.half_length - b.edge * 0.5)
+	var ca := a.center + a.direction * a.crest_u()
+	var cb := b.center + b.direction * b.crest_u()
+	var pts := Geometry2D.get_closest_points_between_segments(ca - pa, ca + pa, cb - pb, cb + pb)
+	return pts[0].distance_to(pts[1]) < (a.width + b.width) * 0.5
+
+
 ## Modo trucos: una ola de un tamaño al azar (TRICK_SIZES), alrededor de un
 ## surfista y avanzando para cualquier lado (no hacia él).
 func _make_trick_swell() -> Swell:
@@ -566,7 +600,32 @@ func _spaced_trick(s: Swell) -> bool:
 			gap = maxf(gap, other.half_length + s.width * 2.0)
 		if other.center.distance_to(s.center) < gap:
 			return false
+		# Que no vayan a chocarse mientras duran (se disolverían las dos).
+		if _will_collide(s, other):
+			return false
 	return true
+
+
+## Cada cuánto (s) se mira hacia adelante si dos olas van a chocarse.
+const COLLIDE_LOOK_STEP := 2.0
+
+
+## true si `a` y `b`, avanzando como avanzan, se van a tocar mientras duren las dos.
+func _will_collide(a: Swell, b: Swell) -> bool:
+	var span := minf(a.lifetime - a.age, b.lifetime - b.age)
+	var t := 0.0
+	var ca := a.center
+	var cb := b.center
+	while t <= span:
+		a.center = ca + a.direction * a.speed * t
+		b.center = cb + b.direction * b.speed * t
+		var touch := crests_touch(a, b)
+		a.center = ca
+		b.center = cb
+		if touch:
+			return true
+		t += COLLIDE_LOOK_STEP
+	return false
 
 
 ## Modo trucos: una ola de borde cerca de `near` (larga y alta; ver

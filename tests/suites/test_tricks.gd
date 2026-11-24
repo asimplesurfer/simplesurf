@@ -253,8 +253,20 @@ func _test_waves_and_lip() -> void:
 	var audio := root.get_node_or_null("AudioManager")
 	var tall := _tall_wave(r, 8.0)
 	await _wait(0.2)
+	# De frente contra la ola (subiendo la cara para saltar): no engancha.
 	_place_on(tall, 3.0, 0.0)
-	_check(not session.try_catch_lip(r, tall), "desde adelante no engancha")
+	r.heading = atan2(tall.direction.x, tall.direction.y)
+	_check(not session.try_catch_lip(r, tall), "de frente no engancha (ahí se salta)")
+	# De costado por la cara, tocando la espuma de arriba: engancha.
+	_place_on(tall, 3.0, 0.0)
+	var along_dir := Vector2(-tall.direction.y, tall.direction.x)
+	r.heading = atan2(-along_dir.x, -along_dir.y)
+	_check(session.try_catch_lip(r, tall), "de costado por la cara, tocando la espuma, engancha")
+	await _wait(0.2)
+	r.state_machine.transition_to(&"riding")
+	r.lip_wave = null
+	tall = _tall_wave(r, 8.0)
+	await _wait(0.2)
 	var limit := tall.half_length - tall.edge - 2.0
 	_place_on(tall, -1.0, -(limit - 3.0))
 	await _wait(0.1)
@@ -304,12 +316,15 @@ func _test_waves_and_lip() -> void:
 	var cd2 := r.global_position - cam.global_position
 	_check(Vector2(cd2.x, cd2.z).normalized().dot(Vector2(r.forward().x, r.forward().z)) > 0.8, "al soltarlo, la cámara ya volvió detrás")
 
-	# Una chica desde atrás no engancha.
+	# Todas las olas enganchan: también una chica.
 	await _wait_until_state(&"riding", 8.0)
 	var small_w := _tall_wave(r, 4.5)
 	await _wait(0.2)
 	_place_on(small_w, -1.0, 0.0)
-	_check(not session.try_catch_lip(r, small_w), "una ola chica no engancha (esa lanza)")
+	_check(session.try_catch_lip(r, small_w), "una ola chica también engancha")
+	await _wait(0.2)
+	r.state_machine.transition_to(&"riding")
+	r.lip_wave = null
 
 	# Otra alta: sin tocar el stick se cae, pero se queda con lo que hizo.
 	await _wait_until_state(&"riding", 8.0)
@@ -372,6 +387,60 @@ func _test_launches() -> void:
 	var back_big := await _launch_apex(r, 12.0, true)
 	_check(back_small > 0.8, "pasando una ola chica por arriba desde atrás, sale volando (%.1f m)" % back_small)
 	_check(back_big > back_small * 1.8, "desde atrás, la gigante también levanta más (%.1f m)" % back_big)
+
+	# Dos olas que se cruzan: lo que se siente sigue siendo lo que se ve (el
+	# dibujo suma los labios de las dos).
+	_water.clear_swells()
+	var c := Vector2(900.0, -400.0)
+	var dirs := [Vector2.RIGHT, Vector2(0.3, 1.0).normalized()]
+	for k in 2:
+		var cw := Swell.new()
+		cw.match_drawn = true
+		cw.max_amplitude = 9.0 - k * 2.0
+		cw.width = cw.max_amplitude * 1.8
+		cw.half_length = 50.0
+		cw.lifetime = 100.0
+		cw.grow_time = 0.1
+		cw.age = 0.1
+		cw.direction = dirs[k]
+		cw.center = c + Vector2(k * 4.0, -k * 3.0)
+		cw.update(0.0)
+		_water.add_swell(cw)
+	var worst := 0.0
+	var worst_plain := 0.0
+	var step := _water.grid_step()
+	for i in 24:
+		for j in 24:
+			var gp := c + Vector2((i - 12) * 2.0, (j - 12) * 2.0)
+			gp = Vector2((floorf(gp.x / step) + 0.5) * step, (floorf(gp.y / step) + 0.5) * step)
+			var v := _water.drawn_vertex(gp)
+			var drawn_h := v.y - _water.waves.height_at(gp.x, gp.y, _water.time)
+			var here := Vector2(v.x, v.z)
+			worst = maxf(worst, absf(_water.swell_height_at(here.x, here.y) - drawn_h))
+			var plain := 0.0
+			for sw in _water.swells:
+				plain += sw.height_at(here)
+			worst_plain = maxf(worst_plain, absf(plain - drawn_h))
+	_check(worst < 0.3, "con dos olas cruzándose, lo que se siente es lo que se ve (%.2f m; sumando cada una aparte: %.1f m)" % [worst, worst_plain])
+	# Chocan: en vez de sumarse en una masa enorme, las dos se disuelven de a
+	# poco (no de golpe).
+	var crossed: Array = _water.swells.duplicate()
+	waves._dissolve_collisions()
+	var fading := true
+	for sw in crossed:
+		if sw.lifetime - sw.age > WaveManager.COLLIDE_FADE + 0.01 or sw.lifetime - sw.age < 1.0:
+			fading = false
+	_check(crossed.size() == 2 and fading, "al chocar, las dos olas se empiezan a disolver (en unos segundos)")
+	var lonely := Swell.new()
+	lonely.max_amplitude = 6.0
+	lonely.width = 10.0
+	lonely.half_length = 30.0
+	lonely.lifetime = 100.0
+	lonely.age = 1.0
+	lonely.center = c + Vector2(400.0, 0.0)
+	lonely.update(0.0)
+	_check(not WaveManager.crests_touch(crossed[0], lonely), "una ola lejos no cuenta como choque")
+	_water.clear_swells()
 	m.queue_free()
 	await process_frame
 
@@ -406,6 +475,8 @@ func _launch_apex(r: Rider, amp: float, from_behind: bool) -> float:
 		sw.direction = -fwd
 		sw.speed = 4.0
 	sw.update(0.0)
+	# Para medir el salto: esta ya se usó para el borde (si no, la engancha).
+	sw.lip_used = true
 	_water.add_swell(sw)
 	var top := 0.0
 	var flew := false

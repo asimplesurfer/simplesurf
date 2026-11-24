@@ -36,16 +36,17 @@ const BASE_POINTS := 100
 ## Aterrizaje justo: esta parte de los puntos.
 const TIGHT_MULT := 0.5
 const COUNTDOWN_TIME := 3.0
-## Olas de borde: con LIP_ANY_WAVE, toda ola de LIP_MIN_HEIGHT m o más se
-## engancha si se llega a su cresta desde atrás (y dura lo que le queda de
-## cresta, o de vida). Con LIP_SPECIAL_WAVES, además sale cada LIP_EVERY
-## segundos una ola de borde especial (larga, con rocío). Por ahora: todas las
-## altas, sin la especial (para probar cómo queda).
+## Olas de borde: con LIP_ANY_WAVE, toda ola de LIP_MIN_HEIGHT m o más (por
+## ahora 0: todas) se engancha si se llega a su cresta desde atrás (y dura lo
+## que le queda de cresta, o de vida). Si no da para recorrerla LIP_MIN_TIME
+## segundos, lanza por arriba. Con LIP_SPECIAL_WAVES, además sale cada
+## LIP_EVERY segundos una ola de borde especial (larga, con rocío). Por ahora:
+## todas, sin la especial (para probar cómo queda).
 const LIP_ANY_WAVE := true
 const LIP_SPECIAL_WAVES := false
-const LIP_MIN_HEIGHT := 5.5
+const LIP_MIN_HEIGHT := 0.0
 ## Hace falta poder recorrerla al menos esto (s) para engancharse.
-const LIP_MIN_TIME := 3.0
+const LIP_MIN_TIME := 1.5
 ## Ola de borde: la primera a los LIP_FIRST segundos, después cada LIP_EVERY.
 const LIP_FIRST := 10.0
 const LIP_EVERY := 20.0
@@ -59,6 +60,9 @@ const LIP_BONUS := 2000
 ## Para engancharse: en la parte de atrás de la ola, cerca de la cresta (esta
 ## parte de la altura, o más) y a no más de LIP_CATCH_HEIGHT m del agua.
 const LIP_CATCH_UP := 0.7
+## Hasta dónde de la cara de adelante engancha (veces el ancho de la ola):
+## llegando de costado por la cara, al tocar la espuma de arriba.
+const LIP_CATCH_FRONT := 0.35
 const LIP_CATCH_HEIGHT := 2.0
 ## Récords: los mejores TOP puntajes de cada mapa y duración.
 const SAVE_PATH := "user://trucos.cfg"
@@ -230,11 +234,12 @@ func try_catch_lip(r: Rider, s: Swell) -> bool:
 		return false
 	var p := Vector2(r.position.x, r.position.z)
 	var uw := s.local_coords(p)
-	# Atrás de la cresta (la ola avanza hacia +u) y no en las puntas.
+	# Tocando la espuma de la cresta: un poco atrás o un poco adelante de lo
+	# más alto (la ola avanza hacia +u), y no en las puntas.
 	var from_crest := uw.x - s.crest_u()
-	if from_crest > 0.5 or from_crest < -s.width * 0.8 or absf(uw.y) > s.half_length - s.edge - 4.0:
+	if from_crest > s.width * LIP_CATCH_FRONT or from_crest < -s.width * 0.8 or absf(uw.y) > s.half_length - s.edge - 4.0:
 		return false
-	# Desde atrás o de costado (no de frente: esa la salta).
+	# Desde atrás o de costado (no de frente contra la ola: ahí quiere saltar).
 	var f := r.forward()
 	if Vector2(f.x, f.z).dot(s.direction) < -0.3:
 		return false
