@@ -246,91 +246,101 @@ func _test_waves_and_lip() -> void:
 	_rider = r
 	await _wait_until_state(&"riding", 6.0)
 
-	# Ola de borde: larga y alta, cerca pero no encima.
-	var lip := waves.spawn_lip_wave(Vector2(r.position.x, r.position.z))
-	_check(lip != null and lip.lip and lip.half_length > 60.0, "sale una ola de borde, larga")
-	session.lip_wave = lip
-	await _wait(3.5)
-	# De frente (del lado de adelante) no engancha.
-	_place_on(lip, 3.0, 0.0)
-	_check(not session.try_catch_lip(r, lip), "desde adelante no engancha")
-	# Llega a la cresta desde atrás: lo engancha solo.
-	_place_on(lip, -1.0, 0.0)
-	await _wait(0.1)
-	_check(r.on_lip() and r.state_machine.current_name == &"lip", "desde atrás, en la cresta, la ola lo engancha sola")
-	var start_w := lip.local_coords(Vector2(r.position.x, r.position.z)).y
-	await _wait(1.0)
-	_check(r.position.y - water.height_at(r.position.x + 30.0, r.position.z + 30.0) > 4.0 or r.position.y > 5.0, "va arriba, en el borde (%.1f m)" % r.position.y)
-	_check(absf(lip.local_coords(Vector2(r.position.x, r.position.z)).y - start_w) > 8.0, "lo lleva a lo largo de la cresta")
-	_check(r.drift_side != 0, "con la tabla de costado, raspando")
+	# Toda ola alta (de LIP_MIN_HEIGHT m o más) se engancha si se llega a su
+	# cresta desde atrás; las chicas no (esas lanzan).
 	var vis := r.get_node("Visual") as RiderVisual
+	var hud := (m.get_node("Views") as SplitScreen).huds[0]
+	var audio := root.get_node_or_null("AudioManager")
+	var tall := _tall_wave(r, 8.0)
+	await _wait(0.2)
+	_place_on(tall, 3.0, 0.0)
+	_check(not session.try_catch_lip(r, tall), "desde adelante no engancha")
+	var limit := tall.half_length - tall.edge - 2.0
+	_place_on(tall, -1.0, -(limit - 3.0))
+	await _wait(0.1)
+	_check(r.on_lip() and r.state_machine.current_name == &"lip", "una ola alta cualquiera, desde atrás, en la cresta, lo engancha sola")
+	var expected := r.lip_time_left
+	_check(expected > 8.0, "dura lo que le queda de cresta por recorrer (%.1f s)" % expected)
+	var start_w := tall.local_coords(Vector2(r.position.x, r.position.z)).y
+	await _wait(1.0)
+	_check(r.position.y > 6.0, "va arriba, en el borde (%.1f m)" % r.position.y)
+	_check(absf(tall.local_coords(Vector2(r.position.x, r.position.z)).y - start_w) > 8.0, "lo lleva a lo largo de la cresta")
+	_check(r.drift_side != 0, "con la tabla de costado, raspando")
 	_check(vis._body.anim == &"lip", "con la pose del borde (%s)" % vis._body.anim)
 	_check(absf(vis._drift_yaw) > 0.3, "la tabla va en diagonal (%.2f rad)" % vis._drift_yaw)
-	var cam_dir := r.global_position - (m.get_node("Views") as SplitScreen).cameras[0].global_position
 	var fwd := r.forward()
-	_check(Vector2(cam_dir.x, cam_dir.z).normalized().dot(Vector2(fwd.x, fwd.z)) > 0.9, "la cámara sigue detrás del surfista")
-	var along := Vector2(fwd.x, fwd.z).dot(Vector2(-lip.direction.y, lip.direction.x))
+	var along := Vector2(fwd.x, fwd.z).dot(Vector2(-tall.direction.y, tall.direction.x))
 	_check(absf(along) > 0.99, "mira derecho a lo largo de la cresta")
-	_check((m.get_node("Views") as SplitScreen).huds[0]._lip_meter.visible, "el HUD muestra la barra de equilibrio")
-	# Mantiene el equilibrio con el stick hasta que la ola se disuelve.
+	_check(hud._lip_meter.visible, "el HUD muestra la barra de equilibrio")
+	# Mantiene el equilibrio con el stick hasta el final de la cresta. A mitad
+	# de camino la cámara está dando la vuelta y la música subió.
 	var before := session.score_of(r)
 	var clock := session.time_left + 1.1
 	var t := 0.0
-	while r.on_lip() and t < 14.0:
+	var cam_around := false
+	var music_up := false
+	while r.on_lip() and t < 20.0:
 		var b := r.lip_balance
 		_set_action(&"p1_left", b > 0.05)
 		_set_action(&"p1_right", b < -0.05)
 		await get_tree().physics_frame
 		t = clock - session.time_left
+		if r.lip_progress > 0.4 and r.lip_progress < 0.6:
+			var cd := r.global_position - cam.global_position
+			if Vector2(cd.x, cd.z).normalized().dot(Vector2(r.forward().x, r.forward().z)) < 0.0:
+				cam_around = true
+			if audio and float(audio.get("target_db")) > -4.0:
+				music_up = true
 	_set_action(&"p1_left", false)
 	_set_action(&"p1_right", false)
-	_check(t >= 11.5 and t < 13.0, "la ola dura 12 s (%.1f)" % t)
+	_check(absf(t - expected) < 0.6, "termina al llegar a la punta de la cresta (%.1f s; esperado %.1f)" % [t, expected])
 	_check(not r.is_fallen(), "aguantando el equilibrio no se cae")
+	_check(cam_around, "mientras tanto la cámara da la vuelta alrededor")
+	_check(music_up, "y la música sube")
 	var gained := session.score_of(r) - before
-	_check(gained >= TrickAttack.LIP_BONUS + 1500, "puntos por recorrerla y el bonus (%d)" % gained)
+	_check(gained >= TrickAttack.LIP_BONUS + 1000, "puntos por recorrerla y el bonus (%d)" % gained)
 	_check(r.motivation_timer > 0.0 and not r.grounded, "al completarla sale disparado, con motivación")
-	_check(lip.lifetime - lip.age <= lip.fade_time + 0.1, "la ola se disuelve")
+	await _wait(0.3)
+	var cd2 := r.global_position - cam.global_position
+	_check(Vector2(cd2.x, cd2.z).normalized().dot(Vector2(r.forward().x, r.forward().z)) > 0.8, "al soltarlo, la cámara ya volvió detrás")
 
-	# Otra: sin tocar el stick se cae, pero se queda con lo que hizo.
-	await _wait_until_state(&"riding", 6.0)
+	# Una chica desde atrás no engancha.
+	await _wait_until_state(&"riding", 8.0)
+	var small_w := _tall_wave(r, 4.5)
+	await _wait(0.2)
+	_place_on(small_w, -1.0, 0.0)
+	_check(not session.try_catch_lip(r, small_w), "una ola chica no engancha (esa lanza)")
+
+	# Otra alta: sin tocar el stick se cae, pero se queda con lo que hizo.
+	await _wait_until_state(&"riding", 8.0)
 	await _wait(1.0)
-	lip = waves.spawn_lip_wave(Vector2(r.position.x, r.position.z))
-	session.lip_wave = lip
-	await _wait(3.5)
-	_place_on(lip, -1.0, 0.0)
+	var other := _tall_wave(r, 9.0)
+	await _wait(0.2)
+	_place_on(other, -1.0, -(other.half_length - other.edge - 5.0))
 	await _wait(0.1)
-	_check(r.on_lip(), "engancha otra ola de borde")
+	_check(r.on_lip(), "engancha otra")
 	before = session.score_of(r)
-	await _wait(11.5)
+	await _wait(9.0)
 	_check(r.is_fallen(), "sin corregir con el stick pierde el equilibrio y se cae")
 	_check(session.score_of(r) > before and session.score_of(r) - before < TrickAttack.LIP_BONUS, "se queda con los puntos que hizo, sin bonus (%d)" % (session.score_of(r) - before))
-	_check(not lip.keep and lip.lip_used, "una ola de borde se usa una sola vez")
+	_check(not other.keep and other.lip_used, "cada ola se usa una sola vez")
 
-	# Cada tanto sale sola, con el rocío en la cresta (para reconocerla) y, por
-	# ahora, la flecha en pantalla.
+	# La ola de borde especial (apagada por ahora: LIP_SPECIAL_WAVES) sigue
+	# andando: rocío en la cresta y flecha en pantalla.
 	await _wait_until_state(&"riding", 8.0)
-	session.lip_wave = null
-	var spawned := [null]
-	session.lip_wave_spawned.connect(func(w: Swell) -> void: spawned[0] = w)
-	session._lip_timer = 0.05
-	await _wait(0.2)
-	_check(spawned[0] != null and session.lip_wave == spawned[0], "la ola de borde sale sola cada tanto (y avisa)")
-	var sprays := get_nodes_in_group("lip_spray")
-	_check(sprays.size() >= 1, "tiene rocío volando de la cresta")
+	var nl := waves.spawn_lip_wave(Vector2(r.position.x, r.position.z))
+	_check(nl != null and nl.lip and nl.half_length > 60.0, "la ola de borde especial: larga")
+	session.lip_wave = nl
+	var spray := session.add_lip_spray(nl) if nl else null
 	await _wait(3.5)
-	var spray := sprays[sprays.size() - 1] as LipWaveSpray
-	var nl := session.lip_wave
 	if spray and nl:
 		var on_top := nl.local_coords(Vector2(spray.global_position.x, spray.global_position.z))
 		_check(spray._particles.emitting and absf(on_top.y) < 1.0 and spray.global_position.y > nl.amplitude * 0.8,
-			"el rocío sale de la cresta, de punta a punta")
-	var hud := (m.get_node("Views") as SplitScreen).huds[0]
-	if nl:
-		# De espaldas a la ola: la flecha aparece.
+			"con rocío que sale de la cresta, de punta a punta")
 		var from_wave := r.global_position - Vector3(nl.center.x, 0.0, nl.center.y)
 		r.heading = atan2(-from_wave.x, -from_wave.z)
 		await _wait(1.0)
-		_check(hud._lip_pointer.visible, "si no se la ve, una flecha apunta hacia la ola de borde")
+		_check(hud._lip_pointer.visible, "si no se la ve, una flecha apunta hacia ella")
 	m.queue_free()
 	await process_frame
 
@@ -412,6 +422,33 @@ func _launch_apex(r: Rider, amp: float, from_behind: bool) -> float:
 			break
 	_water.clear_swells()
 	return top
+
+
+## Una ola alta del modo trucos, ya crecida, a un costado del surfista (lejos
+## de la isla), larga y que dura (para recorrerla).
+func _tall_wave(r: Rider, amp: float) -> Swell:
+	_water.clear_swells()
+	var base := Vector2(r.position.x, r.position.z)
+	if base.length() < 200.0:
+		base = base.normalized() * 260.0 if base.length() > 1.0 else Vector2(260.0, 0.0)
+	var sw := Swell.new()
+	sw.match_drawn = true
+	sw.max_amplitude = amp
+	sw.width = amp * 1.8
+	sw.half_length = 70.0
+	sw.lifetime = 120.0
+	sw.grow_time = 0.1
+	sw.age = 0.1
+	sw.speed = 4.0
+	sw.direction = Vector2.RIGHT.rotated(randf() * TAU)
+	sw.center = base
+	sw.update(0.0)
+	_water.add_swell(sw)
+	# Lejos, atrás de la ola (que no lo enganche antes de tiempo).
+	var away: Vector2 = base - sw.direction * (sw.width * 5.0)
+	r.position = Vector3(away.x, _water.height_at(away.x, away.y), away.y)
+	r.heading = atan2(sw.direction.x, sw.direction.y)
+	return sw
 
 
 ## Pone al surfista sobre la ola `s`: `u` metros hacia adelante de la cresta

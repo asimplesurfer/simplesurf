@@ -136,6 +136,11 @@ func _process(delta: float) -> void:
 	else:
 		_tube_blend = 0.0
 	var desired := _desired_position()
+	# En el borde de una ola (modo trucos): la cámara da una vuelta alrededor
+	# del surfista, subiendo y bajando; termina detrás, como siempre.
+	if target.on_lip() and not back:
+		var orbit := _lip_orbit()
+		desired = desired.lerp(orbit[0], orbit[1])
 	if back != looking_back:
 		# Corte directo (si no, la cámara atravesaría al personaje).
 		looking_back = back
@@ -198,6 +203,25 @@ func _tube_view(tw: TubeWave, s_now: float) -> Array:
 	var look := ao + aw * TUBE_CAM_U
 	look.y = tw.base_height(ao) + 1.5
 	return [pos, look]
+
+
+## Cámara que gira alrededor del surfista en la ola de borde: [posición,
+## cuánto se usa (0..1)]. Da una vuelta entera mientras dura (así al final ya
+## está detrás) y entra y sale suave.
+const LIP_ORBIT_DISTANCE := 6.5
+const LIP_ORBIT_HEIGHT := 2.0
+const LIP_ORBIT_RISE := 2.5
+
+
+func _lip_orbit() -> Array:
+	var p := clampf(target.lip_progress, 0.0, 1.0)
+	var angle := TAU * smoothstep(0.0, 1.0, p)
+	var use := smoothstep(0.0, 0.1, p) * (1.0 - smoothstep(0.85, 1.0, p))
+	var xf := target.render_transform()
+	var back_dir := Basis(Vector3.UP, angle) * xf.basis.z
+	back_dir.y = 0.0
+	var h := LIP_ORBIT_HEIGHT + LIP_ORBIT_RISE * sin(PI * p) + 0.8 * sin(2.0 * TAU * p)
+	return [xf.origin + back_dir.normalized() * LIP_ORBIT_DISTANCE + Vector3.UP * h, use]
 
 
 ## true con turbo o motivación (y adentro del tubo: se siente la velocidad).

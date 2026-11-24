@@ -36,6 +36,16 @@ const BASE_POINTS := 100
 ## Aterrizaje justo: esta parte de los puntos.
 const TIGHT_MULT := 0.5
 const COUNTDOWN_TIME := 3.0
+## Olas de borde: con LIP_ANY_WAVE, toda ola de LIP_MIN_HEIGHT m o más se
+## engancha si se llega a su cresta desde atrás (y dura lo que le queda de
+## cresta, o de vida). Con LIP_SPECIAL_WAVES, además sale cada LIP_EVERY
+## segundos una ola de borde especial (larga, con rocío). Por ahora: todas las
+## altas, sin la especial (para probar cómo queda).
+const LIP_ANY_WAVE := true
+const LIP_SPECIAL_WAVES := false
+const LIP_MIN_HEIGHT := 5.5
+## Hace falta poder recorrerla al menos esto (s) para engancharse.
+const LIP_MIN_TIME := 3.0
 ## Ola de borde: la primera a los LIP_FIRST segundos, después cada LIP_EVERY.
 const LIP_FIRST := 10.0
 const LIP_EVERY := 20.0
@@ -173,7 +183,7 @@ func _update_lip(delta: float) -> void:
 	if lip_wave and (lip_wave.is_dead() or water == null or not water.swells.has(lip_wave)):
 		lip_wave = null
 	_lip_timer -= delta
-	if _lip_timer <= 0.0:
+	if LIP_SPECIAL_WAVES and _lip_timer <= 0.0:
 		_lip_timer = LIP_EVERY
 		var people := humans()
 		if lip_wave == null and waves and not people.is_empty():
@@ -191,8 +201,12 @@ func _update_lip(delta: float) -> void:
 			var whole := int(acc)
 			_lip_points[r] = acc - whole
 			scores[r] = score_of(r) + whole
-		elif lip_wave:
-			try_catch_lip(r, lip_wave)
+		elif lip_wave and try_catch_lip(r, lip_wave):
+			pass
+		elif LIP_ANY_WAVE and water:
+			for s in water.swells:
+				if try_catch_lip(r, s):
+					break
 
 
 ## El rocío de la cresta, para reconocer la ola de borde (ver LipWaveSpray).
@@ -211,11 +225,23 @@ func try_catch_lip(r: Rider, s: Swell) -> bool:
 		return false
 	if s.amplitude < s.max_amplitude * 0.8:
 		return false
+	# Las chicas no (esas lanzan); la ola de borde especial, siempre.
+	if not s.lip and s.max_amplitude < LIP_MIN_HEIGHT:
+		return false
 	var p := Vector2(r.position.x, r.position.z)
 	var uw := s.local_coords(p)
 	# Atrás de la cresta (la ola avanza hacia +u) y no en las puntas.
 	var from_crest := uw.x - s.crest_u()
 	if from_crest > 0.5 or from_crest < -s.width * 0.8 or absf(uw.y) > s.half_length - s.edge - 4.0:
+		return false
+	# Desde atrás o de costado (no de frente: esa la salta).
+	var f := r.forward()
+	if Vector2(f.x, f.z).dot(s.direction) < -0.3:
+		return false
+	# Que se pueda recorrer un rato.
+	var lip_state := preload("res://core/rider/states/state_lip.gd")
+	var side: float = lip_state.choose_side(s, uw.y, f)
+	if lip_state.ride_time_for(s, uw.y, side) < LIP_MIN_TIME:
 		return false
 	if s.height_at(p) < s.amplitude * LIP_CATCH_UP:
 		return false
