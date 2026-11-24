@@ -37,7 +37,9 @@ void fragment() {
 		float lip;
 		float grow;
 		float tube;
-		water_surface(p, h, g, disp, ambient_h, body, lip, grow, tube);
+		vec3 tube_n;
+		vec2 flow;
+		water_surface(p, h, g, disp, ambient_h, body, lip, grow, tube, tube_n, flow);
 		float v = ch == 0 ? h : (ch == 1 ? disp.x : disp.y);
 		COLOR = encode(v);
 	}

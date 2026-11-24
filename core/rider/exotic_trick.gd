@@ -21,7 +21,7 @@ const POINTS_PER_SEC := {Kind.LIP: 150.0, Kind.TUBE: 500.0}
 ## Bonus for finishing it (trick mode).
 const BONUS := {Kind.LIP: 2000, Kind.TUBE: 6000}
 ## Rider state that runs it.
-const STATES := {Kind.LIP: &"lip", Kind.TUBE: &"tube"}
+const STATES := {Kind.LIP: &"lip", Kind.TUBE: &"barrel"}
 
 
 static func points_per_sec(kind: Kind) -> float:

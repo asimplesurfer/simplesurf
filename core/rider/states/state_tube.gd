@@ -145,16 +145,12 @@ func _place() -> void:
 	var w: Vector3 = f[1]
 	var u := balance * TubeWave.BALANCE_REACH
 	var p := o + w * u
-	if tube.floor_base:
-		# El tubo es el agua misma (modo trucos): sobre su piso, donde está.
-		p.y = tube.base_height(p)
-	else:
-		p.y = tube.base_height(o) + TubeWave.face_y(u)
+	p.y = tube.base_height(o) + TubeWave.face_y(u)
 	rider.position = p
 	rider.heading = tube.heading_at(s)
 	rider.rotation.y = rider.heading
 	# La tabla se apoya en la pared (inclinada hacia el lado abierto).
-	rider.water_normal = Vector3.UP if tube.floor_base else (Vector3.UP - w * TubeWave.face_slope(u)).normalized()
+	rider.water_normal = (Vector3.UP - w * TubeWave.face_slope(u)).normalized()
 	rider.grounded = true
 	rider.vertical_speed = 0.0
 

@@ -76,6 +76,7 @@ varying float v_lip;
 varying float v_grow;
 // Parte de una ola cerrada en tubo (labio, techo por adentro y pared).
 varying float v_tube;
+varying vec2 v_flow;
 varying vec3 v_world;
 
 // Una capa de gotas: en cada celda cae una gota cada tanto (en un lugar y
@@ -106,7 +107,9 @@ void vertex() {
 	float lip;
 	float grow;
 	float tube;
-	water_surface(world.xz, h, g, disp, ambient_h, body, lip, grow, tube);
+	vec3 tube_n;
+	vec2 flow;
+	water_surface(world.xz, h, g, disp, ambient_h, body, lip, grow, tube, tube_n, flow);
 	// Lejos del centro del plano el agua se aplana (después vienen los anillos
 	// enormes hasta el horizonte, que no pueden seguir las olas).
 	float calm = 1.0 - smoothstep(95.0, 125.0, distance(world.xz, NODE_POSITION_WORLD.xz));
@@ -118,14 +121,22 @@ void vertex() {
 	grow *= calm;
 	tube *= calm;
 	ambient_h *= calm;
+	tube_n *= calm;
 	VERTEX.y += h;
 	VERTEX.xz += disp;
 	NORMAL = normalize(vec3(-g.x, 1.0, -g.y));
+	// Tubo: donde el agua está parada o dada vuelta, su normal de verdad.
+	float tn = length(tube_n);
+	if (tn > 0.001) {
+		vec3 m = mix(NORMAL, tube_n / tn, min(tn, 1.0));
+		NORMAL = dot(m, m) > 1.0e-6 ? normalize(m) : NORMAL;
+	}
 	v_height = ambient_h;
 	v_body = body;
 	v_lip = lip;
 	v_grow = grow;
 	v_tube = tube;
+	v_flow = flow;
 	v_world = world + vec3(disp.x, h, disp.y);
 }
 
@@ -152,13 +163,10 @@ void fragment() {
 	float facing = clamp(dot(NORMAL, VIEW), 0.0, 1.0);
 	float fresnel = pow(1.0 - facing, 4.0) * (1.0 - 0.6 * v_tube);
 	col = mix(col, sky_tint, fresnel * sky_reflect);
-	// Tubo: el agua del labio y de la pared deja pasar la luz (turquesa claro
-	// y verdoso, como en una ola de verdad); vista desde adentro, un poco más
-	// brillante arriba (el labio es fino) que en la pared.
+	// Tubo: el agua del labio es fina y deja pasar la luz (un poco más clara).
+	// Por adentro es la misma agua que por afuera (ver BACKLIGHT más abajo).
 	if (v_tube > 0.0) {
-		vec3 lit = mix(wave_color, glow_color, 0.2);
-		float thin = FRONT_FACING ? 0.2 : 0.35;
-		col = mix(col, lit, v_tube * thin);
+		col = mix(col, mix(wave_color, glow_color, 0.2), v_tube * 0.2);
 	}
 
 	// Espuma con textura: se deshace en bordes irregulares y se mueve.
@@ -174,6 +182,16 @@ void fragment() {
 	// Vetas finas de espuma que flotan en el agua (marcan el movimiento).
 	float streak = smoothstep(0.78, 0.82, fx_noise(wp * vec2(0.18, 0.6) + vec2(t * 0.05, 0.0)));
 	foam = max(foam, streak * 0.35 * (1.0 - v_body));
+	// Tubo: el agua sube por la pared, pasa por el techo y sale por la punta
+	// del labio (y por afuera también corre hacia la punta): vetas finas a lo
+	// largo de ese camino, que se mueven hacia la punta.
+	if (v_tube > 0.01) {
+		float f = abs(v_flow.y) * 0.1 + t * 0.8;
+		float vein = fx_noise(vec2(v_flow.x * 1.1, f));
+		float vein2 = fx_noise(vec2(v_flow.x * 2.2 + 3.1, f * 1.6 + 1.3));
+		float veins = max(smoothstep(0.67, 0.71, vein), smoothstep(0.7, 0.73, vein2) * 0.6);
+		foam = max(foam, veins * v_tube * v_tube * 0.45);
+	}
 	col = mix(col, foam_color, clamp(foam, 0.0, 1.0) * 0.9);
 
 	// Lluvia: gotas pegando en el agua (solo cerca: de lejos no se distinguen).
@@ -266,6 +284,9 @@ void fragment() {
 	}
 	FOG = vec4(fog_col, fog_a);
 	ALBEDO = col;
+	// El labio y la pared del tubo son finos: el sol pasa a través (por
+	// adentro no quedan en sombra, como en una ola de verdad).
+	BACKLIGHT = col * v_tube * 0.9;
 	EMISSION = vec3(sparkle * 0.7 * (1.0 - haze));
 	if (lamp_count > 0) {
 		vec3 nw = normalize((INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz);
@@ -302,4 +323,9 @@ void fragment() {
 	}
 	ROUGHNESS = mix(0.26, 0.7, clamp(foam, 0.0, 1.0));
 	SPECULAR = 0.38;
+	// Adentro del tubo (pasando la punta del labio) sin el reflejo fuerte del
+	// sol (con la normal mirando hacia adentro quedaban manchas blancas).
+	float inner = v_tube * smoothstep(-0.5, 1.5, v_flow.y);
+	ROUGHNESS = mix(ROUGHNESS, 0.75, inner);
+	SPECULAR = mix(SPECULAR, 0.15, inner);
 }

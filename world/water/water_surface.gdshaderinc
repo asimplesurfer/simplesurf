@@ -26,6 +26,9 @@ uniform vec4 swell_a4; uniform vec4 swell_b4;
 uniform vec4 swell_a5; uniform vec4 swell_b5;
 uniform vec4 swell_a6; uniform vec4 swell_b6;
 uniform vec4 swell_a7; uniform vec4 swell_b7;
+// La ola que está rompiendo en tubo (ver swell.gd, peel_w): (punto de rotura
+// a lo ancho, hacia dónde avanza ±1, largo del tubo abierto, -).
+uniform vec4 barrel = vec4(-1.0e9, 1.0, 22.0, 0.0);
 // Ola constante (ver ring_wave.gd). a = (centro.x, centro.z, radio, ancho); b = (amplitud, base, lóbulos, fase)
 uniform vec4 ring_a = vec4(0.0, 0.0, 1.0, 1.0);
 uniform vec4 ring_b = vec4(0.0);
@@ -63,41 +66,58 @@ void add_wave(vec4 w, int i, float wave_phase, vec2 p, inout float h, inout vec2
 
 // Forma del tubo de una ola grande que se cierra (modo trucos): igual en
 // swell.gd (profile y tube_point). En veces la altura de la ola.
-const float TUBE_R = 0.5;
-const float TUBE_THICK = 0.15;
-const float TUBE_END_ANGLE = -0.14;
-const float TUBE_BACK_ANGLE = 2.62;
-const float TUBE_WALL_BACK = 0.4;
-const float TUBE_FLOOR_Y = 0.12;
+const float TUBE_RX = 0.55;
+const float TUBE_RY = 0.48;
+const float TUBE_THICK = 0.1;
+const float TUBE_END_ANGLE = -0.35;
+const float TUBE_LAND_ANGLE = -1.2;
+const float TUBE_BACK_ANGLE = 2.44;
+const float TUBE_WALL_BACK = 0.5;
+const float TUBE_FLOOR_Y = 0.1;
 const float TUBE_REACH = 3.0;
-const vec4 TUBE_S = vec4(0.25, 0.3, 0.5, 0.7);
+const vec4 TUBE_S = vec4(0.3, 0.35, 0.55, 0.72);
 const float TUBE_STEEP = 0.25;
-const float TUBE_THROAT = 14.0;
-const float TUBE_FOOT = 0.35;
+const float BARREL_THROAT = 14.0;
+const float BARREL_COLLAPSE = 16.0;
+const float BARREL_DROP = 0.6;
+const float TUBE_FOOT = 0.4;
+// La punta del labio, derecha aunque la malla quede en diagonal (swell.gd).
+const float TUBE_TIP_BAND = 0.78;
+const float TUBE_TIP_RAMP = 1.2;
 
 // El punto u0 de la cara de adelante en la forma de tubo: (adelante, altura).
-vec2 tube_point(float u0, float a, float width, float curl) {
+// fill: cuánto se llenó el hueco (donde el tubo ya se cayó).
+vec2 tube_point(float u0, float a, float width, float curl, float land, float fill) {
 	float full_lean = 1.3 * a;
 	// Cuánto salió el labio (0: recién la pared; 1: cerrado).
 	float sw = smoothstep(0.0, 1.0, (curl - TUBE_STEEP) / (1.0 - TUBE_STEEP));
-	float r = TUBE_R * a * sw;
-	float r_in = (TUBE_R - TUBE_THICK) * a * sw;
-	float end_angle = mix(1.5707963, TUBE_END_ANGLE, sw);
+	float rx = TUBE_RX * a * sw;
+	float ry = TUBE_RY * a * sw;
+	float rxi = (TUBE_RX - TUBE_THICK) * a * sw * (1.0 - fill);
+	float ryi = (TUBE_RY - TUBE_THICK) * a * sw * (1.0 - fill);
+	float end_angle = mix(1.5707963, mix(TUBE_END_ANGLE, TUBE_LAND_ANGLE, land), sw);
+	// La punta, derecha (ver TUBE_TIP_BAND).
+	float tip = (TUBE_S.x + TUBE_S.y) * 0.5 * TUBE_REACH * width;
+	float d = u0 - tip;
+	float ad = abs(d);
+	if (ad < TUBE_TIP_BAND + TUBE_TIP_RAMP) {
+		u0 = tip + sign(d) * max(ad - TUBE_TIP_BAND, 0.0) * (TUBE_TIP_BAND + TUBE_TIP_RAMP) / TUBE_TIP_RAMP;
+	}
 	float s = u0 / (TUBE_REACH * width);
-	vec2 c = vec2(full_lean, a - r);
+	vec2 c = vec2(full_lean + 0.05 * a * sw, a - ry);
 	if (s <= TUBE_S.x) {
 		float ang = mix(1.5707963, end_angle, s / TUBE_S.x);
-		return c + vec2(cos(ang), sin(ang)) * r;
+		return c + vec2(cos(ang) * rx, sin(ang) * ry);
 	}
 	if (s <= TUBE_S.y) {
-		float rr = mix(r, r_in, (s - TUBE_S.x) / (TUBE_S.y - TUBE_S.x));
-		return c + vec2(cos(end_angle), sin(end_angle)) * rr;
+		float k = (s - TUBE_S.x) / (TUBE_S.y - TUBE_S.x);
+		return c + vec2(cos(end_angle) * mix(rx, rxi, k), sin(end_angle) * mix(ry, ryi, k));
 	}
 	if (s <= TUBE_S.z) {
 		float ang2 = mix(end_angle, TUBE_BACK_ANGLE, (s - TUBE_S.y) / (TUBE_S.z - TUBE_S.y));
-		return c + vec2(cos(ang2), sin(ang2)) * r_in;
+		return c + vec2(cos(ang2) * rxi, sin(ang2) * ryi);
 	}
-	vec2 top = c + vec2(cos(TUBE_BACK_ANGLE), sin(TUBE_BACK_ANGLE)) * r_in;
+	vec2 top = c + vec2(cos(TUBE_BACK_ANGLE) * rxi, sin(TUBE_BACK_ANGLE) * ryi);
 	vec2 base = vec2(full_lean - (TUBE_WALL_BACK * sw - 0.15 * (1.0 - sw)) * a, TUBE_FLOOR_Y * a);
 	// La cara es cóncava: baja empinada y se curva hasta el agua de adelante.
 	vec2 foot = base + vec2(TUBE_FOOT * a, 0.0);
@@ -113,7 +133,7 @@ vec2 tube_point(float u0, float a, float width, float curl) {
 
 // Cómo se dibuja el punto u0 de la loma: (corrimiento hacia adelante, altura).
 // Con tubo (curl), la cara de adelante se vuelve labio, piso y cara.
-vec2 swell_profile(float u0, float amp, float width, float breaking, float curl, float e) {
+vec2 swell_profile(float u0, float amp, float width, float breaking, float curl, float land, float fill, float e) {
 	float n = exp(-(u0 * u0) / (width * width)) * e;
 	float lean = (0.35 + 0.95 * breaking) * amp;
 	float off = lean * n * n * n;
@@ -122,7 +142,7 @@ vec2 swell_profile(float u0, float amp, float width, float breaking, float curl,
 		return vec2(off, hh);
 	}
 	// Hacia las puntas el tubo se achica (más bajo) pero sigue abierto: la boca.
-	vec2 t = tube_point(u0, amp, width, curl);
+	vec2 t = tube_point(u0, amp, width, curl, land, fill);
 	t.y *= e;
 	float k = smoothstep(0.0, TUBE_STEEP, curl);
 	float x = mix(u0 + off, t.x, k);
@@ -135,7 +155,8 @@ vec2 swell_profile(float u0, float amp, float width, float breaking, float curl,
 // espuma. La altura (lo que usa la física) es la misma de swell.gd; el corrimiento
 // es solo visual.
 void add_swell(vec4 a, vec4 b, vec2 p, inout float h, inout vec2 g, inout vec2 disp,
-		inout float body, inout float lip, inout float grow, inout float tube) {
+		inout float body, inout float lip, inout float grow, inout float tube, inout vec3 tube_n,
+		inout vec2 flow) {
 	float amp = b.x;
 	float width = b.y;
 	if (width <= 0.0) {
@@ -155,10 +176,26 @@ void add_swell(vec4 a, vec4 b, vec2 p, inout float h, inout vec2 g, inout vec2 d
 	if (aw >= half_len || abs(u) > width * 4.0) {
 		return;
 	}
-	// Hacia las puntas el tubo se abre de a poco (la garganta; ver swell.gd curl_at).
+	// Rompe de a poco a lo largo de la cresta (ver swell.gd barrel_at): adelante
+	// del punto de rotura, el hombro y la garganta; detrás, el tubo abierto y
+	// más atrás la ola que se cae (más baja, con espuma).
+	float fall = 0.0;
+	float land = 0.0;
+	float fill = 0.0;
 	if (curl > 0.0) {
-		curl *= 1.0 - smoothstep(half_len - edge - TUBE_THROAT, half_len - edge, aw);
+		float ps = (w - barrel.x) * barrel.y;
+		land = smoothstep(0.0, barrel.z + BARREL_COLLAPSE * 0.5, -ps);
+		if (ps > 0.0) {
+			curl *= 1.0 - smoothstep(0.0, BARREL_THROAT, ps);
+		} else {
+			// Se cae: el hueco se llena (bulto de espuma) y después baja.
+			float q = 1.0 - smoothstep(-barrel.z - BARREL_COLLAPSE, -barrel.z, ps);
+			fall = q * curl;
+			fill = smoothstep(0.0, 0.5, q);
+			curl *= 1.0 - smoothstep(0.45, 1.0, q);
+		}
 	}
+	float drop = 1.0 - BARREL_DROP * fall;
 	float t = clamp((aw - (half_len - edge)) / edge, 0.0, 1.0);
 	float e0 = 1.0 - t * t * (3.0 - 2.0 * t);
 	// "Se viene": franja oscura donde va a subir la ola, desde que nace (sin
@@ -171,10 +208,15 @@ void add_swell(vec4 a, vec4 b, vec2 p, inout float h, inout vec2 g, inout vec2 d
 	float de = -6.0 * t * (1.0 - t) / edge;
 	float n = gauss * e;
 	float dn_du = (-2.0 * u / (width * width)) * gauss * e;
-	float dh_du;
+	// Pendiente que se ve en la ola normal (la cara de adelante, apretada por
+	// el corrimiento de la cresta, queda más empinada).
+	float lean = (0.35 + 0.95 * breaking) * amp;
+	float n2 = n * n;
+	float stretch = max(1.0 + lean * 3.0 * n2 * dn_du, 0.12);
+	float dh_du = amp * dn_du / stretch * drop;
 	if (curl > 0.0) {
 		// Cerrándose en tubo: la forma de swell_profile; la pendiente, de dos puntos.
-		vec2 pr = swell_profile(u, amp, width, breaking, curl, e);
+		vec2 pr = swell_profile(u, amp, width, breaking, curl, land, fill, e);
 		// Cuánto es parte del tubo (labio, techo por adentro y pared): para
 		// pintarlo como agua que deja pasar la luz.
 		float ts = u / (TUBE_REACH * width);
@@ -182,21 +224,27 @@ void add_swell(vec4 a, vec4 b, vec2 p, inout float h, inout vec2 g, inout vec2 d
 			// Todo en el labio; bajando por la pared se va apagando.
 			tube = max(tube, smoothstep(0.0, TUBE_STEEP, curl) * e * (1.0 - smoothstep(TUBE_S.z, TUBE_S.w, ts)));
 		}
-		vec2 pr2 = swell_profile(u + 0.3, amp, width, breaking, curl, e);
-		h += pr.y;
+		vec2 pr2 = swell_profile(u + 0.3, amp, width, breaking, curl, land, fill, e);
+		h += pr.y * drop;
 		disp += dir * pr.x;
 		float dx = 0.3 + pr2.x - pr.x;
+		float dy = (pr2.y - pr.y) * drop;
+		// La normal de verdad (del lado que miraba arriba antes de curvarse):
+		// por adentro del labio mira hacia abajo y en la pared hacia adelante.
+		// Con la pendiente sola (que siempre mira arriba) quedaban al revés.
+		vec2 cn = vec2(-dy, dx);
+		cn = dot(cn, cn) > 1.0e-6 ? normalize(cn) : vec2(1.0, 0.0);
+		// Solo donde el agua está parada o dada vuelta (el resto, la pendiente).
+		float tw = smoothstep(0.0, TUBE_STEEP, curl) * e * (1.0 - smoothstep(0.2, 0.6, cn.y));
+		tube_n += (vec3(dir.x, 0.0, dir.y) * cn.x + vec3(0.0, cn.y, 0.0)) * tw;
 		dx = abs(dx) < 0.05 ? (dx < 0.0 ? -0.05 : 0.05) : dx;
-		dh_du = clamp((pr2.y - pr.y) / dx, -8.0, 8.0);
+		// Mientras recién empieza a cerrarse, la de la ola normal (la de dos
+		// puntos se da vuelta en el pliegue chico del labio y queda oscura).
+		dh_du = mix(dh_du, clamp(dy / dx, -8.0, 8.0), smoothstep(0.0, TUBE_STEEP, curl));
 	} else {
-		h += amp * n;
+		h += amp * n * drop;
 		// Corrimiento de la cresta hacia adelante (más fuerte cuando rompe).
-		float lean = (0.35 + 0.95 * breaking) * amp;
-		float n2 = n * n;
 		disp += dir * (lean * n2 * n);
-		float stretch = max(1.0 + lean * 3.0 * n2 * dn_du, 0.12);
-		// Pendiente que se ve (la cara de adelante, apretada, queda más empinada).
-		dh_du = amp * dn_du / stretch;
 	}
 	float dh_dw = amp * gauss * de * sign(w);
 	g += dir * dh_du + perp * dh_dw;
@@ -206,7 +254,28 @@ void add_swell(vec4 a, vec4 b, vec2 p, inout float h, inout vec2 g, inout vec2 d
 	// Espuma: arriba del labio y cayendo por la cara de adelante.
 	float crest_foam = smoothstep(0.8, 0.97, n);
 	float face_foam = smoothstep(0.5, 0.8, n) * smoothstep(0.0, width * 0.35, u);
-	lip = max(lip, breaking * strength * max(crest_foam, face_foam * 0.6));
+	// En el tubo, la espuma queda solo en el borde del labio y donde cae (el
+	// resto del labio es agua que deja pasar la luz).
+	float in_tube = 0.0;
+	float edge_foam = 0.0;
+	if (curl > 0.0 && u > 0.0) {
+		float k_t = smoothstep(0.0, TUBE_STEEP, curl);
+		float ts2 = u / (TUBE_REACH * width);
+		in_tube = k_t * (1.0 - smoothstep(TUBE_S.w, TUBE_S.w + 0.06, ts2));
+		float sw2 = smoothstep(0.0, 1.0, (curl - TUBE_STEEP) / (1.0 - TUBE_STEEP));
+		// El borde del labio (la punta) y, cuando ya baja hasta el agua
+		// (land), el agua justo debajo de la punta.
+		edge_foam = sw2 * e * max(
+			smoothstep(TUBE_S.x - 0.07, TUBE_S.x, ts2) * (1.0 - smoothstep(TUBE_S.y, TUBE_S.y + 0.03, ts2)),
+			smoothstep(TUBE_S.w + 0.02, TUBE_S.w + 0.04, ts2) * (1.0 - smoothstep(TUBE_S.w + 0.07, TUBE_S.w + 0.11, ts2)) * 0.8 * land);
+		// Para las vetas del agua que corre por el tubo (ver water.gdshader):
+		// a lo ancho de la ola y cuánto falta hasta la punta del labio.
+		flow = vec2(w, u - (TUBE_S.x + TUBE_S.y) * 0.5 * TUBE_REACH * width);
+	}
+	lip = max(lip, breaking * strength * max(crest_foam, face_foam * 0.6) * (1.0 - in_tube * 0.9));
+	lip = max(lip, edge_foam * strength);
+	// La ola que se cayó detrás del tubo: espuma blanca.
+	lip = max(lip, fall * strength * smoothstep(0.05, 0.3, n));
 }
 
 void add_ring(vec2 p, inout float h, inout vec2 g, inout float body, inout float lip) {
@@ -256,9 +325,11 @@ float island_fade(vec2 p) {
 // La superficie en el punto p (x, z del mundo): altura (h), pendiente (g),
 // corrimiento horizontal del labio de las olas grandes (disp), la altura de
 // las olas de fondo solas (ambient_h), y cuánto hay de cuerpo de ola, espuma
-// del labio y ola que crece (para los colores).
+// del labio y ola que crece (para los colores). tube_n: en un tubo, la normal
+// donde el agua está parada o dada vuelta (el largo es cuánto pesa, 0..1);
+// flow: dónde está en el tubo (a lo ancho, hasta la punta del labio).
 void water_surface(vec2 p, out float h, out vec2 g, out vec2 disp, out float ambient_h,
-		out float body, out float lip, out float grow, out float tube) {
+		out float body, out float lip, out float grow, out float tube, out vec3 tube_n, out vec2 flow) {
 	h = 0.0;
 	g = vec2(0.0);
 	add_wave(wave_0, 0, wave_phase_0, p, h, g);
@@ -273,14 +344,16 @@ void water_surface(vec2 p, out float h, out vec2 g, out vec2 disp, out float amb
 	lip = 0.0;
 	grow = 0.0;
 	tube = 0.0;
-	add_swell(swell_a0, swell_b0, p, sh, sg, disp, body, lip, grow, tube);
-	add_swell(swell_a1, swell_b1, p, sh, sg, disp, body, lip, grow, tube);
-	add_swell(swell_a2, swell_b2, p, sh, sg, disp, body, lip, grow, tube);
-	add_swell(swell_a3, swell_b3, p, sh, sg, disp, body, lip, grow, tube);
-	add_swell(swell_a4, swell_b4, p, sh, sg, disp, body, lip, grow, tube);
-	add_swell(swell_a5, swell_b5, p, sh, sg, disp, body, lip, grow, tube);
-	add_swell(swell_a6, swell_b6, p, sh, sg, disp, body, lip, grow, tube);
-	add_swell(swell_a7, swell_b7, p, sh, sg, disp, body, lip, grow, tube);
+	tube_n = vec3(0.0);
+	flow = vec2(0.0);
+	add_swell(swell_a0, swell_b0, p, sh, sg, disp, body, lip, grow, tube, tube_n, flow);
+	add_swell(swell_a1, swell_b1, p, sh, sg, disp, body, lip, grow, tube, tube_n, flow);
+	add_swell(swell_a2, swell_b2, p, sh, sg, disp, body, lip, grow, tube, tube_n, flow);
+	add_swell(swell_a3, swell_b3, p, sh, sg, disp, body, lip, grow, tube, tube_n, flow);
+	add_swell(swell_a4, swell_b4, p, sh, sg, disp, body, lip, grow, tube, tube_n, flow);
+	add_swell(swell_a5, swell_b5, p, sh, sg, disp, body, lip, grow, tube, tube_n, flow);
+	add_swell(swell_a6, swell_b6, p, sh, sg, disp, body, lip, grow, tube, tube_n, flow);
+	add_swell(swell_a7, swell_b7, p, sh, sg, disp, body, lip, grow, tube, tube_n, flow);
 	add_ring(p, sh, sg, body, lip);
 	float fade = island_fade(p);
 	h += sh * fade;
@@ -290,4 +363,5 @@ void water_surface(vec2 p, out float h, out vec2 g, out vec2 disp, out float amb
 	lip *= fade;
 	grow *= fade;
 	tube *= fade;
+	tube_n *= fade;
 }

@@ -175,6 +175,10 @@ func _test_waves_and_lip() -> void:
 		var extra := waves._make_trick_swell()
 		if extra:
 			tiers[0 if extra.max_amplitude < 5.5 else (1 if extra.max_amplitude < 9.0 else 2)] = true
+			# (Las direcciones también se sortean: con estas no depende de la suerte.)
+			var to_r := Vector2(r.position.x, r.position.z) - extra.center
+			if extra.direction.dot(to_r.normalized()) < 0.0:
+				away = true
 	_check(tiers.size() >= 2, "salen de distintos tamaños mezclados (%s)" % str(tiers.keys()))
 	var smallest := 99.0
 	for sw in water.swells:
@@ -623,49 +627,58 @@ func _test_tube() -> void:
 	_water.clear_swells()
 	var mid := _make_swell(Vector2(500.0, 500.0), 7.0)
 	mid.age = mid.grow_time + TrickAttack.TUBE_AFTER + 1.0
-	_check(not session.ready_for_tube(mid), "una ola mediana no se cierra en tubo")
+	_check(not session.ready_for_tube(mid), "una ola mediana no rompe en tubo")
 	var giant := _make_swell(Vector2(500.0, -500.0), 11.0)
+	giant.half_length = 55.0
 	giant.age = giant.grow_time + TrickAttack.TUBE_AFTER - 1.0
 	_check(not session.ready_for_tube(giant), "una gigante recién formada todavía no")
+	# El surfista, lejos detrás de la ola, hacia un costado (w > 0).
+	r.position = Vector3(400.0, _water.height_at(400.0, -470.0), -470.0)
+	r.controls_locked = true
 	giant.age = giant.grow_time + TrickAttack.TUBE_AFTER + 0.1
-	r.position = Vector3(560.0, _water.height_at(560.0, -560.0), -560.0)
 	await _wait(0.2)
-	_check(session.curling == giant and giant.curl > 0.0 and giant.curl < 0.5, "después de un rato entera, la gigante se empieza a cerrar (de a poco)")
-	_check(session.tube == null, "mientras se enrosca todavía no se puede entrar")
-	await _wait(TrickAttack.TUBE_CURL_TIME)
-	var t := session.tube
-	_check(t != null and is_instance_valid(t) and giant.curl > 0.9, "ya cerrada, se puede entrar por la punta")
-	_check(_water.swells.has(giant) and not t.show_shape, "el tubo es la misma ola (el agua), no otra cosa")
-	# Adentro hay piso y techo: lo que se siente es lo que se ve.
-	var inside := giant.center + giant.direction * (TrickAttack.TUBE_LINE * giant.max_amplitude)
-	var hs := giant.tube_heights(giant.local_coords(inside).x, 0.0)
+	_check(session.barrel_wave == giant and giant.curl > 0.0, "después de un rato entera, la gigante empieza a romper en tubo")
+	var perp := Vector2(-giant.direction.y, giant.direction.x)
+	var side := signf((Vector2(r.position.x, r.position.z) - giant.center).dot(perp))
+	_check(giant.peel_dir == side, "rompe hacia el lado del surfista (así el tubo le llega)")
+	var c0 := giant.center
+	var p0 := giant.peel_w
+	await _wait(1.5)
+	_check(giant.center.distance_to(c0) > 2.0, "la ola sigue avanzando (no se queda quieta)")
+	_check((giant.peel_w - p0) * giant.peel_dir > 12.0, "el punto de rotura corre por la cresta (%.1f m)" % ((giant.peel_w - p0) * giant.peel_dir))
+	# A lo largo de la cresta: hombro entero adelante, tubo detrás, la ola caída más atrás.
+	var ahead := giant.barrel_at(giant.peel_w + giant.peel_dir * (Swell.BARREL_THROAT + 4.0))
+	var inside_b := giant.barrel_at(giant.peel_w - giant.peel_dir * 8.0)
+	var behind := giant.barrel_at(giant.peel_w - giant.peel_dir * (giant.barrel_len + Swell.BARREL_COLLAPSE + 2.0))
+	_check(ahead.x == 0.0 and ahead.y == 0.0, "adelante de la rotura, el hombro (la ola entera)")
+	_check(inside_b.x > 0.95 and inside_b.y == 0.0, "detrás, el tubo abierto")
+	_check(behind.y > 0.95, "más atrás, la ola ya se cayó")
+	# Adentro del tubo hay piso y techo: lo que se siente es lo que se ve.
+	var w_in := giant.peel_w - giant.peel_dir * 8.0
+	var hs := giant.tube_heights(1.45 * giant.max_amplitude, w_in)
 	_check(hs.size() >= 3 and hs[hs.size() - 1] - hs[0] > giant.max_amplitude * 0.5,
-		"adentro hay piso y techo (%s)" % str(Array(hs).map(func(v): return snappedf(v, 0.1))))
-	if t == null:
-		m.queue_free()
-		return
-	# Entra por la boca.
-	var f: Array = t.frame_at(0.0)
-	var mouth: Vector3 = f[0]
-	var h := t.heading_at(0.0)
-	r.heading = h
-	r.speed = r.stats.max_speed
-	var back := Vector3(-sin(h), 0.0, -cos(h))
-	r.position = mouth - back * 4.0
-	r.position.y = _water.height_at(r.position.x, r.position.z)
+		"adentro hay piso y techo (%s)" % str(Array(hs).map(func(v: float) -> float: return snappedf(v, 0.1))))
+	# Entra por adelante, pasando por debajo del labio: al piso del tubo.
+	var spot := giant.center + giant.direction * (1.4 * giant.max_amplitude) + perp * (giant.peel_w - giant.peel_dir * 10.0)
+	r.position = Vector3(spot.x, _water.floor_height_at(spot.x, spot.y), spot.y)
+	r.heading = atan2(perp.x * -giant.peel_dir, perp.y * -giant.peel_dir)
+	r.controls_locked = false
 	r.set_recovery_stage(Rider.RecoveryStage.STANDING)
 	r.state_machine.transition_to(&"riding")
 	var before := session.score_of(r)
-	for i in 60:
+	for i in 30:
 		await get_tree().physics_frame
 		if r.in_tube():
 			break
-	_check(r.in_tube(), "entrando por la boca, arranca el minijuego del tubo")
-	# Mantiene el equilibrio hasta que lo escupe.
+	_check(r.in_tube() and r.state_machine.current_name == &"barrel", "debajo del labio, arranca el minijuego del tubo")
+	_check(r.exotic == ExoticTrick.Kind.TUBE, "es el truco exótico del tubo")
+	# Mantiene el equilibrio hasta que sale por la punta.
 	var exited := [false]
 	r.tube_exited.connect(func(ok: bool) -> void: exited[0] = ok, CONNECT_ONE_SHOT)
 	var guard := 0
 	var low := true
+	var moved := 0.0
+	var last := r.position
 	while r.in_tube() and guard < 60 * 20:
 		if r.position.y - _water.waves.height_at(r.position.x, r.position.z, _water.time) > giant.max_amplitude * 0.45:
 			low = false
@@ -675,16 +688,20 @@ func _test_tube() -> void:
 		_set_action(&"p1_right", want > 0.0)
 		_set_action(&"p1_left", want < 0.0)
 		await get_tree().physics_frame
+		moved += r.position.distance_to(last)
+		last = r.position
 		guard += 1
 	_set_action(&"p1_right", false)
 	_set_action(&"p1_left", false)
-	_check(exited[0] and not r.is_fallen(), "aguantando el equilibrio, sale por adelante")
+	_check(exited[0] and not r.is_fallen(), "aguantando el equilibrio, sale por la punta")
 	_check(low, "adentro va por el piso, debajo del labio (no arriba)")
+	_check(moved > 30.0, "adentro va con la rotura, a lo largo de la ola (%.0f m)" % moved)
 	var gained := session.score_of(r) - before
-	_check(gained >= ExoticTrick.bonus(ExoticTrick.Kind.TUBE) + 1500, "suma muchos puntos (%d)" % gained)
-	# El tubo termina de soltarlo (TubeWave.SPIT_HOLD + COLLAPSE_TIME) y la ola se deshace.
-	await _wait(TubeWave.SPIT_HOLD + TubeWave.COLLAPSE_TIME + 0.5)
-	_check(giant.lifetime - giant.age <= TrickAttack.TUBE_FADE + 0.1, "al terminar, la ola se deshace")
+	_check(gained >= ExoticTrick.bonus(ExoticTrick.Kind.TUBE) + 1000, "suma muchos puntos (%d)" % gained)
+	_check(r.motivation_timer > 0.0, "sale con motivación")
+	# Cuando la rotura llega a la otra punta, la ola se deshace.
+	await _wait((Swell.BARREL_THROAT + 20.0) / TrickAttack.PEEL_SPEED)
+	_check(session.barrel_wave == null and giant.lifetime - giant.age <= TrickAttack.TUBE_FADE + 0.1, "al terminar de romper, la ola se deshace")
 	m.queue_free()
 	await process_frame
 
