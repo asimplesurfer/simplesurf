@@ -38,7 +38,7 @@ const WAIST := Vector3(0.0, 1.0, 0.0)
 ## Animaciones de pie sobre la tabla (cuerpo de costado).
 const STANCE := [
 	&"idle", &"ride", &"air", &"trick", &"drift", &"duck", &"pop_up",
-	&"hands_down", &"pommel", &"superman", &"tube", &"balance",
+	&"hands_down", &"pommel", &"superman", &"tube", &"balance", &"lip",
 ]
 
 
@@ -64,6 +64,8 @@ static func pose(s: Dictionary) -> Dictionary:
 			_duck(p, s)
 		&"tube":
 			_tube(p, s)
+		&"lip":
+			_lip(p, s)
 		&"pop_up":
 			_pop_up(p, s)
 		&"flail":
@@ -218,6 +220,35 @@ static func _tube(p: Dictionary, s: Dictionary) -> void:
 		_reach(p, "HandR", Vector3(1.0, 1.25, 0.2) + p["Torso"].pos, 0.9)
 	# Mira hacia la salida (la punta).
 	_turn(p, "Head", Vector3(0.1, 0.35, 0.0))
+
+
+## En el borde de una ola de borde (modo trucos): bien agachado, el cuerpo
+## volcado hacia la cara de la ola, la mano de ese lado arrastrándose por el
+## agua (levanta el rocío) y el otro brazo tirado arriba y atrás, abierto. Se
+## balancea con el equilibrio (steer) y el brazo de arriba hace fuerza para
+## no caerse. drift_side: de qué lado está la cara de la ola (+1 del lado del
+## pecho, -1 de la espalda).
+static func _lip(p: Dictionary, s: Dictionary) -> void:
+	var t: float = s.time
+	var side: float = 1.0 if s.drift_side >= 0 else -1.0
+	var steer: float = s.steer
+	var pulse := sin(t * 6.5)
+	var shake := sin(t * 23.0) * 0.03
+	_crouch(p, 1.1 + pulse * 0.05 + absf(steer) * 0.12)
+	# Bien volcado hacia la cara de la ola y hacia adelante; se balancea con steer.
+	_bend(p, Vector3(0.35 + steer * 0.15, steer * 0.25, 0.55 * side + steer * 0.2))
+	# La mano de la cara: abajo, metida en el agua, rozándola hacia atrás.
+	var drag: Vector3 = Vector3(0.5 + pulse * 0.15, 0.0 + shake, 1.35 * side) + p["Torso"].pos
+	# La otra: estirada bien arriba y atrás (más alta cuanto más se desequilibra).
+	var up: Vector3 = Vector3(1.0 - steer * 0.25, 2.75 + absf(steer) * 0.25 - pulse * 0.08, -0.8 * side) + p["Torso"].pos
+	if side > 0.0:
+		_reach(p, "HandR", drag, 1.0)
+		_reach(p, "HandL", up, 1.0)
+	else:
+		_reach(p, "HandL", drag, 1.0)
+		_reach(p, "HandR", up, 1.0)
+	# Mira hacia adelante, por la cresta.
+	_turn(p, "Head", Vector3(0.2, 0.3, -0.1 * side))
 
 
 ## Atravesando una ola: agachado y con los brazos tapándose la cabeza.
