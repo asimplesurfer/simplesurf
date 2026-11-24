@@ -156,6 +156,24 @@ func _shift_error(u0: float, u: float, lean_now: float, e: float) -> float:
 	return u0 + lean_now * n * n * n - u
 
 
+## true si `p` puede estar sobre esta ola tal como se dibuja (contando el
+## corrimiento del labio).
+func reaches(p: Vector2) -> bool:
+	if amplitude <= 0.0:
+		return false
+	var uw := local_coords(p)
+	return absf(uw.y) < half_length and uw.x > -width * 4.0 and uw.x < width * 4.0 + (lean() if match_drawn else 0.0)
+
+
+## La loma sin corrimiento en `p`: 0..1 (altura = amplitude · esto).
+func plain_n(p: Vector2) -> float:
+	var uw := local_coords(p)
+	var aw := absf(uw.y)
+	if aw >= half_length or absf(uw.x) > width * 4.0:
+		return 0.0
+	return exp(-(uw.x * uw.x) / (width * width)) * _edge(aw)
+
+
 ## Dónde está la cresta (lo más alto) a lo largo de la dirección de avance (m
 ## desde el centro): corrida por el labio si la física sigue al dibujo.
 func crest_u() -> float:
