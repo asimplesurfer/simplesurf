@@ -93,7 +93,8 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if target == null:
 		return
-	var follow_target := 0.6 if target.grounded else 1.0
+	# En el borde de una ola (modo trucos) va alto: se sigue toda la altura.
+	var follow_target := 0.6 if target.grounded and not target.on_lip() else 1.0
 	_follow_y = lerpf(_follow_y, follow_target, 1.0 - exp(-3.0 * delta))
 	var w := 1.0 - exp(-follow_sharpness * minf(delta, 0.1))
 	var boosting_now := boosting()

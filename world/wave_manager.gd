@@ -35,6 +35,22 @@ extends Node
 @export var ahead_max: float = 95.0
 
 var mode: GameSettings.WaveMode = GameSettings.WaveMode.SURGES
+## Modo trucos (ver TrickAttack): las olas nacen alrededor del surfista, en
+## cualquier dirección (no vienen hacia él: hay que buscarlas), cada una de un
+## tamaño (TRICK_SIZES, todos mezclados), y cada tanto una ola de borde
+## (`spawn_lip_wave`).
+var trick_mode: bool = false
+## Modo trucos: tamaños de ola [altura mínima, máxima (m), probabilidad].
+const TRICK_SIZES := [[4.0, 5.0, 0.5], [6.0, 8.0, 0.35], [10.0, 13.0, 0.15]]
+## Modo trucos: a qué distancia del surfista nacen (m).
+const TRICK_SPAWN_DISTANCE := Vector2(40.0, 120.0)
+## Ola de borde: altura (m), mitad del largo de la cresta (m), velocidad (m/s)
+## y cuánto dura si nadie la usa (s). Larga y alta: se reconoce de lejos.
+const LIP_AMPLITUDE := 7.0
+const LIP_HALF_LENGTH := 75.0
+const LIP_SPEED := 3.5
+const LIP_LIFETIME := 30.0
+const LIP_SPAWN_DISTANCE := Vector2(55.0, 95.0)
 ## Modo libre: multiplica la altura de las olas nuevas (0 = no aparecen olas
 ## grandes; 1 = como en una carrera).
 var amplitude_scale: float = 1.0
@@ -145,6 +161,16 @@ func _physics_process(delta: float) -> void:
 	_retire_passed()
 	if fixed_waves:
 		_update_fixed()
+		return
+	if trick_mode:
+		_timer -= delta
+		if _timer <= 0.0:
+			_timer = _rng.randf_range(spawn_interval_min, spawn_interval_max)
+			_free_slot()
+			if _water.can_add_swell():
+				var ts := _make_trick_swell()
+				if ts:
+					_water.add_swell(ts)
 		return
 	# Mientras hay una ola tubo no salen olas nuevas (se mezclarían con el tubo y
 	# así se ve claro adónde ir).
@@ -303,12 +329,13 @@ func _retire_passed() -> void:
 		points.append(Vector2(t.global_position.x, t.global_position.z))
 		dirs.append(_track_dir(t))
 	for s in _water.swells:
-		if _seen_by_people(s):
+		if s.keep or _seen_by_people(s):
 			continue
 		var useful := false
 		for i in points.size():
 			var rel := s.center - points[i]
-			if rel.dot(dirs[i]) > -s.width * 3.0 and rel.length() < 160.0:
+			# Modo trucos: sirve si está cerca, de cualquier lado.
+			if (trick_mode or rel.dot(dirs[i]) > -s.width * 3.0) and rel.length() < 160.0:
 				useful = true
 				break
 		if not useful:
@@ -350,6 +377,8 @@ func _free_slot() -> void:
 	var worst_seen: Swell = null
 	var worst_seen_score := -INF
 	for s in _water.swells:
+		if s.keep:
+			continue
 		var leaving := s.lifetime - s.age < s.fade_time + 0.1
 		var score := s.age + (1000.0 if leaving else 0.0) - s.amplitude
 		if _seen_by_people(s):
@@ -365,7 +394,7 @@ func _free_slot() -> void:
 	# Todas se ven: sale una que ya casi terminó de desvanecerse (no se nota);
 	# si no hay, la menos útil se desvanece rápido (nunca de golpe).
 	for sw in _water.swells:
-		if sw.lifetime - sw.age < ALMOST_GONE:
+		if not sw.keep and sw.lifetime - sw.age < ALMOST_GONE:
 			_water.swells.erase(sw)
 			return
 	if worst_seen:
@@ -483,6 +512,111 @@ func _make_incoming(target: Rider, player: Vector2) -> Swell:
 	if is_clear_of(s, player) and _far_from_island(s) and _spaced(s):
 		return s
 	return null
+
+
+## Modo trucos: una ola de un tamaño al azar (TRICK_SIZES), alrededor de un
+## surfista y avanzando para cualquier lado (no hacia él).
+func _make_trick_swell() -> Swell:
+	var target := _pick_target()
+	if target == null:
+		return null
+	var player := Vector2(target.global_position.x, target.global_position.z)
+	var amp := trick_amplitude(_rng.randf(), _rng.randf())
+	for attempt in 12:
+		var s := Swell.new()
+		var angle := _rng.randf() * TAU
+		var dist := _rng.randf_range(TRICK_SPAWN_DISTANCE.x, TRICK_SPAWN_DISTANCE.y)
+		s.center = player + Vector2.RIGHT.rotated(angle) * dist
+		s.direction = Vector2.RIGHT.rotated(_rng.randf() * TAU)
+		s.speed = _rng.randf_range(3.0, 6.0)
+		s.max_amplitude = amp * amplitude_scale
+		s.width = s.max_amplitude * _rng.randf_range(1.6, 2.0)
+		# Las más grandes, más largas.
+		s.half_length = _rng.randf_range(20.0, 35.0) + amp * 1.5
+		s.lifetime = _rng.randf_range(24.0, 34.0)
+		s.grow_time = 3.0
+		s.fade_time = 4.0
+		if is_clear_of(s, player) and _far_from_island(s) and _spaced_trick(s):
+			return s
+	return null
+
+
+## Altura de una ola del modo trucos según dos números al azar (0..1): el
+## primero elige el tamaño (chica, mediana o gigante), el segundo la altura
+## dentro de ese tamaño.
+static func trick_amplitude(pick: float, within: float) -> float:
+	var acc := 0.0
+	for size in TRICK_SIZES:
+		acc += float(size[2])
+		if pick <= acc:
+			return lerpf(float(size[0]), float(size[1]), within)
+	var last: Array = TRICK_SIZES[TRICK_SIZES.size() - 1]
+	return lerpf(float(last[0]), float(last[1]), within)
+
+
+## Modo trucos: lejos de las otras olas (las más grandes ocupan más lugar).
+func _spaced_trick(s: Swell) -> bool:
+	for other in _water.swells:
+		if other.lifetime - other.age < other.fade_time:
+			continue
+		var gap := MIN_WAVE_GAP + (s.width + other.width) * 1.2
+		if other.lip:
+			gap = maxf(gap, other.half_length + s.width * 2.0)
+		if other.center.distance_to(s.center) < gap:
+			return false
+	return true
+
+
+## Modo trucos: una ola de borde cerca de `near` (larga y alta; ver
+## Swell.lip). Devuelve la ola, o null si no encontró lugar.
+func spawn_lip_wave(near: Vector2) -> Swell:
+	if _water == null:
+		return null
+	for attempt in 16:
+		var s := Swell.new()
+		s.lip = true
+		var angle := _rng.randf() * TAU
+		s.center = near + Vector2.RIGHT.rotated(angle) * _rng.randf_range(LIP_SPAWN_DISTANCE.x, LIP_SPAWN_DISTANCE.y)
+		s.direction = Vector2.RIGHT.rotated(_rng.randf() * TAU)
+		s.speed = LIP_SPEED
+		s.max_amplitude = LIP_AMPLITUDE
+		s.width = LIP_AMPLITUDE * 1.5
+		s.half_length = LIP_HALF_LENGTH
+		s.lifetime = LIP_LIFETIME
+		s.grow_time = 3.0
+		s.fade_time = 3.0
+		if not is_clear_of(s, near) or not _lip_far_from_island(s):
+			continue
+		# Hace lugar: saca las olas que quedan encima de la cresta.
+		for other in _water.swells.duplicate():
+			if other.keep:
+				continue
+			var uw := s.local_coords(other.center)
+			if absf(uw.y) < s.half_length + other.half_length and absf(uw.x) < s.width * 3.0 + other.width * 3.0:
+				other.fade_time = minf(other.fade_time, QUICK_FADE)
+				other.retire()
+		_free_slot()
+		if not _water.can_add_swell():
+			return null
+		_water.add_swell(s)
+		return s
+	return null
+
+
+## Toda la cresta de la ola de borde (y lo que recorre mientras dura) lejos de
+## las islas.
+func _lip_far_from_island(s: Swell) -> bool:
+	if _water == null:
+		return true
+	var perp := Vector2(-s.direction.y, s.direction.x)
+	var travel := s.speed * s.lifetime
+	for k in 9:
+		var w := lerpf(-s.half_length, s.half_length, k / 8.0)
+		for t in [0.0, 0.5, 1.0]:
+			var p: Vector2 = s.center + perp * w + s.direction * travel * t
+			if _water.land_fade(p) < 0.999:
+				return false
+	return true
 
 
 ## true si el punto está lejos de la ola (ni encima ni pegado).
