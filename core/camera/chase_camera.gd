@@ -98,7 +98,10 @@ func _process(delta: float) -> void:
 	_follow_y = lerpf(_follow_y, follow_target, 1.0 - exp(-3.0 * delta))
 	var w := 1.0 - exp(-follow_sharpness * minf(delta, 0.1))
 	var boosting_now := boosting()
-	_boost = move_toward(_boost, 1.0 if boosting_now else 0.0, delta * (2.5 if boosting_now else 1.5))
+	# Concentración (modo trucos): se aleja de a poco, según cuánto subió la
+	# velocidad (al doble, todo).
+	var boost_target := 1.0 if boosting_now else target.focus
+	_boost = move_toward(_boost, boost_target, delta * (2.5 if boost_target > _boost else 1.5))
 	var back := target.input != null and target.input.look_back and not target.is_fallen()
 	# Adentro del tubo (y llegando a la boca): la cámara va baja y en el medio
 	# del tubo. Llegando se mezcla de a poco según lo cerca de la boca; al salir
@@ -172,7 +175,7 @@ func _process(delta: float) -> void:
 		rotate_object_local(Vector3.UP, randf_range(-1.0, 1.0) * 0.05 * s)
 		global_position += Vector3(randf_range(-1, 1), randf_range(-1, 1), 0.0) * 0.25 * s
 	# Más ángulo de visión con turbo / motivación: sensación de velocidad.
-	fov = lerpf(fov, BOOST_FOV if boosting_now else BASE_FOV, 1.0 - exp(-4.0 * delta))
+	fov = lerpf(fov, lerpf(BASE_FOV, BOOST_FOV, maxf(1.0 if boosting_now else 0.0, target.focus)), 1.0 - exp(-4.0 * delta))
 
 
 ## Dónde va la cámara adentro del tubo: [posición, a dónde mira].
@@ -226,7 +229,7 @@ func _lip_orbit() -> Array:
 
 ## true con turbo o motivación (y adentro del tubo: se siente la velocidad).
 func boosting() -> bool:
-	return target.turbo_active or target.motivation_timer > 0.0 or target.in_tube() or target.focus > 0.2
+	return target.turbo_active or target.motivation_timer > 0.0 or target.in_tube()
 
 
 ## Cuántos metros se aleja con turbo.

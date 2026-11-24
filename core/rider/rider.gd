@@ -135,7 +135,7 @@ var exotic_progress: float = 0.0
 ## velocidad va subiendo (0..1: cuánto; ver TrickAttack). La máxima sube hasta
 ## FOCUS_SPEED_MULT.
 var focus: float = 0.0
-const FOCUS_SPEED_MULT := 1.45
+const FOCUS_SPEED_MULT := 2.0
 ## Carga del salto (0..1) mientras se mantiene ESPACIO en el agua.
 var jump_charge: float = 0.0
 ## Avance del truco en curso (radianes): cada TAU es un "tiempo" de truco
@@ -594,6 +594,8 @@ func apply_throttle(throttle: float, delta: float, turbo: bool = false) -> void:
 		rate *= 2.0
 	if focus > 0.0 and throttle > 0.0:
 		target = maxf(target, top * lerpf(1.0, FOCUS_SPEED_MULT, focus))
+		# Que llegue: sube con la concentración, no con la aceleración de siempre.
+		rate = maxf(rate, stats.acceleration * 2.0)
 	if turbo_request(turbo):
 		turbo_active = true
 		target = maxf(target, top * stats.turbo_speed_mult)

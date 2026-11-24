@@ -512,19 +512,39 @@ func _test_launches() -> void:
 	target_w.age = 0.1
 	target_w.speed = 0.0
 	target_w.direction = -ff
-	target_w.center = fbase + ff * 200.0
+	target_w.center = fbase + ff * 420.0
 	target_w.update(0.0)
 	_water.add_swell(target_w)
 	await _wait(1.5)
 	_check(r.focus == 0.0, "lejos de toda ola, sin concentración")
-	r.position = Vector3(fbase.x, _water.height_at(fbase.x, fbase.y), fbase.y) + Vector3(ff.x, 0.0, ff.y) * 110.0
-	await _wait(1.0)
-	_check(r.focus == 0.0, "al principio todavía no")
-	await _wait(2.5)
-	_check(r.focus > 0.3 and r.speed > r.stats.max_speed * 1.08, "yendo derecho hacia la ola, la velocidad sube (%.1f m/s)" % r.speed)
-	r.heading += 1.2
-	await _wait(1.0)
-	_check(r.focus < 0.2, "si gira, se corta")
+	r.position = Vector3(fbase.x, _water.height_at(fbase.x, fbase.y), fbase.y) + Vector3(ff.x, 0.0, ff.y) * 220.0
+	await _wait(0.8)
+	_check(r.focus == 0.0, "durante el primer segundo, todavía no")
+	await _wait(2.0)
+	_check(r.focus > 0.2 and r.focus < 0.7 and r.speed > r.stats.max_speed * 1.15, "después sube de a poco (×%.2f)" % (r.speed / r.stats.max_speed))
+	var hud := (m.get_node("Views") as SplitScreen).huds[0]
+	var cam := (m.get_node("Views") as SplitScreen).cameras[0]
+	_check(hud._lines > 0.1, "aparecen las rayas de velocidad")
+	_check(cam._boost > 0.1, "la cámara se va alejando")
+	_check(hud._focus_label.visible and hud._focus_label.text.begins_with("Concentrado ") and hud._focus_label.text.ends_with("%"),
+		"el HUD muestra la concentración con porcentaje (%s)" % hud._focus_label.text)
+	# Con tolerancia (antes de ×1,5): girar apenas no la corta.
+	var before_f := r.focus
+	r.reset_steer()
+	_set_action(&"p1_right", true)
+	await _wait(0.05)
+	_set_action(&"p1_right", false)
+	await _wait(0.4)
+	_check(r.focus >= before_f, "antes de ×1,5, girar apenas no la corta (%.2f)" % r.focus)
+	await _wait(3.0)
+	_check(r.focus > 0.95 and r.speed > r.stats.max_speed * 1.85, "llega al doble de velocidad (×%.2f)" % (r.speed / r.stats.max_speed))
+	_check(cam._boost > 0.9 and hud._lines > 0.9, "con la cámara y las rayas al máximo")
+	# Desde ×1,5, sin tolerancia: girar apenas ya la corta (de a poco).
+	_set_action(&"p1_right", true)
+	await _wait(0.15)
+	_set_action(&"p1_right", false)
+	await _wait(0.2)
+	_check(r.focus < 1.0 and r.focus > 0.3, "pasado ×1,5, girar aunque sea un poco la corta, de a poco (%.2f)" % r.focus)
 	_water.clear_swells()
 	_water.clear_swells()
 	m.queue_free()

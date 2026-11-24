@@ -79,14 +79,24 @@ const TUBE_END_MARGIN := 12.0
 ## Al salir del tubo sale en diagonal hacia afuera (rad), por el hueco de
 ## adelante (no por la punta, donde la ola se achica).
 const TUBE_EXIT_TURN := 0.8
-## Concentración: yendo derecho hacia una ola (a menos de FOCUS_RANGE m, sin
-## desviarse más de FOCUS_ANGLE rad) durante FOCUS_DELAY segundos, la velocidad
-## empieza a subir (llega al máximo en FOCUS_RAMP segundos más). Al girar o
-## al llegar, se corta de a poco.
-const FOCUS_RANGE := 90.0
-const FOCUS_ANGLE := 0.35
-const FOCUS_DELAY := 2.0
-const FOCUS_RAMP := 2.0
+## Concentración: yendo hacia una ola más o menos en línea recta (a menos de
+## FOCUS_RANGE m; hacia algún punto de su cresta, sin desviarse más de
+## FOCUS_ANGLE rad), se va cargando: al segundo (FOCUS_DELAY) la velocidad
+## empieza a subir y en FOCUS_RAMP segundos llega al doble (Rider.focus y
+## FOCUS_SPEED_MULT); con ella aparecen las rayas de velocidad y la cámara se
+## aleja. Hasta FOCUS_STRICT_AT (×1,5) hay tolerancia: moverse apenas para
+## los costados no la corta (solo girar más de FOCUS_STEER). Desde ahí, solo
+## se mantiene yendo totalmente recto (girar más de FOCUS_STEER_STRICT la
+## corta). Al cortarse se descarga de a poco (FOCUS_DRAIN veces más rápido de
+## lo que carga), no de golpe.
+const FOCUS_RANGE := 220.0
+const FOCUS_ANGLE := 0.6
+const FOCUS_STEER := 0.85
+const FOCUS_STEER_STRICT := 0.06
+const FOCUS_STRICT_AT := 0.5
+const FOCUS_DELAY := 1.0
+const FOCUS_RAMP := 4.0
+const FOCUS_DRAIN := 2.5
 ## Para engancharse: en la parte de atrás de la ola, cerca de la cresta (esta
 ## parte de la altura, o más) y a no más de LIP_CATCH_HEIGHT m del agua.
 const LIP_CATCH_UP := 0.7
@@ -395,14 +405,19 @@ func _update_focus(r: Rider, delta: float) -> void:
 	var t: float = _focus_time.get(r, 0.0)
 	if heading_to_wave(r):
 		var was := t
-		t += delta
+		t = minf(t + delta, FOCUS_DELAY + FOCUS_RAMP)
 		if was < FOCUS_DELAY and t >= FOCUS_DELAY:
 			focus_started.emit(r)
-		r.focus = clampf((t - FOCUS_DELAY) / FOCUS_RAMP, 0.0, 1.0)
 	else:
-		t = 0.0
-		r.focus = move_toward(r.focus, 0.0, delta * 2.0)
+		t = maxf(t - delta * FOCUS_DRAIN, 0.0)
+	r.focus = clampf((t - FOCUS_DELAY) / FOCUS_RAMP, 0.0, 1.0)
 	_focus_time[r] = t
+
+
+## Concentración cargada (0..1): 0,5 = recién empieza a subir la velocidad,
+## 1 = al máximo. Para el HUD.
+func focus_charge(r: Rider) -> float:
+	return clampf(float(_focus_time.get(r, 0.0)) / (FOCUS_DELAY + FOCUS_RAMP), 0.0, 1.0)
 
 
 ## true si va andando (parado en la tabla, sin girar mucho) derecho hacia la
@@ -410,7 +425,8 @@ func _update_focus(r: Rider, delta: float) -> void:
 func heading_to_wave(r: Rider) -> bool:
 	if water == null or not r.grounded or r.is_fallen() or r.on_lip() or r.in_tube() or r.controls_locked:
 		return false
-	if absf(r.steer_amount) > 0.5 or r.speed < 4.0:
+	var max_steer := FOCUS_STEER_STRICT if r.focus >= FOCUS_STRICT_AT else FOCUS_STEER
+	if absf(r.steer_amount) > max_steer or r.speed < 4.0:
 		return false
 	var p := Vector2(r.position.x, r.position.z)
 	var f := Vector2(r.forward().x, r.forward().z)
