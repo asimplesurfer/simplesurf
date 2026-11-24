@@ -120,6 +120,9 @@ var lip_wave: Swell = null
 var lip_balance: float = 0.0
 var lip_danger: float = 0.0
 var lip_time_left: float = 0.0
+## En la ola: cuánto recorrió de lo que puede durar (0..1; para la cámara y la
+## música).
+var lip_progress: float = 0.0
 ## Carga del salto (0..1) mientras se mantiene ESPACIO en el agua.
 var jump_charge: float = 0.0
 ## Avance del truco en curso (radianes): cada TAU es un "tiempo" de truco

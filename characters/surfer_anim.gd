@@ -237,10 +237,11 @@ static func _lip(p: Dictionary, s: Dictionary) -> void:
 	_crouch(p, 1.1 + pulse * 0.05 + absf(steer) * 0.12)
 	# Bien volcado hacia la cara de la ola y hacia adelante; se balancea con steer.
 	_bend(p, Vector3(0.35 + steer * 0.15, steer * 0.25, 0.55 * side + steer * 0.2))
-	# La mano de la cara: abajo, metida en el agua, rozándola hacia atrás.
-	var drag: Vector3 = Vector3(0.5 + pulse * 0.15, 0.0 + shake, 1.35 * side) + p["Torso"].pos
-	# La otra: estirada bien arriba y atrás (más alta cuanto más se desequilibra).
-	var up: Vector3 = Vector3(1.0 - steer * 0.25, 2.75 + absf(steer) * 0.25 - pulse * 0.08, -0.8 * side) + p["Torso"].pos
+	# La mano de la cara: abajo, cerca del agua, rozándola hacia atrás.
+	var drag: Vector3 = Vector3(0.35 + pulse * 0.1, 0.3 + shake, 0.8 * side) + p["Torso"].pos
+	# La otra: arriba y un poco atrás, cerca del cuerpo (sube cuanto más se
+	# desequilibra).
+	var up: Vector3 = Vector3(0.55 - steer * 0.2, 2.15 + absf(steer) * 0.25 - pulse * 0.06, -0.4 * side) + p["Torso"].pos
 	if side > 0.0:
 		_reach(p, "HandR", drag, 1.0)
 		_reach(p, "HandL", up, 1.0)

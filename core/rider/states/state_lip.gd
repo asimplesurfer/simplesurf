@@ -8,11 +8,9 @@ extends RiderState
 ## Minijuego de equilibrio: la ola lo empuja para un lado o el otro y él
 ## corrige con el stick (izquierda / derecha). Cada vez empuja más fuerte y
 ## más seguido. Si el equilibrio llega a un extremo, se cae (atrás de la ola).
-## La ola dura LIP_TIME segundos: si aguanta hasta que se disuelve, sale
-## disparado con motivación (y queda en el aire: puede seguir con trucos).
-
-## Cuánto dura la ola una vez que lo engancha (s).
-const LIP_TIME := 12.0
+## Dura lo que le queda de cresta por recorrer (o lo que le falta a la ola
+## para disolverse, si es menos): si aguanta hasta el final, sale disparado con
+## motivación (y queda en el aire: puede seguir con trucos).
 ## Al engancharse, un ratito sin empujones (para acomodarse).
 const SETTLE_TIME := 1.0
 ## Cuánto más arriba del agua va la tabla (m): la cresta se dibuja con espuma
@@ -45,6 +43,8 @@ var w: float = 0.0
 ## Equilibrio: 0 en el medio; en -1 o 1 se cae.
 var balance: float = 0.0
 var ride_time: float = 0.0
+## Cuánto dura esta vez (s; ver `ride_time_for`).
+var total: float = 1.0
 var _push: float = 0.0
 var _push_target: float = 0.0
 var _push_timer: float = 0.0
@@ -64,13 +64,8 @@ func enter(_previous: StringName) -> void:
 		w = wave.local_coords(p).y
 		# Sigue para el lado al que iba (si iba derecho hacia la ola, hacia
 		# donde le queda más cresta).
-		var f := rider.forward()
-		var perp := _perp()
-		var along := Vector2(f.x, f.z).dot(perp)
-		if absf(along) > 0.15:
-			side = signf(along)
-		else:
-			side = -signf(w) if absf(w) > 1.0 else 1.0
+		side = choose_side(wave, w, rider.forward())
+		total = maxf(ride_time_for(wave, w, side), 0.5)
 	rider.set_recovery_stage(Rider.RecoveryStage.STANDING)
 	rider.grounded = true
 	rider.vertical_speed = 0.0
@@ -79,7 +74,8 @@ func enter(_previous: StringName) -> void:
 	rider.reset_steer()
 	rider.lip_balance = 0.0
 	rider.lip_danger = 0.0
-	rider.lip_time_left = LIP_TIME
+	rider.lip_time_left = total
+	rider.lip_progress = 0.0
 	rider.lip_entered.emit()
 
 
@@ -92,6 +88,26 @@ func exit() -> void:
 	rider.lip_balance = 0.0
 	rider.lip_danger = 0.0
 	rider.lip_time_left = 0.0
+	rider.lip_progress = 0.0
+
+
+## Para qué lado sigue por la cresta: para donde iba, si iba claramente para
+## un lado; si no, para donde le queda más cresta.
+static func choose_side(s: Swell, w_now: float, fwd: Vector3) -> float:
+	var perp := Vector2(-s.direction.y, s.direction.x)
+	var along := Vector2(fwd.x, fwd.z).dot(perp)
+	if absf(along) > 0.4:
+		return signf(along)
+	return -signf(w_now) if absf(w_now) > 1.0 else 1.0
+
+
+## Lo que tarda en recorrer lo que le queda de cresta hacia `side_now`, o lo
+## que le falta a la ola para empezar a disolverse, lo que sea menos (s).
+static func ride_time_for(s: Swell, w_now: float, side_now: float) -> float:
+	var limit := maxf(s.half_length - s.edge - 2.0, 0.0)
+	var crest_left := maxf(limit - w_now * side_now, 0.0)
+	var life_left := maxf(s.lifetime - s.age - s.fade_time, 0.0)
+	return minf(crest_left / SPEED, life_left)
 
 
 func update(delta: float, input: RiderInput) -> void:
@@ -99,9 +115,11 @@ func update(delta: float, input: RiderInput) -> void:
 		state_machine.transition_to(&"riding")
 		return
 	ride_time += delta
-	rider.lip_time_left = maxf(LIP_TIME - ride_time, 0.0)
+	rider.lip_time_left = maxf(total - ride_time, 0.0)
+	rider.lip_progress = progress()
 	_update_balance(delta, input)
-	# Avanza por la cresta (sin pasarse de las puntas, donde la ola se achica).
+	# Avanza por la cresta; al llegar a la punta (o cuando la ola se empieza a
+	# disolver) termina: completado.
 	var limit := maxf(wave.half_length - wave.edge - 2.0, 0.0)
 	w = clampf(w + side * SPEED * delta, -limit, limit)
 	rider.speed = SPEED
@@ -109,7 +127,7 @@ func update(delta: float, input: RiderInput) -> void:
 	if absf(balance) >= 1.0:
 		_wipe_out()
 		return
-	if ride_time >= LIP_TIME:
+	if ride_time >= total or absf(w) >= limit:
 		_complete()
 
 
@@ -118,9 +136,9 @@ func _perp() -> Vector2:
 	return Vector2(-wave.direction.y, wave.direction.x)
 
 
-## Progreso de la ola (0 al engancharse .. 1 al disolverse).
+## Progreso (0 al engancharse .. 1 al terminar).
 func progress() -> float:
-	return clampf(ride_time / LIP_TIME, 0.0, 1.0)
+	return clampf(ride_time / total, 0.0, 1.0)
 
 
 ## El empujón de la ola cambia cada tanto (cada vez más seguido y más fuerte);
@@ -176,12 +194,10 @@ func _wipe_out() -> void:
 	rider.fall()
 
 
-## Aguantó hasta que la ola se disolvió: sale disparado (con motivación) y
-## queda en el aire.
+## Aguantó hasta el final (la punta de la cresta, o la ola que se disuelve):
+## sale disparado (con motivación) y queda en el aire.
 func _complete() -> void:
 	wave.keep = false
-	wave.fade_time = minf(wave.fade_time, 1.5)
-	wave.retire()
 	rider.trigger_motivation()
 	rider.speed = rider.stats.max_speed * rider.stats.motivation_speed_mult
 	rider.vertical_speed = EXIT_UP
