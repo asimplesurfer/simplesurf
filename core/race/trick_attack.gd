@@ -4,7 +4,8 @@ extends GameSession
 ## termine el tiempo (cuenta para abajo; por defecto 2 minutos).
 ##
 ## - Los trucos dan puntos, no nitro (no hay turbo). La motivación sí queda
-##   (derrapar y tirar al de atrás te da velocidad).
+##   (derrapar y tirar al de atrás te da velocidad), y completar un truco
+##   también la da.
 ## - Más combo vale más que proporcional (ver `points_for`). Aterrizaje limpio:
 ##   todo; justo: menos (TIGHT_MULT). Si te caés, perdés los puntos de ese salto.
 ## - Al terminar: el puntaje y los mejores del mapa (con ese tiempo).
@@ -57,6 +58,14 @@ const SHOW_LIP_POINTER := true
 ## Puntos por segundo en el borde y bonus si aguanta hasta el final.
 const LIP_POINTS_PER_SEC := 150.0
 const LIP_BONUS := 2000
+## Concentración: yendo derecho hacia una ola (a menos de FOCUS_RANGE m, sin
+## desviarse más de FOCUS_ANGLE rad) durante FOCUS_DELAY segundos, la velocidad
+## empieza a subir (llega al máximo en FOCUS_RAMP segundos más). Al girar o
+## al llegar, se corta de a poco.
+const FOCUS_RANGE := 90.0
+const FOCUS_ANGLE := 0.35
+const FOCUS_DELAY := 2.0
+const FOCUS_RAMP := 2.0
 ## Para engancharse: en la parte de atrás de la ola, cerca de la cresta (esta
 ## parte de la altura, o más) y a no más de LIP_CATCH_HEIGHT m del agua.
 const LIP_CATCH_UP := 0.7
@@ -87,6 +96,10 @@ var lip_wave: Swell = null
 var _lip_timer: float = LIP_FIRST
 ## Puntos del borde que todavía no llegan a uno entero (por surfista).
 var _lip_points: Dictionary = {}
+## Concentración: cuánto hace que va derecho hacia una ola (por surfista).
+var _focus_time: Dictionary = {}
+## Empezó la concentración (el HUD avisa).
+signal focus_started(rider: Rider)
 
 
 func default_config() -> RaceConfig:
@@ -158,6 +171,8 @@ func _on_trick_landed(spins: int, rider: Rider) -> void:
 	if state != State.PLAYING:
 		return
 	var clean := rider.last_landing_clean
+	# Completar un truco (sin caerse) da motivación: un rato más rápido.
+	rider.trigger_motivation()
 	var gained := points_for(spins, clean)
 	scores[rider] = score_of(rider) + gained
 	scored.emit(rider, gained, score_of(rider), clean)
@@ -177,6 +192,8 @@ func _physics_process(delta: float) -> void:
 		State.PLAYING:
 			time_left = maxf(time_left - delta, 0.0)
 			_update_lip(delta)
+			for r in racers:
+				_update_focus(r, delta)
 			if time_left <= 0.0:
 				finish()
 
@@ -221,6 +238,46 @@ func add_lip_spray(wave: Swell) -> LipWaveSpray:
 	get_parent().add_child(spray)
 	spray.setup(wave, water)
 	return spray
+
+
+## Concentración: si va derecho hacia una ola, la velocidad sube de a poco.
+func _update_focus(r: Rider, delta: float) -> void:
+	var t: float = _focus_time.get(r, 0.0)
+	if heading_to_wave(r):
+		var was := t
+		t += delta
+		if was < FOCUS_DELAY and t >= FOCUS_DELAY:
+			focus_started.emit(r)
+		r.focus = clampf((t - FOCUS_DELAY) / FOCUS_RAMP, 0.0, 1.0)
+	else:
+		t = 0.0
+		r.focus = move_toward(r.focus, 0.0, delta * 2.0)
+	_focus_time[r] = t
+
+
+## true si va andando (parado en la tabla, sin girar mucho) derecho hacia la
+## cresta de una ola cercana.
+func heading_to_wave(r: Rider) -> bool:
+	if water == null or not r.grounded or r.is_fallen() or r.on_lip() or r.in_tube() or r.controls_locked:
+		return false
+	if absf(r.steer_amount) > 0.5 or r.speed < 4.0:
+		return false
+	var p := Vector2(r.position.x, r.position.z)
+	var f := Vector2(r.forward().x, r.forward().z)
+	for s in water.swells:
+		if s.amplitude < s.max_amplitude * 0.6:
+			continue
+		# El punto de la cresta más cerca.
+		var perp := Vector2(-s.direction.y, s.direction.x)
+		var crest := s.center + s.direction * s.crest_u()
+		var along := clampf((p - crest).dot(perp), -s.half_length + s.edge, s.half_length - s.edge)
+		var to := crest + perp * along - p
+		var d := to.length()
+		if d < 6.0 or d > FOCUS_RANGE:
+			continue
+		if f.dot(to / d) > cos(FOCUS_ANGLE):
+			return true
+	return false
 
 
 ## Si `r` llegó a la cresta de la ola de borde desde atrás, la ola lo engancha.

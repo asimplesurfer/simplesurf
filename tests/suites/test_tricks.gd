@@ -101,8 +101,10 @@ func _test_match() -> void:
 
 	# Puntos: limpio todo, justo la mitad, caerse nada.
 	r.last_landing_clean = true
+	r.motivation_timer = 0.0
 	r.trick_landed.emit(3)
 	_check(session.score_of(r) == 600, "un ×3 limpio suma 600 (%d)" % session.score_of(r))
+	_check(r.motivation_timer > 0.0, "completar un truco da motivación")
 	r.last_landing_clean = false
 	r.trick_landed.emit(2)
 	_check(session.score_of(r) == 750, "un ×2 justo suma la mitad (%d)" % session.score_of(r))
@@ -177,6 +179,11 @@ func _test_waves_and_lip() -> void:
 		smallest = minf(smallest, sw.max_amplitude)
 	_check(smallest >= 4.0, "ni las más chicas bajan de 4 m (%.1f)" % smallest)
 	_check(away, "no todas vienen hacia el surfista")
+	var near := 0
+	for sw in water.swells:
+		if sw.center.distance_to(Vector2(r.position.x, r.position.z)) < WaveManager.TRICK_SPAWN_DISTANCE.y + 40.0:
+			near += 1
+	_check(near >= 2, "las olas aparecen cerca del surfista (%d cerca)" % near)
 	_check(not r.air_ceiling, "sin techo invisible en los saltos")
 
 	# Lo que se siente es lo que se ve: con una ola de 12 m rompiendo (el labio
@@ -440,6 +447,41 @@ func _test_launches() -> void:
 	lonely.center = c + Vector2(400.0, 0.0)
 	lonely.update(0.0)
 	_check(not WaveManager.crests_touch(crossed[0], lonely), "una ola lejos no cuenta como choque")
+
+	# Concentración: yendo derecho hacia una ola un par de segundos, la
+	# velocidad sube; girando, se corta.
+	_water.clear_swells()
+	var fbase := Vector2(-900.0, 600.0)
+	r.position = Vector3(fbase.x, _water.height_at(fbase.x, fbase.y), fbase.y)
+	r.set_recovery_stage(Rider.RecoveryStage.STANDING)
+	r.state_machine.transition_to(&"riding")
+	r.heading = 0.0
+	r.speed = r.stats.max_speed
+	var ff := Vector2(r.forward().x, r.forward().z)
+	var target_w := Swell.new()
+	target_w.match_drawn = true
+	target_w.max_amplitude = 6.0
+	target_w.width = 10.8
+	target_w.half_length = 40.0
+	target_w.lifetime = 100.0
+	target_w.grow_time = 0.1
+	target_w.age = 0.1
+	target_w.speed = 0.0
+	target_w.direction = -ff
+	target_w.center = fbase + ff * 200.0
+	target_w.update(0.0)
+	_water.add_swell(target_w)
+	await _wait(1.5)
+	_check(r.focus == 0.0, "lejos de toda ola, sin concentración")
+	r.position = Vector3(fbase.x, _water.height_at(fbase.x, fbase.y), fbase.y) + Vector3(ff.x, 0.0, ff.y) * 110.0
+	await _wait(1.0)
+	_check(r.focus == 0.0, "al principio todavía no")
+	await _wait(2.5)
+	_check(r.focus > 0.3 and r.speed > r.stats.max_speed * 1.08, "yendo derecho hacia la ola, la velocidad sube (%.1f m/s)" % r.speed)
+	r.heading += 1.2
+	await _wait(1.0)
+	_check(r.focus < 0.2, "si gira, se corta")
+	_water.clear_swells()
 	_water.clear_swells()
 	m.queue_free()
 	await process_frame

@@ -238,6 +238,10 @@ func _ready() -> void:
 	if tricks:
 		tricks.countdown_tick.connect(_on_countdown_tick)
 		tricks.scored.connect(_on_scored)
+		tricks.focus_started.connect(func(r: Rider) -> void:
+			if r == rider:
+				show_message("¡Concentración!", PROMPT_COLOR)
+		)
 		if TrickAttack.SHOW_LIP_POINTER:
 			tricks.lip_wave_spawned.connect(func(_w: Swell) -> void: show_message("¡Ola de borde!", PROMPT_COLOR))
 		tricks.finished.connect(func(_score: int, _rank: int) -> void: show_center("¡TIEMPO!", PROMPT_COLOR, 1.5))
@@ -559,7 +563,7 @@ func _process(delta: float) -> void:
 	_message.modulate.a = clampf(_message_time / 0.4, 0.0, 1.0)
 
 	# Rayas de velocidad con turbo o motivación.
-	var boosting := (rider.turbo_active or rider.motivation_timer > 0.0) and rider.speed > 5.0
+	var boosting := (rider.turbo_active or rider.motivation_timer > 0.0 or rider.focus > 0.2) and rider.speed > 5.0
 	_lines = move_toward(_lines, 1.0 if boosting else 0.0, delta * 4.0)
 	_speed_lines.visible = _lines > 0.01
 	_speed_lines_material.set_shader_parameter("intensity", _lines)
