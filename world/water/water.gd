@@ -328,6 +328,55 @@ func swell_height_at(x: float, z: float) -> float:
 	return h * _island_fade(p)
 
 
+## Altura del agua para algo que está a la altura `y` en (x, z): como
+## height_at, pero si una ola se cerró en tubo y ahí hay más de una superficie
+## (el piso de adentro y el techo del labio), la más alta que queda debajo (con
+## un margen de `step` m para subir). Así, el que va por arriba sigue arriba y
+## el que entra por abajo del labio va por el piso.
+func height_below(x: float, z: float, y: float, step: float = 0.4) -> float:
+	var h := height_at(x, z)
+	var p := Vector2(x, z)
+	for s in swells:
+		if s.curl <= 0.0 or not s.reaches(p):
+			continue
+		var uw := s.local_coords(p)
+		var hs := s.tube_heights(uw.x, absf(uw.y))
+		if hs.size() < 2:
+			continue
+		var top := hs[hs.size() - 1]
+		var fade := _island_fade(p)
+		var base := h - top * fade
+		# Las superficies se alternan: piso (mira arriba), techo por adentro (mira
+		# abajo: no se pisa), techo por afuera (mira arriba)...
+		var pick := hs[0]
+		for i in range(0, hs.size(), 2):
+			if base + hs[i] * fade <= y + step:
+				pick = hs[i]
+		h = base + pick * fade
+	return h
+
+
+## true si en (x, z) hay agua por encima de `y` (más de `margin` m): está
+## adentro de una ola que se cerró en tubo, con el techo del labio encima.
+func under_roof(x: float, z: float, y: float, margin: float = 1.5) -> bool:
+	var p := Vector2(x, z)
+	for s in swells:
+		if s.curl > 0.0 and s.reaches(p) and height_at(x, z) > y + margin:
+			return true
+	return false
+
+
+## Altura del agua de abajo en (x, z): como height_at, pero adentro de una ola
+## que se cerró en tubo, el piso de adentro (no el techo del labio).
+func floor_height_at(x: float, z: float) -> float:
+	var h := height_at(x, z)
+	var p := Vector2(x, z)
+	for s in swells:
+		if s.curl > 0.0 and s.reaches(p):
+			h += (s.floor_height_at(p) - s.height_at(p)) * _island_fade(p)
+	return h
+
+
 ## Qué tanto está rompiendo la ola grande que hay en ese punto (0 si no hay).
 func breaking_at(x: float, z: float) -> float:
 	var p := Vector2(x, z)
@@ -371,9 +420,10 @@ func drawn_vertex(p: Vector2) -> Vector3:
 		var aw := absf(uw.y)
 		if aw >= s.half_length or absf(uw.x) > s.width * 4.0:
 			continue
-		var n := exp(-(uw.x * uw.x) / (s.width * s.width)) * s._edge(aw)
-		sh += s.amplitude * n
-		disp += s.direction * (s.lean() * n * n * n)
+		# La misma forma que el shader (con el labio y, si se cierra, el tubo).
+		var pr := s.profile(uw.x, aw)
+		sh += pr.y
+		disp += s.direction * pr.x
 	if ring_wave:
 		sh += ring_wave.height_at(p)
 	if sh == 0.0 and disp == Vector2.ZERO:
@@ -541,7 +591,8 @@ func normal_at(x: float, z: float) -> Vector3:
 func _crossing_drawn(p: Vector2) -> Array[Swell]:
 	var out: Array[Swell] = []
 	for s in swells:
-		if s.match_drawn and s.reaches(p):
+		# (Una ola cerrándose en tubo se calcula sola: ver Swell.tube_heights.)
+		if s.match_drawn and s.curl <= 0.0 and s.reaches(p):
 			out.append(s)
 	if out.size() < 2:
 		out.clear()

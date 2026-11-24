@@ -650,7 +650,9 @@ func crash(safe_position: Vector3) -> void:
 func water_height() -> float:
 	if water == null:
 		return 0.0
-	return water.height_at(position.x, position.z)
+	# (Con una ola cerrada en tubo, la superficie de abajo del surfista: el
+	# piso si está adentro, el techo si va por arriba.)
+	return water.height_below(position.x, position.z, position.y)
 
 
 ## Pega al Rider a la superficie. Devuelve true si la ola lo lanzó al aire:
@@ -658,6 +660,9 @@ func water_height() -> float:
 ## cresta con velocidad). Cuanto más rápido sube, más alto sale.
 func stick_to_water(delta: float, allow_launch: bool = true) -> bool:
 	var h := water_height()
+	# Con el techo de un tubo encima no se sale volando (se iría al techo).
+	if allow_launch and water and water.under_roof(position.x, position.z, h):
+		allow_launch = false
 	var ballistic_y := position.y + vertical_speed * delta - 0.5 * stats.gravity * delta * delta
 	# Solo las olas grandes lanzan; las olitas de fondo son decorado.
 	if (

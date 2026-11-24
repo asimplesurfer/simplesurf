@@ -13,6 +13,8 @@ const ARROW := 26.0
 ## Hacia dónde apunta (en la pantalla, normalizado) y a cuántos metros está.
 var dir := Vector2.RIGHT
 var meters: float = 0.0
+## Qué es (se escribe al lado de la distancia).
+var label: String = "Ola de borde"
 
 
 ## Pone la flecha según dónde queda `target` para la cámara `cam`. Si se ve en
@@ -52,7 +54,7 @@ func _draw() -> void:
 	draw_colored_polygon(outline, INK)
 	draw_colored_polygon(pts, COLOR)
 	var font := get_theme_default_font()
-	var text := "Ola de borde  %d m" % roundi(meters)
+	var text := "%s  %d m" % [label, roundi(meters)]
 	var fs := 22
 	var tw := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
 	var at := tip - dir * (ARROW + 34.0) - Vector2(tw * 0.5, -8.0)

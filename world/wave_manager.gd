@@ -167,6 +167,9 @@ func _physics_process(delta: float) -> void:
 		return
 	if trick_mode:
 		_dissolve_collisions()
+		# Mientras hay un tubo no nacen olas nuevas (se mezclarían con él).
+		if not get_tree().get_nodes_in_group("tube_waves").is_empty():
+			return
 		_timer -= delta
 		if _timer <= 0.0:
 			_timer = _rng.randf_range(spawn_interval_min, spawn_interval_max)

@@ -74,6 +74,8 @@ varying float v_lip;
 // 0..1: ola que todavía está creciendo ("se viene"): el agua se oscurece donde
 // se va a levantar, aunque todavía no tenga altura.
 varying float v_grow;
+// Parte de una ola cerrada en tubo (labio, techo por adentro y pared).
+varying float v_tube;
 varying vec3 v_world;
 
 // Una capa de gotas: en cada celda cae una gota cada tanto (en un lugar y
@@ -103,7 +105,8 @@ void vertex() {
 	float body;
 	float lip;
 	float grow;
-	water_surface(world.xz, h, g, disp, ambient_h, body, lip, grow);
+	float tube;
+	water_surface(world.xz, h, g, disp, ambient_h, body, lip, grow, tube);
 	// Lejos del centro del plano el agua se aplana (después vienen los anillos
 	// enormes hasta el horizonte, que no pueden seguir las olas).
 	float calm = 1.0 - smoothstep(95.0, 125.0, distance(world.xz, NODE_POSITION_WORLD.xz));
@@ -113,6 +116,7 @@ void vertex() {
 	body *= calm;
 	lip *= calm;
 	grow *= calm;
+	tube *= calm;
 	ambient_h *= calm;
 	VERTEX.y += h;
 	VERTEX.xz += disp;
@@ -121,12 +125,16 @@ void vertex() {
 	v_body = body;
 	v_lip = lip;
 	v_grow = grow;
+	v_tube = tube;
 	v_world = world + vec3(disp.x, h, disp.y);
 }
 
 void fragment() {
 	float t = fx_time;
-	vec2 wp = v_world.xz;
+	// Coordenadas de las texturas (manchas, espuma, brillos): las del mar.
+	// En el tubo hay agua de costado y dada vuelta: se suma la altura, así la
+	// textura no se estira en las paredes y se ve igual que en el resto.
+	vec2 wp = v_world.xz + vec2(v_world.y) * 0.8 * v_tube;
 	// Color base: valles profundos, crestas claras.
 	vec3 col = mix(deep_color, shallow_color, smoothstep(-0.5, 0.5, v_height));
 	// Manchas suaves de color (el mar no es de un solo tono).
@@ -142,8 +150,16 @@ void fragment() {
 
 	// Reflejo del cielo en ángulos rasantes (fresnel): el mar de lejos brilla.
 	float facing = clamp(dot(NORMAL, VIEW), 0.0, 1.0);
-	float fresnel = pow(1.0 - facing, 4.0);
+	float fresnel = pow(1.0 - facing, 4.0) * (1.0 - 0.6 * v_tube);
 	col = mix(col, sky_tint, fresnel * sky_reflect);
+	// Tubo: el agua del labio y de la pared deja pasar la luz (turquesa claro
+	// y verdoso, como en una ola de verdad); vista desde adentro, un poco más
+	// brillante arriba (el labio es fino) que en la pared.
+	if (v_tube > 0.0) {
+		vec3 lit = mix(wave_color, glow_color, 0.2);
+		float thin = FRONT_FACING ? 0.2 : 0.35;
+		col = mix(col, lit, v_tube * thin);
+	}
 
 	// Espuma con textura: se deshace en bordes irregulares y se mueve.
 	float n1 = fx_noise(wp * 0.9 + vec2(t * 0.35, t * 0.2));
@@ -241,7 +257,14 @@ void fragment() {
 	vec3 near_fog = pow(fog_tint, vec3(2.2));
 	vec3 fog_rgb = near_fog * a1 * (1.0 - a2) * (1.0 - haze) + c2 * a2 * (1.0 - haze) + h_col * haze;
 	float fog_a = 1.0 - keep;
-	FOG = vec4(fog_a > 0.0001 ? fog_rgb / fog_a : near_fog, fog_a);
+	// Por dentro de una ola que se cerró en tubo (la cara de atrás del agua):
+	// agua vista desde adentro, un poco más oscura y sin la niebla del horizonte
+	// (si no, las paredes lejanas del tubo se pintaban de cielo).
+	vec3 fog_col = fog_a > 0.0001 ? fog_rgb / fog_a : near_fog;
+	if (!FRONT_FACING) {
+		fog_a *= 0.25;
+	}
+	FOG = vec4(fog_col, fog_a);
 	ALBEDO = col;
 	EMISSION = vec3(sparkle * 0.7 * (1.0 - haze));
 	if (lamp_count > 0) {

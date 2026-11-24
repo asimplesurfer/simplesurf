@@ -110,6 +110,16 @@ var inside: Dictionary = {}
 var used: Dictionary = {}
 
 const SHADER := preload("res://world/tube/tube_wave.gdshader")
+## Modo trucos: el tubo lo dibuja el agua (una ola que se cierra: ver
+## Swell.curl). Esta ola no se ve; solo pone la boca, el recorrido y el piso.
+var show_shape: bool = true
+## La ola que se cierra en tubo (no se saca de alrededor).
+var keep_swell: Swell = null
+## El piso es el del agua de adentro del tubo (Water.floor_height_at), sin la
+## cara propia de esta ola.
+var floor_base: bool = false
+## Hasta qué altura sobre el piso se puede entrar por la boca (m).
+var mouth_max_air: float = MOUTH_MAX_AIR
 
 var _mesh_instance: MeshInstance3D
 var _mesh: ArrayMesh
@@ -173,12 +183,13 @@ func _ready() -> void:
 func setup(
 	p_course: Course, p_mouth_angle: float, p_lateral: float, p_side: float,
 	p_duration: float, p_speed: float, p_opener: Rider = null, p_open_timeout: float = 6.0,
-	p_sway: float = -1.0, p_track: TrackSpace = null
+	p_sway: float = -1.0, p_track: TrackSpace = null, p_water: Water = null
 ) -> void:
 	course = p_course
 	# Con bifurcaciones, la vuelta por el camino donde nace (ver TubeDirector.track_for).
+	# Sin carrera (modo trucos) se pasan una pista recta y el agua.
 	track = p_track if p_track else course.track
-	water = GameSession.find_in_scene(course, "water") as Water
+	water = p_water if p_water else GameSession.find_in_scene(course, "water") as Water
 	mouth_angle = p_mouth_angle
 	lateral = p_lateral
 	side = 1.0 if p_side >= 0.0 else -1.0
@@ -199,6 +210,12 @@ func setup(
 		_build_spine(OPENING_SPINE)
 	_build_visual()
 	_rebuild()
+	if not show_shape:
+		# La dibuja el agua: sin su malla ni su espuma (queda el chorro de la salida).
+		_mesh_instance.visible = false
+		for p in [_back_foam, _lip_drops]:
+			(p as CPUParticles3D).emitting = false
+			(p as CPUParticles3D).visible = false
 
 
 ## Metros de pista que ocupa como mucho (desde la boca): para saber si entra
@@ -375,6 +392,8 @@ static func face_slope(u: float) -> float:
 
 ## Altura del agua de abajo (con las olas) en un punto.
 func base_height(p: Vector3) -> float:
+	if water and floor_base:
+		return water.floor_height_at(p.x, p.z)
 	return water.height_at(p.x, p.z) if water else 0.0
 
 
@@ -488,6 +507,8 @@ func _physics_process(delta: float) -> void:
 
 
 func _process(_delta: float) -> void:
+	if not show_shape:
+		return
 	# La tormenta cambia los colores del agua de a poco: la ola la sigue.
 	_color_tick += 1
 	if _color_tick % 20 == 0:
@@ -526,7 +547,7 @@ func _check_entries() -> void:
 		var u := u_of(r.position)
 		if u < -MOUTH_OPEN_SIDE or u > MOUTH_WALL_SIDE:
 			continue
-		if r.position.y - base_height(r.position) > MOUTH_MAX_AIR:
+		if r.position.y - base_height(r.position) > mouth_max_air:
 			continue
 		enter(r, maxf(s, 0.0))
 
@@ -592,6 +613,8 @@ func _hide_obstacles() -> void:
 	var from := -30.0
 	var to := max_length() + 20.0
 	var items: Array[Node3D] = []
+	if course == null:
+		return
 	for ring in course.rings:
 		items.append(ring)
 	for rock in course.rocks:
@@ -611,6 +634,9 @@ func _clear_swells() -> void:
 		return
 	var keep: Array[Swell] = []
 	for sw in water.swells:
+		if sw == keep_swell:
+			keep.append(sw)
+			continue
 		var c := Vector3(sw.center.x, 0.0, sw.center.y)
 		var near := false
 		var i := 0

@@ -19,6 +19,7 @@ func run() -> void:
 	await _test_match()
 	await _test_launches()
 	await _test_waves_and_lip()
+	await _test_tube()
 	await _test_menu()
 
 	GameSettings.trick_time = saved_time
@@ -535,6 +536,112 @@ func _launch_apex(r: Rider, amp: float, from_behind: bool) -> float:
 			break
 	_water.clear_swells()
 	return top
+
+
+## Las olas gigantes, después de un rato, se cierran en tubo: entrando por la
+## boca arranca el minijuego del tubo y suma muchos puntos.
+func _test_tube() -> void:
+	var config := RaceConfig.tricks()
+	config.trick_seconds = 300
+	var m: Node = load("res://tricks.tscn").instantiate()
+	(m.get_node("Session") as GameSession).config = config
+	root.add_child(m)
+	await process_frame
+	await process_frame
+	var session := m.get_node("Session") as TrickAttack
+	var waves := m.get_node("WaveManager") as WaveManager
+	_water = m.get_node("Water") as Water
+	var r := session.racers[0]
+	_rider = r
+	session._lip_timer = 1e9
+	waves.enabled = false
+	session.start()
+	await _wait(0.2)
+	_water.clear_swells()
+	var mid := _make_swell(Vector2(500.0, 500.0), 7.0)
+	mid.age = mid.grow_time + TrickAttack.TUBE_AFTER + 1.0
+	_check(not session.ready_for_tube(mid), "una ola mediana no se cierra en tubo")
+	var giant := _make_swell(Vector2(500.0, -500.0), 11.0)
+	giant.age = giant.grow_time + TrickAttack.TUBE_AFTER - 1.0
+	_check(not session.ready_for_tube(giant), "una gigante recién formada todavía no")
+	giant.age = giant.grow_time + TrickAttack.TUBE_AFTER + 0.1
+	r.position = Vector3(560.0, _water.height_at(560.0, -560.0), -560.0)
+	await _wait(0.2)
+	_check(session.curling == giant and giant.curl > 0.0 and giant.curl < 0.5, "después de un rato entera, la gigante se empieza a cerrar (de a poco)")
+	_check(session.tube == null, "mientras se enrosca todavía no se puede entrar")
+	await _wait(TrickAttack.TUBE_CURL_TIME)
+	var t := session.tube
+	_check(t != null and is_instance_valid(t) and giant.curl > 0.9, "ya cerrada, se puede entrar por la punta")
+	_check(_water.swells.has(giant) and not t.show_shape, "el tubo es la misma ola (el agua), no otra cosa")
+	# Adentro hay piso y techo: lo que se siente es lo que se ve.
+	var inside := giant.center + giant.direction * (TrickAttack.TUBE_LINE * giant.max_amplitude)
+	var hs := giant.tube_heights(giant.local_coords(inside).x, 0.0)
+	_check(hs.size() >= 3 and hs[hs.size() - 1] - hs[0] > giant.max_amplitude * 0.5,
+		"adentro hay piso y techo (%s)" % str(Array(hs).map(func(v): return snappedf(v, 0.1))))
+	if t == null:
+		m.queue_free()
+		return
+	# Entra por la boca.
+	var f: Array = t.frame_at(0.0)
+	var mouth: Vector3 = f[0]
+	var h := t.heading_at(0.0)
+	r.heading = h
+	r.speed = r.stats.max_speed
+	var back := Vector3(-sin(h), 0.0, -cos(h))
+	r.position = mouth - back * 4.0
+	r.position.y = _water.height_at(r.position.x, r.position.z)
+	r.set_recovery_stage(Rider.RecoveryStage.STANDING)
+	r.state_machine.transition_to(&"riding")
+	var before := session.score_of(r)
+	for i in 60:
+		await get_tree().physics_frame
+		if r.in_tube():
+			break
+	_check(r.in_tube(), "entrando por la boca, arranca el minijuego del tubo")
+	# Mantiene el equilibrio hasta que lo escupe.
+	var exited := [false]
+	r.tube_exited.connect(func(ok: bool) -> void: exited[0] = ok, CONNECT_ONE_SHOT)
+	var guard := 0
+	var low := true
+	while r.in_tube() and guard < 60 * 20:
+		if r.position.y - _water.waves.height_at(r.position.x, r.position.z, _water.time) > giant.max_amplitude * 0.45:
+			low = false
+		var st := r.state_machine.current
+		var wall: float = float(st.call("wall_on_right_sign")) if st.has_method("wall_on_right_sign") else 1.0
+		var want := -signf(r.tube_balance) * wall if absf(r.tube_balance) > 0.05 else 0.0
+		_set_action(&"p1_right", want > 0.0)
+		_set_action(&"p1_left", want < 0.0)
+		await get_tree().physics_frame
+		guard += 1
+	_set_action(&"p1_right", false)
+	_set_action(&"p1_left", false)
+	_check(exited[0] and not r.is_fallen(), "aguantando el equilibrio, sale por adelante")
+	_check(low, "adentro va por el piso, debajo del labio (no arriba)")
+	var gained := session.score_of(r) - before
+	_check(gained >= TrickAttack.TUBE_BONUS + 1500, "suma muchos puntos (%d)" % gained)
+	# El tubo termina de soltarlo (TubeWave.SPIT_HOLD + COLLAPSE_TIME) y la ola se deshace.
+	await _wait(TubeWave.SPIT_HOLD + TubeWave.COLLAPSE_TIME + 0.5)
+	_check(giant.lifetime - giant.age <= TrickAttack.TUBE_FADE + 0.1, "al terminar, la ola se deshace")
+	m.queue_free()
+	await process_frame
+
+
+## Una ola del modo trucos ya crecida (quieta, que dura).
+func _make_swell(at: Vector2, amp: float) -> Swell:
+	var sw := Swell.new()
+	sw.match_drawn = true
+	sw.max_amplitude = amp
+	sw.width = amp * 1.8
+	sw.half_length = 45.0
+	sw.lifetime = 200.0
+	sw.grow_time = 1.0
+	sw.age = 1.0
+	sw.speed = 3.0
+	sw.direction = Vector2.RIGHT
+	sw.center = at
+	sw.update(0.0)
+	_water.add_swell(sw)
+	return sw
 
 
 ## Una ola alta del modo trucos, ya crecida, a un costado del surfista (lejos
