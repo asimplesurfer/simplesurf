@@ -76,10 +76,13 @@ func enter(_previous: StringName) -> void:
 	rider.lip_danger = 0.0
 	rider.lip_time_left = total
 	rider.lip_progress = 0.0
+	rider.start_exotic(ExoticTrick.Kind.LIP)
 	rider.lip_entered.emit()
 
 
 func exit() -> void:
+	# Si salió de otra forma (reinicio, otra cosa lo sacó): como caerse.
+	rider.finish_exotic(false)
 	if wave:
 		wave.keep = false
 	wave = null
@@ -117,6 +120,7 @@ func update(delta: float, input: RiderInput) -> void:
 	ride_time += delta
 	rider.lip_time_left = maxf(total - ride_time, 0.0)
 	rider.lip_progress = progress()
+	rider.update_exotic(progress())
 	_update_balance(delta, input)
 	# Avanza por la cresta; al llegar a la punta (o cuando la ola se empieza a
 	# disolver) termina: completado.
@@ -190,6 +194,7 @@ func _wipe_out() -> void:
 	rider.speed = minf(rider.speed, 3.0)
 	wave.keep = false
 	wave.retire()
+	rider.finish_exotic(false)
 	rider.lip_exited.emit(false)
 	rider.fall()
 
@@ -198,7 +203,7 @@ func _wipe_out() -> void:
 ## sale disparado (con motivación) y queda en el aire.
 func _complete() -> void:
 	wave.keep = false
-	rider.trigger_motivation()
+	rider.finish_exotic(true)
 	rider.speed = rider.stats.max_speed * rider.stats.motivation_speed_mult
 	rider.vertical_speed = EXIT_UP
 	rider.grounded = false

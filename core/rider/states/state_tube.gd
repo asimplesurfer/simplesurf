@@ -63,9 +63,12 @@ func enter(_previous: StringName) -> void:
 	rider.reset_steer()
 	rider.tube_balance = 0.0
 	rider.tube_danger = 0.0
+	rider.start_exotic(ExoticTrick.Kind.TUBE)
 
 
 func exit() -> void:
+	# Si salió de otra forma (reinicio, el tubo se terminó): como caerse.
+	rider.finish_exotic(false)
 	if tube and is_instance_valid(tube):
 		tube.leave(rider)
 	tube = null
@@ -79,6 +82,7 @@ func update(delta: float, input: RiderInput) -> void:
 		state_machine.transition_to(&"riding")
 		return
 	_time += delta
+	rider.update_exotic(tube.progress())
 	s += tube.speed * delta
 	tube.inside[rider] = s
 	rider.speed = tube.speed
@@ -167,6 +171,7 @@ func _wipe_out() -> void:
 	var w: Vector3 = f[1]
 	var p := o - w * 1.5
 	rider.position = Vector3(p.x, tube.base_height(p), p.z)
+	rider.finish_exotic(false)
 	rider.tube_exited.emit(false)
 	rider.tube_wiped_out.emit(lip)
 	rider.fall()
@@ -180,7 +185,7 @@ func _spit_out() -> void:
 	rider.speed = tube.speed
 	rider.turbo_time = rider.stats.turbo_burst_time * TUBE_EXIT_TURBO
 	rider.turbo_fired.emit()
-	rider.trigger_motivation()
+	rider.finish_exotic(true)
 	rider.tube_exited.emit(true)
 	state_machine.transition_to(&"riding")
 

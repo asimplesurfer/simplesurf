@@ -51,6 +51,10 @@ signal tube_entered
 signal tube_exited(success: bool)
 ## Se cayó adentro del tubo: lip = lo tapó el labio (si no, lo escupió la espuma).
 signal tube_wiped_out(lip: bool)
+## Empezó un truco exótico (ver ExoticTrick: el borde, el tubo...).
+signal exotic_started(kind: ExoticTrick.Kind)
+## Terminó un truco exótico: success = lo completó (bonus y motivación).
+signal exotic_finished(kind: ExoticTrick.Kind, success: bool)
 ## Modo trucos: lo enganchó una ola de borde (ver el estado `lip`).
 signal lip_entered
 ## Salió de la ola de borde: success = aguantó hasta que se disolvió.
@@ -123,6 +127,10 @@ var lip_time_left: float = 0.0
 ## En la ola: cuánto recorrió de lo que puede durar (0..1; para la cámara y la
 ## música).
 var lip_progress: float = 0.0
+## El truco exótico que está haciendo (ExoticTrick.Kind.NONE si ninguno) y
+## cuánto lleva (0..1: para la música; ver ExoticTrick).
+var exotic: ExoticTrick.Kind = ExoticTrick.Kind.NONE
+var exotic_progress: float = 0.0
 ## Modo trucos, "concentración": yendo derecho hacia una ola un rato, la
 ## velocidad va subiendo (0..1: cuánto; ver TrickAttack). La máxima sube hasta
 ## FOCUS_SPEED_MULT.
@@ -617,6 +625,31 @@ func fire_turbo() -> bool:
 
 
 ## Mini sprint automático tras pasar por un círculo o tirar a alguien.
+## Truco exótico (ver ExoticTrick): lo llama el estado que lo hace, al
+## empezar, en cada paso (con cuánto lleva) y al terminar.
+func start_exotic(kind: ExoticTrick.Kind) -> void:
+	exotic = kind
+	exotic_progress = 0.0
+	exotic_started.emit(kind)
+
+
+func update_exotic(progress: float) -> void:
+	exotic_progress = clampf(progress, 0.0, 1.0)
+
+
+## Al completarlo: motivación (sale disparado). Si se cayó, nada (se queda con
+## lo que juntó).
+func finish_exotic(success: bool) -> void:
+	var kind := exotic
+	if kind == ExoticTrick.Kind.NONE:
+		return
+	exotic = ExoticTrick.Kind.NONE
+	exotic_progress = 0.0
+	if success:
+		trigger_motivation()
+	exotic_finished.emit(kind, success)
+
+
 func trigger_motivation() -> void:
 	if motivation_timer <= 0.0:
 		motivation_started.emit()
