@@ -2,7 +2,8 @@ extends RiderState
 ## En el borde de una ola de borde (modo trucos; ver TrickAttack y
 ## Swell.lip). Llegó a la cresta desde atrás y la ola lo lleva por el borde:
 ## avanza a lo largo de la cresta con la tabla en diagonal, raspando (como en
-## el derrape), mientras la ola sigue su camino.
+## el derrape), mientras la ola sigue su camino. La cámara sigue detrás, como
+## siempre (el rumbo va derecho por la cresta; la diagonal es solo de la tabla).
 ##
 ## Minijuego de equilibrio: la ola lo empuja para un lado o el otro y él
 ## corrige con el stick (izquierda / derecha). Cada vez empuja más fuerte y
@@ -16,8 +17,6 @@ const LIP_TIME := 12.0
 const SETTLE_TIME := 1.0
 ## Velocidad a lo largo de la cresta (m/s).
 const SPEED := 12.0
-## La tabla va en diagonal: cuánto apunta hacia el frente de la ola (rad).
-const DIAGONAL := 0.4
 ## Empujón de la ola (cuánto corre el equilibrio por segundo): al principio
 ## suave, al final fuerte.
 const PUSH_START := 0.25
@@ -151,10 +150,9 @@ func _place() -> void:
 	var top := on_crest + wave.direction * wave.lean() * 0.9
 	var h := rider.water.height_at(on_crest.x, on_crest.y)
 	rider.position = Vector3(top.x, h, top.y)
-	# Hacia donde avanza por la cresta, un poco hacia el frente de la ola.
-	var d := (perp * side).rotated(DIAGONAL * side).normalized()
-	if d.dot(wave.direction) < 0.0:
-		d = (perp * side).rotated(-DIAGONAL * side).normalized()
+	# Mira hacia donde avanza por la cresta: la cámara queda justo detrás,
+	# como siempre. La diagonal es solo de la tabla (la pose de raspar, abajo).
+	var d := perp * side
 	rider.heading = atan2(-d.x, -d.y)
 	rider.rotation.y = rider.heading
 	# Raspando: la tabla de costado, levantando agua (como el derrape).

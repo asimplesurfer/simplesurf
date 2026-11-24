@@ -221,6 +221,11 @@ func _test_waves_and_lip() -> void:
 	_check(r.position.y - water.height_at(r.position.x + 30.0, r.position.z + 30.0) > 4.0 or r.position.y > 5.0, "va arriba, en el borde (%.1f m)" % r.position.y)
 	_check(absf(lip.local_coords(Vector2(r.position.x, r.position.z)).y - start_w) > 8.0, "lo lleva a lo largo de la cresta")
 	_check(r.drift_side != 0, "con la tabla de costado, raspando")
+	var cam_dir := r.global_position - (m.get_node("Views") as SplitScreen).cameras[0].global_position
+	var fwd := r.forward()
+	_check(Vector2(cam_dir.x, cam_dir.z).normalized().dot(Vector2(fwd.x, fwd.z)) > 0.9, "la cámara sigue detrás del surfista")
+	var along := Vector2(fwd.x, fwd.z).dot(Vector2(-lip.direction.y, lip.direction.x))
+	_check(absf(along) > 0.99, "mira derecho a lo largo de la cresta")
 	_check((m.get_node("Views") as SplitScreen).huds[0]._lip_meter.visible, "el HUD muestra la barra de equilibrio")
 	# Mantiene el equilibrio con el stick hasta que la ola se disuelve.
 	var before := session.score_of(r)
