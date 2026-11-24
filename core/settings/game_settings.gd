@@ -54,6 +54,12 @@ static var sfx_volume: float = 1.0
 ## como en una carrera). Se recuerda mientras el juego está abierto.
 const SANDBOX_WAVE_LEVELS := 5
 static var sandbox_wave_level: int = 3
+## Modo trucos: el mapa elegido (su lugar en TrickWorld.MAPS) y cuánto dura la
+## partida (su lugar en TRICK_TIMES).
+const TRICK_TIMES: Array[int] = [60, 120, 180, 300]
+const TRICK_TIME_NAMES := ["1 minuto", "2 minutos", "3 minutos", "5 minutos"]
+static var trick_map: int = 0
+static var trick_time: int = 1
 ## La demo siempre es igual: dos bots en Imposible, en El Atolón con tormenta
 ## (ver RaceConfig.demo; el modo de la partida va en su RaceConfig, no acá).
 const DEMO_MAP := "atoll"
@@ -84,6 +90,8 @@ static func load_settings() -> void:
 		wave_mode = clampi(int(cfg.get_value("gameplay", "wave_mode", WaveMode.SURGES)), 0, 1) as WaveMode
 		bot_count = clampi(int(cfg.get_value("gameplay", "bot_count", 1)), 0, 3)
 		bot_level = clampi(int(cfg.get_value("gameplay", "bot_level", 1)), 0, AIDifficulty.NAMES.size() - 1)
+		trick_map = clampi(int(cfg.get_value("tricks", "map", 0)), 0, TrickWorld.MAPS.size() - 1)
+		trick_time = clampi(int(cfg.get_value("tricks", "time", 1)), 0, TRICK_TIMES.size() - 1)
 		music_choice = clampi(int(cfg.get_value("audio", "music", MUSIC_SHUFFLE)), 0, MUSIC_SHUFFLE)
 		music_volume = clampf(float(cfg.get_value("audio", "music_volume", 1.0)), 0.0, 1.0)
 		sfx_volume = clampf(float(cfg.get_value("audio", "sfx_volume", 1.0)), 0.0, 1.0)
@@ -112,6 +120,8 @@ static func save_settings() -> void:
 	cfg.set_value("gameplay", "time_of_day", time_of_day)
 	cfg.set_value("gameplay", "bot_count", bot_count)
 	cfg.set_value("gameplay", "bot_level", bot_level)
+	cfg.set_value("tricks", "map", trick_map)
+	cfg.set_value("tricks", "time", trick_time)
 	cfg.set_value("audio", "music", music_choice)
 	cfg.set_value("audio", "music_volume", music_volume)
 	cfg.set_value("audio", "sfx_volume", sfx_volume)
@@ -178,6 +188,11 @@ static func track_layout_names() -> Array[String]:
 
 ## Vueltas de la carrera según el mapa (el archipiélago y el atolón son mucho
 ## más largos que la isla).
+## Segundos que dura una partida del modo trucos (según lo elegido).
+static func trick_seconds() -> int:
+	return TRICK_TIMES[clampi(trick_time, 0, TRICK_TIMES.size() - 1)]
+
+
 static func laps_for(layout: int) -> int:
 	return TrackMap.for_layout(layout).laps
 

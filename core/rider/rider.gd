@@ -86,6 +86,9 @@ var steer_amount: float = 0.0
 var recovery_stage: RecoveryStage = RecoveryStage.STANDING
 var water_normal: Vector3 = Vector3.UP
 var nitro: float = 0.0
+## false en el modo trucos: no se junta nitro (los trucos dan puntos) y no hay
+## turbo. La motivación sí.
+var nitro_enabled: bool = true
 ## Carga del salto (0..1) mientras se mantiene ESPACIO en el agua.
 var jump_charge: float = 0.0
 ## Avance del truco en curso (radianes): cada TAU es un "tiempo" de truco
@@ -294,7 +297,7 @@ func _physics_process(delta: float) -> void:
 	_top_up_first_charge(delta)
 	# Turbo en ráfagas: cada toque dispara una (mantener no hace nada).
 	turbo_time = maxf(0.0, turbo_time - delta)
-	if input.turbo_pressed and not is_fallen() and not in_tube() and not fire_turbo():
+	if input.turbo_pressed and nitro_enabled and not is_fallen() and not in_tube() and not fire_turbo():
 		turbo_blocked.emit()
 	if wave_air_time >= 0.0:
 		wave_air_time += delta
@@ -858,6 +861,8 @@ func jump_mult() -> float:
 
 ## Suma nitro. Lo que se gana se multiplica por el handicap (lo que se gasta no).
 func add_nitro(amount: float) -> void:
+	if not nitro_enabled and amount > 0.0:
+		return
 	if amount > 0.0:
 		amount *= nitro_gain_mult()
 	nitro = clampf(nitro + amount, 0.0, NITRO_MAX)

@@ -128,6 +128,15 @@ var _splash_t: float = 0.0
 var _speed_lines: ColorRect
 var _nitro_label: Label
 var _speed_lines_material: ShaderMaterial
+## Modo trucos (ver TrickAttack): reloj, puntos y lo último que sumó, arriba a
+## la derecha.
+var _tricks_box: VBoxContainer
+var _clock_label: Label
+var _score_label: Label
+var _gain_label: Label
+var _gain_time: float = 0.0
+## Últimos segundos: el reloj late en rojo.
+const CLOCK_WARN := 10.0
 var _message_time: float = 0.0
 ## Contador de vueltas del truco mientras está en el aire (x1, x2...).
 var _trick_label: Label
@@ -221,6 +230,14 @@ func _ready() -> void:
 	if rider:
 		_connect_rider()
 	var race := _race()
+	var tricks := session as TrickAttack
+	if tricks:
+		tricks.countdown_tick.connect(_on_countdown_tick)
+		tricks.scored.connect(_on_scored)
+		tricks.finished.connect(func(_score: int, _rank: int) -> void: show_center("¡TIEMPO!", PROMPT_COLOR, 1.5))
+		_tricks_box.visible = true
+		# Sin nitro: los trucos dan puntos.
+		_nitro_box.visible = false
 	if race:
 		race.countdown_tick.connect(_on_countdown_tick)
 		race.lap_started.connect(_on_lap_started)
@@ -488,7 +505,9 @@ func _process(delta: float) -> void:
 	_trick_label.offset_bottom = TRICK_BOX.end.y + jitter.y
 	_trick_label.rotation = jitter.x * 0.004
 
-	if free_ride:
+	if session is TrickAttack:
+		_update_tricks(delta)
+	elif free_ride:
 		_place_label.visible = false
 		_lap_label.visible = false
 		_waves_box.visible = true
@@ -533,6 +552,33 @@ func _process(delta: float) -> void:
 	_speed_lines_material.set_shader_parameter("intensity", _lines)
 	_update_turbo_meter(delta)
 	_update_hint(delta)
+
+
+## Modo trucos: el reloj (para abajo) y los puntos.
+func _update_tricks(delta: float) -> void:
+	var tricks := session as TrickAttack
+	_place_label.visible = false
+	_lap_label.visible = false
+	_center_label.visible = _center_time > 0.0
+	_clock_label.text = TrickAttack.format_clock(tricks.time_left)
+	var warn := tricks.state == TrickAttack.State.PLAYING and tricks.time_left <= CLOCK_WARN
+	var beat := 1.0 - fposmod(tricks.time_left, 1.0)
+	_clock_label.add_theme_color_override("font_color", BEHIND_COLOR if warn else Color.WHITE)
+	_clock_label.pivot_offset = _clock_label.size * Vector2(1.0, 0.5)
+	_clock_label.scale = Vector2.ONE * (1.0 + 0.18 * exp(-6.0 * beat) if warn else 1.0)
+	_score_label.text = "%s pts" % TrickAttack.format_score(tricks.score_of(rider))
+	_gain_time = maxf(_gain_time - delta, 0.0)
+	_gain_label.modulate.a = clampf(_gain_time / 0.5, 0.0, 1.0)
+
+
+## Sumó puntos con un truco: "+600" abajo de los puntos (más apagado si el
+## aterrizaje fue justo).
+func _on_scored(r: Rider, gained: int, _total: int, clean: bool) -> void:
+	if r != rider:
+		return
+	_gain_label.text = "+%s%s" % [TrickAttack.format_score(gained), "" if clean else " (justo)"]
+	_gain_label.add_theme_color_override("font_color", AHEAD_COLOR if clean else PROMPT_COLOR)
+	_gain_time = 2.0
 
 
 ## Barra de nitro según el turbo:
@@ -1060,6 +1106,32 @@ func _build() -> void:
 		_waves_box.add_child(bar)
 		_wave_bars.append(bar)
 
+	# Modo trucos: reloj y puntos, arriba a la derecha.
+	_tricks_box = VBoxContainer.new()
+	_tricks_box.anchor_left = 1.0
+	_tricks_box.anchor_right = 1.0
+	_tricks_box.offset_left = -340.0
+	_tricks_box.offset_right = -24.0
+	_tricks_box.offset_top = 12.0
+	_tricks_box.offset_bottom = 200.0
+	_tricks_box.add_theme_constant_override("separation", -4)
+	_tricks_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tricks_box.visible = false
+	root.add_child(_tricks_box)
+	_clock_label = _make_label(64, Color.WHITE)
+	_clock_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_style_number(_clock_label, 64)
+	_tricks_box.add_child(_clock_label)
+	_score_label = _make_label(40, PROMPT_COLOR)
+	_score_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_style_number(_score_label, 40)
+	_tricks_box.add_child(_score_label)
+	_gain_label = _make_label(30, AHEAD_COLOR)
+	_gain_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_gain_label.modulate.a = 0.0
+	_style_number(_gain_label, 30)
+	_tricks_box.add_child(_gain_label)
+
 	# Abajo a la derecha: la posición (oro, plata, bronce o gris).
 	_place_label = _make_label(64, PLACE_COLORS[0])
 	_place_label.anchor_left = 1.0
@@ -1258,10 +1330,12 @@ func _draw_fx() -> void:
 		var col: Color = r[1]
 		var radius := lerpf(40.0, 150.0, 1.0 - pow(1.0 - k, 2.0))
 		_fx.draw_arc(center, radius, 0.0, TAU, 48, Color(col.r, col.g, col.b, (1.0 - k) * 0.55), 3.0 * (1.0 - k) + 1.0, true)
-	# Gotas que van de la calificación al medidor de nitro.
+	# Gotas que van de la calificación al medidor de nitro (en el modo trucos,
+	# a los puntos).
 	if not _trail.is_empty():
 		var from := _grade_count.get_global_rect().get_center() * _fx.get_global_transform()
-		var to := _gauge.get_global_rect().get_center() * _fx.get_global_transform()
+		var target: Control = _score_label if _tricks_box.visible else _gauge
+		var to := target.get_global_rect().get_center() * _fx.get_global_transform()
 		var mid := Vector2(lerpf(from.x, to.x, 0.25), lerpf(from.y, to.y, 0.15) - 40.0)
 		for v in _trail:
 			if v <= 0.0:
