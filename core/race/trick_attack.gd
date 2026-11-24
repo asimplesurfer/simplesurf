@@ -24,6 +24,8 @@ signal countdown_tick(value: int)
 signal started
 ## Sumó puntos (gained) con un truco; total es lo que lleva.
 signal scored(rider: Rider, gained: int, total: int, clean: bool)
+## Salió una ola de borde (el HUD avisa).
+signal lip_wave_spawned(wave: Swell)
 ## Se terminó el tiempo. rank: puesto entre los mejores (-1 = no entró).
 signal finished(score: int, rank: int)
 
@@ -37,6 +39,10 @@ const COUNTDOWN_TIME := 3.0
 ## Ola de borde: la primera a los LIP_FIRST segundos, después cada LIP_EVERY.
 const LIP_FIRST := 10.0
 const LIP_EVERY := 20.0
+## Para probar: una flecha en el borde de la pantalla apunta a la ola de borde
+## (y un cartel cuando sale). La idea es sacarla: con el rocío de la cresta
+## (LipWaveSpray) ya se tiene que reconocer.
+const SHOW_LIP_POINTER := true
 ## Puntos por segundo en el borde y bonus si aguanta hasta el final.
 const LIP_POINTS_PER_SEC := 150.0
 const LIP_BONUS := 2000
@@ -174,6 +180,9 @@ func _update_lip(delta: float) -> void:
 			if lip_wave == null:
 				# No hubo lugar: prueba de nuevo enseguida.
 				_lip_timer = 1.0
+			else:
+				add_lip_spray(lip_wave)
+				lip_wave_spawned.emit(lip_wave)
 	for r in racers:
 		if r.on_lip():
 			var acc: float = float(_lip_points.get(r, 0.0)) + LIP_POINTS_PER_SEC * delta
@@ -182,6 +191,16 @@ func _update_lip(delta: float) -> void:
 			scores[r] = score_of(r) + whole
 		elif lip_wave:
 			try_catch_lip(r, lip_wave)
+
+
+## El rocío de la cresta, para reconocer la ola de borde (ver LipWaveSpray).
+func add_lip_spray(wave: Swell) -> LipWaveSpray:
+	var spray := LipWaveSpray.new()
+	spray.name = "LipSpray"
+	spray.add_to_group("lip_spray")
+	get_parent().add_child(spray)
+	spray.setup(wave, water)
+	return spray
 
 
 ## Si `r` llegó a la cresta de la ola de borde desde atrás, la ola lo engancha.
@@ -193,7 +212,8 @@ func try_catch_lip(r: Rider, s: Swell) -> bool:
 	var p := Vector2(r.position.x, r.position.z)
 	var uw := s.local_coords(p)
 	# Atrás de la cresta (la ola avanza hacia +u) y no en las puntas.
-	if uw.x > 0.5 or uw.x < -s.width * 0.8 or absf(uw.y) > s.half_length - s.edge - 4.0:
+	var from_crest := uw.x - s.crest_u()
+	if from_crest > 0.5 or from_crest < -s.width * 0.8 or absf(uw.y) > s.half_length - s.edge - 4.0:
 		return false
 	if s.height_at(p) < s.amplitude * LIP_CATCH_UP:
 		return false

@@ -146,9 +146,8 @@ func _update_balance(delta: float, input: RiderInput) -> void:
 ## el labio), con la tabla en diagonal raspando.
 func _place() -> void:
 	var perp := _perp()
-	var on_crest := wave.center + perp * w
-	var top := on_crest + wave.direction * wave.lean() * 0.9
-	var h := rider.water.height_at(on_crest.x, on_crest.y)
+	var top := wave.center + perp * w + wave.direction * wave.crest_u()
+	var h := rider.water.height_at(top.x, top.y)
 	rider.position = Vector3(top.x, h, top.y)
 	# Mira hacia donde avanza por la cresta: la cámara queda justo detrás,
 	# como siempre. La diagonal es solo de la tabla (la pose de raspar, abajo).
@@ -165,7 +164,7 @@ func _place() -> void:
 
 ## Perdió el equilibrio: cae atrás de la ola. Se queda con los puntos que hizo.
 func _wipe_out() -> void:
-	var p := wave.center + _perp() * w - wave.direction * wave.width * 1.6
+	var p := wave.center + _perp() * w + wave.direction * (wave.crest_u() - wave.width * 1.6)
 	rider.position = Vector3(p.x, rider.water.height_at(p.x, p.y), p.y)
 	rider.speed = minf(rider.speed, 3.0)
 	wave.keep = false

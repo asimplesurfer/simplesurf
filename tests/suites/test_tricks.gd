@@ -178,6 +178,47 @@ func _test_waves_and_lip() -> void:
 	_check(away, "no todas vienen hacia el surfista")
 	_check(not r.air_ceiling, "sin techo invisible en los saltos")
 
+	# Lo que se siente es lo que se ve: con una ola de 12 m rompiendo (el labio
+	# corre la cresta muchos metros hacia adelante), la altura de la física es
+	# la del agua dibujada.
+	var big := Swell.new()
+	big.match_drawn = true
+	big.center = Vector2(r.position.x + 300.0, r.position.z)
+	big.direction = Vector2.RIGHT
+	big.max_amplitude = 12.0
+	big.width = 12.0 * 1.8
+	big.half_length = 40.0
+	big.lifetime = 100.0
+	big.age = 50.0
+	big.update(0.0)
+	# La superficie dibujada de arriba: cada punto de la loma corrido hacia
+	# adelante (como en el shader), y en cada franja de 0,5 m lo más alto.
+	var top_h := {}
+	for k in 3000:
+		var u0 := -big.width * 4.0 + k * big.width * 8.0 / 3000.0
+		var n := exp(-pow(u0 / big.width, 2.0))
+		var x := u0 + big.lean() * n * n * n
+		var bin := int(floor(x / 0.5))
+		if big.amplitude * n > float((top_h.get(bin, [0.0, -1.0]) as Array)[1]):
+			top_h[bin] = [x, big.amplitude * n]
+	var worst := 0.0
+	var worst_plain := 0.0
+	for bin in top_h:
+		var pick: Array = top_h[bin]
+		var at: Vector2 = big.center + big.direction * float(pick[0])
+		worst = maxf(worst, absf(big.height_at(at) - float(pick[1])))
+		big.match_drawn = false
+		worst_plain = maxf(worst_plain, absf(big.height_at(at) - float(pick[1])))
+		big.match_drawn = true
+	_check(worst < 0.25, "la ola que se siente es la que se ve (diferencia: %.2f m; sin esto: %.1f m)" % [worst, worst_plain])
+	# (Si justo no hay lugar libre no sale ninguna: se prueba varias veces.)
+	var sample: Swell = null
+	for k in 40:
+		sample = waves._make_trick_swell()
+		if sample:
+			break
+	_check(sample != null and sample.match_drawn, "todas las olas del modo trucos son así")
+
 	# Sin techo: un salto muy fuerte sube mucho más que el techo de carrera, y
 	# la cámara lo sigue siempre.
 	water.clear_swells()
@@ -260,6 +301,32 @@ func _test_waves_and_lip() -> void:
 	_check(r.is_fallen(), "sin corregir con el stick pierde el equilibrio y se cae")
 	_check(session.score_of(r) > before and session.score_of(r) - before < TrickAttack.LIP_BONUS, "se queda con los puntos que hizo, sin bonus (%d)" % (session.score_of(r) - before))
 	_check(not lip.keep and lip.lip_used, "una ola de borde se usa una sola vez")
+
+	# Cada tanto sale sola, con el rocío en la cresta (para reconocerla) y, por
+	# ahora, la flecha en pantalla.
+	await _wait_until_state(&"riding", 8.0)
+	session.lip_wave = null
+	var spawned := [null]
+	session.lip_wave_spawned.connect(func(w: Swell) -> void: spawned[0] = w)
+	session._lip_timer = 0.05
+	await _wait(0.2)
+	_check(spawned[0] != null and session.lip_wave == spawned[0], "la ola de borde sale sola cada tanto (y avisa)")
+	var sprays := get_nodes_in_group("lip_spray")
+	_check(sprays.size() >= 1, "tiene rocío volando de la cresta")
+	await _wait(3.5)
+	var spray := sprays[sprays.size() - 1] as LipWaveSpray
+	var nl := session.lip_wave
+	if spray and nl:
+		var on_top := nl.local_coords(Vector2(spray.global_position.x, spray.global_position.z))
+		_check(spray._particles.emitting and absf(on_top.y) < 1.0 and spray.global_position.y > nl.amplitude * 0.8,
+			"el rocío sale de la cresta, de punta a punta")
+	var hud := (m.get_node("Views") as SplitScreen).huds[0]
+	if nl:
+		# De espaldas a la ola: la flecha aparece.
+		var from_wave := r.global_position - Vector3(nl.center.x, 0.0, nl.center.y)
+		r.heading = atan2(-from_wave.x, -from_wave.z)
+		await _wait(1.0)
+		_check(hud._lip_pointer.visible, "si no se la ve, una flecha apunta hacia la ola de borde")
 	m.queue_free()
 	await process_frame
 
@@ -267,7 +334,7 @@ func _test_waves_and_lip() -> void:
 ## Pone al surfista sobre la ola `s`: `u` metros hacia adelante de la cresta
 ## (negativo: atrás) y `w` a lo largo, apoyado en el agua y yendo con la ola.
 func _place_on(s: Swell, u: float, w: float) -> void:
-	var p := s.center + s.direction * u + Vector2(-s.direction.y, s.direction.x) * w
+	var p := s.center + s.direction * (s.crest_u() + u) + Vector2(-s.direction.y, s.direction.x) * w
 	_rider.position = Vector3(p.x, _water.height_at(p.x, p.y), p.y)
 	_rider.vertical_speed = 0.0
 	_rider.heading = atan2(-s.direction.x, -s.direction.y)

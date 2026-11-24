@@ -524,6 +524,8 @@ func _make_trick_swell() -> Swell:
 	var amp := trick_amplitude(_rng.randf(), _rng.randf())
 	for attempt in 12:
 		var s := Swell.new()
+		# Lo que se siente es lo que se ve (con olas tan altas el labio se nota).
+		s.match_drawn = true
 		var angle := _rng.randf() * TAU
 		var dist := _rng.randf_range(TRICK_SPAWN_DISTANCE.x, TRICK_SPAWN_DISTANCE.y)
 		s.center = player + Vector2.RIGHT.rotated(angle) * dist
@@ -575,6 +577,7 @@ func spawn_lip_wave(near: Vector2) -> Swell:
 	for attempt in 16:
 		var s := Swell.new()
 		s.lip = true
+		s.match_drawn = true
 		var angle := _rng.randf() * TAU
 		s.center = near + Vector2.RIGHT.rotated(angle) * _rng.randf_range(LIP_SPAWN_DISTANCE.x, LIP_SPAWN_DISTANCE.y)
 		s.direction = Vector2.RIGHT.rotated(_rng.randf() * TAU)

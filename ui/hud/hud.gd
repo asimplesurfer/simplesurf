@@ -139,6 +139,8 @@ var _gain_time: float = 0.0
 const CLOCK_WARN := 10.0
 ## Ola de borde (modo trucos): la barra de equilibrio, abajo al centro.
 var _lip_meter: LipMeter
+## Para probar: flecha hacia la ola de borde (ver TrickAttack.SHOW_LIP_POINTER).
+var _lip_pointer: LipPointer
 var _message_time: float = 0.0
 ## Contador de vueltas del truco mientras está en el aire (x1, x2...).
 var _trick_label: Label
@@ -236,6 +238,8 @@ func _ready() -> void:
 	if tricks:
 		tricks.countdown_tick.connect(_on_countdown_tick)
 		tricks.scored.connect(_on_scored)
+		if TrickAttack.SHOW_LIP_POINTER:
+			tricks.lip_wave_spawned.connect(func(_w: Swell) -> void: show_message("¡Ola de borde!", PROMPT_COLOR))
 		tricks.finished.connect(func(_score: int, _rank: int) -> void: show_center("¡TIEMPO!", PROMPT_COLOR, 1.5))
 		_tricks_box.visible = true
 		# Sin nitro: los trucos dan puntos.
@@ -576,6 +580,7 @@ func _update_tricks(delta: float) -> void:
 	_clock_label.pivot_offset = _clock_label.size * Vector2(1.0, 0.5)
 	_clock_label.scale = Vector2.ONE * (1.0 + 0.18 * exp(-6.0 * beat) if warn else 1.0)
 	_score_label.text = "%s pts" % TrickAttack.format_score(tricks.score_of(rider))
+	_update_lip_pointer(tricks)
 	_lip_meter.visible = rider.on_lip()
 	if _lip_meter.visible:
 		_lip_meter.balance = rider.lip_balance
@@ -584,6 +589,20 @@ func _update_tricks(delta: float) -> void:
 		_lip_meter.queue_redraw()
 	_gain_time = maxf(_gain_time - delta, 0.0)
 	_gain_label.modulate.a = clampf(_gain_time / 0.5, 0.0, 1.0)
+
+
+## Flecha hacia la ola de borde (mientras no se la usó y no se la ve).
+func _update_lip_pointer(tricks: TrickAttack) -> void:
+	var w := tricks.lip_wave
+	var cam := get_viewport().get_camera_3d()
+	if not TrickAttack.SHOW_LIP_POINTER or w == null or w.lip_used or rider.on_lip() or cam == null:
+		_lip_pointer.visible = false
+		return
+	# El punto de la cresta más cerca del surfista.
+	var p := Vector2(rider.global_position.x, rider.global_position.z)
+	var along := clampf(w.local_coords(p).y, -w.half_length + w.edge, w.half_length - w.edge)
+	var c := w.center + Vector2(-w.direction.y, w.direction.x) * along + w.direction * w.crest_u()
+	_lip_pointer.point_to(cam, Vector3(c.x, w.amplitude, c.y), rider.global_position)
 
 
 ## Sumó puntos con un truco: "+600" abajo de los puntos (más apagado si el
@@ -1148,6 +1167,13 @@ func _build() -> void:
 	_gain_label.modulate.a = 0.0
 	_style_number(_gain_label, 30)
 	_tricks_box.add_child(_gain_label)
+
+	# Modo trucos (para probar): flecha hacia la ola de borde.
+	_lip_pointer = LipPointer.new()
+	_lip_pointer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_lip_pointer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_lip_pointer.visible = false
+	root.add_child(_lip_pointer)
 
 	# Modo trucos: la barra de equilibrio de la ola de borde, abajo al centro.
 	_lip_meter = LipMeter.new()
