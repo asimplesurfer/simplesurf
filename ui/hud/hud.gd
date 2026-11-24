@@ -139,6 +139,8 @@ var _gain_time: float = 0.0
 const CLOCK_WARN := 10.0
 ## Ola de borde (modo trucos): la barra de equilibrio, abajo al centro.
 var _lip_meter: LipMeter
+## Modo trucos (por ahora, para ver cómo funciona): "Concentrado 63%".
+var _focus_label: Label
 ## Para probar: flecha hacia la ola de borde (ver TrickAttack.SHOW_LIP_POINTER).
 var _lip_pointer: LipPointer
 var _message_time: float = 0.0
@@ -568,9 +570,11 @@ func _process(delta: float) -> void:
 	_message.visible = _message_time > 0.0
 	_message.modulate.a = clampf(_message_time / 0.4, 0.0, 1.0)
 
-	# Rayas de velocidad con turbo o motivación.
-	var boosting := (rider.turbo_active or rider.motivation_timer > 0.0 or rider.focus > 0.2) and rider.speed > 5.0
-	_lines = move_toward(_lines, 1.0 if boosting else 0.0, delta * 4.0)
+	# Rayas de velocidad con turbo o motivación; con la concentración, tanto
+	# como subió la velocidad.
+	var boosting := (rider.turbo_active or rider.motivation_timer > 0.0) and rider.speed > 5.0
+	var lines_target := 1.0 if boosting else (rider.focus if rider.speed > 5.0 else 0.0)
+	_lines = move_toward(_lines, lines_target, delta * 4.0)
 	_speed_lines.visible = _lines > 0.01
 	_speed_lines_material.set_shader_parameter("intensity", _lines)
 	_update_turbo_meter(delta)
@@ -591,6 +595,12 @@ func _update_tricks(delta: float) -> void:
 	_clock_label.scale = Vector2.ONE * (1.0 + 0.18 * exp(-6.0 * beat) if warn else 1.0)
 	_score_label.text = "%s pts" % TrickAttack.format_score(tricks.score_of(rider))
 	_update_lip_pointer(tricks)
+	var charge := tricks.focus_charge(rider)
+	_focus_label.visible = charge > 0.0
+	if _focus_label.visible:
+		_focus_label.text = "Concentrado %d%%" % roundi(charge * 100.0)
+		# Desde la mitad ya sube la velocidad: se pinta de amarillo.
+		_focus_label.add_theme_color_override("font_color", PROMPT_COLOR if rider.focus > 0.0 else Color.WHITE)
 	_lip_meter.visible = rider.on_lip()
 	if _lip_meter.visible:
 		_lip_meter.balance = rider.lip_balance
@@ -1186,6 +1196,19 @@ func _build() -> void:
 	_gain_label.modulate.a = 0.0
 	_style_number(_gain_label, 30)
 	_tricks_box.add_child(_gain_label)
+
+	# Modo trucos: la concentración (texto y porcentaje), abajo a la izquierda.
+	_focus_label = _make_label(30, Color.WHITE)
+	_focus_label.anchor_top = 1.0
+	_focus_label.anchor_bottom = 1.0
+	_focus_label.offset_left = 24.0
+	_focus_label.offset_right = 400.0
+	_focus_label.offset_top = -70.0
+	_focus_label.offset_bottom = -24.0
+	_focus_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_style_number(_focus_label, 30)
+	_focus_label.visible = false
+	root.add_child(_focus_label)
 
 	# Modo trucos (para probar): flecha hacia la ola de borde.
 	_lip_pointer = LipPointer.new()
