@@ -8,10 +8,17 @@ extends GameSession
 ## - Más combo vale más que proporcional (ver `points_for`). Aterrizaje limpio:
 ##   todo; justo: menos (TIGHT_MULT). Si te caés, perdés los puntos de ese salto.
 ## - Al terminar: el puntaje y los mejores del mapa (con ese tiempo).
+## - Olas: de distintos tamaños a la vez (chicas, medianas y gigantes), que
+##   nacen alrededor y van para cualquier lado: hay que buscarlas. Sin techo
+##   invisible en los saltos.
+## - Cada LIP_EVERY segundos, una ola de borde (larga y alta): si llegás a la
+##   cresta desde atrás, te lleva por el borde con un minijuego de equilibrio
+##   (ver el estado `lip`). Da puntos por segundo y un bonus si aguantás hasta
+##   que se disuelve; si te caés, te quedás con lo que hiciste.
 ##
 ## Por ahora se juega solo (J1). Pensado para después: bots y otros jugadores
 ## (un puntaje por surfista: `scores` ya va por surfista), el clima que cambia
-## durante la partida y olas de distintos tamaños (`set_wave_level`).
+## durante la partida.
 
 signal countdown_tick(value: int)
 signal started
@@ -27,8 +34,16 @@ const BASE_POINTS := 100
 ## Aterrizaje justo: esta parte de los puntos.
 const TIGHT_MULT := 0.5
 const COUNTDOWN_TIME := 3.0
-## Nivel de olas (como el del modo libre, de 0 a SANDBOX_WAVE_LEVELS).
-const WAVE_LEVEL := 3
+## Ola de borde: la primera a los LIP_FIRST segundos, después cada LIP_EVERY.
+const LIP_FIRST := 10.0
+const LIP_EVERY := 20.0
+## Puntos por segundo en el borde y bonus si aguanta hasta el final.
+const LIP_POINTS_PER_SEC := 150.0
+const LIP_BONUS := 2000
+## Para engancharse: en la parte de atrás de la ola, cerca de la cresta (esta
+## parte de la altura, o más) y a no más de LIP_CATCH_HEIGHT m del agua.
+const LIP_CATCH_UP := 0.7
+const LIP_CATCH_HEIGHT := 2.0
 ## Récords: los mejores TOP puntajes de cada mapa y duración.
 const SAVE_PATH := "user://trucos.cfg"
 const TOP := 3
@@ -45,6 +60,13 @@ var top: Array = []
 var world: Node3D
 var _countdown: float = COUNTDOWN_TIME
 var _last_tick: int = -1
+var waves: WaveManager
+var water: Water
+## La ola de borde de ahora (null si no hay) y cuánto falta para la próxima.
+var lip_wave: Swell = null
+var _lip_timer: float = LIP_FIRST
+## Puntos del borde que todavía no llegan a uno entero (por surfista).
+var _lip_points: Dictionary = {}
 
 
 func default_config() -> RaceConfig:
@@ -68,10 +90,14 @@ func _ready() -> void:
 		scores[r] = 0
 		r.controls_locked = true
 		r.trick_landed.connect(_on_trick_landed.bind(r))
-	var waves := get_parent().get_node_or_null("WaveManager") as WaveManager
+		r.lip_exited.connect(_on_lip_exited.bind(r))
+	water = get_parent().get_node_or_null("Water") as Water
+	waves = get_parent().get_node_or_null("WaveManager") as WaveManager
 	if waves:
 		waves.set_mode(GameSettings.WaveMode.SURGES)
-	set_wave_level(WAVE_LEVEL, true)
+		waves.trick_mode = true
+		# Los tamaños son los del modo trucos (TRICK_SIZES), sin escalar.
+		waves.set_amplitude_scale(1.0, true)
 	DayTime.apply(get_parent(), config.time_of_day)
 	var audio := get_node_or_null("/root/AudioManager")
 	if audio:
@@ -79,9 +105,10 @@ func _ready() -> void:
 		audio.connect_race(self)
 
 
-## Sin nitro (los trucos dan puntos).
+## Sin nitro (los trucos dan puntos) y sin techo invisible en los saltos.
 func _before_add(rider: Rider) -> void:
 	rider.nitro_enabled = false
+	rider.air_ceiling = false
 
 
 ## Nombre interno del mapa (para los récords).
@@ -89,12 +116,6 @@ func map_id() -> String:
 	return String(TrickWorld.map_for(config.trick_map).id)
 
 
-## Tamaño de las olas: 0 (sin olas grandes) .. SANDBOX_WAVE_LEVELS.
-func set_wave_level(level: int, instant: bool = false) -> void:
-	var waves := get_parent().get_node_or_null("WaveManager") as WaveManager
-	if waves:
-		var l := clampi(level, 0, GameSettings.SANDBOX_WAVE_LEVELS)
-		waves.set_amplitude_scale(float(l) / GameSettings.SANDBOX_WAVE_LEVELS, instant)
 
 
 ## Puntos de un salto con `spins` tiempos de truco: cada tiempo vale más que
@@ -133,8 +154,67 @@ func _physics_process(delta: float) -> void:
 				start()
 		State.PLAYING:
 			time_left = maxf(time_left - delta, 0.0)
+			_update_lip(delta)
 			if time_left <= 0.0:
 				finish()
+
+
+## Ola de borde: sale cada LIP_EVERY segundos (si no hay otra), engancha a
+## quien llega a su cresta desde atrás y da puntos mientras lo lleva.
+func _update_lip(delta: float) -> void:
+	if lip_wave and (lip_wave.is_dead() or water == null or not water.swells.has(lip_wave)):
+		lip_wave = null
+	_lip_timer -= delta
+	if _lip_timer <= 0.0:
+		_lip_timer = LIP_EVERY
+		var people := humans()
+		if lip_wave == null and waves and not people.is_empty():
+			var p := people[0].global_position
+			lip_wave = waves.spawn_lip_wave(Vector2(p.x, p.z))
+			if lip_wave == null:
+				# No hubo lugar: prueba de nuevo enseguida.
+				_lip_timer = 1.0
+	for r in racers:
+		if r.on_lip():
+			var acc: float = float(_lip_points.get(r, 0.0)) + LIP_POINTS_PER_SEC * delta
+			var whole := int(acc)
+			_lip_points[r] = acc - whole
+			scores[r] = score_of(r) + whole
+		elif lip_wave:
+			try_catch_lip(r, lip_wave)
+
+
+## Si `r` llegó a la cresta de la ola de borde desde atrás, la ola lo engancha.
+func try_catch_lip(r: Rider, s: Swell) -> bool:
+	if s.lip_used or r.is_fallen() or r.in_tube() or r.on_lip() or r.trick_angle > 0.0 or water == null:
+		return false
+	if s.amplitude < s.max_amplitude * 0.8:
+		return false
+	var p := Vector2(r.position.x, r.position.z)
+	var uw := s.local_coords(p)
+	# Atrás de la cresta (la ola avanza hacia +u) y no en las puntas.
+	if uw.x > 0.5 or uw.x < -s.width * 0.8 or absf(uw.y) > s.half_length - s.edge - 4.0:
+		return false
+	if s.height_at(p) < s.amplitude * LIP_CATCH_UP:
+		return false
+	if r.position.y - water.height_at(p.x, p.y) > LIP_CATCH_HEIGHT:
+		return false
+	s.lip_used = true
+	s.keep = true
+	r.lip_wave = s
+	_lip_points[r] = 0.0
+	r.state_machine.transition_to(&"lip")
+	return true
+
+
+## Salió de la ola de borde: si aguantó, el bonus.
+func _on_lip_exited(success: bool, rider: Rider) -> void:
+	if lip_wave and rider.lip_wave == lip_wave:
+		lip_wave = null
+	if not success or state != State.PLAYING:
+		return
+	scores[rider] = score_of(rider) + LIP_BONUS
+	scored.emit(rider, LIP_BONUS, score_of(rider), true)
 
 
 ## Arranca (termina la cuenta regresiva).

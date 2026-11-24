@@ -137,6 +137,8 @@ var _gain_label: Label
 var _gain_time: float = 0.0
 ## Últimos segundos: el reloj late en rojo.
 const CLOCK_WARN := 10.0
+## Ola de borde (modo trucos): la barra de equilibrio, abajo al centro.
+var _lip_meter: LipMeter
 var _message_time: float = 0.0
 ## Contador de vueltas del truco mientras está en el aire (x1, x2...).
 var _trick_label: Label
@@ -270,6 +272,13 @@ func _connect_rider() -> void:
 	rider.tube_exited.connect(func(success: bool) -> void:
 		if success:
 			show_center("¡Qué tubo!", PROMPT_COLOR, 1.4)
+	)
+	rider.lip_entered.connect(func() -> void: show_message("¡En el borde! Mantené el equilibrio", PROMPT_COLOR))
+	rider.lip_exited.connect(func(success: bool) -> void:
+		if success:
+			show_center("¡Ola completa!", PROMPT_COLOR, 1.6)
+		else:
+			show_message("¡Te caíste del borde!", BAD_COLOR)
 	)
 	rider.tube_wiped_out.connect(func(lip: bool) -> void:
 		show_message("¡Te tapó la ola!" if lip else "¡Te escupió la espuma!", BAD_COLOR)
@@ -567,6 +576,12 @@ func _update_tricks(delta: float) -> void:
 	_clock_label.pivot_offset = _clock_label.size * Vector2(1.0, 0.5)
 	_clock_label.scale = Vector2.ONE * (1.0 + 0.18 * exp(-6.0 * beat) if warn else 1.0)
 	_score_label.text = "%s pts" % TrickAttack.format_score(tricks.score_of(rider))
+	_lip_meter.visible = rider.on_lip()
+	if _lip_meter.visible:
+		_lip_meter.balance = rider.lip_balance
+		_lip_meter.danger = rider.lip_danger
+		_lip_meter.time_left = rider.lip_time_left
+		_lip_meter.queue_redraw()
 	_gain_time = maxf(_gain_time - delta, 0.0)
 	_gain_label.modulate.a = clampf(_gain_time / 0.5, 0.0, 1.0)
 
@@ -826,7 +841,7 @@ func _on_wave_punched() -> void:
 ## Tubo: el borde se tiñe cuando está por perder el equilibrio (amarillo y
 ## después rojo, más fuerte del lado hacia donde se va).
 func _update_tube_warning(delta: float) -> void:
-	var target := rider.tube_danger if rider.in_tube() else 0.0
+	var target := rider.tube_danger if rider.in_tube() else (rider.lip_danger if rider.on_lip() else 0.0)
 	_tube_warning_amount = move_toward(_tube_warning_amount, target, delta * 4.0)
 	tube_warning.visible = _tube_warning_amount > 0.01
 	if not tube_warning.visible:
@@ -839,7 +854,9 @@ func _update_tube_warning(delta: float) -> void:
 	# Hacia qué lado de la pantalla se va (la pared puede estar a la izquierda o a la derecha).
 	var side := 0.0
 	var state := rider.state_machine.current
-	if state and state.has_method("wall_on_right_sign"):
+	if rider.on_lip():
+		side = signf(rider.lip_balance)
+	elif state and state.has_method("wall_on_right_sign"):
 		side = signf(rider.tube_balance) * float(state.call("wall_on_right_sign"))
 	_tube_warning_mat.set_shader_parameter("side", side)
 
@@ -1131,6 +1148,20 @@ func _build() -> void:
 	_gain_label.modulate.a = 0.0
 	_style_number(_gain_label, 30)
 	_tricks_box.add_child(_gain_label)
+
+	# Modo trucos: la barra de equilibrio de la ola de borde, abajo al centro.
+	_lip_meter = LipMeter.new()
+	_lip_meter.anchor_left = 0.5
+	_lip_meter.anchor_right = 0.5
+	_lip_meter.anchor_top = 1.0
+	_lip_meter.anchor_bottom = 1.0
+	_lip_meter.offset_left = -LipMeter.WIDTH * 0.5 - 20.0
+	_lip_meter.offset_right = LipMeter.WIDTH * 0.5 + 20.0
+	_lip_meter.offset_top = -150.0
+	_lip_meter.offset_bottom = -40.0
+	_lip_meter.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_lip_meter.visible = false
+	root.add_child(_lip_meter)
 
 	# Abajo a la derecha: la posición (oro, plata, bronce o gris).
 	_place_label = _make_label(64, PLACE_COLORS[0])

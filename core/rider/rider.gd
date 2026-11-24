@@ -51,6 +51,10 @@ signal tube_entered
 signal tube_exited(success: bool)
 ## Se cayó adentro del tubo: lip = lo tapó el labio (si no, lo escupió la espuma).
 signal tube_wiped_out(lip: bool)
+## Modo trucos: lo enganchó una ola de borde (ver el estado `lip`).
+signal lip_entered
+## Salió de la ola de borde: success = aguantó hasta que se disolvió.
+signal lip_exited(success: bool)
 
 ## En qué punto de la recuperación está: en el agua, acostado sobre la tabla o parado.
 enum RecoveryStage { IN_WATER, PRONE, STANDING }
@@ -89,6 +93,16 @@ var nitro: float = 0.0
 ## false en el modo trucos: no se junta nitro (los trucos dan puntos) y no hay
 ## turbo. La motivación sí.
 var nitro_enabled: bool = true
+## false en el modo trucos: sin "aire fino" (el techo invisible que frena la
+## subida en los saltos muy altos).
+var air_ceiling: bool = true
+## La ola de borde que lo lleva (null si no está en ninguna; ver el estado `lip`).
+var lip_wave: Swell = null
+## En la ola de borde: equilibrio (-1..1), peligro de caerse (0..1) y
+## segundos que le quedan a la ola (para el HUD).
+var lip_balance: float = 0.0
+var lip_danger: float = 0.0
+var lip_time_left: float = 0.0
 ## Carga del salto (0..1) mientras se mantiene ESPACIO en el agua.
 var jump_charge: float = 0.0
 ## Avance del truco en curso (radianes): cada TAU es un "tiempo" de truco
@@ -258,6 +272,11 @@ func _ready() -> void:
 	paddling.set_script(preload("res://core/rider/states/state_paddling.gd"))
 	paddling.name = "Paddling"
 	state_machine.add_child(paddling)
+	# En el borde de una ola de borde (modo trucos).
+	var lip := RiderState.new()
+	lip.set_script(preload("res://core/rider/states/state_lip.gd"))
+	lip.name = "Lip"
+	state_machine.add_child(lip)
 	# Adentro de un tubo (ver TubeWave).
 	var tubing := RiderState.new()
 	tubing.set_script(preload("res://core/rider/states/state_tube.gd"))
@@ -894,6 +913,11 @@ func is_fallen() -> bool:
 
 
 ## true mientras está adentro de un tubo.
+## true mientras lo lleva una ola de borde.
+func on_lip() -> bool:
+	return lip_wave != null
+
+
 func in_tube() -> bool:
 	return state_machine.current_name == &"tube"
 

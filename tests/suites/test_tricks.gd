@@ -17,6 +17,7 @@ func run() -> void:
 
 	_test_rules()
 	await _test_match()
+	await _test_waves_and_lip()
 	await _test_menu()
 
 	GameSettings.trick_time = saved_time
@@ -127,6 +128,144 @@ func _test_match() -> void:
 	_check(session.score_of(r) == 750, "después del tiempo no suma más")
 	m.queue_free()
 	await process_frame
+
+
+## Olas de tamaños mezclados alrededor (no hacia el surfista), sin techo en
+## los saltos (y la cámara lo sigue) y la ola de borde.
+func _test_waves_and_lip() -> void:
+	# Tamaños: chicas 4-5 m (ya más altas que las de antes), medianas 6-8, gigantes 10-13.
+	_check(WaveManager.trick_amplitude(0.1, 0.0) >= 4.0 and WaveManager.trick_amplitude(0.1, 1.0) <= 5.0, "olas chicas de 4 a 5 m")
+	_check(WaveManager.trick_amplitude(0.7, 0.5) >= 6.0 and WaveManager.trick_amplitude(0.7, 0.5) <= 8.0, "olas medianas de 6 a 8 m")
+	_check(WaveManager.trick_amplitude(0.95, 1.0) >= 12.0, "olas gigantes de hasta 13 m")
+	var config := RaceConfig.tricks()
+	config.trick_seconds = 300
+	var m: Node = load("res://tricks.tscn").instantiate()
+	(m.get_node("Session") as GameSession).config = config
+	root.add_child(m)
+	await process_frame
+	await process_frame
+	var session := m.get_node("Session") as TrickAttack
+	var waves := m.get_node("WaveManager") as WaveManager
+	var water := m.get_node("Water") as Water
+	_water = water
+	var r := session.racers[0]
+	_rider = r
+	session._lip_timer = 1e9
+	session.start()
+	_check(waves.trick_mode and is_equal_approx(waves.amplitude_scale, 1.0), "las olas son las del modo trucos")
+	# Que salgan varias y mirar tamaños y direcciones.
+	await _wait(12.0)
+	var away := false
+	for sw in water.swells:
+		var to_rider := Vector2(r.position.x, r.position.z) - sw.center
+		if sw.direction.dot(to_rider.normalized()) < 0.0:
+			away = true
+	_check(water.swells.size() >= 3, "salen varias olas a la vez (%d)" % water.swells.size())
+	# Los tamaños se sortean: además de las que hay, se arman varias más (sin
+	# agregarlas) para no depender de la suerte.
+	var tiers := {}
+	for sw in water.swells:
+		tiers[0 if sw.max_amplitude < 5.5 else (1 if sw.max_amplitude < 9.0 else 2)] = true
+	for k in 40:
+		var extra := waves._make_trick_swell()
+		if extra:
+			tiers[0 if extra.max_amplitude < 5.5 else (1 if extra.max_amplitude < 9.0 else 2)] = true
+	_check(tiers.size() >= 2, "salen de distintos tamaños mezclados (%s)" % str(tiers.keys()))
+	var smallest := 99.0
+	for sw in water.swells:
+		smallest = minf(smallest, sw.max_amplitude)
+	_check(smallest >= 4.0, "ni las más chicas bajan de 4 m (%.1f)" % smallest)
+	_check(away, "no todas vienen hacia el surfista")
+	_check(not r.air_ceiling, "sin techo invisible en los saltos")
+
+	# Sin techo: un salto muy fuerte sube mucho más que el techo de carrera, y
+	# la cámara lo sigue siempre.
+	water.clear_swells()
+	waves.enabled = false
+	await _wait(0.5)
+	r.vertical_speed = 26.0
+	r.grounded = false
+	r.state_machine.transition_to(&"airborne")
+	var cam := (m.get_node("Views") as SplitScreen).cameras[0]
+	var top := 0.0
+	var always_seen := true
+	for i in 200:
+		await process_frame
+		top = maxf(top, r.position.y - water.height_at(r.position.x, r.position.z))
+		if not cam.is_position_in_frustum(r.global_position + Vector3.UP * 0.8):
+			always_seen = false
+		if r.grounded:
+			break
+	# Sin freno, la altura es la de la parábola (v² / 2g): con techo no pasaría
+	# de air_max_height.
+	var free_top := 26.0 * 26.0 / (2.0 * r.stats.gravity)
+	_check(top > free_top * 0.85 and top > r.stats.air_max_height * 2.0, "sube sin techo (%.0f m; sin freno: %.0f)" % [top, free_top])
+	_check(always_seen, "la cámara lo tiene en cuadro todo el salto")
+	_rider = r
+	await _wait_until_state(&"riding", 6.0)
+
+	# Ola de borde: larga y alta, cerca pero no encima.
+	var lip := waves.spawn_lip_wave(Vector2(r.position.x, r.position.z))
+	_check(lip != null and lip.lip and lip.half_length > 60.0, "sale una ola de borde, larga")
+	session.lip_wave = lip
+	await _wait(3.5)
+	# De frente (del lado de adelante) no engancha.
+	_place_on(lip, 3.0, 0.0)
+	_check(not session.try_catch_lip(r, lip), "desde adelante no engancha")
+	# Llega a la cresta desde atrás: lo engancha solo.
+	_place_on(lip, -1.0, 0.0)
+	await _wait(0.1)
+	_check(r.on_lip() and r.state_machine.current_name == &"lip", "desde atrás, en la cresta, la ola lo engancha sola")
+	var start_w := lip.local_coords(Vector2(r.position.x, r.position.z)).y
+	await _wait(1.0)
+	_check(r.position.y - water.height_at(r.position.x + 30.0, r.position.z + 30.0) > 4.0 or r.position.y > 5.0, "va arriba, en el borde (%.1f m)" % r.position.y)
+	_check(absf(lip.local_coords(Vector2(r.position.x, r.position.z)).y - start_w) > 8.0, "lo lleva a lo largo de la cresta")
+	_check(r.drift_side != 0, "con la tabla de costado, raspando")
+	_check((m.get_node("Views") as SplitScreen).huds[0]._lip_meter.visible, "el HUD muestra la barra de equilibrio")
+	# Mantiene el equilibrio con el stick hasta que la ola se disuelve.
+	var before := session.score_of(r)
+	var clock := session.time_left + 1.1
+	var t := 0.0
+	while r.on_lip() and t < 14.0:
+		var b := r.lip_balance
+		_set_action(&"p1_left", b > 0.05)
+		_set_action(&"p1_right", b < -0.05)
+		await get_tree().physics_frame
+		t = clock - session.time_left
+	_set_action(&"p1_left", false)
+	_set_action(&"p1_right", false)
+	_check(t >= 11.5 and t < 13.0, "la ola dura 12 s (%.1f)" % t)
+	_check(not r.is_fallen(), "aguantando el equilibrio no se cae")
+	var gained := session.score_of(r) - before
+	_check(gained >= TrickAttack.LIP_BONUS + 1500, "puntos por recorrerla y el bonus (%d)" % gained)
+	_check(r.motivation_timer > 0.0 and not r.grounded, "al completarla sale disparado, con motivación")
+	_check(lip.lifetime - lip.age <= lip.fade_time + 0.1, "la ola se disuelve")
+
+	# Otra: sin tocar el stick se cae, pero se queda con lo que hizo.
+	await _wait_until_state(&"riding", 6.0)
+	await _wait(1.0)
+	lip = waves.spawn_lip_wave(Vector2(r.position.x, r.position.z))
+	session.lip_wave = lip
+	await _wait(3.5)
+	_place_on(lip, -1.0, 0.0)
+	await _wait(0.1)
+	_check(r.on_lip(), "engancha otra ola de borde")
+	before = session.score_of(r)
+	await _wait(11.5)
+	_check(r.is_fallen(), "sin corregir con el stick pierde el equilibrio y se cae")
+	_check(session.score_of(r) > before and session.score_of(r) - before < TrickAttack.LIP_BONUS, "se queda con los puntos que hizo, sin bonus (%d)" % (session.score_of(r) - before))
+	_check(not lip.keep and lip.lip_used, "una ola de borde se usa una sola vez")
+	m.queue_free()
+	await process_frame
+
+
+## Pone al surfista sobre la ola `s`: `u` metros hacia adelante de la cresta
+## (negativo: atrás) y `w` a lo largo, apoyado en el agua y yendo con la ola.
+func _place_on(s: Swell, u: float, w: float) -> void:
+	var p := s.center + s.direction * u + Vector2(-s.direction.y, s.direction.x) * w
+	_rider.position = Vector3(p.x, _water.height_at(p.x, p.y), p.y)
+	_rider.vertical_speed = 0.0
+	_rider.heading = atan2(-s.direction.x, -s.direction.y)
 
 
 func _test_menu() -> void:

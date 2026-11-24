@@ -21,6 +21,14 @@ var lifetime: float = 12.0
 var grow_time: float = 2.0
 var fade_time: float = 2.5
 
+## Modo trucos: ola de borde (larga; si se llega a la cresta desde atrás, lleva
+## al surfista por el borde; ver el estado `lip`).
+var lip: bool = false
+## Ya se usó (la ola de borde lleva a uno solo, una vez).
+var lip_used: bool = false
+## No sacarla para hacer lugar (alguien la está usando).
+var keep: bool = false
+
 var age: float = 0.0
 var amplitude: float = 0.0
 ## 0 mientras crece; sube a 1 apenas llega a su máximo (rompe: labio y espuma).

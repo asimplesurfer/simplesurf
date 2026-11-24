@@ -245,6 +245,8 @@ func _release() -> void:
 ## 0 por debajo de air_soft_height, 1 en air_max_height (y sigue creciendo un
 ## poco más arriba, para que ni los saltos más fuertes se vayan muy lejos).
 func _thin_air() -> float:
+	if not rider.air_ceiling:
+		return 0.0
 	var stats := rider.stats
 	var h := rider.position.y - rider.water_height()
 	var span := maxf(stats.air_max_height - stats.air_soft_height, 0.1)
