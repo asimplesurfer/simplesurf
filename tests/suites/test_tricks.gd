@@ -17,6 +17,7 @@ func run() -> void:
 
 	_test_rules()
 	await _test_match()
+	await _test_launches()
 	await _test_waves_and_lip()
 	await _test_menu()
 
@@ -329,6 +330,85 @@ func _test_waves_and_lip() -> void:
 		_check(hud._lip_pointer.visible, "si no se la ve, una flecha apunta hacia la ola de borde")
 	m.queue_free()
 	await process_frame
+
+
+## Las olas lanzan según su tamaño (una chica, poco; una gigante, mucho) y
+## también pasándolas por arriba desde atrás.
+func _test_launches() -> void:
+	var config := RaceConfig.tricks()
+	config.trick_seconds = 300
+	var m: Node = load("res://tricks.tscn").instantiate()
+	(m.get_node("Session") as GameSession).config = config
+	root.add_child(m)
+	await process_frame
+	await process_frame
+	var session := m.get_node("Session") as TrickAttack
+	var waves := m.get_node("WaveManager") as WaveManager
+	_water = m.get_node("Water") as Water
+	var r := session.racers[0]
+	_rider = r
+	session._lip_timer = 1e9
+	waves.enabled = false
+	session.start()
+	_check(r.wave_sized_launch, "en el modo trucos las olas lanzan según su tamaño")
+	var small := await _launch_apex(r, 4.5, false)
+	var big := await _launch_apex(r, 12.0, false)
+	_check(small > 0.5 and small < 4.5, "una ola chica (4,5 m) de frente levanta poco (%.1f m)" % small)
+	_check(big > small * 2.0, "una gigante (12 m) levanta mucho más (%.1f m)" % big)
+	var back_small := await _launch_apex(r, 4.5, true)
+	var back_big := await _launch_apex(r, 12.0, true)
+	_check(back_small > 0.8, "pasando una ola chica por arriba desde atrás, sale volando (%.1f m)" % back_small)
+	_check(back_big > back_small * 1.8, "desde atrás, la gigante también levanta más (%.1f m)" % back_big)
+	m.queue_free()
+	await process_frame
+
+
+## Surfea una ola de `amp` metros, de frente (viene hacia él) o desde atrás
+## (va para el mismo lado, más lenta). Devuelve cuánto subió desde donde
+## despegó (0 si no despegó).
+func _launch_apex(r: Rider, amp: float, from_behind: bool) -> float:
+	_water.clear_swells()
+	var base := Vector2(600.0 + randf() * 50.0, 300.0)
+	r.position = Vector3(base.x, _water.height_at(base.x, base.y), base.y)
+	r.set_recovery_stage(Rider.RecoveryStage.STANDING)
+	r.state_machine.transition_to(&"riding")
+	r.heading = 0.0
+	r.vertical_speed = 0.0
+	r.speed = r.stats.max_speed
+	var fwd := Vector2(r.forward().x, r.forward().z)
+	var sw := Swell.new()
+	sw.match_drawn = true
+	sw.max_amplitude = amp
+	sw.width = amp * 1.8
+	sw.half_length = 40.0
+	sw.lifetime = 60.0
+	sw.grow_time = 0.1
+	sw.age = 0.1
+	if from_behind:
+		sw.center = base + fwd * (amp * 1.8 * 2.5)
+		sw.direction = fwd
+		sw.speed = 3.0
+	else:
+		sw.center = base + fwd * (amp * 1.8 * 3.0 + 10.0)
+		sw.direction = -fwd
+		sw.speed = 4.0
+	sw.update(0.0)
+	_water.add_swell(sw)
+	var top := 0.0
+	var flew := false
+	var takeoff := 0.0
+	for i in 600:
+		var y_before := r.position.y
+		await get_tree().physics_frame
+		if not r.grounded:
+			if not flew:
+				takeoff = y_before
+			flew = true
+			top = maxf(top, r.position.y - takeoff)
+		elif flew:
+			break
+	_water.clear_swells()
+	return top
 
 
 ## Pone al surfista sobre la ola `s`: `u` metros hacia adelante de la cresta
