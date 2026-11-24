@@ -96,6 +96,23 @@ var nitro_enabled: bool = true
 ## false en el modo trucos: sin "aire fino" (el techo invisible que frena la
 ## subida en los saltos muy altos).
 var air_ceiling: bool = true
+## true en el modo trucos: la ola lanza según su tamaño (las chicas te levantan
+## poco, las gigantes mucho), y también si se la pasa por arriba desde atrás.
+var wave_sized_launch: bool = false
+## Modo trucos: la altura del salto (sobre el agua) es hasta esta parte de la
+## altura de la ola (con un mínimo), según lo rápido que se la agarra.
+const LAUNCH_HEIGHT_PER_WAVE := 0.85
+const LAUNCH_MIN_HEIGHT := 1.2
+## Modo trucos: al pasar la cresta desde atrás, salta esta parte de la altura
+## de la ola (a toda velocidad; más lento, menos). Hace falta ir al menos a
+## BACK_LAUNCH_SPEED m/s.
+const BACK_LAUNCH_HEIGHT := 0.5
+const BACK_LAUNCH_SPEED := 6.0
+## Modo trucos: a esta velocidad de subida (m/s) se agarra la ola "de lleno"
+## (sale todo lo que da su tamaño); más despacio, menos (hasta la mitad).
+const FULL_LAUNCH_CLIMB := 9.0
+## Modo trucos: viene subiendo una ola grande (para saltar al pasar la cresta).
+var _climbing_wave: bool = false
 ## La ola de borde que lo lleva (null si no está en ninguna; ver el estado `lip`).
 var lip_wave: Swell = null
 ## En la ola de borde: equilibrio (-1..1), peligro de caerse (0..1) y
@@ -638,27 +655,76 @@ func stick_to_water(delta: float, allow_launch: bool = true) -> bool:
 		and vertical_speed > stats.min_launch_speed
 		and ballistic_y > h
 		and on_big_wave(0.3)
+		# Modo trucos: solo arriba, en la cresta (no a mitad de subida por las
+		# olitas de fondo: se despegaba con un saltito antes de llegar).
+		and (not wave_sized_launch or _near_crest())
 	):
 		position.y = ballistic_y
 		var boost := stats.wave_launch_boost * jump_mult()
 		if turbo_active:
 			boost *= stats.turbo_launch_mult
 		vertical_speed = (vertical_speed - stats.gravity * delta) * boost
-		launch_speed = vertical_speed
-		jump_charge = 0.0
-		grounded = false
-		wave_air_time = 0.0
-		did_pop = false
-		can_trick = true
-		if pop_buffer > 0.0:
-			do_pop()
+		if wave_sized_launch:
+			# Según el tamaño de la ola (y lo rápido que se la agarró): las chicas
+			# levantan poco, las gigantes mucho.
+			var full := clampf(vertical_speed / FULL_LAUNCH_CLIMB, 0.5, 1.0)
+			vertical_speed = _launch_speed_for(LAUNCH_HEIGHT_PER_WAVE * full)
+		_launched()
 		return true
-	vertical_speed = clampf((h - position.y) / delta, -30.0, 30.0)
+	var follow := clampf((h - position.y) / delta, -30.0, 30.0)
+	# Modo trucos: venía subiendo una ola grande (por ejemplo la parte de atrás,
+	# que sube despacio y no lanza) y pasa la cresta (el agua empieza a bajar):
+	# sale volando por arriba.
+	if wave_sized_launch:
+		var big := on_big_wave(2.0)
+		if not big or not grounded:
+			_climbing_wave = false
+		elif follow > 0.5:
+			_climbing_wave = true
+		elif _climbing_wave and follow <= 0.0 and allow_launch and speed >= BACK_LAUNCH_SPEED and _near_crest():
+			_climbing_wave = false
+			var k := clampf(speed / maxf(stats.max_speed, 0.1), 0.4, 1.0)
+			vertical_speed = _launch_speed_for(BACK_LAUNCH_HEIGHT * k)
+			_launched()
+			return true
+	vertical_speed = follow
 	position.y = h
 	grounded = true
 	if water:
 		water_normal = water.normal_at(position.x, position.z)
 	return false
+
+
+## true si está cerca de lo más alto de una ola grande (no a mitad de subida,
+## donde las olitas de fondo pueden hacer bajar el agua un instante).
+func _near_crest() -> bool:
+	if water == null:
+		return false
+	var p := Vector2(position.x, position.z)
+	var here := water.swell_height_at(position.x, position.z)
+	for sw in water.swells:
+		if sw.height_at(p) > 0.0 and here >= sw.amplitude * 0.8:
+			return true
+	return false
+
+
+## Velocidad hacia arriba para subir `part` veces la altura de la ola que hay
+## acá (sin el freno del aire fino: v² = 2·g·altura).
+func _launch_speed_for(part: float) -> float:
+	var wave_h := water.swell_height_at(position.x, position.z) if water else 0.0
+	return sqrt(2.0 * stats.gravity * maxf(wave_h * part, LAUNCH_MIN_HEIGHT))
+
+
+## Lo lanzó una ola: queda en el aire, listo para trucos (y el pop, si lo apretó).
+func _launched() -> void:
+	launch_speed = vertical_speed
+	jump_charge = 0.0
+	grounded = false
+	wave_air_time = 0.0
+	did_pop = false
+	can_trick = true
+	if pop_buffer > 0.0:
+		do_pop()
 
 
 ## Salta con la fuerza que indica jump_charge (0 = toque, 1 = cargado al máximo).

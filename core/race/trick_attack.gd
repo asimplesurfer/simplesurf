@@ -111,10 +111,12 @@ func _ready() -> void:
 		audio.connect_race(self)
 
 
-## Sin nitro (los trucos dan puntos) y sin techo invisible en los saltos.
+## Sin nitro (los trucos dan puntos), sin techo invisible en los saltos, y
+## las olas lanzan según su tamaño (también pasándolas por arriba desde atrás).
 func _before_add(rider: Rider) -> void:
 	rider.nitro_enabled = false
 	rider.air_ceiling = false
+	rider.wave_sized_launch = true
 
 
 ## Nombre interno del mapa (para los récords).
