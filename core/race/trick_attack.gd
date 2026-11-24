@@ -73,7 +73,12 @@ const TUBE_OPEN_AT := 0.85
 const TUBE_FADE := 2.5
 ## Por dónde va el recorrido adentro (veces la altura de la ola, hacia
 ## adelante desde el centro): en el medio del hueco, debajo del labio.
-const TUBE_LINE := 1.25
+const TUBE_LINE := 1.45
+## El tubo termina antes de la otra punta (m): al salir, por adelante.
+const TUBE_END_MARGIN := 12.0
+## Al salir del tubo sale en diagonal hacia afuera (rad), por el hueco de
+## adelante (no por la punta, donde la ola se achica).
+const TUBE_EXIT_TURN := 0.8
 ## Concentración: yendo derecho hacia una ola (a menos de FOCUS_RANGE m, sin
 ## desviarse más de FOCUS_ANGLE rad) durante FOCUS_DELAY segundos, la velocidad
 ## empieza a subir (llega al máximo en FOCUS_RAMP segundos más). Al girar o
@@ -267,8 +272,9 @@ func add_lip_spray(wave: Swell) -> LipWaveSpray:
 
 ## Tubos: las olas gigantes que ya llevan un rato enteras se cierran en tubo
 ## (una a la vez): primero la ola se va enroscando (TUBE_CURL_TIME) y se queda
-## quieta; ya casi cerrada se puede entrar por la punta (la boca). Al terminar
-## (o si nadie entra) la ola se deshace. Adentro se suman puntos.
+## quieta; ya casi cerrada se puede entrar: por la punta, o por adelante,
+## pasando por debajo del labio (el hueco que deja; ver `try_enter_tube`). Al
+## terminar (o si nadie entra) la ola se deshace.
 func _update_tubes(delta: float) -> void:
 	if water == null:
 		return
@@ -280,6 +286,9 @@ func _update_tubes(delta: float) -> void:
 		curling.curl = move_toward(curling.curl, 1.0, delta / TUBE_CURL_TIME)
 		if tube == null and curling.curl >= TUBE_OPEN_AT:
 			make_tube(curling)
+		elif tube and is_instance_valid(tube) and not tube.done:
+			for r in racers:
+				try_enter_tube(r)
 		elif tube and (not is_instance_valid(tube) or tube.done):
 			# Terminó: la ola se deshace de a poco.
 			curling.keep = false
@@ -292,6 +301,32 @@ func _update_tubes(delta: float) -> void:
 		if ready_for_tube(sw):
 			start_curl(sw)
 			return
+
+
+## Entrar al tubo por adelante: el que está andando por el piso de adentro,
+## debajo del labio (pasó por el hueco de adelante), entra desde ahí y lo
+## recorre hasta el final.
+func try_enter_tube(r: Rider) -> bool:
+	if tube == null or not tube.accepting() or tube.used.has(r) or r.in_tube():
+		return false
+	if r.is_fallen() or not r.grounded or r.controls_locked or r.on_lip():
+		return false
+	var s := tube.s_of(r.position)
+	var end_s := tube_length() - TUBE_END_MARGIN
+	if s < 0.0 or s > end_s - TUBE_SPEED * 1.5:
+		return false
+	if not water.under_roof(r.position.x, r.position.z, r.position.y):
+		return false
+	if tube.phase == TubeWave.Phase.OPENING:
+		# Dura lo que le queda de tubo desde donde entró.
+		tube.duration = clampf((end_s - s) / TUBE_SPEED, 1.5, TUBE_DURATION)
+	tube.enter(r, s)
+	return true
+
+
+## Largo del recorrido del tubo (m, desde la boca).
+func tube_length() -> float:
+	return (curling.half_length - curling.edge - Swell.TUBE_THROAT * 0.6) * 2.0 if curling else 0.0
 
 
 ## true si la ola ya puede cerrarse en tubo.
@@ -322,8 +357,8 @@ func start_curl(s: Swell) -> void:
 ## más cerca de algún surfista.
 func make_tube(s: Swell) -> TubeWave:
 	var perp := Vector2(-s.direction.y, s.direction.x)
-	# La boca, en la punta (donde el tubo está a medio formar: la ola se achica).
-	var reach := s.half_length - s.edge * 0.5
+	# La boca, donde termina la garganta (el tubo entero).
+	var reach := s.half_length - s.edge - Swell.TUBE_THROAT * 0.6
 	# Adentro del hueco: debajo del labio, sobre el piso.
 	var line := s.center + s.direction * (TUBE_LINE * s.max_amplitude)
 	var a := line - perp * reach
@@ -339,8 +374,8 @@ func make_tube(s: Swell) -> TubeWave:
 			near = p.distance_to(b)
 			mouth = b
 	var along := (b - a).normalized() if mouth == a else (a - b).normalized()
-	# Dura lo que da el largo de la ola (sin salirse por la otra punta).
-	var duration := clampf((reach * 2.0 - 6.0) / TUBE_SPEED, 2.0, TUBE_DURATION)
+	# Dura lo que da el largo de la ola (sin llegar a la otra punta).
+	var duration := clampf((reach * 2.0 - TUBE_END_MARGIN) / TUBE_SPEED, 2.0, TUBE_DURATION)
 	# La pared es el cuerpo de la ola (hacia atrás de la cresta).
 	var track := LineTrack.new(mouth, along, -s.direction, 12.0)
 	var t := TubeWave.new()
@@ -452,6 +487,13 @@ func _update_exotic(delta: float) -> void:
 ## con lo que juntó). La motivación la da el surfista (Rider.finish_exotic).
 func _on_exotic_finished(kind: ExoticTrick.Kind, success: bool, rider: Rider) -> void:
 	_exotic_points[rider] = 0.0
+	if kind == ExoticTrick.Kind.TUBE and success and curling:
+		# Sale en diagonal por el hueco de adelante.
+		var f := rider.forward()
+		var out := Vector2(f.x, f.z).normalized().rotated(0.0)
+		var d := curling.direction
+		var turned := out.rotated(TUBE_EXIT_TURN) if out.rotated(TUBE_EXIT_TURN).dot(d) > out.rotated(-TUBE_EXIT_TURN).dot(d) else out.rotated(-TUBE_EXIT_TURN)
+		rider.heading = atan2(-turned.x, -turned.y)
 	if not success or state != State.PLAYING:
 		return
 	var b := ExoticTrick.bonus(kind)

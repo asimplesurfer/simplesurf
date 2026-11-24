@@ -65,13 +65,14 @@ void add_wave(vec4 w, int i, float wave_phase, vec2 p, inout float h, inout vec2
 // swell.gd (profile y tube_point). En veces la altura de la ola.
 const float TUBE_R = 0.5;
 const float TUBE_THICK = 0.15;
-const float TUBE_END_ANGLE = -0.7;
+const float TUBE_END_ANGLE = -0.14;
 const float TUBE_BACK_ANGLE = 2.62;
 const float TUBE_WALL_BACK = 0.4;
 const float TUBE_FLOOR_Y = 0.12;
 const float TUBE_REACH = 3.0;
 const vec4 TUBE_S = vec4(0.25, 0.3, 0.5, 0.7);
 const float TUBE_STEEP = 0.25;
+const float TUBE_THROAT = 14.0;
 const float TUBE_FOOT = 0.35;
 
 // El punto u0 de la cara de adelante en la forma de tubo: (adelante, altura).
@@ -153,6 +154,10 @@ void add_swell(vec4 a, vec4 b, vec2 p, inout float h, inout vec2 g, inout vec2 d
 	float edge = 8.0;
 	if (aw >= half_len || abs(u) > width * 4.0) {
 		return;
+	}
+	// Hacia las puntas el tubo se abre de a poco (la garganta; ver swell.gd curl_at).
+	if (curl > 0.0) {
+		curl *= 1.0 - smoothstep(half_len - edge - TUBE_THROAT, half_len - edge, aw);
 	}
 	float t = clamp((aw - (half_len - edge)) / edge, 0.0, 1.0);
 	float e0 = 1.0 - t * t * (3.0 - 2.0 * t);
