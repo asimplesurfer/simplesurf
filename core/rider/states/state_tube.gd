@@ -86,7 +86,7 @@ func update(delta: float, input: RiderInput) -> void:
 	# Nitro: se va llenando hasta el final.
 	var fill := clampf(_time / _entry_left, 0.0, 1.0)
 	var target := lerpf(_entry_nitro, Rider.NITRO_MAX, fill)
-	if target > rider.nitro:
+	if target > rider.nitro and rider.nitro_enabled:
 		rider.nitro = target
 		rider.nitro_changed.emit(rider.nitro, Rider.NITRO_MAX)
 
@@ -141,12 +141,16 @@ func _place() -> void:
 	var w: Vector3 = f[1]
 	var u := balance * TubeWave.BALANCE_REACH
 	var p := o + w * u
-	p.y = tube.base_height(o) + TubeWave.face_y(u)
+	if tube.floor_base:
+		# El tubo es el agua misma (modo trucos): sobre su piso, donde está.
+		p.y = tube.base_height(p)
+	else:
+		p.y = tube.base_height(o) + TubeWave.face_y(u)
 	rider.position = p
 	rider.heading = tube.heading_at(s)
 	rider.rotation.y = rider.heading
 	# La tabla se apoya en la pared (inclinada hacia el lado abierto).
-	rider.water_normal = (Vector3.UP - w * TubeWave.face_slope(u)).normalized()
+	rider.water_normal = Vector3.UP if tube.floor_base else (Vector3.UP - w * TubeWave.face_slope(u)).normalized()
 	rider.grounded = true
 	rider.vertical_speed = 0.0
 
@@ -170,8 +174,9 @@ func _wipe_out() -> void:
 
 ## Llegó al final: sale disparado con un turbo (no gasta cargas) y el nitro lleno.
 func _spit_out() -> void:
-	rider.nitro = Rider.NITRO_MAX
-	rider.nitro_changed.emit(rider.nitro, Rider.NITRO_MAX)
+	if rider.nitro_enabled:
+		rider.nitro = Rider.NITRO_MAX
+		rider.nitro_changed.emit(rider.nitro, Rider.NITRO_MAX)
 	rider.speed = tube.speed
 	rider.turbo_time = rider.stats.turbo_burst_time * TUBE_EXIT_TURBO
 	rider.turbo_fired.emit()

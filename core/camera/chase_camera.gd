@@ -158,7 +158,7 @@ func _process(delta: float) -> void:
 		global_position.y = lerpf(global_position.y, desired.y, wy)
 	# Nunca debajo del agua (con olas grandes, la cámara podía quedar adentro).
 	if _water and _tube_blend <= 0.0:
-		var h := _water.height_at(global_position.x, global_position.z) + MIN_ABOVE_WATER
+		var h := _water.height_below(global_position.x, global_position.z, global_position.y) + MIN_ABOVE_WATER
 		if global_position.y < h:
 			global_position.y = h
 	var look := _look_point()

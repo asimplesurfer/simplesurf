@@ -43,6 +43,35 @@ var age: float = 0.0
 var amplitude: float = 0.0
 ## 0 mientras crece; sube a 1 apenas llega a su máximo (rompe: labio y espuma).
 var breaking: float = 0.0
+## Modo trucos: cuánto se cerró en tubo (0 = ola normal, 1 = tubo: ver
+## `profile`). Solo en olas que ya rompieron del todo. El dibujo (shader) y la
+## física usan la misma forma.
+var curl: float = 0.0
+## Forma del tubo (en veces la altura de la ola), visto de costado: la
+## superficie pasa la cresta, da la vuelta por afuera del labio (radio TUBE_R)
+## hasta la punta (TUBE_END_ANGLE), vuelve por adentro del labio (grosor
+## TUBE_THICK) hasta atrás (TUBE_BACK_ANGLE), baja como pared hasta el piso
+## (TUBE_WALL_BACK atrás de la cresta, a TUBE_FLOOR_Y de alto) y sigue hacia
+## adelante como agua. TUBE_REACH: hasta dónde llega por delante (veces el
+## ancho). Igual en water_surface.gdshaderinc.
+const TUBE_R := 0.5
+const TUBE_THICK := 0.15
+const TUBE_END_ANGLE := -0.7
+const TUBE_BACK_ANGLE := 2.62
+const TUBE_WALL_BACK := 0.4
+const TUBE_FLOOR_Y := 0.12
+const TUBE_REACH := 3.0
+## En qué parte del recorrido de la cara de adelante (0..1) termina cada tramo:
+## labio por afuera, punta, labio por adentro, pared (y después el piso).
+const TUBE_S := [0.25, 0.3, 0.5, 0.7]
+## Cómo se forma: hasta TUBE_STEEP de curl la cara se pone empinada (de la ola
+## normal a una pared); después el labio sale arriba y va creciendo hacia
+## adelante y hacia abajo hasta cerrar (el hueco crece con él).
+const TUBE_STEEP := 0.25
+## Cuánto hacia adelante termina la curva de la cara (veces la altura).
+const TUBE_FOOT := 0.35
+## Muestras para encontrar qué parte de la ola se dibuja en un lugar (tubo).
+const TUBE_SCAN := 96
 ## Tiempo que tarda en romper del todo después de llegar al máximo (s).
 const BREAK_TIME := 1.2
 
@@ -75,6 +104,12 @@ func height_at(p: Vector2) -> float:
 		return 0.0
 	var uw := local_coords(p)
 	var aw := absf(uw.y)
+	if curl > 0.0:
+		# Cerrándose en tubo: lo más alto que se dibuja ahí (el techo).
+		if aw >= half_length or uw.x < -width * 4.0 or uw.x > _drawn_ahead():
+			return 0.0
+		var hs := tube_heights(uw.x, aw)
+		return hs[hs.size() - 1] if not hs.is_empty() else 0.0
 	if match_drawn:
 		if aw >= half_length or uw.x < -width * 4.0 or uw.x > width * 4.0 + lean():
 			return 0.0
@@ -88,6 +123,11 @@ func height_at(p: Vector2) -> float:
 func gradient_at(p: Vector2) -> Vector2:
 	if amplitude <= 0.0:
 		return Vector2.ZERO
+	if curl > 0.0:
+		var d := 0.25
+		return Vector2(
+			(height_at(p + Vector2(d, 0.0)) - height_at(p - Vector2(d, 0.0))) / (2.0 * d),
+			(height_at(p + Vector2(0.0, d)) - height_at(p - Vector2(0.0, d))) / (2.0 * d))
 	var uw := local_coords(p)
 	var aw := absf(uw.y)
 	var stretch := 1.0
@@ -162,7 +202,7 @@ func reaches(p: Vector2) -> bool:
 	if amplitude <= 0.0:
 		return false
 	var uw := local_coords(p)
-	return absf(uw.y) < half_length and uw.x > -width * 4.0 and uw.x < width * 4.0 + (lean() if match_drawn else 0.0)
+	return absf(uw.y) < half_length and uw.x > -width * 4.0 and uw.x < (_drawn_ahead() if match_drawn else width * 4.0)
 
 
 ## La loma sin corrimiento en `p`: 0..1 (altura = amplitude · esto).
@@ -201,4 +241,117 @@ func shader_a() -> Vector4:
 
 func shader_b() -> Vector4:
 	# El borde (edge) es fijo en el shader (8 m); el último valor es lo que rompió.
-	return Vector4(amplitude, width, half_length, breaking)
+	# Con tubo (curl > 0), 1 + curl (ya rompió del todo).
+	return Vector4(amplitude, width, half_length, 1.0 + curl if curl > 0.0 else breaking)
+
+
+## Cómo se dibuja el punto u0 de la loma (a lo ancho, `aw` de la mitad):
+## Vector2(cuánto se corre hacia adelante, altura). Sin tubo: la loma con la
+## cresta corrida por el labio. Con tubo (curl), la cara de adelante se
+## transforma de a poco en un labio que se tira hacia adelante y baja (un arco),
+## un piso por adentro y la cara que sigue hacia adelante. En las puntas (donde
+## la ola se achica) el tubo se achica pero queda abierto: la boca. Igual en
+## water_surface.gdshaderinc.
+func profile(u0: float, aw: float) -> Vector2:
+	var e := _edge(aw)
+	var n := exp(-(u0 * u0) / (width * width)) * e
+	var off := lean() * n * n * n
+	var h := amplitude * n
+	if curl <= 0.0 or u0 <= 0.0 or u0 >= TUBE_REACH * width:
+		return Vector2(off, h)
+	# Hacia las puntas el tubo se achica (más bajo) pero sigue abierto: la boca.
+	var target := tube_point(u0)
+	target.y *= e
+	var k := smoothstep(0.0, TUBE_STEEP, curl)
+	var x := lerpf(u0 + off, target.x, k)
+	return Vector2(x - u0, lerpf(h, target.y, k))
+
+
+## El punto u0 (de la cara de adelante, 0 < u0 < TUBE_REACH·ancho) en la forma
+## de tubo, sin las puntas: Vector2(adelante desde el centro, altura).
+func tube_point(u0: float) -> Vector2:
+	var a := amplitude
+	var full_lean := 1.3 * a
+	# Cuánto salió el labio (0: recién la pared; 1: cerrado).
+	var sw := smoothstep(0.0, 1.0, (curl - TUBE_STEEP) / (1.0 - TUBE_STEEP))
+	var r := TUBE_R * a * sw
+	var r_in := (TUBE_R - TUBE_THICK) * a * sw
+	var end_angle := lerpf(PI * 0.5, TUBE_END_ANGLE, sw)
+	var s := u0 / (TUBE_REACH * width)
+	var c := Vector2(full_lean, a - r)
+	var s0: float = TUBE_S[0]
+	var s1: float = TUBE_S[1]
+	var s2: float = TUBE_S[2]
+	var s3: float = TUBE_S[3]
+	if s <= s0:
+		var ang := lerpf(PI * 0.5, end_angle, s / s0)
+		return c + Vector2(cos(ang), sin(ang)) * r
+	if s <= s1:
+		var rr := lerpf(r, r_in, (s - s0) / (s1 - s0))
+		return c + Vector2(cos(end_angle), sin(end_angle)) * rr
+	if s <= s2:
+		var ang2 := lerpf(end_angle, TUBE_BACK_ANGLE, (s - s1) / (s2 - s1))
+		return c + Vector2(cos(ang2), sin(ang2)) * r_in
+	var top := c + Vector2(cos(TUBE_BACK_ANGLE), sin(TUBE_BACK_ANGLE)) * r_in
+	var base := Vector2(full_lean - (TUBE_WALL_BACK * sw - 0.15 * (1.0 - sw)) * a, TUBE_FLOOR_Y * a)
+	# La cara (la pared de atrás del tubo) es cóncava: baja empinada y se va
+	# curvando hasta el agua de adelante (sin esquina).
+	var foot := base + Vector2(TUBE_FOOT * a, 0.0)
+	if s <= s3:
+		var t := (s - s2) / (s3 - s2)
+		return top * (1.0 - t) * (1.0 - t) + base * 2.0 * t * (1.0 - t) + foot * t * t
+	var ue := TUBE_REACH * width
+	var ne := exp(-(ue * ue) / (width * width))
+	var end := Vector2(ue + full_lean * ne * ne * ne, a * ne)
+	return foot.lerp(end, (s - s3) / (1.0 - s3))
+
+
+## Ola cerrándose en tubo: las alturas (de abajo hacia arriba) de lo que se
+## dibuja en `u` (hay más de una: el piso de adentro y el techo del labio).
+func tube_heights(u: float, aw: float) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	var lo := -width * 4.0
+	var hi := width * 4.0
+	var prev_u := lo
+	var prev_f := lo + profile(lo, aw).x - u
+	for k in range(1, TUBE_SCAN + 1):
+		var cu := lerpf(lo, hi, float(k) / TUBE_SCAN)
+		var cf := cu + profile(cu, aw).x - u
+		if (prev_f <= 0.0) != (cf <= 0.0):
+			var a := prev_u
+			var b := cu
+			var fa := prev_f
+			for i in MATCH_REFINE:
+				var mid := (a + b) * 0.5
+				var fm := mid + profile(mid, aw).x - u
+				if (fa <= 0.0) == (fm <= 0.0):
+					a = mid
+					fa = fm
+				else:
+					b = mid
+			out.append(profile((a + b) * 0.5, aw).y)
+		prev_u = cu
+		prev_f = cf
+	out.sort()
+	return out
+
+
+## Lo que hay a lo largo de la ola (de atrás hacia adelante) que puede tener
+## agua dibujada (con el corrimiento del labio y el tubo).
+func _drawn_ahead() -> float:
+	return width * 4.0 + lean() + (2.0 * amplitude if curl > 0.0 else 0.0)
+
+
+## Ola cerrándose en tubo: la altura del piso de adentro en `p` (la superficie
+## más baja que se dibuja ahí).
+func floor_height_at(p: Vector2) -> float:
+	if curl <= 0.0:
+		return height_at(p)
+	if amplitude <= 0.0:
+		return 0.0
+	var uw := local_coords(p)
+	var aw := absf(uw.y)
+	if aw >= half_length or uw.x < -width * 4.0 or uw.x > _drawn_ahead():
+		return 0.0
+	var hs := tube_heights(uw.x, aw)
+	return hs[0] if not hs.is_empty() else 0.0

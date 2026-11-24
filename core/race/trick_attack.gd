@@ -58,6 +58,27 @@ const SHOW_LIP_POINTER := true
 ## Puntos por segundo en el borde y bonus si aguanta hasta el final.
 const LIP_POINTS_PER_SEC := 150.0
 const LIP_BONUS := 2000
+## Tubos: una ola de TUBE_MIN_HEIGHT m o más, después de TUBE_AFTER segundos
+## entera, se cierra en tubo (la ola tubo, ver TubeWave) a lo largo de su
+## cresta, con la boca del lado del surfista. Si entra por la boca antes de
+## TUBE_OPEN_TIME segundos, arranca el minijuego del tubo (ver el estado
+## `tube`): puntos por segundo adentro y un bonus grande si sale. Si se cae,
+## se queda con lo que hizo.
+const TUBE_MIN_HEIGHT := 10.0
+const TUBE_AFTER := 6.0
+const TUBE_OPEN_TIME := 12.0
+const TUBE_DURATION := 8.0
+const TUBE_SPEED := 12.0
+## Cuánto tarda en enroscarse, desde cuánto se puede entrar y cuánto tarda en
+## deshacerse al final (s / 0..1).
+const TUBE_CURL_TIME := 3.0
+const TUBE_OPEN_AT := 0.85
+const TUBE_FADE := 2.5
+## Por dónde va el recorrido adentro (veces la altura de la ola, hacia
+## adelante desde el centro): en el medio del hueco, debajo del labio.
+const TUBE_LINE := 1.25
+const TUBE_POINTS_PER_SEC := 500.0
+const TUBE_BONUS := 6000
 ## Concentración: yendo derecho hacia una ola (a menos de FOCUS_RANGE m, sin
 ## desviarse más de FOCUS_ANGLE rad) durante FOCUS_DELAY segundos, la velocidad
 ## empieza a subir (llega al máximo en FOCUS_RAMP segundos más). Al girar o
@@ -96,6 +117,15 @@ var lip_wave: Swell = null
 var _lip_timer: float = LIP_FIRST
 ## Puntos del borde que todavía no llegan a uno entero (por surfista).
 var _lip_points: Dictionary = {}
+## El tubo que hay ahora (null si no hay ninguno).
+var tube: TubeWave = null
+## Puntos del tubo que todavía no llegan a uno entero (por surfista).
+var _tube_points: Dictionary = {}
+## Una ola gigante se empieza a cerrar en tubo, y ya se puede entrar.
+signal tube_curling(wave: Swell)
+signal tube_formed(tube: TubeWave)
+## La ola que se está cerrando en tubo (null si no hay).
+var curling: Swell = null
 ## Concentración: cuánto hace que va derecho hacia una ola (por surfista).
 var _focus_time: Dictionary = {}
 ## Empezó la concentración (el HUD avisa).
@@ -124,6 +154,7 @@ func _ready() -> void:
 		r.controls_locked = true
 		r.trick_landed.connect(_on_trick_landed.bind(r))
 		r.lip_exited.connect(_on_lip_exited.bind(r))
+		r.tube_exited.connect(_on_tube_exited.bind(r))
 	water = get_parent().get_node_or_null("Water") as Water
 	waves = get_parent().get_node_or_null("WaveManager") as WaveManager
 	if waves:
@@ -192,6 +223,7 @@ func _physics_process(delta: float) -> void:
 		State.PLAYING:
 			time_left = maxf(time_left - delta, 0.0)
 			_update_lip(delta)
+			_update_tubes(delta)
 			for r in racers:
 				_update_focus(r, delta)
 			if time_left <= 0.0:
@@ -238,6 +270,111 @@ func add_lip_spray(wave: Swell) -> LipWaveSpray:
 	get_parent().add_child(spray)
 	spray.setup(wave, water)
 	return spray
+
+
+## Tubos: las olas gigantes que ya llevan un rato enteras se cierran en tubo
+## (una a la vez): primero la ola se va enroscando (TUBE_CURL_TIME) y se queda
+## quieta; ya casi cerrada se puede entrar por la punta (la boca). Al terminar
+## (o si nadie entra) la ola se deshace. Adentro se suman puntos.
+func _update_tubes(delta: float) -> void:
+	for r in racers:
+		if r.in_tube():
+			var acc: float = float(_tube_points.get(r, 0.0)) + TUBE_POINTS_PER_SEC * delta
+			var whole := int(acc)
+			_tube_points[r] = acc - whole
+			scores[r] = score_of(r) + whole
+	if water == null:
+		return
+	if curling != null:
+		if not water.swells.has(curling):
+			curling = null
+			tube = null
+			return
+		curling.curl = move_toward(curling.curl, 1.0, delta / TUBE_CURL_TIME)
+		if tube == null and curling.curl >= TUBE_OPEN_AT:
+			make_tube(curling)
+		elif tube and (not is_instance_valid(tube) or tube.done):
+			# Terminó: la ola se deshace de a poco.
+			curling.keep = false
+			curling.fade_time = TUBE_FADE
+			curling.retire()
+			curling = null
+			tube = null
+		return
+	for sw in water.swells:
+		if ready_for_tube(sw):
+			start_curl(sw)
+			return
+
+
+## true si la ola ya puede cerrarse en tubo.
+func ready_for_tube(s: Swell) -> bool:
+	return (
+		s.max_amplitude >= TUBE_MIN_HEIGHT
+		and not s.keep
+		and not s.lip_used
+		and s.age >= s.grow_time + TUBE_AFTER
+		and s.amplitude >= s.max_amplitude * 0.95
+		and s.breaking >= 1.0
+		and s.lifetime - s.age > s.fade_time + 1.0
+	)
+
+
+## Empieza a cerrarse en tubo: se queda quieta y dura lo que haga falta.
+func start_curl(s: Swell) -> void:
+	curling = s
+	s.keep = true
+	s.lip_used = true
+	s.speed = 0.0
+	s.lifetime = maxf(s.lifetime, s.age + TUBE_CURL_TIME + TUBE_OPEN_TIME + TUBE_DURATION + 6.0)
+	tube_curling.emit(s)
+
+
+## La boca y el recorrido del tubo (invisible: lo dibuja el agua) por adentro
+## de la ola `s`, a lo largo de su cresta, con la boca en la punta que queda
+## más cerca de algún surfista.
+func make_tube(s: Swell) -> TubeWave:
+	var perp := Vector2(-s.direction.y, s.direction.x)
+	# La boca, en la punta (donde el tubo está a medio formar: la ola se achica).
+	var reach := s.half_length - s.edge * 0.5
+	# Adentro del hueco: debajo del labio, sobre el piso.
+	var line := s.center + s.direction * (TUBE_LINE * s.max_amplitude)
+	var a := line - perp * reach
+	var b := line + perp * reach
+	var mouth := a
+	var near := INF
+	for r in racers:
+		var p := Vector2(r.position.x, r.position.z)
+		if p.distance_to(a) < near:
+			near = p.distance_to(a)
+			mouth = a
+		if p.distance_to(b) < near:
+			near = p.distance_to(b)
+			mouth = b
+	var along := (b - a).normalized() if mouth == a else (a - b).normalized()
+	# Dura lo que da el largo de la ola (sin salirse por la otra punta).
+	var duration := clampf((reach * 2.0 - 6.0) / TUBE_SPEED, 2.0, TUBE_DURATION)
+	# La pared es el cuerpo de la ola (hacia atrás de la cresta).
+	var track := LineTrack.new(mouth, along, -s.direction, 12.0)
+	var t := TubeWave.new()
+	t.name = "TrickTube"
+	t.show_shape = false
+	t.floor_base = true
+	t.keep_swell = s
+	get_parent().add_child(t)
+	t.setup(null, 0.0, 0.0, 1.0, duration, TUBE_SPEED, null, TUBE_OPEN_TIME, -1.0, track, water)
+	tube = t
+	tube_formed.emit(t)
+	return t
+
+
+## Salió del tubo: si llegó al final, el bonus.
+func _on_tube_exited(success: bool, rider: Rider) -> void:
+	_tube_points[rider] = 0.0
+	if not success or state != State.PLAYING:
+		return
+	scores[rider] = score_of(rider) + TUBE_BONUS
+	scored.emit(rider, TUBE_BONUS, score_of(rider), true)
 
 
 ## Concentración: si va derecho hacia una ola, la velocidad sube de a poco.
