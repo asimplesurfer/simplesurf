@@ -226,7 +226,7 @@ func _lip_orbit() -> Array:
 
 ## true con turbo o motivación (y adentro del tubo: se siente la velocidad).
 func boosting() -> bool:
-	return target.turbo_active or target.motivation_timer > 0.0 or target.in_tube()
+	return target.turbo_active or target.motivation_timer > 0.0 or target.in_tube() or target.focus > 0.2
 
 
 ## Cuántos metros se aleja con turbo.

@@ -43,7 +43,10 @@ var trick_mode: bool = false
 ## Modo trucos: tamaños de ola [altura mínima, máxima (m), probabilidad].
 const TRICK_SIZES := [[4.0, 5.0, 0.5], [6.0, 8.0, 0.35], [10.0, 13.0, 0.15]]
 ## Modo trucos: a qué distancia del surfista nacen (m).
-const TRICK_SPAWN_DISTANCE := Vector2(40.0, 120.0)
+const TRICK_SPAWN_DISTANCE := Vector2(20.0, 60.0)
+## Modo trucos: lo mínimo (m) entre el surfista y cualquier parte de una ola
+## que nace (contando su ancho).
+const TRICK_CLEARANCE := 6.0
 ## Ola de borde: altura (m), mitad del largo de la cresta (m), velocidad (m/s)
 ## y cuánto dura si nadie la usa (s). Larga y alta: se reconoce de lejos.
 const LIP_AMPLITUDE := 7.0
@@ -556,12 +559,14 @@ func _make_trick_swell() -> Swell:
 		return null
 	var player := Vector2(target.global_position.x, target.global_position.z)
 	var amp := trick_amplitude(_rng.randf(), _rng.randf())
-	for attempt in 12:
+	for attempt in 16:
 		var s := Swell.new()
 		# Lo que se siente es lo que se ve (con olas tan altas el labio se nota).
 		s.match_drawn = true
 		var angle := _rng.randf() * TAU
-		var dist := _rng.randf_range(TRICK_SPAWN_DISTANCE.x, TRICK_SPAWN_DISTANCE.y)
+		# Cerca; si no encuentra lugar, cada vez un poco más lejos.
+		var far := TRICK_SPAWN_DISTANCE.y + attempt * 5.0
+		var dist := _rng.randf_range(TRICK_SPAWN_DISTANCE.x, far)
 		s.center = player + Vector2.RIGHT.rotated(angle) * dist
 		s.direction = Vector2.RIGHT.rotated(_rng.randf() * TAU)
 		s.speed = _rng.randf_range(3.0, 6.0)
@@ -572,9 +577,23 @@ func _make_trick_swell() -> Swell:
 		s.lifetime = _rng.randf_range(24.0, 34.0)
 		s.grow_time = 3.0
 		s.fade_time = 4.0
-		if is_clear_of(s, player) and _far_from_island(s) and _spaced_trick(s):
+		if _trick_clear_of(s) and _far_from_island(s) and _spaced_trick(s):
 			return s
 	return null
+
+
+## Modo trucos: la ola nace cerca, pero no encima de ningún surfista.
+func _trick_clear_of(s: Swell) -> bool:
+	for node in get_tree().get_nodes_in_group("riders"):
+		var r := node as Rider
+		if r == null:
+			continue
+		var uw := s.local_coords(Vector2(r.global_position.x, r.global_position.z))
+		var along := absf(uw.x) - s.width * 1.6
+		var across := absf(uw.y) - s.half_length
+		if along < TRICK_CLEARANCE and across < TRICK_CLEARANCE:
+			return false
+	return true
 
 
 ## Altura de una ola del modo trucos según dos números al azar (0..1): el
@@ -595,7 +614,7 @@ func _spaced_trick(s: Swell) -> bool:
 	for other in _water.swells:
 		if other.lifetime - other.age < other.fade_time:
 			continue
-		var gap := MIN_WAVE_GAP + (s.width + other.width) * 1.2
+		var gap := MIN_WAVE_GAP + (s.width + other.width) * 0.6
 		if other.lip:
 			gap = maxf(gap, other.half_length + s.width * 2.0)
 		if other.center.distance_to(s.center) < gap:
