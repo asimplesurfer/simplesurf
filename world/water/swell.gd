@@ -56,7 +56,7 @@ var curl: float = 0.0
 ## ancho). Igual en water_surface.gdshaderinc.
 const TUBE_R := 0.5
 const TUBE_THICK := 0.15
-const TUBE_END_ANGLE := -0.7
+const TUBE_END_ANGLE := -0.14
 const TUBE_BACK_ANGLE := 2.62
 const TUBE_WALL_BACK := 0.4
 const TUBE_FLOOR_Y := 0.12
@@ -68,6 +68,8 @@ const TUBE_S := [0.25, 0.3, 0.5, 0.7]
 ## normal a una pared); después el labio sale arriba y va creciendo hacia
 ## adelante y hacia abajo hasta cerrar (el hueco crece con él).
 const TUBE_STEEP := 0.25
+## Largo de la garganta del tubo, en cada punta (m; ver curl_at).
+const TUBE_THROAT := 14.0
 ## Cuánto hacia adelante termina la curva de la cara (veces la altura).
 const TUBE_FOOT := 0.35
 ## Muestras para encontrar qué parte de la ola se dibuja en un lugar (tubo).
@@ -220,13 +222,31 @@ func crest_u() -> float:
 	return lean() if match_drawn else 0.0
 
 
+## Largo de las puntas, donde la ola se achica (m).
+func edge_len() -> float:
+	return edge
+
+
+## Cuánto se cerró en tubo a `aw` m del medio: entero en el medio y, hacia las
+## puntas, se va abriendo de a poco a lo largo de TUBE_THROAT m (la garganta:
+## el labio sale cada vez menos). Así, mirando desde la punta, se ve el hueco
+## que se agranda hacia adentro (si se achicara todo junto, quedaba cerrado).
+func curl_at(aw: float) -> float:
+	if curl <= 0.0:
+		return 0.0
+	var full_to := half_length - edge - TUBE_THROAT
+	return curl * (1.0 - smoothstep(full_to, half_length - edge, aw))
+
+
 func _edge(aw: float) -> float:
-	return 1.0 - smoothstep(half_length - edge, half_length, aw)
+	var ed := edge_len()
+	return 1.0 - smoothstep(half_length - ed, half_length, aw)
 
 
 func _edge_derivative(aw: float) -> float:
-	var t := clampf((aw - (half_length - edge)) / edge, 0.0, 1.0)
-	return -6.0 * t * (1.0 - t) / edge
+	var ed := edge_len()
+	var t := clampf((aw - (half_length - ed)) / ed, 0.0, 1.0)
+	return -6.0 * t * (1.0 - t) / ed
 
 
 ## Cuánto se corre la cresta hacia adelante (m), igual que en water_surface.gdshaderinc.
@@ -257,23 +277,23 @@ func profile(u0: float, aw: float) -> Vector2:
 	var n := exp(-(u0 * u0) / (width * width)) * e
 	var off := lean() * n * n * n
 	var h := amplitude * n
-	if curl <= 0.0 or u0 <= 0.0 or u0 >= TUBE_REACH * width:
+	var c := curl_at(aw)
+	if c <= 0.0 or u0 <= 0.0 or u0 >= TUBE_REACH * width:
 		return Vector2(off, h)
-	# Hacia las puntas el tubo se achica (más bajo) pero sigue abierto: la boca.
-	var target := tube_point(u0)
+	var target := tube_point(u0, c)
 	target.y *= e
-	var k := smoothstep(0.0, TUBE_STEEP, curl)
+	var k := smoothstep(0.0, TUBE_STEEP, c)
 	var x := lerpf(u0 + off, target.x, k)
 	return Vector2(x - u0, lerpf(h, target.y, k))
 
 
 ## El punto u0 (de la cara de adelante, 0 < u0 < TUBE_REACH·ancho) en la forma
 ## de tubo, sin las puntas: Vector2(adelante desde el centro, altura).
-func tube_point(u0: float) -> Vector2:
+func tube_point(u0: float, c_now: float) -> Vector2:
 	var a := amplitude
 	var full_lean := 1.3 * a
 	# Cuánto salió el labio (0: recién la pared; 1: cerrado).
-	var sw := smoothstep(0.0, 1.0, (curl - TUBE_STEEP) / (1.0 - TUBE_STEEP))
+	var sw := smoothstep(0.0, 1.0, (c_now - TUBE_STEEP) / (1.0 - TUBE_STEEP))
 	var r := TUBE_R * a * sw
 	var r_in := (TUBE_R - TUBE_THICK) * a * sw
 	var end_angle := lerpf(PI * 0.5, TUBE_END_ANGLE, sw)

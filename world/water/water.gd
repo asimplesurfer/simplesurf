@@ -35,6 +35,10 @@ var ring_wave: RingWave = null
 ## Grilla fina: celdas a cada lado del centro de la malla (~40 m). Después,
 ## MID_CELLS celdas de 2 pasos y el resto de 4 pasos hasta el borde.
 const FINE_HALF_CELLS := 26
+## Celdas finas que se usan (FINE_HALF_CELLS en carrera). El modo trucos usa
+## más: las olas gigantes que se cierran en tubo necesitan la grilla fina más
+## lejos (con celdas grandes el hueco del tubo no se ve).
+@export var fine_half_cells: int = FINE_HALF_CELLS
 const MID_CELLS := 10
 ## Solo para diagnóstico: revisar sin atajos.
 static var debug_exact: bool = false
@@ -136,9 +140,9 @@ func _build_mesh() -> ArrayMesh:
 	var step := grid_step()
 	var half := size * 0.5
 	var coords: Array[float] = []
-	for k in range(-FINE_HALF_CELLS, FINE_HALF_CELLS):
+	for k in range(-fine_half_cells, fine_half_cells):
 		coords.append((k + 0.5) * step)
-	var edge := (FINE_HALF_CELLS - 0.5) * step
+	var edge := (fine_half_cells - 0.5) * step
 	for m in MID_CELLS:
 		edge += step * 2.0
 		coords.append(edge)
