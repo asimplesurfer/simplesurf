@@ -43,37 +43,63 @@ var age: float = 0.0
 var amplitude: float = 0.0
 ## 0 mientras crece; sube a 1 apenas llega a su máximo (rompe: labio y espuma).
 var breaking: float = 0.0
-## Modo trucos: cuánto se cerró en tubo (0 = ola normal, 1 = tubo: ver
+## Modo trucos: la ola rompe en tubo (0 = ola normal, 1 = rompiendo: ver
 ## `profile`). Solo en olas que ya rompieron del todo. El dibujo (shader) y la
 ## física usan la misma forma.
 var curl: float = 0.0
+## Rompe de a poco a lo largo de la cresta, como una ola de verdad: el punto
+## de rotura (`peel_w`: metros a lo ancho desde el medio) avanza hacia
+## `peel_dir` (+1 / -1) a `peel_speed` m/s. Mirando hacia donde avanza:
+##   - adelante, el hombro: la ola entera, empinada;
+##   - la garganta (BARREL_THROAT m): el labio se va tirando hacia adelante;
+##   - detrás del punto de rotura, el tubo abierto (`barrel_len` m);
+##   - más atrás, el tubo se cae: el labio ya tocó el agua, el hueco se llena
+##     (espuma) y la ola baja (BARREL_DROP).
+## Mientras, la ola sigue avanzando (`speed`). Ver `barrel_at`.
+var peel_w: float = -1.0e9
+var peel_dir: float = 1.0
+var peel_speed: float = 0.0
+var barrel_len: float = 22.0
+const BARREL_THROAT := 14.0
+const BARREL_COLLAPSE := 16.0
+const BARREL_DROP := 0.6
 ## Forma del tubo (en veces la altura de la ola), visto de costado: la
-## superficie pasa la cresta, da la vuelta por afuera del labio (radio TUBE_R)
-## hasta la punta (TUBE_END_ANGLE), vuelve por adentro del labio (grosor
-## TUBE_THICK) hasta atrás (TUBE_BACK_ANGLE), baja como pared hasta el piso
+## superficie pasa la cresta y da la vuelta por afuera del labio (un óvalo de
+## radios TUBE_RX × TUBE_RY) hacia adelante y abajo hasta la punta
+## (TUBE_END_ANGLE); vuelve por adentro del labio (más fino: TUBE_THICK) hasta
+## atrás (TUBE_BACK_ANGLE), baja como pared cóncava hasta el piso
 ## (TUBE_WALL_BACK atrás de la cresta, a TUBE_FLOOR_Y de alto) y sigue hacia
 ## adelante como agua. TUBE_REACH: hasta dónde llega por delante (veces el
 ## ancho). Igual en water_surface.gdshaderinc.
-const TUBE_R := 0.5
-const TUBE_THICK := 0.15
-const TUBE_END_ANGLE := -0.14
-const TUBE_BACK_ANGLE := 2.62
-const TUBE_WALL_BACK := 0.4
-const TUBE_FLOOR_Y := 0.12
+const TUBE_RX := 0.55
+const TUBE_RY := 0.48
+const TUBE_THICK := 0.1
+const TUBE_END_ANGLE := -0.35
+## Hasta dónde baja la punta cuando el labio cae (rad; ver land_at).
+const TUBE_LAND_ANGLE := -1.2
+const TUBE_BACK_ANGLE := 2.44
+const TUBE_WALL_BACK := 0.5
+const TUBE_FLOOR_Y := 0.1
 const TUBE_REACH := 3.0
 ## En qué parte del recorrido de la cara de adelante (0..1) termina cada tramo:
 ## labio por afuera, punta, labio por adentro, pared (y después el piso).
-const TUBE_S := [0.25, 0.3, 0.5, 0.7]
-## Cómo se forma: hasta TUBE_STEEP de curl la cara se pone empinada (de la ola
-## normal a una pared); después el labio sale arriba y va creciendo hacia
-## adelante y hacia abajo hasta cerrar (el hueco crece con él).
+const TUBE_S := [0.3, 0.35, 0.55, 0.72]
+## Cómo se forma (en la garganta): hasta TUBE_STEEP la cara se pone empinada
+## (de la ola normal a una pared); después el labio sale arriba y va creciendo
+## hacia adelante y hacia abajo hasta cerrar (el hueco crece con él).
 const TUBE_STEEP := 0.25
-## Largo de la garganta del tubo, en cada punta (m; ver curl_at).
-const TUBE_THROAT := 14.0
 ## Cuánto hacia adelante termina la curva de la cara (veces la altura).
-const TUBE_FOOT := 0.35
+const TUBE_FOOT := 0.4
 ## Muestras para encontrar qué parte de la ola se dibuja en un lugar (tubo).
 const TUBE_SCAN := 96
+## La punta del labio se dibuja como una línea derecha: la malla del agua
+## (celdas de ~1 m en el modo trucos) queda en diagonal con la ola y, si no,
+## el borde del labio se ve serruchado. Los puntos a TUBE_TIP_BAND m (de u0)
+## de la punta van justo a la punta (ningún triángulo la cruza: miden a lo
+## sumo 1,41 celdas) y los siguientes TUBE_TIP_RAMP m se estiran para no
+## dejar un salto.
+const TUBE_TIP_BAND := 0.78
+const TUBE_TIP_RAMP := 1.2
 ## Tiempo que tarda en romper del todo después de llegar al máximo (s).
 const BREAK_TIME := 1.2
 
@@ -81,6 +107,8 @@ const BREAK_TIME := 1.2
 func update(delta: float) -> void:
 	age += delta
 	center += direction * speed * delta
+	if curl > 0.0:
+		peel_w += peel_dir * peel_speed * delta
 	var k := minf(age / grow_time, 1.0) * clampf((lifetime - age) / fade_time, 0.0, 1.0)
 	amplitude = max_amplitude * smoothstep(0.0, 1.0, k)
 	breaking = clampf((age - grow_time) / BREAK_TIME, 0.0, 1.0)
@@ -110,7 +138,7 @@ func height_at(p: Vector2) -> float:
 		# Cerrándose en tubo: lo más alto que se dibuja ahí (el techo).
 		if aw >= half_length or uw.x < -width * 4.0 or uw.x > _drawn_ahead():
 			return 0.0
-		var hs := tube_heights(uw.x, aw)
+		var hs := tube_heights(uw.x, uw.y)
 		return hs[hs.size() - 1] if not hs.is_empty() else 0.0
 	if match_drawn:
 		if aw >= half_length or uw.x < -width * 4.0 or uw.x > width * 4.0 + lean():
@@ -227,15 +255,34 @@ func edge_len() -> float:
 	return edge
 
 
-## Cuánto se cerró en tubo a `aw` m del medio: entero en el medio y, hacia las
-## puntas, se va abriendo de a poco a lo largo de TUBE_THROAT m (la garganta:
-## el labio sale cada vez menos). Así, mirando desde la punta, se ve el hueco
-## que se agranda hacia adentro (si se achicara todo junto, quedaba cerrado).
-func curl_at(aw: float) -> float:
+## Cómo está la ola en `w` (metros a lo ancho desde el medio) mientras rompe:
+## Vector3(cuánto se cerró en tubo 0..1, cuánto se cayó 0..1, cuánto se llenó
+## el hueco 0..1). Ver `peel_w`. Donde se cae, primero el hueco se llena de
+## agua (el labio ya cayó: queda un bulto de espuma) y después el bulto se
+## desarma y baja. Igual en water_surface.gdshaderinc.
+func barrel_at(w: float) -> Vector3:
+	if curl <= 0.0:
+		return Vector3.ZERO
+	var s := (w - peel_w) * peel_dir
+	if s > 0.0:
+		return Vector3(curl * (1.0 - smoothstep(0.0, BARREL_THROAT, s)), 0.0, 0.0)
+	var q := 1.0 - smoothstep(-barrel_len - BARREL_COLLAPSE, -barrel_len, s)
+	return Vector3(curl * (1.0 - smoothstep(0.45, 1.0, q)), q * curl, smoothstep(0.0, 0.5, q))
+
+
+## Cuánto cayó el labio en `w` (0..1): recién tirado cerca del punto de
+## rotura (hueco grande); más atrás va cayendo hasta tocar el agua (el tubo se
+## cierra, antes de caerse del todo). Igual en water_surface.gdshaderinc.
+func land_at(w: float) -> float:
 	if curl <= 0.0:
 		return 0.0
-	var full_to := half_length - edge - TUBE_THROAT
-	return curl * (1.0 - smoothstep(full_to, half_length - edge, aw))
+	var s := (w - peel_w) * peel_dir
+	return smoothstep(0.0, barrel_len + BARREL_COLLAPSE * 0.5, -s)
+
+
+## Para el shader: (punto de rotura, hacia dónde, largo del tubo, -).
+func barrel_uniform() -> Vector4:
+	return Vector4(peel_w, peel_dir, barrel_len, 0.0)
 
 
 func _edge(aw: float) -> float:
@@ -272,47 +319,59 @@ func shader_b() -> Vector4:
 ## un piso por adentro y la cara que sigue hacia adelante. En las puntas (donde
 ## la ola se achica) el tubo se achica pero queda abierto: la boca. Igual en
 ## water_surface.gdshaderinc.
-func profile(u0: float, aw: float) -> Vector2:
-	var e := _edge(aw)
+func profile(u0: float, w: float) -> Vector2:
+	var e := _edge(absf(w))
 	var n := exp(-(u0 * u0) / (width * width)) * e
 	var off := lean() * n * n * n
 	var h := amplitude * n
-	var c := curl_at(aw)
+	var bq := barrel_at(w)
+	var c := bq.x
+	# Detrás del tubo la ola se cae: más baja (y con espuma, en el shader).
+	var drop := 1.0 - BARREL_DROP * bq.y
 	if c <= 0.0 or u0 <= 0.0 or u0 >= TUBE_REACH * width:
-		return Vector2(off, h)
-	var target := tube_point(u0, c)
+		return Vector2(off, h * drop)
+	var target := tube_point(u0, c, land_at(w), bq.z)
 	target.y *= e
 	var k := smoothstep(0.0, TUBE_STEEP, c)
 	var x := lerpf(u0 + off, target.x, k)
-	return Vector2(x - u0, lerpf(h, target.y, k))
+	return Vector2(x - u0, lerpf(h, target.y, k) * drop)
 
 
 ## El punto u0 (de la cara de adelante, 0 < u0 < TUBE_REACH·ancho) en la forma
-## de tubo, sin las puntas: Vector2(adelante desde el centro, altura).
-func tube_point(u0: float, c_now: float) -> Vector2:
+## de tubo, sin las puntas: Vector2(adelante desde el centro, altura). `fill`:
+## cuánto se llenó el hueco (0: abierto; 1: macizo, ver barrel_at).
+func tube_point(u0: float, c_now: float, land: float = 0.0, fill: float = 0.0) -> Vector2:
 	var a := amplitude
 	var full_lean := 1.3 * a
 	# Cuánto salió el labio (0: recién la pared; 1: cerrado).
 	var sw := smoothstep(0.0, 1.0, (c_now - TUBE_STEEP) / (1.0 - TUBE_STEEP))
-	var r := TUBE_R * a * sw
-	var r_in := (TUBE_R - TUBE_THICK) * a * sw
-	var end_angle := lerpf(PI * 0.5, TUBE_END_ANGLE, sw)
-	var s := u0 / (TUBE_REACH * width)
-	var c := Vector2(full_lean, a - r)
+	var rx := TUBE_RX * a * sw
+	var ry := TUBE_RY * a * sw
+	var rxi := (TUBE_RX - TUBE_THICK) * a * sw * (1.0 - fill)
+	var ryi := (TUBE_RY - TUBE_THICK) * a * sw * (1.0 - fill)
+	var end_angle := lerpf(PI * 0.5, lerpf(TUBE_END_ANGLE, TUBE_LAND_ANGLE, land), sw)
 	var s0: float = TUBE_S[0]
 	var s1: float = TUBE_S[1]
 	var s2: float = TUBE_S[2]
 	var s3: float = TUBE_S[3]
+	# La punta, derecha (ver TUBE_TIP_BAND).
+	var tip := (s0 + s1) * 0.5 * TUBE_REACH * width
+	var d := u0 - tip
+	var ad := absf(d)
+	if ad < TUBE_TIP_BAND + TUBE_TIP_RAMP:
+		u0 = tip + signf(d) * maxf(ad - TUBE_TIP_BAND, 0.0) * (TUBE_TIP_BAND + TUBE_TIP_RAMP) / TUBE_TIP_RAMP
+	var s := u0 / (TUBE_REACH * width)
+	var c := Vector2(full_lean + 0.05 * a * sw, a - ry)
 	if s <= s0:
 		var ang := lerpf(PI * 0.5, end_angle, s / s0)
-		return c + Vector2(cos(ang), sin(ang)) * r
+		return c + Vector2(cos(ang) * rx, sin(ang) * ry)
 	if s <= s1:
-		var rr := lerpf(r, r_in, (s - s0) / (s1 - s0))
-		return c + Vector2(cos(end_angle), sin(end_angle)) * rr
+		var k := (s - s0) / (s1 - s0)
+		return c + Vector2(cos(end_angle) * lerpf(rx, rxi, k), sin(end_angle) * lerpf(ry, ryi, k))
 	if s <= s2:
 		var ang2 := lerpf(end_angle, TUBE_BACK_ANGLE, (s - s1) / (s2 - s1))
-		return c + Vector2(cos(ang2), sin(ang2)) * r_in
-	var top := c + Vector2(cos(TUBE_BACK_ANGLE), sin(TUBE_BACK_ANGLE)) * r_in
+		return c + Vector2(cos(ang2) * rxi, sin(ang2) * ryi)
+	var top := c + Vector2(cos(TUBE_BACK_ANGLE) * rxi, sin(TUBE_BACK_ANGLE) * ryi)
 	var base := Vector2(full_lean - (TUBE_WALL_BACK * sw - 0.15 * (1.0 - sw)) * a, TUBE_FLOOR_Y * a)
 	# La cara (la pared de atrás del tubo) es cóncava: baja empinada y se va
 	# curvando hasta el agua de adelante (sin esquina).
@@ -326,30 +385,30 @@ func tube_point(u0: float, c_now: float) -> Vector2:
 	return foot.lerp(end, (s - s3) / (1.0 - s3))
 
 
-## Ola cerrándose en tubo: las alturas (de abajo hacia arriba) de lo que se
-## dibuja en `u` (hay más de una: el piso de adentro y el techo del labio).
-func tube_heights(u: float, aw: float) -> PackedFloat32Array:
+## Ola rompiendo en tubo: las alturas (de abajo hacia arriba) de lo que se
+## dibuja en (u, w) (hay más de una: el piso de adentro y el techo del labio).
+func tube_heights(u: float, w: float) -> PackedFloat32Array:
 	var out := PackedFloat32Array()
 	var lo := -width * 4.0
 	var hi := width * 4.0
 	var prev_u := lo
-	var prev_f := lo + profile(lo, aw).x - u
+	var prev_f := lo + profile(lo, w).x - u
 	for k in range(1, TUBE_SCAN + 1):
 		var cu := lerpf(lo, hi, float(k) / TUBE_SCAN)
-		var cf := cu + profile(cu, aw).x - u
+		var cf := cu + profile(cu, w).x - u
 		if (prev_f <= 0.0) != (cf <= 0.0):
 			var a := prev_u
 			var b := cu
 			var fa := prev_f
 			for i in MATCH_REFINE:
 				var mid := (a + b) * 0.5
-				var fm := mid + profile(mid, aw).x - u
+				var fm := mid + profile(mid, w).x - u
 				if (fa <= 0.0) == (fm <= 0.0):
 					a = mid
 					fa = fm
 				else:
 					b = mid
-			out.append(profile((a + b) * 0.5, aw).y)
+			out.append(profile((a + b) * 0.5, w).y)
 		prev_u = cu
 		prev_f = cf
 	out.sort()
@@ -373,5 +432,5 @@ func floor_height_at(p: Vector2) -> float:
 	var aw := absf(uw.y)
 	if aw >= half_length or uw.x < -width * 4.0 or uw.x > _drawn_ahead():
 		return 0.0
-	var hs := tube_heights(uw.x, aw)
+	var hs := tube_heights(uw.x, uw.y)
 	return hs[0] if not hs.is_empty() else 0.0

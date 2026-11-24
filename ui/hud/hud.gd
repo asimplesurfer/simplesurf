@@ -240,11 +240,8 @@ func _ready() -> void:
 	if tricks:
 		tricks.countdown_tick.connect(_on_countdown_tick)
 		tricks.scored.connect(_on_scored)
-		tricks.tube_curling.connect(func(_w: Swell) -> void:
-			show_message("¡Una ola se cierra en tubo!", PROMPT_COLOR)
-		)
-		tricks.tube_formed.connect(func(_t: TubeWave) -> void:
-			show_message("¡Entrá al tubo por debajo del labio!", PROMPT_COLOR)
+		tricks.barrel_started.connect(func(_w: Swell) -> void:
+			show_message("¡Una ola rompe en tubo! Metete debajo del labio", PROMPT_COLOR)
 		)
 		tricks.focus_started.connect(func(r: Rider) -> void:
 			if r == rider:
@@ -615,13 +612,10 @@ func _update_tricks(delta: float) -> void:
 func _update_lip_pointer(tricks: TrickAttack) -> void:
 	var w := tricks.lip_wave
 	var cam := get_viewport().get_camera_3d()
-	# Un tubo esperando que alguien entre: la flecha apunta a su boca.
-	var t := tricks.tube
-	if t and is_instance_valid(t) and t.phase == TubeWave.Phase.OPENING and not rider.in_tube() and cam:
-		# Al medio del tubo (se entra por adelante, por debajo del labio).
-		var mid: Vector3 = t.frame_at(tricks.tube_length() * 0.4)[0]
+	# Una ola rompiendo en tubo: la flecha apunta al bolsillo (adonde meterse).
+	if tricks.barrel_wave and not rider.in_tube() and cam:
 		_lip_pointer.label = "Tubo"
-		_lip_pointer.point_to(cam, mid + Vector3.UP * 3.0, rider.global_position)
+		_lip_pointer.point_to(cam, tricks.barrel_pocket(), rider.global_position)
 		return
 	_lip_pointer.label = "Ola de borde"
 	if not TrickAttack.SHOW_LIP_POINTER or w == null or w.lip_used or rider.on_lip() or cam == null:

@@ -57,28 +57,19 @@ const LIP_EVERY := 20.0
 ## (LipWaveSpray) ya se tiene que reconocer.
 const SHOW_LIP_POINTER := true
 ## Tubos: una ola de TUBE_MIN_HEIGHT m o más, después de TUBE_AFTER segundos
-## entera, se cierra en tubo (la ola tubo, ver TubeWave) a lo largo de su
-## cresta, con la boca del lado del surfista. Si entra por la boca antes de
-## TUBE_OPEN_TIME segundos, arranca el minijuego del tubo (ver el estado
-## `tube`): también es un truco exótico (ver ExoticTrick).
+## entera, rompe en tubo de a poco, como una ola de verdad: el punto de rotura
+## corre por la cresta (PEEL_SPEED) desde una punta hasta la otra, con el tubo
+## abierto detrás (BARREL_LEN) y la ola que se cae más atrás (ver
+## Swell.peel_w). Pasando por debajo del labio se entra (estado `barrel`): es
+## un truco exótico (ver ExoticTrick).
 const TUBE_MIN_HEIGHT := 10.0
 const TUBE_AFTER := 6.0
-const TUBE_OPEN_TIME := 12.0
-const TUBE_DURATION := 8.0
-const TUBE_SPEED := 12.0
-## Cuánto tarda en enroscarse, desde cuánto se puede entrar y cuánto tarda en
-## deshacerse al final (s / 0..1).
-const TUBE_CURL_TIME := 3.0
-const TUBE_OPEN_AT := 0.85
+const PEEL_SPEED := 10.0
+const BARREL_LEN := 28.0
+## Cuánto tarda en empezar a romper (s: el labio crece de a poco) y en
+## deshacerse al final.
+const BARREL_START := 1.0
 const TUBE_FADE := 2.5
-## Por dónde va el recorrido adentro (veces la altura de la ola, hacia
-## adelante desde el centro): en el medio del hueco, debajo del labio.
-const TUBE_LINE := 1.45
-## El tubo termina antes de la otra punta (m): al salir, por adelante.
-const TUBE_END_MARGIN := 12.0
-## Al salir del tubo sale en diagonal hacia afuera (rad), por el hueco de
-## adelante (no por la punta, donde la ola se achica).
-const TUBE_EXIT_TURN := 0.8
 ## Concentración: yendo hacia una ola más o menos en línea recta (a menos de
 ## FOCUS_RANGE m; hacia algún punto de su cresta, sin desviarse más de
 ## FOCUS_ANGLE rad), se va cargando: al segundo (FOCUS_DELAY) la velocidad
@@ -129,13 +120,10 @@ var _lip_timer: float = LIP_FIRST
 ## Trucos exóticos (ver ExoticTrick): puntos que todavía no llegan a uno
 ## entero (por surfista).
 var _exotic_points: Dictionary = {}
-## El tubo que hay ahora (null si no hay ninguno).
-var tube: TubeWave = null
-## Una ola gigante se empieza a cerrar en tubo, y ya se puede entrar.
-signal tube_curling(wave: Swell)
-signal tube_formed(tube: TubeWave)
-## La ola que se está cerrando en tubo (null si no hay).
-var curling: Swell = null
+## Una ola gigante empieza a romper en tubo (el HUD avisa).
+signal barrel_started(wave: Swell)
+## La ola que está rompiendo en tubo (null si no hay).
+var barrel_wave: Swell = null
 ## Concentración: cuánto hace que va derecho hacia una ola (por surfista).
 var _focus_time: Dictionary = {}
 ## Empezó la concentración (el HUD avisa).
@@ -280,66 +268,60 @@ func add_lip_spray(wave: Swell) -> LipWaveSpray:
 	return spray
 
 
-## Tubos: las olas gigantes que ya llevan un rato enteras se cierran en tubo
-## (una a la vez): primero la ola se va enroscando (TUBE_CURL_TIME) y se queda
-## quieta; ya casi cerrada se puede entrar: por la punta, o por adelante,
-## pasando por debajo del labio (el hueco que deja; ver `try_enter_tube`). Al
-## terminar (o si nadie entra) la ola se deshace.
+## Tubos: una ola gigante que ya lleva un rato entera rompe en tubo (una a la
+## vez). Mientras rompe, el que pasa por debajo del labio entra. Cuando la
+## rotura llega a la otra punta, la ola se deshace.
 func _update_tubes(delta: float) -> void:
 	if water == null:
 		return
-	if curling != null:
-		if not water.swells.has(curling):
-			curling = null
-			tube = null
+	if barrel_wave != null:
+		if not water.swells.has(barrel_wave):
+			barrel_wave = null
 			return
-		curling.curl = move_toward(curling.curl, 1.0, delta / TUBE_CURL_TIME)
-		if tube == null and curling.curl >= TUBE_OPEN_AT:
-			make_tube(curling)
-		elif tube and is_instance_valid(tube) and not tube.done:
-			for r in racers:
-				try_enter_tube(r)
-		elif tube and (not is_instance_valid(tube) or tube.done):
-			# Terminó: la ola se deshace de a poco.
-			curling.keep = false
-			curling.fade_time = TUBE_FADE
-			curling.retire()
-			curling = null
-			tube = null
+		barrel_wave.curl = move_toward(barrel_wave.curl, 1.0, delta / BARREL_START)
+		for r in racers:
+			try_enter_barrel(r)
+		# Ya rompió toda: se deshace (si nadie sigue adentro).
+		var done_at := barrel_wave.half_length + Swell.BARREL_THROAT
+		var someone := false
+		for r in racers:
+			if r.barrel_wave == barrel_wave:
+				someone = true
+		if barrel_wave.peel_w * barrel_wave.peel_dir > done_at and not someone:
+			barrel_wave.keep = false
+			barrel_wave.fade_time = TUBE_FADE
+			barrel_wave.retire()
+			barrel_wave = null
 		return
 	for sw in water.swells:
 		if ready_for_tube(sw):
-			start_curl(sw)
+			start_barrel(sw)
 			return
 
 
-## Entrar al tubo por adelante: el que está andando por el piso de adentro,
-## debajo del labio (pasó por el hueco de adelante), entra desde ahí y lo
-## recorre hasta el final.
-func try_enter_tube(r: Rider) -> bool:
-	if tube == null or not tube.accepting() or tube.used.has(r) or r.in_tube():
+## Entrar al tubo: el que anda por el piso de adentro, debajo del labio (pasó
+## por el hueco de adelante, o la rotura le pasó por encima).
+func try_enter_barrel(r: Rider) -> bool:
+	var s := barrel_wave
+	if s == null or s.curl < 0.9 or r.in_tube() or r.on_lip():
 		return false
-	if r.is_fallen() or not r.grounded or r.controls_locked or r.on_lip():
+	if r.is_fallen() or not r.grounded or r.controls_locked:
 		return false
-	var s := tube.s_of(r.position)
-	var end_s := tube_length() - TUBE_END_MARGIN
-	if s < 0.0 or s > end_s - TUBE_SPEED * 1.5:
+	var uw := s.local_coords(Vector2(r.position.x, r.position.z))
+	var rel := (uw.y - s.peel_w) * s.peel_dir
+	if rel < -s.barrel_len + 2.0 or rel > 1.0:
+		return false
+	# Que todavía quede tubo por recorrer.
+	if s.peel_w * s.peel_dir + rel > s.half_length - s.edge - 8.0:
 		return false
 	if not water.under_roof(r.position.x, r.position.z, r.position.y):
 		return false
-	if tube.phase == TubeWave.Phase.OPENING:
-		# Dura lo que le queda de tubo desde donde entró.
-		tube.duration = clampf((end_s - s) / TUBE_SPEED, 1.5, TUBE_DURATION)
-	tube.enter(r, s)
+	r.barrel_wave = s
+	r.state_machine.transition_to(&"barrel")
 	return true
 
 
-## Largo del recorrido del tubo (m, desde la boca).
-func tube_length() -> float:
-	return (curling.half_length - curling.edge - Swell.TUBE_THROAT * 0.6) * 2.0 if curling else 0.0
-
-
-## true si la ola ya puede cerrarse en tubo.
+## true si la ola ya puede romper en tubo.
 func ready_for_tube(s: Swell) -> bool:
 	return (
 		s.max_amplitude >= TUBE_MIN_HEIGHT
@@ -352,52 +334,44 @@ func ready_for_tube(s: Swell) -> bool:
 	)
 
 
-## Empieza a cerrarse en tubo: se queda quieta y dura lo que haga falta.
-func start_curl(s: Swell) -> void:
-	curling = s
+## Empieza a romper en tubo: la rotura arranca en una punta y va hacia el lado
+## donde está el surfista (así el tubo le llega). Dura lo que tarda en
+## recorrer la ola.
+func start_barrel(s: Swell) -> void:
+	barrel_wave = s
 	s.keep = true
 	s.lip_used = true
-	s.speed = 0.0
-	s.lifetime = maxf(s.lifetime, s.age + TUBE_CURL_TIME + TUBE_OPEN_TIME + TUBE_DURATION + 6.0)
-	tube_curling.emit(s)
-
-
-## La boca y el recorrido del tubo (invisible: lo dibuja el agua) por adentro
-## de la ola `s`, a lo largo de su cresta, con la boca en la punta que queda
-## más cerca de algún surfista.
-func make_tube(s: Swell) -> TubeWave:
-	var perp := Vector2(-s.direction.y, s.direction.x)
-	# La boca, donde termina la garganta (el tubo entero).
-	var reach := s.half_length - s.edge - Swell.TUBE_THROAT * 0.6
-	# Adentro del hueco: debajo del labio, sobre el piso.
-	var line := s.center + s.direction * (TUBE_LINE * s.max_amplitude)
-	var a := line - perp * reach
-	var b := line + perp * reach
-	var mouth := a
+	s.curl = 0.01
+	s.peel_speed = PEEL_SPEED
+	s.barrel_len = BARREL_LEN
+	var side := 1.0
 	var near := INF
 	for r in racers:
 		var p := Vector2(r.position.x, r.position.z)
-		if p.distance_to(a) < near:
-			near = p.distance_to(a)
-			mouth = a
-		if p.distance_to(b) < near:
-			near = p.distance_to(b)
-			mouth = b
-	var along := (b - a).normalized() if mouth == a else (a - b).normalized()
-	# Dura lo que da el largo de la ola (sin llegar a la otra punta).
-	var duration := clampf((reach * 2.0 - TUBE_END_MARGIN) / TUBE_SPEED, 2.0, TUBE_DURATION)
-	# La pared es el cuerpo de la ola (hacia atrás de la cresta).
-	var track := LineTrack.new(mouth, along, -s.direction, 12.0)
-	var t := TubeWave.new()
-	t.name = "TrickTube"
-	t.show_shape = false
-	t.floor_base = true
-	t.keep_swell = s
-	get_parent().add_child(t)
-	t.setup(null, 0.0, 0.0, 1.0, duration, TUBE_SPEED, null, TUBE_OPEN_TIME, -1.0, track, water)
-	tube = t
-	tube_formed.emit(t)
-	return t
+		var d := p.distance_to(s.center)
+		if d < near:
+			near = d
+			var w := s.local_coords(p).y
+			side = signf(w) if absf(w) > 1.0 else 1.0
+	s.peel_dir = side
+	s.peel_w = -side * (s.half_length - s.edge * 0.5)
+	var travel := 2.0 * s.half_length + Swell.BARREL_THROAT + BARREL_LEN + Swell.BARREL_COLLAPSE
+	s.lifetime = maxf(s.lifetime, s.age + travel / PEEL_SPEED + s.fade_time + 2.0)
+	# La espuma que salta donde cae el labio y en la garganta.
+	var spray := BarrelSpray.new()
+	spray.name = "BarrelSpray"
+	get_parent().add_child(spray)
+	spray.setup(s, water)
+	barrel_started.emit(s)
+
+
+## Dónde está el bolsillo del tubo (adonde ir), en el mundo.
+func barrel_pocket() -> Vector3:
+	var s := barrel_wave
+	var perp := Vector2(-s.direction.y, s.direction.x)
+	var w := s.peel_w - 7.0 * s.peel_dir
+	var p := s.center + s.direction * (1.4 * s.max_amplitude) + perp * w
+	return Vector3(p.x, s.max_amplitude * 0.5, p.y)
 
 
 ## Concentración: si va derecho hacia una ola, la velocidad sube de a poco.
@@ -503,13 +477,6 @@ func _update_exotic(delta: float) -> void:
 ## con lo que juntó). La motivación la da el surfista (Rider.finish_exotic).
 func _on_exotic_finished(kind: ExoticTrick.Kind, success: bool, rider: Rider) -> void:
 	_exotic_points[rider] = 0.0
-	if kind == ExoticTrick.Kind.TUBE and success and curling:
-		# Sale en diagonal por el hueco de adelante.
-		var f := rider.forward()
-		var out := Vector2(f.x, f.z).normalized().rotated(0.0)
-		var d := curling.direction
-		var turned := out.rotated(TUBE_EXIT_TURN) if out.rotated(TUBE_EXIT_TURN).dot(d) > out.rotated(-TUBE_EXIT_TURN).dot(d) else out.rotated(-TUBE_EXIT_TURN)
-		rider.heading = atan2(-turned.x, -turned.y)
 	if not success or state != State.PLAYING:
 		return
 	var b := ExoticTrick.bonus(kind)

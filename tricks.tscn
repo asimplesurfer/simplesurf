@@ -41,7 +41,8 @@ directional_shadow_max_distance = 50.0
 
 [node name="Water" type="Node3D" parent="." groups=["water"]]
 script = ExtResource("1_water")
-fine_half_cells = 45
+subdivisions = 255
+fine_half_cells = 68
 
 
 [node name="Horizon" type="Node3D" parent="."]

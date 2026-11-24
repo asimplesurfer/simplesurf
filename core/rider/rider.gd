@@ -127,6 +127,9 @@ var lip_time_left: float = 0.0
 ## En la ola: cuánto recorrió de lo que puede durar (0..1; para la cámara y la
 ## música).
 var lip_progress: float = 0.0
+## Modo trucos: la ola que rompe en tubo y lo lleva adentro (ver el estado
+## `barrel`; null si no está en ninguna).
+var barrel_wave: Swell = null
 ## El truco exótico que está haciendo (ExoticTrick.Kind.NONE si ninguno) y
 ## cuánto lleva (0..1: para la música; ver ExoticTrick).
 var exotic: ExoticTrick.Kind = ExoticTrick.Kind.NONE
@@ -310,6 +313,11 @@ func _ready() -> void:
 	lip.set_script(preload("res://core/rider/states/state_lip.gd"))
 	lip.name = "Lip"
 	state_machine.add_child(lip)
+	# Adentro del tubo de una ola que rompe (modo trucos; ver Swell.peel_w).
+	var barreling := RiderState.new()
+	barreling.set_script(preload("res://core/rider/states/state_barrel.gd"))
+	barreling.name = "Barrel"
+	state_machine.add_child(barreling)
 	# Adentro de un tubo (ver TubeWave).
 	var tubing := RiderState.new()
 	tubing.set_script(preload("res://core/rider/states/state_tube.gd"))
@@ -1034,8 +1042,10 @@ func on_lip() -> bool:
 	return lip_wave != null
 
 
+## true adentro de un tubo: el de carrera (TubeWave) o el de una ola que rompe
+## (modo trucos, estado `barrel`).
 func in_tube() -> bool:
-	return state_machine.current_name == &"tube"
+	return state_machine.current_name == &"tube" or state_machine.current_name == &"barrel"
 
 
 ## Entra al tubo (lo llama TubeWave cuando pasa por la boca).

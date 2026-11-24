@@ -1,0 +1,195 @@
+extends RiderState
+## Adentro del tubo de una ola que rompe de a poco (modo trucos; ver
+## Swell.peel_w y TrickAttack). Es un truco exótico (ExoticTrick.Kind.TUBE).
+##
+## La ola sigue avanzando y el punto de rotura corre a lo largo de la cresta:
+## el surfista va con él, adentro del tubo abierto, un poco detrás de donde el
+## labio se está tirando (el "bolsillo", POCKET). Si entró más atrás, alcanza
+## el bolsillo de a poco.
+##
+## Equilibrio (como en el tubo de carrera): la ola lo empuja hacia un lado o el
+## otro y él corrige con el stick. Muy hacia la pared, lo tapa el labio; muy
+## hacia afuera, lo escupe la espuma. En los dos casos se cae (se queda con lo
+## que juntó). Si aguanta hasta que el tubo llega a la punta de la ola, sale
+## disparado por adelante (bonus y motivación).
+
+## Dónde va, respecto del punto de rotura (m, negativo = detrás).
+const POCKET := -7.0
+## Con qué velocidad alcanza el bolsillo si entró más atrás (m/s de más).
+const CATCH_UP := 4.0
+## Termina cuando el bolsillo llega a esta distancia (m) del final de la ola
+## (antes de las puntas, donde la ola se achica).
+const END_MARGIN := 4.0
+## Por dónde va adentro (veces la altura, hacia adelante desde el centro de
+## la ola): en el medio del hueco, debajo del labio. Y cuánto se corre de
+## costado con el equilibrio al máximo (veces la altura).
+const LINE := 1.4
+const REACH := 0.2
+## Al salir, en diagonal hacia afuera (rad), por el hueco de adelante.
+const EXIT_TURN := 0.8
+## Al entrar, un ratito sin empujones (para acomodarse).
+const SETTLE_TIME := 1.0
+## Empujón de la ola y lo inestable (como en el tubo de carrera): crecen de a
+## poco hasta el final.
+const PUSH_START := 0.2
+const PUSH_END := 0.55
+const UNSTABLE_START := 0.15
+const UNSTABLE_END := 0.5
+const CONTROL := 1.8
+const PUSH_MIN_TIME := 0.5
+const PUSH_MAX_TIME := 1.3
+
+var wave: Swell
+## Dónde está respecto del punto de rotura (m a lo largo de la cresta, hacia
+## donde avanza; negativo = detrás).
+var rel: float = POCKET
+## Equilibrio: 0 en el medio, +1 tapado por el labio, -1 escupido por la espuma.
+var balance: float = 0.0
+## Dónde empezó y dónde termina (punto de rotura + rel, a lo largo de la
+## cresta): para el progreso.
+var _from: float = 0.0
+var _push: float = 0.0
+var _push_target: float = 0.0
+var _push_timer: float = 0.0
+var _rng := RandomNumberGenerator.new()
+
+
+func enter(_previous: StringName) -> void:
+	wave = rider.barrel_wave
+	_rng.randomize()
+	balance = 0.0
+	_push = 0.0
+	_push_target = 0.0
+	_push_timer = SETTLE_TIME
+	if wave:
+		var uw := wave.local_coords(Vector2(rider.position.x, rider.position.z))
+		rel = clampf((uw.y - wave.peel_w) * wave.peel_dir, -wave.barrel_len, 0.0)
+		# Donde entró de costado es su equilibrio (sin pasarse).
+		balance = clampf((LINE * wave.max_amplitude - uw.x) / (REACH * wave.max_amplitude), -0.5, 0.5)
+		_from = _along()
+	rider.set_recovery_stage(Rider.RecoveryStage.STANDING)
+	rider.grounded = true
+	rider.vertical_speed = 0.0
+	rider.drift_side = 0
+	rider.shove = Vector3.ZERO
+	rider.turbo_time = 0.0
+	rider.reset_steer()
+	rider.tube_balance = balance
+	rider.tube_danger = 0.0
+	rider.start_exotic(ExoticTrick.Kind.TUBE)
+	rider.tube_entered.emit()
+
+
+func exit() -> void:
+	# Si salió de otra forma (reinicio, la ola se fue): como caerse.
+	rider.finish_exotic(false)
+	rider.barrel_wave = null
+	wave = null
+	rider.tube_balance = 0.0
+	rider.tube_danger = 0.0
+
+
+func update(delta: float, input: RiderInput) -> void:
+	if wave == null or wave.curl <= 0.0 or rider.water == null or not rider.water.swells.has(wave):
+		state_machine.transition_to(&"riding")
+		return
+	# Alcanza el bolsillo (si entró más atrás) y va con la rotura.
+	rel = move_toward(rel, POCKET, CATCH_UP * delta)
+	rider.update_exotic(progress())
+	_update_balance(delta, input)
+	_place()
+	if absf(balance) >= 1.0:
+		_wipe_out()
+		return
+	if _along() >= _end():
+		_complete()
+
+
+## Dónde está a lo largo de la cresta (m desde el medio, hacia donde avanza la rotura).
+func _along() -> float:
+	return wave.peel_w * wave.peel_dir + rel
+
+
+## Hasta dónde llega (antes de la punta de la ola).
+func _end() -> float:
+	return wave.half_length - wave.edge - END_MARGIN
+
+
+## 0 al entrar .. 1 al llegar a la punta.
+func progress() -> float:
+	var span := maxf(_end() - _from, 1.0)
+	return clampf((_along() - _from) / span, 0.0, 1.0)
+
+
+func _update_balance(delta: float, input: RiderInput) -> void:
+	_push_timer -= delta
+	if _push_timer <= 0.0:
+		_push_timer = _rng.randf_range(PUSH_MIN_TIME, PUSH_MAX_TIME)
+		var dir := -1.0 if _rng.randf() < 0.5 else 1.0
+		_push_target = dir * _rng.randf_range(0.45, 1.0)
+	_push = move_toward(_push, _push_target, delta * 3.0)
+	var k := smoothstep(0.0, 1.0, progress())
+	var strength := lerpf(PUSH_START, PUSH_END, k)
+	var unstable := lerpf(UNSTABLE_START, UNSTABLE_END, k)
+	var toward_wall := input.steer * wall_on_right_sign()
+	var vel := _push * strength + balance * unstable + toward_wall * CONTROL
+	balance = clampf(balance + vel * delta, -1.0, 1.0)
+	rider.tube_balance = balance
+	rider.tube_danger = smoothstep(0.5, 0.95, absf(balance))
+	# Se ladea con el stick (lo visual).
+	rider.steer_amount = input.steer * 0.6
+
+
+## +1 si la pared (el cuerpo de la ola, hacia atrás) queda a su derecha.
+func wall_on_right_sign() -> float:
+	if wave == null:
+		return 1.0
+	var r := rider.right()
+	return 1.0 if Vector2(r.x, r.z).dot(-wave.direction) >= 0.0 else -1.0
+
+
+## Lo pone en su lugar: sobre el piso de adentro del tubo, mirando hacia
+## donde avanza la rotura.
+func _place() -> void:
+	var a := wave.max_amplitude
+	var perp := Vector2(-wave.direction.y, wave.direction.x)
+	var w := wave.peel_w + rel * wave.peel_dir
+	var u := LINE * a - balance * REACH * a
+	var p := wave.center + wave.direction * u + perp * w
+	rider.position = Vector3(p.x, rider.water.floor_height_at(p.x, p.y), p.y)
+	var f := perp * wave.peel_dir
+	rider.heading = atan2(-f.x, -f.y)
+	rider.rotation.y = rider.heading
+	rider.speed = wave.peel_speed
+	rider.water_normal = Vector3.UP
+	rider.grounded = true
+	rider.vertical_speed = 0.0
+
+
+## Se cayó: el labio lo tapó (hacia la pared) o lo escupió la espuma (hacia
+## afuera). Se queda con lo que juntó.
+func _wipe_out() -> void:
+	var lip := balance > 0.0
+	if not lip:
+		# Escupido hacia afuera, al agua de adelante.
+		var out := wave.direction * (REACH * wave.max_amplitude + 3.0)
+		rider.position += Vector3(out.x, 0.0, out.y)
+		rider.position.y = rider.water.height_below(rider.position.x, rider.position.z, rider.position.y)
+	rider.speed = minf(rider.speed, 4.0)
+	rider.finish_exotic(false)
+	rider.tube_exited.emit(false)
+	rider.tube_wiped_out.emit(lip)
+	rider.fall()
+
+
+## Llegó a la punta: sale disparado en diagonal por el hueco de adelante.
+func _complete() -> void:
+	var f := Vector2(-wave.direction.y, wave.direction.x) * wave.peel_dir
+	var a1 := f.rotated(EXIT_TURN)
+	var a2 := f.rotated(-EXIT_TURN)
+	var out := a1 if a1.dot(wave.direction) > a2.dot(wave.direction) else a2
+	rider.heading = atan2(-out.x, -out.y)
+	rider.speed = rider.stats.max_speed * rider.stats.motivation_speed_mult
+	rider.finish_exotic(true)
+	rider.tube_exited.emit(true)
+	state_machine.transition_to(&"riding")

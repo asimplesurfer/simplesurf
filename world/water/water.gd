@@ -344,7 +344,7 @@ func height_below(x: float, z: float, y: float, step: float = 0.4) -> float:
 		if s.curl <= 0.0 or not s.reaches(p):
 			continue
 		var uw := s.local_coords(p)
-		var hs := s.tube_heights(uw.x, absf(uw.y))
+		var hs := s.tube_heights(uw.x, uw.y)
 		if hs.size() < 2:
 			continue
 		var top := hs[hs.size() - 1]
@@ -425,7 +425,7 @@ func drawn_vertex(p: Vector2) -> Vector3:
 		if aw >= s.half_length or absf(uw.x) > s.width * 4.0:
 			continue
 		# La misma forma que el shader (con el labio y, si se cierra, el tubo).
-		var pr := s.profile(uw.x, aw)
+		var pr := s.profile(uw.x, uw.y)
 		sh += pr.y
 		disp += s.direction * pr.x
 	if ring_wave:
@@ -837,3 +837,10 @@ func _push_swells() -> void:
 		rb = ring_wave.shader_b()
 	_material.set_shader_parameter("ring_a", ra)
 	_material.set_shader_parameter("ring_b", rb)
+	# La ola que está rompiendo en tubo (una a la vez; ver Swell.peel_w).
+	var barrel := Vector4(-1.0e9, 1.0, 22.0, 0.0)
+	for sw in swells:
+		if sw.curl > 0.0:
+			barrel = sw.barrel_uniform()
+			break
+	_material.set_shader_parameter("barrel", barrel)
