@@ -332,7 +332,11 @@ func _process(delta: float) -> void:
 	else:
 		tilt_base = Quaternion(Vector3.RIGHT, clampf(rider.vertical_speed * 0.04, -0.35, 0.35))
 	# El derrape ya no pone la tabla de costado: solo frena (ver state_drifting).
-	_drift_yaw = lerpf(_drift_yaw, 0.0, 1.0 - exp(-12.0 * delta))
+	# En el borde de una ola de borde (modo trucos), la tabla y el cuerpo van en
+	# diagonal, con la punta hacia la cara de la ola (solo lo que se ve: el
+	# rumbo, y la cámara, siguen derecho por la cresta).
+	var yaw_target := -LIP_YAW * float(rider.drift_side) if rider.on_lip() else 0.0
+	_drift_yaw = lerpf(_drift_yaw, yaw_target, 1.0 - exp(-12.0 * delta))
 	var lean_target := rider.steer_amount * LEAN_ANGLE
 	_lean = lerpf(_lean, lean_target, 1.0 - exp(-6.0 * delta))
 	var tilt_target := (
@@ -376,6 +380,12 @@ func _process(delta: float) -> void:
 	_body.scale = (
 		Vector3(1.0 + squash * 1.1, 1.0 - squash, 1.0 + squash * 1.1) * AVATAR_SCALE
 	)
+
+
+## Ola de borde: cuánto se gira la tabla en diagonal (rad) y de qué lado
+## queda el pecho respecto de la cara de la ola (para la pose `lip`).
+const LIP_YAW := 0.55
+const LIP_CHEST_SIDE := -1
 
 
 ## Altura del centro del cuerpo (sobre el que gira en las vueltas).
@@ -612,6 +622,9 @@ func _update_avatar_anim(delta: float) -> void:
 			if _stage_time < _pose_duration and _pose_t < 1.0:
 				a = &"pop_up"
 				_body.pop_time = _pose_duration
+			elif rider.on_lip():
+				a = &"lip"
+				_body.drift_side = rider.drift_side * LIP_CHEST_SIDE
 			elif rider.in_tube():
 				a = &"tube"
 				# De qué lado está la pared: el pecho mira a la derecha del surfista.

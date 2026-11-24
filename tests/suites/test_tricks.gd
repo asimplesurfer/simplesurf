@@ -263,6 +263,9 @@ func _test_waves_and_lip() -> void:
 	_check(r.position.y - water.height_at(r.position.x + 30.0, r.position.z + 30.0) > 4.0 or r.position.y > 5.0, "va arriba, en el borde (%.1f m)" % r.position.y)
 	_check(absf(lip.local_coords(Vector2(r.position.x, r.position.z)).y - start_w) > 8.0, "lo lleva a lo largo de la cresta")
 	_check(r.drift_side != 0, "con la tabla de costado, raspando")
+	var vis := r.get_node("Visual") as RiderVisual
+	_check(vis._body.anim == &"lip", "con la pose del borde (%s)" % vis._body.anim)
+	_check(absf(vis._drift_yaw) > 0.3, "la tabla va en diagonal (%.2f rad)" % vis._drift_yaw)
 	var cam_dir := r.global_position - (m.get_node("Views") as SplitScreen).cameras[0].global_position
 	var fwd := r.forward()
 	_check(Vector2(cam_dir.x, cam_dir.z).normalized().dot(Vector2(fwd.x, fwd.z)) > 0.9, "la cámara sigue detrás del surfista")

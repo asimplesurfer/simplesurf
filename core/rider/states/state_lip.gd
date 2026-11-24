@@ -15,6 +15,9 @@ extends RiderState
 const LIP_TIME := 12.0
 ## Al engancharse, un ratito sin empujones (para acomodarse).
 const SETTLE_TIME := 1.0
+## Cuánto más arriba del agua va la tabla (m): la cresta se dibuja con espuma
+## y, pegada al agua, la tabla quedaba tapada.
+const RIDE_ABOVE := 0.35
 ## Velocidad a lo largo de la cresta (m/s).
 const SPEED := 12.0
 ## Empujón de la ola (cuánto corre el equilibrio por segundo): al principio
@@ -147,7 +150,7 @@ func _update_balance(delta: float, input: RiderInput) -> void:
 func _place() -> void:
 	var perp := _perp()
 	var top := wave.center + perp * w + wave.direction * wave.crest_u()
-	var h := rider.water.height_at(top.x, top.y)
+	var h := rider.water.height_at(top.x, top.y) + RIDE_ABOVE
 	rider.position = Vector3(top.x, h, top.y)
 	# Mira hacia donde avanza por la cresta: la cámara queda justo detrás,
 	# como siempre. La diagonal es solo de la tabla (la pose de raspar, abajo).
