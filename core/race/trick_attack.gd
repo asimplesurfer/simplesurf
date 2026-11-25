@@ -467,6 +467,7 @@ func start_barrel(s: Swell, r: Rider, side: float) -> void:
 	s.keep = true
 	s.lip_used = true
 	s.curl = 0.01
+	s.tube_close = 0.0
 	s.peel_speed = PEEL_SPEED
 	s.barrel_len = BARREL_LEN
 	s.peel_dir = side

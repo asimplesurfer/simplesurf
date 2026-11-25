@@ -101,6 +101,8 @@ func _run() -> void:
 		b.peel_from = 0.0
 		b.peel_w = 20.0
 		b.barrel_len = 12.0
+		# Y algo cerrado (el labio más bajo y la pared más cerca).
+		b.tube_close = 0.4
 		water.add_swell(b)
 		water._push_swells()
 		var res2 := await _compare(water, Vector2(-90, -8), Vector2(1.7, 1.3), false)

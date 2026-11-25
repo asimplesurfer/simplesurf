@@ -362,6 +362,30 @@ func height_below(x: float, z: float, y: float, step: float = 0.4) -> float:
 
 ## true si en (x, z) hay agua por encima de `y` (más de `margin` m): está
 ## adentro de una ola que se cerró en tubo, con el techo del labio encima.
+## true si el punto está adentro del agua tal como se dibuja, contando los
+## tubos: en el hueco (piso abajo, labio arriba) no; adentro del grosor del
+## labio o debajo del piso, sí. (Se cuentan las superficies que tiene encima:
+## impar = adentro.)
+func in_water(x: float, z: float, y: float) -> bool:
+	var h := height_at(x, z)
+	var p := Vector2(x, z)
+	for s in swells:
+		if s.curl <= 0.0 or not s.reaches(p):
+			continue
+		var uw := s.local_coords(p)
+		var hs := s.tube_heights(uw.x, uw.y)
+		if hs.size() < 2:
+			continue
+		var fade := _island_fade(p)
+		var base := h - hs[hs.size() - 1] * fade
+		var above := 0
+		for v in hs:
+			if base + v * fade > y:
+				above += 1
+		return above % 2 == 1
+	return y < h
+
+
 func under_roof(x: float, z: float, y: float, margin: float = 1.5) -> bool:
 	var p := Vector2(x, z)
 	for s in swells:
@@ -847,8 +871,11 @@ func _push_swells() -> void:
 	_material.set_shader_parameter("ring_b", rb)
 	# La ola que está rompiendo en tubo (una a la vez; ver Swell.peel_w).
 	var barrel := Vector4(-1.0e9, 1.0, 22.0, 0.0)
+	var close := 0.0
 	for sw in swells:
 		if sw.curl > 0.0:
 			barrel = sw.barrel_uniform()
+			close = sw.tube_close
 			break
 	_material.set_shader_parameter("barrel", barrel)
+	_material.set_shader_parameter("barrel_close", close)

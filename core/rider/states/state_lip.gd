@@ -49,6 +49,8 @@ var _push: float = 0.0
 var _push_target: float = 0.0
 var _push_timer: float = 0.0
 var _rng := RandomNumberGenerator.new()
+## Al engancharse, un ratito sin caerse (ver ExoticGrace).
+var _grace := ExoticGrace.new()
 
 
 func enter(_previous: StringName) -> void:
@@ -56,6 +58,7 @@ func enter(_previous: StringName) -> void:
 	_rng.randomize()
 	ride_time = 0.0
 	balance = 0.0
+	_grace.start(rider.input.steer if rider.input else 0.0)
 	_push = 0.0
 	_push_target = 0.0
 	_push_timer = SETTLE_TIME
@@ -159,8 +162,9 @@ func _update_balance(delta: float, input: RiderInput) -> void:
 	_push = move_toward(_push, _push_target, delta * 3.0)
 	var strength := lerpf(PUSH_START, PUSH_END, k)
 	var unstable := lerpf(UNSTABLE_START, UNSTABLE_END, k)
-	var vel := _push * strength + balance * unstable + input.steer * CONTROL
-	balance = clampf(balance + vel * delta, -1.0, 1.0)
+	var steer := _grace.steer(input.steer, delta)
+	var vel := _push * strength + balance * unstable + steer * CONTROL
+	balance = _grace.clamp_balance(clampf(balance + vel * delta, -1.0, 1.0))
 	rider.lip_balance = balance
 	rider.lip_danger = smoothstep(0.5, 0.95, absf(balance))
 	# Se ladea según el equilibrio (lo visual).
