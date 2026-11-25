@@ -181,10 +181,13 @@ func _test_waves_and_lip() -> void:
 	var tiers := {}
 	for sw in water.swells:
 		tiers[0 if sw.max_amplitude < 5.5 else (1 if sw.max_amplitude < 9.0 else 2)] = true
+	var near_extra := 0
 	for k in 40:
 		var extra := waves._make_trick_swell()
 		if extra:
 			tiers[0 if extra.max_amplitude < 5.5 else (1 if extra.max_amplitude < 9.0 else 2)] = true
+			if extra.center.distance_to(Vector2(r.position.x, r.position.z)) < WaveManager.TRICK_SPAWN_DISTANCE.y + 40.0:
+				near_extra += 1
 			# (Las direcciones también se sortean: con estas no depende de la suerte.)
 			var to_r := Vector2(r.position.x, r.position.z) - extra.center
 			if extra.direction.dot(to_r.normalized()) < 0.0:
@@ -199,6 +202,10 @@ func _test_waves_and_lip() -> void:
 	for sw in water.swells:
 		if sw.center.distance_to(Vector2(r.position.x, r.position.z)) < WaveManager.TRICK_SPAWN_DISTANCE.y + 40.0:
 			near += 1
+	# Las que ya estaban se pudieron alejar (o él de ellas) en estos 12 s: se
+	# cuentan también las que se acaban de armar, que nacen alrededor de donde
+	# está ahora (así no depende de la suerte).
+	near += near_extra
 	_check(near >= 2, "las olas aparecen cerca del surfista (%d cerca)" % near)
 	_check(not r.air_ceiling, "sin techo invisible en los saltos")
 
