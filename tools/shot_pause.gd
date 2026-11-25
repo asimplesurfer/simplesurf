@@ -61,7 +61,7 @@ func _run() -> void:
 	quit()
 
 
-func _video(out: String, race: RaceManager) -> void:
+func _video(out: String, race: Node) -> void:
 	var frame := 0
 	# [cuadros, qué hacer antes]: 1 s de juego, abrir, 4 s con el menú, 3 s
 	# solo el fondo (para ver cómo se mueven las luces), cerrar y 1 s de juego.
