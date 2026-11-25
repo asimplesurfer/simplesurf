@@ -33,7 +33,7 @@ const CAMERA_FIELDS := ["x", "y", "z", "fwd_x", "fwd_y", "fwd_z", "fov"]
 const SWELL_FIELDS := [
 	"id", "cx", "cz", "dir_x", "dir_z", "speed", "amplitude", "max_amplitude", "width",
 	"half_length", "edge", "breaking", "age", "lifetime", "curl", "peel_w", "peel_dir",
-	"peel_from", "barrel_len", "lip_used", "keep",
+	"peel_from", "barrel_len", "lip_used", "keep", "tube_close", "grown",
 ]
 ## Detalle de las marcas: [t, x, y, z, speed, heading, vy, state, grounded,
 ## steer_in, cam_x, cam_y, cam_z, cam_fwd_x, cam_fwd_y, cam_fwd_z].
@@ -246,7 +246,7 @@ func _swell_row(s: Swell) -> Array:
 		_r(s.speed), _r(s.amplitude), _r(s.max_amplitude), _r(s.width), _r(s.half_length), _r(s.edge),
 		_r(s.breaking), _r(s.age), _r(s.lifetime), _r(s.curl), _r(s.peel_w) if s.curl > 0.0 else 0.0,
 		s.peel_dir, _r(s.peel_from) if not is_inf(s.peel_from) else null, _r(s.barrel_len),
-		1 if s.lip_used else 0, 1 if s.keep else 0,
+		1 if s.lip_used else 0, 1 if s.keep else 0, _r(s.tube_close), _r(s.grown),
 	]
 
 

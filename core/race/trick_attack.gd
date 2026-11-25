@@ -85,6 +85,17 @@ const BARREL_LEN := 28.0
 const BARREL_START := 2.4
 const BARREL_FORM_POW := 1.3
 const TUBE_FADE := 2.5
+## Lo que dura el tubo: una vez que tapa al surfista (BarrelState.FORMED),
+## al menos TUBE_RIDE s hasta que acelera hacia el ojo. Si no queda ola para
+## eso, la ola se alarga hacia adelante (hacia donde rompe) mientras él está
+## adentro, como una ola de verdad que sigue creciendo de un lado mientras
+## rompe del otro: la punta de adelante se estira a lo sumo a EXTEND_SPEED m/s
+## (la de atrás queda donde estaba), hasta MAX_HALF_LENGTH m de media cresta.
+## EXTEND_MARGIN: los metros de más (para no quedar justo).
+const TUBE_RIDE := 4.0
+const EXTEND_SPEED := 18.0
+const EXTEND_MARGIN := 2.0
+const MAX_HALF_LENGTH := 150.0
 ## Concentración: yendo hacia una ola más o menos en línea recta (a menos de
 ## FOCUS_RANGE m; hacia algún punto de su cresta, sin desviarse más de
 ## FOCUS_ANGLE rad), se va cargando: al segundo (FOCUS_DELAY) la velocidad
@@ -141,6 +152,8 @@ signal barrel_started(wave: Swell)
 var barrel_wave: Swell = null
 ## Cuánto se formó el tubo que está rompiendo (0..1, en BARREL_START s).
 var _barrel_form: float = 0.0
+## Cuánto le queda al tubo armado antes del tramo final (s; ver TUBE_RIDE).
+var _ride_left: float = 0.0
 ## Concentración: cuánto hace que va derecho hacia una ola (por surfista).
 var _focus_time: Dictionary = {}
 ## Empezó la concentración (el HUD avisa).
@@ -326,6 +339,9 @@ func _update_tubes(delta: float) -> void:
 			return
 		_barrel_form = move_toward(_barrel_form, 1.0, delta / BARREL_START)
 		barrel_wave.curl = maxf(pow(_barrel_form, BARREL_FORM_POW), 0.01)
+		if barrel_wave.curl >= BarrelState.FORMED:
+			_ride_left = maxf(_ride_left - delta, 0.0)
+		_extend_barrel(delta)
 		for r in racers:
 			try_enter_barrel(r)
 		# Ya rompió toda: se deshace (si nadie sigue adentro).
@@ -344,6 +360,33 @@ func _update_tubes(delta: float) -> void:
 		for sw in water.swells:
 			if try_start_tube(r, sw):
 				return
+
+
+## Mientras alguien va adentro: si no le queda ola para TUBE_RIDE s de tubo
+## armado (más lo que falta para que se arme y el tramo final hacia el ojo),
+## la ola se alarga hacia adelante, de a poco (ver Swell.extend_front).
+func _extend_barrel(delta: float) -> void:
+	var s := barrel_wave
+	# Ya pasó su rato de tubo: lo que queda es el tramo final (no se alarga más;
+	# si no, nunca llega a la punta).
+	if _ride_left <= 0.0:
+		return
+	var along := -INF
+	for r in racers:
+		if r.barrel_wave == s and r.state_machine.current_name == &"barrel":
+			along = maxf(along, float(r.state_machine.current.call("along")))
+	if along == -INF:
+		return
+	var form_left := maxf(pow(BarrelState.FORMED, 1.0 / BARREL_FORM_POW) - _barrel_form, 0.0) * BARREL_START
+	var want := BarrelState.EXIT_RUSH_AT + EXTEND_MARGIN + PEEL_SPEED * (form_left + _ride_left)
+	var room := s.half_length - s.edge - BarrelState.END_MARGIN - along
+	var grow := minf(minf(want - room, EXTEND_SPEED * delta), 2.0 * (MAX_HALF_LENGTH - s.half_length))
+	if grow <= 0.0:
+		return
+	s.extend_front(grow)
+	# Que dure hasta terminar de romper (hasta la punta nueva) y deshacerse.
+	var travel := s.half_length - s.peel_w * s.peel_dir + Swell.BARREL_THROAT + BARREL_LEN + Swell.BARREL_COLLAPSE
+	s.lifetime = maxf(s.lifetime, s.age + travel / PEEL_SPEED + s.fade_time + 2.0)
 
 
 ## Entrar al tubo: el que anda por el piso de adentro, debajo del labio (pasó
@@ -479,6 +522,7 @@ func start_barrel(s: Swell, r: Rider, side: float) -> void:
 	var far := s.half_length + absf(s.peel_from)
 	var travel := far + Swell.BARREL_THROAT + BARREL_LEN + Swell.BARREL_COLLAPSE
 	s.lifetime = maxf(s.lifetime, s.age + travel / PEEL_SPEED + s.fade_time + 2.0)
+	_ride_left = TUBE_RIDE
 	# La espuma que salta donde cae el labio y en la garganta.
 	var spray := BarrelSpray.new()
 	spray.name = "BarrelSpray"

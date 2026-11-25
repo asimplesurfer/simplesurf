@@ -183,7 +183,7 @@ func _process(delta: float) -> void:
 	# olas grandes y tubos): se acerca por la misma línea (mismo ángulo), suave.
 	_has_free = false
 	if _water and _tube_blend <= 0.0:
-		_occlude(look, delta)
+		_occlude(look, delta, desired)
 	if _tube_blend > 0.0 and not _tube_frame.is_empty():
 		look = look.lerp(_tube_frame[1], smoothstep(0.0, 1.0, _tube_blend))
 	look_at(look, Vector3.UP)
@@ -201,31 +201,90 @@ func _process(delta: float) -> void:
 ## (mismo ángulo) hasta donde no hay agua en el medio. Se acerca rápido
 ## (BOOM_IN 1/s) pero no de golpe, y se vuelve a alejar despacio (BOOM_OUT).
 ## Si ni pegada al personaje alcanza, sube (como antes).
-const SIGHT_STEPS := 8
+const SIGHT_STEPS := 16
 const SIGHT_REFINE := 5
 const BOOM_MIN := 0.15
-const BOOM_IN := 7.0
+const BOOM_IN := 14.0
 const BOOM_OUT := 1.5
-## Lo mínimo entre la cámara y el labio de un tubo, por encima (m).
-const ROOF_MARGIN := 0.6
+## Lo mínimo entre la cámara y el labio de un tubo, por encima (m): más cerca,
+## el labio llena la pantalla (como estar abajo del agua).
+const ROOF_MARGIN := 1.2
+## Sobre el agua, pegado al personaje (m): la línea arranca a la altura de
+## sus hombros (look_height), así que ahí no se le puede pedir MIN_ABOVE_WATER
+## (si no, siempre "hay agua en el medio" y la cámara nunca se acerca).
+const LINE_ABOVE_WATER := 0.2
 ## Cuánto de la línea usa (1: toda) y dónde iría sin agua en el medio.
 var _boom: float = 1.0
 var _free_pos := Vector3.ZERO
 var _has_free: bool = false
 
 
-func _occlude(look: Vector3, delta: float) -> void:
+func _occlude(look: Vector3, delta: float, desired: Vector3) -> void:
 	var free := global_position
+	# El personaje ya salió del tubo y la cámara sigue adentro, con el labio
+	# encima (viene atrás, con el retraso de siempre): salta a su lugar detrás
+	# de él, sin el retraso (si no, queda en la boca, que se cierra).
+	var left_tube := not target.in_tube() and _water.under_roof(free.x, free.z, free.y, 0.0) \
+			and not _water.under_roof(look.x, look.z, look.y, 0.0)
+	if left_tube:
+		free = Vector3(desired.x, free.y, desired.z)
+		left_tube = _water.under_roof(free.x, free.z, free.y, 0.0)
 	var k := _sight_fraction(free, look)
+	# Y con lugar alrededor (en la boca de un tubo que se cierra, el labio
+	# puede quedar pegado de costado y llenar la pantalla).
+	while k > BOOM_MIN and not _roomy(look.lerp(free, k), look, k):
+		k = maxf(k - 0.1, BOOM_MIN)
+	# Ni ahí sale de abajo del labio: hasta donde termina el labio.
+	if k > 0.0 and left_tube:
+		k = minf(k, _out_of_tube(free, look))
 	if k < 0.0:
 		var h := _water.height_below(free.x, free.z, free.y) + MIN_ABOVE_WATER
 		global_position = Vector3(free.x, maxf(free.y, h), free.z)
 		_boom = 1.0
 		return
-	_boom = move_toward(_boom, k, (BOOM_IN if k < _boom else BOOM_OUT) * delta)
+	if k < _boom and not _roomy(look.lerp(free, _boom), look, _boom):
+		# Donde está ahora ya hay agua (por ejemplo, el labio que baja en la
+		# punta de la ola): se corrige ya, sin esperar.
+		_boom = k
+	else:
+		_boom = move_toward(_boom, k, (BOOM_IN if k < _boom else BOOM_OUT) * delta)
 	_free_pos = free
 	_has_free = true
 	global_position = look.lerp(free, _boom)
+
+
+## Hasta qué parte de la línea (de `look` a `cam`) no hay labio encima
+## (`look` está afuera y `cam` adentro del tubo).
+func _out_of_tube(cam: Vector3, look: Vector3) -> float:
+	var lo := 0.0
+	var hi := 1.0
+	for i in SIGHT_REFINE + 2:
+		var mid := (lo + hi) * 0.5
+		var q := look.lerp(cam, mid)
+		if _water.under_roof(q.x, q.z, q.y, 0.0):
+			hi = mid
+		else:
+			lo = mid
+	return maxf(lo, BOOM_MIN)
+
+
+## Lugar alrededor de la cámara: sin agua a ROOM m a los costados ni atrás.
+const ROOM := 1.0
+
+
+func _roomy(q: Vector3, look: Vector3, f: float) -> bool:
+	if not _clear_of_water(q, f):
+		return false
+	var back := q - look
+	back.y = 0.0
+	if back.length() < 0.01:
+		return true
+	back = back.normalized()
+	var side := Vector3(-back.z, 0.0, back.x)
+	for o in [side * ROOM, -side * ROOM, back * ROOM]:
+		if _water.in_water(q.x + o.x, q.z + o.z, q.y):
+			return false
+	return true
 
 
 ## Hasta qué parte de la línea (de `look` a `cam`, 0..1) no hay agua en el
@@ -234,7 +293,7 @@ func _sight_fraction(cam: Vector3, look: Vector3) -> float:
 	var prev := 0.0
 	for i in range(1, SIGHT_STEPS + 1):
 		var f := float(i) / SIGHT_STEPS
-		if _clear_of_water(look.lerp(cam, f)):
+		if _clear_of_water(look.lerp(cam, f), f):
 			prev = f
 			continue
 		if prev <= 0.0:
@@ -243,7 +302,7 @@ func _sight_fraction(cam: Vector3, look: Vector3) -> float:
 		var hi := f
 		for j in SIGHT_REFINE:
 			var mid := (lo + hi) * 0.5
-			if _clear_of_water(look.lerp(cam, mid)):
+			if _clear_of_water(look.lerp(cam, mid), mid):
 				lo = mid
 			else:
 				hi = mid
@@ -251,11 +310,15 @@ func _sight_fraction(cam: Vector3, look: Vector3) -> float:
 	return 1.0
 
 
-func _clear_of_water(q: Vector3) -> bool:
-	if q.y < _water.height_below(q.x, q.z, q.y) + MIN_ABOVE_WATER:
+## Sin agua en q, el punto a la fracción f de la línea (0: el personaje, 1:
+## donde iría la cámara). Lo que se le pide crece de a poco: pegado al
+## personaje, apenas sobre el agua; donde va la cámara, MIN_ABOVE_WATER y
+## ROOF_MARGIN debajo del labio.
+func _clear_of_water(q: Vector3, f: float) -> bool:
+	if q.y < _water.height_below(q.x, q.z, q.y) + lerpf(LINE_ABOVE_WATER, MIN_ABOVE_WATER, f):
 		return false
 	# Adentro de un tubo: tampoco metida en el labio (ni pegada a él).
-	return not _water.in_water(q.x, q.z, q.y + ROOF_MARGIN)
+	return not _water.in_water(q.x, q.z, q.y + ROOF_MARGIN * f)
 
 
 ## Dónde va la cámara adentro del tubo: [posición, a dónde mira].
