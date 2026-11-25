@@ -440,6 +440,41 @@ func tube_heights(u: float, w: float) -> PackedFloat32Array:
 	return out
 
 
+## Ola rompiendo en tubo: de qué punto de la cara (u0, antes de correrse)
+## viene el piso que se dibuja en (u, w) (la superficie más baja). El dibujo
+## suma el mar de fondo de ese punto, no el de (u, w): ver Water.floor_height_at.
+## NAN si no hay nada dibujado ahí.
+func tube_floor_source(u: float, w: float) -> float:
+	var lo := -width * 4.0
+	var hi := width * 4.0
+	var prev_u := lo
+	var prev_f := lo + profile(lo, w).x - u
+	var best_y := INF
+	var best_u := NAN
+	for k in range(1, TUBE_SCAN + 1):
+		var cu := lerpf(lo, hi, float(k) / TUBE_SCAN)
+		var cf := cu + profile(cu, w).x - u
+		if (prev_f <= 0.0) != (cf <= 0.0):
+			var a := prev_u
+			var b := cu
+			var fa := prev_f
+			for i in MATCH_REFINE:
+				var mid := (a + b) * 0.5
+				var fm := mid + profile(mid, w).x - u
+				if (fa <= 0.0) == (fm <= 0.0):
+					a = mid
+					fa = fm
+				else:
+					b = mid
+			var y := profile((a + b) * 0.5, w).y
+			if y < best_y:
+				best_y = y
+				best_u = (a + b) * 0.5
+		prev_u = cu
+		prev_f = cf
+	return best_u
+
+
 ## Lo que hay a lo largo de la ola (de atrás hacia adelante) que puede tener
 ## agua dibujada (con el corrimiento del labio y el tubo).
 func _drawn_ahead() -> float:

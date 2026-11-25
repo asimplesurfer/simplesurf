@@ -378,6 +378,14 @@ func floor_height_at(x: float, z: float) -> float:
 	for s in swells:
 		if s.curl > 0.0 and s.reaches(p):
 			h += (s.floor_height_at(p) - s.height_at(p)) * _island_fade(p)
+			# El piso de adentro se dibuja con puntos que vienen de más adelante
+			# en la cara (hasta decenas de metros): el mar de fondo que se ve es
+			# el de ese punto (ver drawn_vertex), no el de acá.
+			var uw := s.local_coords(p)
+			var u0 := s.tube_floor_source(uw.x, uw.y)
+			if not is_nan(u0):
+				var src := s.center + s.direction * u0 + Vector2(-s.direction.y, s.direction.x) * uw.y
+				h += waves.height_at(src.x, src.y, time) - waves.height_at(x, z, time)
 	return h
 
 

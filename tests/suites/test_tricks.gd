@@ -21,6 +21,7 @@ func run() -> void:
 	await _test_launches()
 	await _test_waves_and_lip()
 	await _test_tube()
+	await _test_record()
 	await _test_menu()
 
 	GameSettings.trick_time = saved_time
@@ -643,16 +644,21 @@ func _test_tube() -> void:
 	session.start()
 	await _wait(0.2)
 	_water.clear_swells()
-	var mid := _make_swell(Vector2(500.0, 500.0), 7.0)
+	var mid := _make_swell(Vector2(500.0, 500.0), 5.0)
 	mid.age = 5.0
 	mid.update(0.0)
-	_check(not session.ready_for_tube(mid), "una ola mediana no rompe en tubo")
+	_check(not session.ready_for_tube(mid), "una ola chica no rompe en tubo")
+	var medium := _make_swell(Vector2(200.0, 500.0), 7.0)
+	medium.age = 5.0
+	medium.update(0.0)
+	_check(session.ready_for_tube(medium), "una mediana sí (%.0f m)" % medium.max_amplitude)
+	_water.swells.erase(medium)
 	var giant := _make_swell(Vector2(500.0, -500.0), 11.0)
 	giant.half_length = 55.0
 	giant.age = 0.5
 	giant.update(0.0)
 	_check(not session.ready_for_tube(giant), "una gigante que todavía crece, todavía no")
-	_check(WaveMinimap.shows(giant) and not WaveMinimap.shows(mid), "el minimapa muestra las gigantes (no las medianas)")
+	_check(WaveMinimap.shows(giant) and not WaveMinimap.shows(mid), "el minimapa muestra las que pueden ser tubo (no las chicas)")
 	giant.age = 4.0
 	giant.update(0.0)
 	_check(session.ready_for_tube(giant), "una gigante ya crecida puede romper en tubo")
@@ -682,6 +688,8 @@ func _test_tube() -> void:
 	_check(session.tube_side(r, giant) == 0.0, "arriba, en la cresta, no (eso es la ola de borde)")
 	put.call(face.call(-8.0, -20.0), perp)
 	_check(session.tube_side(r, giant) == 0.0, "detrás de la ola no")
+	put.call(face.call(giant.width * 0.7, -20.0), perp)
+	_check(session.tube_side(r, giant) == 0.0, "lejos por delante de la ola no (no está debajo del labio)")
 	put.call(face.call(6.0, giant.half_length - 20.0), perp)
 	_check(session.tube_side(r, giant) == 0.0, "casi en la punta no (no queda ola para el tubo)")
 	# Pasa de costado por debajo del labio: rompe ahí y queda adentro.
@@ -708,12 +716,17 @@ func _test_tube() -> void:
 	var p0 := giant.peel_w
 	var y_jump := 0.0
 	var last_y := r.position.y
-	for i in 90:
+	var formed_at := -1.0
+	for i in int((TrickAttack.BARREL_START + 0.3) * 60.0):
 		_hold_tube_balance(r)
 		await get_tree().physics_frame
 		y_jump = maxf(y_jump, absf(r.position.y - last_y))
 		last_y = r.position.y
+		if formed_at < 0.0 and giant.curl >= 0.9:
+			formed_at = i / 60.0
 	_check(y_jump < 0.6, "mientras el labio se cierra encima, no salta (%.2f m por cuadro)" % y_jump)
+	_check(formed_at > 1.5, "el tubo se forma despacio, no de golpe (%.1f s)" % formed_at)
+	_check(r.in_tube(), "mientras se forma sigue adentro (sin caerse)")
 	_check(giant.center.distance_to(c0) > 2.0, "la ola sigue avanzando (no se queda quieta)")
 	_check((giant.peel_w - p0) * giant.peel_dir > 12.0, "el punto de rotura corre por la cresta (%.1f m)" % ((giant.peel_w - p0) * giant.peel_dir))
 	# A lo largo de la cresta: hombro entero adelante, tubo detrás.
@@ -723,6 +736,15 @@ func _test_tube() -> void:
 	_check(ahead.x == 0.0 and ahead.y == 0.0, "adelante de la rotura, el hombro (la ola entera)")
 	_check(inside_b.x > 0.95 and inside_b.y == 0.0, "detrás, el tubo abierto")
 	_check(mirror_b.x > 0.95 and mirror_b.y == 0.0, "del otro lado del pico, lo mismo (rompe para los dos lados)")
+	# El piso de adentro se siente donde se dibuja (con el mar de fondo del
+	# punto de la malla que lo forma, que viene de más adelante en la cara).
+	var rp := Vector2(r.position.x, r.position.z)
+	var ruw := giant.local_coords(rp)
+	var u0 := giant.tube_floor_source(ruw.x, ruw.y)
+	var dv := _water.drawn_vertex(giant.center + giant.direction * u0 + perp * ruw.y)
+	_check(not is_nan(u0) and Vector2(dv.x, dv.z).distance_to(rp) < 0.3 and absf(dv.y - _water.floor_height_at(rp.x, rp.y)) < 0.05,
+		"el piso del tubo se siente donde se dibuja (%.2f vs %.2f)" % [dv.y, _water.floor_height_at(rp.x, rp.y)])
+	_check(absf(r.position.y - _water.floor_height_at(rp.x, rp.y)) < 0.05, "y el surfista va sobre ese piso (no hundido)")
 	# Adentro del tubo hay piso y techo: lo que se siente es lo que se ve.
 	var w_in := giant.peel_w - giant.peel_dir * 8.0
 	var hs := giant.tube_heights(1.45 * giant.max_amplitude, w_in)
@@ -756,6 +778,60 @@ func _test_tube() -> void:
 	# Cuando la rotura llega a la otra punta, la ola se deshace.
 	await _wait((Swell.BARREL_THROAT + 20.0) / TrickAttack.PEEL_SPEED)
 	_check(session.barrel_wave == null and giant.lifetime - giant.age <= TrickAttack.TUBE_FADE + 0.1, "al terminar de romper, la ola se deshace")
+	m.queue_free()
+	await process_frame
+
+
+## Registro: Tab marca un momento (con por qué no hizo tubo la ola más cerca)
+## y L lo descarga, con las marcas y lo de antes y después de cada una.
+func _test_record() -> void:
+	var config := RaceConfig.tricks()
+	config.trick_seconds = 300
+	var m: Node = load("res://tricks.tscn").instantiate()
+	(m.get_node("Session") as GameSession).config = config
+	root.add_child(m)
+	await process_frame
+	await process_frame
+	var session := m.get_node("Session") as TrickAttack
+	var waves := m.get_node("WaveManager") as WaveManager
+	_water = m.get_node("Water") as Water
+	var r := session.racers[0]
+	_rider = r
+	session._lip_timer = 1e9
+	waves.enabled = false
+	session.start()
+	await _wait(0.3)
+	_water.clear_swells()
+	var giant := _make_swell(Vector2(r.position.x + 200.0, r.position.z), 9.0)
+	giant.age = 4.0
+	giant.update(0.0)
+	# Enfrente de la ola, arriba de la cara y de frente: ahí no engancha.
+	var p := giant.center + giant.direction * (giant.crest_u() + 1.5)
+	r.position = Vector3(p.x, _water.height_at(p.x, p.y), p.y)
+	r.heading = atan2(giant.direction.x, giant.direction.y)
+	r.controls_locked = true
+	await _wait(0.5)
+	_check(session.recorder != null and session.recorder.mark_count() == 0, "el modo trucos tiene registro")
+	await _key(KEY_TAB)
+	_check(session.recorder.mark_count() == 1, "Tab marca un momento")
+	var hud := (m.get_node("Views") as SplitScreen).huds[0]
+	_check(hud._report_label.visible and hud._report_label.text.begins_with("Marca 1"), "el HUD avisa la marca (%s)" % hud._report_label.text.replace("\n", " / "))
+	var mark: Dictionary = session.recorder._marks[0]
+	_check(str(mark.tube).begins_with("ola de 9.0 m") and not str(mark.tube).ends_with(": engancha"), "la marca dice por qué no hizo tubo (%s)" % mark.tube)
+	_check(not (mark.before as Array).is_empty() and (mark.swells as Array).size() == 1 and mark.swells[0].has("tube_check"),
+		"guarda lo de antes y las olas con el chequeo del tubo")
+	_check(mark.rider.has("position") and mark.camera.has("forward") and mark.water.has("floor"), "y el surfista, la cámara y el agua")
+	await _wait(TrickRecorder.MARK_AFTER + 0.3)
+	_check((mark.after as Array).size() == int(TrickRecorder.MARK_AFTER * 60.0), "y lo de después (%d cuadros)" % (mark.after as Array).size())
+	await _key(KEY_L)
+	var name := session.recorder.file_name()
+	var path := "user://registros/" + name
+	_check(FileAccess.file_exists(path), "L descarga el registro (%s)" % name)
+	var data = JSON.parse_string(FileAccess.get_file_as_string(path)) if FileAccess.file_exists(path) else null
+	_check(data is Dictionary and data.mode == "trucos" and (data.marks as Array).size() == 1 and not (data.samples as Array).is_empty(),
+		"con las marcas y todo lo que pasó")
+	_check(hud._report_label.text.begins_with("Registro descargado"), "el HUD avisa dónde quedó")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	m.queue_free()
 	await process_frame
 

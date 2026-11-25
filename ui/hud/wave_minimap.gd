@@ -2,12 +2,12 @@ class_name WaveMinimap
 extends Control
 ## Modo trucos: un minimapa redondo (como un radar), abajo a la izquierda, para
 ## encontrar las olas que importan:
-##   - las gigantes (TrickAttack.TUBE_MIN_HEIGHT m o más: las que después
-##     rompen en tubo), como una raya celeste en la cresta con una flechita
+##   - las grandes (TrickAttack.TUBE_MIN_HEIGHT m o más: las que pueden
+##     romper en tubo), como una raya celeste en la cresta con una flechita
 ##     hacia donde avanzan;
 ##   - la que está rompiendo en tubo: el hombro todavía entero, el tubo abierto
 ##     en naranja (titila) y lo que ya se cayó como espuma.
-## Las chicas y medianas no se dibujan, así se lee de un vistazo.
+## Las chicas no se dibujan, así se lee de un vistazo.
 ##
 ## El surfista va en el medio (flecha amarilla) y el mapa gira con la cámara:
 ## arriba es hacia donde mira. Una ola fuera del radio (RANGE) deja una marca
@@ -53,7 +53,7 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 
-## Las olas que se dibujan: gigantes o rompiendo en tubo.
+## Las olas que se dibujan: grandes (pueden romper en tubo) o rompiendo.
 static func shows(s: Swell) -> bool:
 	return s.curl > 0.0 or s.max_amplitude >= TrickAttack.TUBE_MIN_HEIGHT
 

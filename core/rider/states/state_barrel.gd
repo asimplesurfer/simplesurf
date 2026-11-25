@@ -21,9 +21,11 @@ const CATCH_UP := 4.0
 ## (antes de las puntas, donde la ola se achica).
 const END_MARGIN := 4.0
 ## Por dónde va adentro (veces la altura, hacia adelante desde el centro de
-## la ola): en el medio del hueco, debajo del labio. Y cuánto se corre de
-## costado con el equilibrio al máximo (veces la altura).
-const LINE := 1.4
+## la ola): en el medio del hueco, debajo del labio, donde el piso es plano
+## (más atrás el piso se curva para arriba hasta la pared y la tabla quedaba
+## tapada). Y cuánto se corre de costado con el equilibrio al máximo (veces
+## la altura): ni con el equilibrio al máximo llega al pie de la pared.
+const LINE := 1.6
 const REACH := 0.2
 ## Al salir, en diagonal hacia afuera (rad), por el hueco de adelante.
 const EXIT_TURN := 0.8
@@ -39,6 +41,9 @@ const TURN_TIME := 0.4
 ## suave) y él cae adentro del tubo, sin golpe (m/s para arriba y para abajo).
 const ENTRY_RISE := 28.0
 const ENTRY_DROP := 14.0
+## Desde qué forma (Swell.curl) el tubo ya está armado: hasta ahí la ola no lo
+## empuja (se está formando encima).
+const FORMED := 0.9
 ## Empujón de la ola y lo inestable (como en el tubo de carrera): crecen de a
 ## poco hasta el final.
 const PUSH_START := 0.2
@@ -139,6 +144,9 @@ func progress() -> float:
 
 
 func _update_balance(delta: float, input: RiderInput) -> void:
+	if wave.curl < FORMED:
+		# Mientras el tubo se forma encima: sin empujones (se acomoda).
+		_push_timer = maxf(_push_timer, SETTLE_TIME * 0.5)
 	_push_timer -= delta
 	if _push_timer <= 0.0:
 		_push_timer = _rng.randf_range(PUSH_MIN_TIME, PUSH_MAX_TIME)
@@ -176,7 +184,7 @@ func _place(delta: float) -> void:
 	var u := lerpf(_entry_u, LINE * a - balance * REACH * a, k)
 	var p := wave.center + wave.direction * u + perp * w
 	var y := rider.water.floor_height_at(p.x, p.y)
-	if _t_in < ENTRY_TIME:
+	if _t_in < ENTRY_TIME or wave.curl < FORMED:
 		y = clampf(y, rider.position.y - ENTRY_DROP * delta, rider.position.y + ENTRY_RISE * delta)
 	rider.position = Vector3(p.x, y, p.y)
 	var f := perp * wave.peel_dir

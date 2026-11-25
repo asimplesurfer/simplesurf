@@ -145,6 +145,11 @@ var _focus_label: Label
 var _lip_pointer: LipPointer
 ## Modo trucos: el minimapa de las olas gigantes y el tubo, abajo a la izquierda.
 var _wave_map: WaveMinimap
+## Modo trucos: aviso del registro (Tab marcó un momento; L lo descargó), arriba
+## al centro, chico (entra el motivo entero).
+var _report_label: Label
+var _report_time: float = 0.0
+const REPORT_TIME := 4.0
 ## Lado del minimapa de olas (px) y su distancia a los bordes.
 const WAVE_MAP_SIDE := 220.0
 const WAVE_MAP_MARGIN := 20.0
@@ -254,6 +259,12 @@ func _ready() -> void:
 		tricks.finished.connect(func(_score: int, _rank: int) -> void: show_center("¡TIEMPO!", PROMPT_COLOR, 1.5))
 		_tricks_box.visible = true
 		_wave_map.visible = true
+		tricks.report_marked.connect(func(n: int, tube: String) -> void:
+			show_report("Marca %d guardada (L: descargar el registro)\nTubo: %s" % [n, tube])
+		)
+		tricks.record_downloaded.connect(func(where: String) -> void:
+			show_report("Registro descargado: %s\nPasáselo a Claude con el número de cada marca." % where.get_file())
+		)
 		# Sin nitro: los trucos dan puntos.
 		_nitro_box.visible = false
 	if race:
@@ -316,6 +327,12 @@ func show_message(text: String, color: Color) -> void:
 	_message.text = text
 	_message.add_theme_color_override("font_color", color)
 	_message_time = 1.4
+
+
+## Aviso del registro del modo trucos (ver _report_label).
+func show_report(text: String) -> void:
+	_report_label.text = text
+	_report_time = REPORT_TIME
 
 
 func show_center(text: String, color: Color, seconds: float) -> void:
@@ -566,6 +583,9 @@ func _process(delta: float) -> void:
 		_center_label.visible = _center_time > 0.0 and not wrong
 
 	_center_time = maxf(0.0, _center_time - delta)
+	_report_time = maxf(0.0, _report_time - delta)
+	_report_label.visible = _report_time > 0.0
+	_report_label.modulate.a = clampf(_report_time / 0.5, 0.0, 1.0)
 	_message_time = maxf(0.0, _message_time - delta)
 	_message.visible = _message_time > 0.0
 	_message.modulate.a = clampf(_message_time / 0.4, 0.0, 1.0)
@@ -1281,6 +1301,18 @@ func _build() -> void:
 	_hint.offset_top = -158.0 - _hint.custom_minimum_size.y
 	_hint.offset_bottom = -158.0
 	root.add_child(_hint)
+
+	# Registro del modo trucos (Tab / L), arriba al centro, abajo de los mensajes.
+	_report_label = _make_label(22, Color.WHITE)
+	_report_label.anchor_left = 0.5
+	_report_label.anchor_right = 0.5
+	_report_label.offset_left = -460.0
+	_report_label.offset_right = 460.0
+	_report_label.offset_top = 128.0
+	_report_label.offset_bottom = 200.0
+	_report_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_report_label.visible = false
+	root.add_child(_report_label)
 
 	# Mensajes (truco, nitro...), arriba al centro.
 	_message = _make_label(40, NITRO_COLOR)
