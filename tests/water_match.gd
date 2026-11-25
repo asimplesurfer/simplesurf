@@ -96,7 +96,10 @@ func _run() -> void:
 		b.update(1.0 + Swell.BREAK_TIME)
 		b.curl = 1.0
 		b.peel_dir = 1.0
-		b.peel_w = 12.0
+		# Empezó a romper en el medio (w = 0) y ya corrió 20 m: rompe para los
+		# dos lados (tubo abierto, lo que se cae y su espejo).
+		b.peel_from = 0.0
+		b.peel_w = 20.0
 		b.barrel_len = 12.0
 		water.add_swell(b)
 		water._push_swells()

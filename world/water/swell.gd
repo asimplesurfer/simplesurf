@@ -56,8 +56,14 @@ var curl: float = 0.0
 ##   - más atrás, el tubo se cae: el labio ya tocó el agua, el hueco se llena
 ##     (espuma) y la ola baja (BARREL_DROP).
 ## Mientras, la ola sigue avanzando (`speed`). Ver `barrel_at`.
+##
+## Si empezó a romper en el medio de la cresta (`peel_from`: donde se paró el
+## surfista), rompe como un pico, para los dos lados: hacia `peel_dir` el tubo
+## que sigue el surfista y hacia el otro lado lo mismo, espejado (ver `peel_s`).
+## INF: empezó más allá de la punta (rompe para un solo lado).
 var peel_w: float = -1.0e9
 var peel_dir: float = 1.0
+var peel_from: float = INF
 var peel_speed: float = 0.0
 var barrel_len: float = 22.0
 const BARREL_THROAT := 14.0
@@ -263,7 +269,7 @@ func edge_len() -> float:
 func barrel_at(w: float) -> Vector3:
 	if curl <= 0.0:
 		return Vector3.ZERO
-	var s := (w - peel_w) * peel_dir
+	var s := peel_s(w)
 	if s > 0.0:
 		return Vector3(curl * (1.0 - smoothstep(0.0, BARREL_THROAT, s)), 0.0, 0.0)
 	var q := 1.0 - smoothstep(-barrel_len - BARREL_COLLAPSE, -barrel_len, s)
@@ -276,13 +282,32 @@ func barrel_at(w: float) -> Vector3:
 func land_at(w: float) -> float:
 	if curl <= 0.0:
 		return 0.0
-	var s := (w - peel_w) * peel_dir
+	var s := peel_s(w)
 	return smoothstep(0.0, barrel_len + BARREL_COLLAPSE * 0.5, -s)
 
 
-## Para el shader: (punto de rotura, hacia dónde, largo del tubo, -).
+## Cuánto corrió la rotura desde donde empezó (m; ver `peel_from`). Sin punto
+## de partida, un número enorme (como si viniera de lejos).
+func peel_run() -> float:
+	if is_inf(peel_from):
+		return 1.0e6
+	return maxf((peel_w - peel_from) * peel_dir, 0.0)
+
+
+## Dónde queda `w` respecto de la rotura (m): positivo = todavía no rompió (el
+## hombro); negativo = ya rompió hace tantos metros (el tubo y, más atrás, lo
+## que se cae). De las dos roturas (la que va hacia `peel_dir` y su espejo, la
+## que vuelve desde `peel_from`), la que le queda más cerca. Igual en
+## water_surface.gdshaderinc.
+func peel_s(w: float) -> float:
+	var a := (w - peel_w) * peel_dir
+	return maxf(a, -a - 2.0 * peel_run())
+
+
+## Para el shader: (punto de rotura, hacia dónde, largo del tubo, cuánto
+## corrió desde donde empezó).
 func barrel_uniform() -> Vector4:
-	return Vector4(peel_w, peel_dir, barrel_len, 0.0)
+	return Vector4(peel_w, peel_dir, barrel_len, peel_run())
 
 
 func _edge(aw: float) -> float:

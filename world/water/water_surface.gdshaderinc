@@ -27,7 +27,8 @@ uniform vec4 swell_a5; uniform vec4 swell_b5;
 uniform vec4 swell_a6; uniform vec4 swell_b6;
 uniform vec4 swell_a7; uniform vec4 swell_b7;
 // La ola que está rompiendo en tubo (ver swell.gd, peel_w): (punto de rotura
-// a lo ancho, hacia dónde avanza ±1, largo del tubo abierto, -).
+// a lo ancho, hacia dónde avanza ±1, largo del tubo abierto, cuánto corrió
+// desde donde empezó: rompe para los dos lados, ver swell.gd peel_s).
 uniform vec4 barrel = vec4(-1.0e9, 1.0, 22.0, 0.0);
 // Ola constante (ver ring_wave.gd). a = (centro.x, centro.z, radio, ancho); b = (amplitud, base, lóbulos, fase)
 uniform vec4 ring_a = vec4(0.0, 0.0, 1.0, 1.0);
@@ -184,6 +185,7 @@ void add_swell(vec4 a, vec4 b, vec2 p, inout float h, inout vec2 g, inout vec2 d
 	float fill = 0.0;
 	if (curl > 0.0) {
 		float ps = (w - barrel.x) * barrel.y;
+		ps = max(ps, -ps - 2.0 * barrel.w);
 		land = smoothstep(0.0, barrel.z + BARREL_COLLAPSE * 0.5, -ps);
 		if (ps > 0.0) {
 			curl *= 1.0 - smoothstep(0.0, BARREL_THROAT, ps);

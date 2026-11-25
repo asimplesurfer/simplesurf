@@ -29,6 +29,16 @@ const REACH := 0.2
 const EXIT_TURN := 0.8
 ## Al entrar, un ratito sin empujones (para acomodarse).
 const SETTLE_TIME := 1.0
+## Al entrar, de dónde venía (por la cara de adelante) pasa a su línea adentro
+## del tubo de a poco, a medida que el labio se cierra encima (s), y gira
+## hacia donde corre la rotura (s).
+const ENTRY_TIME := 0.9
+const TURN_TIME := 0.4
+## Mientras el labio se forma, la cara de adelante se infla y enseguida se
+## abre el piso del tubo: la ola lo levanta (sube con la cara, apenas más
+## suave) y él cae adentro del tubo, sin golpe (m/s para arriba y para abajo).
+const ENTRY_RISE := 28.0
+const ENTRY_DROP := 14.0
 ## Empujón de la ola y lo inestable (como en el tubo de carrera): crecen de a
 ## poco hasta el final.
 const PUSH_START := 0.2
@@ -49,6 +59,11 @@ var balance: float = 0.0
 ## cresta): para el progreso.
 var _from: float = 0.0
 var _push: float = 0.0
+## Por dónde venía al entrar (m hacia adelante de la ola) y hacia dónde
+## miraba; cuánto hace que entró (s).
+var _entry_u: float = 0.0
+var _entry_heading: float = 0.0
+var _t_in: float = 0.0
 var _push_target: float = 0.0
 var _push_timer: float = 0.0
 var _rng := RandomNumberGenerator.new()
@@ -61,11 +76,12 @@ func enter(_previous: StringName) -> void:
 	_push = 0.0
 	_push_target = 0.0
 	_push_timer = SETTLE_TIME
+	_t_in = 0.0
+	_entry_heading = rider.heading
 	if wave:
 		var uw := wave.local_coords(Vector2(rider.position.x, rider.position.z))
 		rel = clampf((uw.y - wave.peel_w) * wave.peel_dir, -wave.barrel_len, 0.0)
-		# Donde entró de costado es su equilibrio (sin pasarse).
-		balance = clampf((LINE * wave.max_amplitude - uw.x) / (REACH * wave.max_amplitude), -0.5, 0.5)
+		_entry_u = uw.x
 		_from = _along()
 	rider.set_recovery_stage(Rider.RecoveryStage.STANDING)
 	rider.grounded = true
@@ -93,11 +109,12 @@ func update(delta: float, input: RiderInput) -> void:
 	if wave == null or wave.curl <= 0.0 or rider.water == null or not rider.water.swells.has(wave):
 		state_machine.transition_to(&"riding")
 		return
+	_t_in += delta
 	# Alcanza el bolsillo (si entró más atrás) y va con la rotura.
 	rel = move_toward(rel, POCKET, CATCH_UP * delta)
 	rider.update_exotic(progress())
 	_update_balance(delta, input)
-	_place()
+	_place(delta)
 	if absf(balance) >= 1.0:
 		_wipe_out()
 		return
@@ -149,16 +166,21 @@ func wall_on_right_sign() -> float:
 
 
 ## Lo pone en su lugar: sobre el piso de adentro del tubo, mirando hacia
-## donde avanza la rotura.
-func _place() -> void:
+## donde avanza la rotura. Recién entrado, todavía cerca de por donde venía
+## (el labio se está cerrando encima).
+func _place(delta: float) -> void:
 	var a := wave.max_amplitude
 	var perp := Vector2(-wave.direction.y, wave.direction.x)
 	var w := wave.peel_w + rel * wave.peel_dir
-	var u := LINE * a - balance * REACH * a
+	var k := minf(smoothstep(0.0, ENTRY_TIME, _t_in), smoothstep(0.2, 0.9, wave.curl))
+	var u := lerpf(_entry_u, LINE * a - balance * REACH * a, k)
 	var p := wave.center + wave.direction * u + perp * w
-	rider.position = Vector3(p.x, rider.water.floor_height_at(p.x, p.y), p.y)
+	var y := rider.water.floor_height_at(p.x, p.y)
+	if _t_in < ENTRY_TIME:
+		y = clampf(y, rider.position.y - ENTRY_DROP * delta, rider.position.y + ENTRY_RISE * delta)
+	rider.position = Vector3(p.x, y, p.y)
 	var f := perp * wave.peel_dir
-	rider.heading = atan2(-f.x, -f.y)
+	rider.heading = lerp_angle(_entry_heading, atan2(-f.x, -f.y), smoothstep(0.0, TURN_TIME, _t_in))
 	rider.rotation.y = rider.heading
 	rider.speed = wave.peel_speed
 	rider.water_normal = Vector3.UP

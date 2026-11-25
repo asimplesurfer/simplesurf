@@ -245,9 +245,6 @@ func _ready() -> void:
 	if tricks:
 		tricks.countdown_tick.connect(_on_countdown_tick)
 		tricks.scored.connect(_on_scored)
-		tricks.barrel_started.connect(func(_w: Swell) -> void:
-			show_message("¡Una ola rompe en tubo! Metete debajo del labio", PROMPT_COLOR)
-		)
 		tricks.focus_started.connect(func(r: Rider) -> void:
 			if r == rider:
 				show_message("¡Concentración!", PROMPT_COLOR)

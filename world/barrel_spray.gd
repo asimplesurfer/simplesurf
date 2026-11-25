@@ -5,6 +5,8 @@ extends Node3D
 ##   - detrás del tubo, donde el labio pega contra el agua y el tubo se cae:
 ##     la explosión de espuma hacia arriba y hacia adelante;
 ##   - en la garganta, la bruma que se desprende del labio recién tirado.
+## Si rompió en el medio de la cresta (Swell.peel_from), rompe para los dos
+## lados: del otro lado, lo mismo espejado.
 ## Cuando la ola se va, deja de soltar y se borra.
 
 ## Gotas por metro y cuánto dura cada una (s).
@@ -18,6 +20,9 @@ var wave: Swell
 var water: Water
 var _land: CPUParticles3D
 var _lip: CPUParticles3D
+## Los del otro lado del pico (espejados).
+var _land_back: CPUParticles3D
+var _lip_back: CPUParticles3D
 var _ending: float = -1.0
 
 
@@ -48,7 +53,13 @@ func setup(p_wave: Swell, p_water: Water) -> void:
 	_lip.initial_velocity_max = 4.5
 	_lip.gravity = Vector3(0.0, -2.5, 0.0)
 	add_child(_lip)
-	for p in [_land, _lip]:
+	_land_back = _land.duplicate() as CPUParticles3D
+	_land_back.name = "LandBack"
+	add_child(_land_back)
+	_lip_back = _lip.duplicate() as CPUParticles3D
+	_lip_back.name = "LipBack"
+	add_child(_lip_back)
+	for p in [_land, _lip, _land_back, _lip_back]:
 		WaterFx.tint(p, foam)
 	_follow()
 
@@ -63,21 +74,41 @@ func _physics_process(delta: float) -> void:
 		return
 	var gone := wave.is_dead() or (water != null and not water.swells.has(wave))
 	if gone or wave.curl <= 0.0 or wave.lifetime - wave.age < wave.fade_time:
-		_land.emitting = false
-		_lip.emitting = false
+		for p in [_land, _lip, _land_back, _lip_back]:
+			p.emitting = false
 		_ending = LIFETIME * 1.5
 		return
 	_follow()
-	# Solo donde la ola existe (no más allá de las puntas).
-	var crash := absf(_crash_w())
-	WaterFx.emit(_land, crash < wave.half_length - wave.edge and wave.curl > 0.8)
-	WaterFx.emit(_lip, absf(wave.peel_w) < wave.half_length - wave.edge and wave.curl > 0.5)
+	# Solo donde la ola existe (no más allá de las puntas) y donde ya se cae
+	# (pasando por donde empezó a romper).
+	var inside := wave.half_length - wave.edge
+	var falling := wave.peel_run() >= _crash_back()
+	WaterFx.emit(_land, absf(_crash_w()) < inside and falling and wave.curl > 0.8)
+	WaterFx.emit(_lip, absf(wave.peel_w) < inside and wave.curl > 0.5)
+	WaterFx.emit(_land_back, absf(_mirror(_crash_w())) < inside and falling and wave.curl > 0.8)
+	WaterFx.emit(_lip_back, absf(_mirror(_lip_w())) < inside and wave.curl > 0.5)
+
+
+## Cuánto detrás del punto de rotura explota.
+func _crash_back() -> float:
+	return wave.barrel_len + Swell.BARREL_COLLAPSE * LAND_SPAN * 0.5
 
 
 ## Dónde explota (a lo ancho de la ola): al principio del tramo donde se cae.
 func _crash_w() -> float:
-	var back := wave.barrel_len + Swell.BARREL_COLLAPSE * LAND_SPAN * 0.5
-	return wave.peel_w - wave.peel_dir * back
+	return wave.peel_w - wave.peel_dir * _crash_back()
+
+
+## Dónde se desprende la bruma: en la garganta, delante del punto de rotura.
+func _lip_w() -> float:
+	return wave.peel_w + wave.peel_dir * (Swell.BARREL_THROAT * 0.4)
+
+
+## Lo mismo del otro lado del pico (espejado respecto de donde empezó).
+func _mirror(w: float) -> float:
+	if is_inf(wave.peel_from):
+		return INF
+	return 2.0 * wave.peel_from - w
 
 
 ## Se pone en la ola: la explosión donde el tubo se cae (donde pegó el labio,
@@ -89,8 +120,12 @@ func _follow() -> void:
 	var x := Vector3(perp.x, 0.0, perp.y) * wave.peel_dir
 	var fwd := Vector3(wave.direction.x, 0.0, wave.direction.y)
 	var basis := Basis(x, Vector3.UP, -fwd)
-	var land_p := wave.center + wave.direction * (1.6 * a) + perp * _crash_w()
-	_land.global_transform = Transform3D(basis, Vector3(land_p.x, a * 0.2, land_p.y))
-	var lip_w := wave.peel_w + wave.peel_dir * (Swell.BARREL_THROAT * 0.4)
-	var lip_p := wave.center + wave.direction * (1.35 * a) + perp * lip_w
-	_lip.global_transform = Transform3D(basis, Vector3(lip_p.x, a * 0.95, lip_p.y))
+	var at := func(u: float, w: float, y: float) -> Vector3:
+		var q: Vector2 = wave.center + wave.direction * u + perp * w
+		return Vector3(q.x, y, q.y)
+	_land.global_transform = Transform3D(basis, at.call(1.6 * a, _crash_w(), a * 0.2))
+	_lip.global_transform = Transform3D(basis, at.call(1.35 * a, _lip_w(), a * 0.95))
+	if not is_inf(wave.peel_from):
+		# (Los emisores son parejos a lo largo de la cresta: la misma orientación.)
+		_land_back.global_transform = Transform3D(basis, at.call(1.6 * a, _mirror(_crash_w()), a * 0.2))
+		_lip_back.global_transform = Transform3D(basis, at.call(1.35 * a, _mirror(_lip_w()), a * 0.95))

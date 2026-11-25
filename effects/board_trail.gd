@@ -167,8 +167,10 @@ func _vertex(edge: Array, which: int) -> void:
 	_mesh.surface_add_vertex(edge[which])
 
 
+## El agua donde anda la tabla: adentro de un tubo, el piso (no el techo
+## del labio, que queda arriba).
 func _water_y(p: Vector2) -> float:
 	var y := height_offset
 	if rider.water:
-		y += rider.water.height_at(p.x, p.y)
+		y += rider.water.floor_height_at(p.x, p.y)
 	return y
