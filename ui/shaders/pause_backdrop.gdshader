@@ -9,9 +9,9 @@ shader_type canvas_item;
 // anima al abrir y al cerrar, así el foco "se va" y "vuelve" de a poco.
 //
 // Lee la pantalla con mipmaps: el motor los arma ya suavizados, así un
-// desenfoque enorme sale con pocas muestras (también en la web).
-
-#include "res://effects/shaders/noise.gdshaderinc"
+// desenfoque enorme sale con pocas muestras (también en la web). Está hecho
+// para gastar poco: unas 16 lecturas de la pantalla por píxel y cuentas
+// baratas (sin senos para los números al azar).
 
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear_mipmap;
 uniform float amount : hint_range(0.0, 1.0) = 0.0;
@@ -46,24 +46,37 @@ uniform float tint = 0.45;
 // Bordes un poco más oscuros: da profundidad y deja leer el menú.
 uniform float vignette = 0.28;
 
-const float GOLDEN_ANGLE = 2.39996323;
 const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 
-// Desenfoque suave: unas muestras en espiral sobre un mipmap (que ya viene
-// desenfocado). Las muestras borran los "cuadrados" del mipmap; el peso cae
-// hacia afuera, como un desenfoque gaussiano.
+// Desenfoque suave: un mipmap (que ya viene desenfocado) en el centro y cuatro
+// alrededor, en cruz girada: borran los "cuadrados" del mipmap. Con un mipmap
+// un poco más chico, 5 muestras alcanzan para lo que antes llevaba 10.
 vec3 soft(vec2 uv, float lod, vec2 radius) {
-	vec3 sum = vec3(0.0);
-	float total = 0.0;
-	for (int i = 0; i < 10; i++) {
-		float f = (float(i) + 0.5) / 10.0;
-		float a = float(i) * GOLDEN_ANGLE;
-		vec2 o = vec2(cos(a), sin(a)) * sqrt(f) * radius;
-		float w = 1.0 - 0.65 * f;
-		sum += textureLod(screen_tex, uv + o, lod).rgb * w;
-		total += w;
-	}
-	return sum / total;
+	vec3 c = textureLod(screen_tex, uv, lod).rgb * 2.0;
+	c += textureLod(screen_tex, uv + vec2(0.92, 0.38) * radius, lod).rgb;
+	c += textureLod(screen_tex, uv + vec2(-0.38, 0.92) * radius, lod).rgb;
+	c += textureLod(screen_tex, uv + vec2(-0.92, -0.38) * radius, lod).rgb;
+	c += textureLod(screen_tex, uv + vec2(0.38, -0.92) * radius, lod).rgb;
+	return c / 6.0;
+}
+
+// Cuatro números al azar (0..1) por celda, sin senos (más barato).
+vec4 hash4(vec2 p) {
+	vec4 p4 = fract(p.xyxy * vec4(0.1031, 0.1030, 0.0973, 0.1099));
+	p4 += dot(p4, p4.wzxy + 33.33);
+	return fract((p4.xxyz + p4.yzzw) * p4.zywx);
+}
+
+// Ruido suave de dos valores (para que la imagen ondule).
+vec2 noise2(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = fract(p);
+	f = f * f * (3.0 - 2.0 * f);
+	vec2 a = hash4(i).xy;
+	vec2 b = hash4(i + vec2(1.0, 0.0)).xy;
+	vec2 c = hash4(i + vec2(0.0, 1.0)).xy;
+	vec2 d = hash4(i + vec2(1.0, 1.0)).xy;
+	return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 
 // El mismo tono, bien saturado y a pleno brillo (para teñir las luces).
@@ -99,39 +112,46 @@ vec3 soft_light(vec3 base, vec3 blend) {
 // puede tener una luz); cada luz da vueltas y titila a su ritmo, y mezcla un
 // color de la paleta con el de la escena (`scene`). `soft_edge`: qué tan
 // difuso es el borde.
+//
+// Cada luz se aleja como mucho 0,9 celdas del centro de la suya (0,2 de
+// corrimiento + 0,28 de vuelta + 0,42 de radio), así que alcanza con mirar
+// las 4 celdas más cercanas (no las 9 de alrededor).
 vec3 bokeh_layer(vec2 p, float seed, float t, vec3 scene, float soft_edge) {
-	vec2 cell = floor(p);
+	vec2 first = floor(p - 0.5);
 	vec3 acc = vec3(0.0);
-	for (int y = -1; y <= 1; y++) {
-		for (int x = -1; x <= 1; x++) {
-			vec2 c = cell + vec2(float(x), float(y));
-			float h = fx_hash(c + seed);
-			if (h > bokeh_density) {
+	for (int y = 0; y <= 1; y++) {
+		for (int x = 0; x <= 1; x++) {
+			vec2 c = first + vec2(float(x), float(y));
+			vec4 h = hash4(c + seed);
+			if (h.x > bokeh_density) {
 				continue;
 			}
-			float h2 = fx_hash(c + seed + 1.7);
-			float h3 = fx_hash(c + seed + 3.1);
-			float h4 = fx_hash(c + seed + 5.3);
 			// Cada luz da vueltas a su ritmo alrededor de su lugar (además de
 			// lo que se mueve la capa entera): nunca queda quieta.
-			float speed = 0.35 + h4 * 0.6;
-			vec2 orbit = vec2(sin(t * speed + h2 * 6.283), cos(t * speed * 0.8 + h3 * 6.283)) * 0.28;
-			vec2 center = c + 0.5 + (vec2(h2, h3) - 0.5) * 0.4 + orbit;
-			float r = mix(0.2, 0.42, h4);
-			float d = length(p - center);
+			float speed = 0.35 + h.w * 0.6;
+			vec2 orbit = vec2(sin(t * speed + h.y * 6.283), cos(t * speed * 0.8 + h.z * 6.283)) * 0.28;
+			vec2 center = c + 0.5 + (h.yz - 0.5) * 0.4 + orbit;
+			float r = mix(0.2, 0.42, h.w);
+			vec2 to = p - center;
+			float d2 = dot(to, to);
+			if (d2 >= r * r) {
+				continue;
+			}
+			float d = sqrt(d2);
 			// Disco con el borde apenas más brillante (como el de una lente).
 			float disc = 1.0 - smoothstep(r * (1.0 - soft_edge), r, d);
 			float rim = smoothstep(r * 0.5, r * 0.95, d) * disc;
-			float twinkle = 0.5 + 0.5 * sin(t * (0.8 + h2 * 1.6) + h3 * 6.283);
-			vec3 hue = mix(scene, light_hue(fract(h * 7.31 + h4)), 0.5);
+			float twinkle = 0.5 + 0.5 * sin(t * (0.8 + h.y * 1.6) + h.z * 6.283);
+			vec3 hue = mix(scene, light_hue(fract(h.x * 7.31 + h.w)), 0.5);
 			acc += (disc * 0.65 + rim * 0.45) * twinkle * hue;
 		}
 	}
 	return acc;
 }
 
-// Manchas grandes de luz de color que flotan por la pantalla.
-vec3 light_leaks(vec2 uv, float aspect, float t, float lod) {
+// Manchas grandes de luz de color que flotan por la pantalla (mezclan su color
+// con el de la escena en cada punto, `scene`).
+vec3 light_leaks(vec2 uv, float aspect, float t, vec3 scene) {
 	vec2 p = uv * vec2(aspect, 1.0);
 	vec3 acc = vec3(0.0);
 	for (int i = 0; i < 4; i++) {
@@ -143,8 +163,7 @@ vec3 light_leaks(vec2 uv, float aspect, float t, float lod) {
 		float r = 0.3 + 0.1 * sin(t * 0.4 + fi * 1.3);
 		vec2 d = p - c;
 		float g = exp(-dot(d, d) / (r * r));
-		vec3 scene = textureLod(screen_tex, clamp(c / vec2(aspect, 1.0), 0.0, 1.0), lod).rgb;
-		acc += g * mix(light_hue(fi * 0.25 + 0.01), vivid(scene), 0.35);
+		acc += g * mix(light_hue(fi * 0.25 + 0.01), scene, 0.35);
 	}
 	return acc;
 }
@@ -158,10 +177,7 @@ void fragment() {
 	float t = TIME;
 
 	// La imagen ondula: dos ruidos lentos desplazan dónde se lee la pantalla.
-	vec2 warp = vec2(
-		fx_noise(uv * vec2(2.2 * aspect, 2.2) + vec2(t * 0.14, 1.3)),
-		fx_noise(uv * vec2(2.2 * aspect, 2.2) + vec2(7.1, t * 0.11))
-	) - 0.5;
+	vec2 warp = noise2(uv * vec2(2.2 * aspect, 2.2) + vec2(t * 0.14, t * 0.11)) - 0.5;
 	vec2 wuv = uv + warp * flow * k;
 
 	// Radio del desenfoque en píxeles y el mipmap que le corresponde.
@@ -169,7 +185,7 @@ void fragment() {
 	float lod = log2(max(r_px * 0.5, 1.0));
 	vec2 radius = r_px * px;
 
-	vec3 base = soft(wuv, lod, radius);
+	vec3 base = soft(wuv, lod + 0.6, radius * 0.55);
 
 	// Difusión cromática: el rojo se corre hacia un lado y el azul hacia el
 	// otro (la dirección gira despacio), más desenfocados que el resto.
@@ -180,7 +196,7 @@ void fragment() {
 	base.b = mix(base.b, textureLod(screen_tex, wuv - dir, lod_b).b, 0.5 * k);
 
 	// Una copia mucho más desenfocada: para el resplandor y el soft focus.
-	vec3 wide = soft(wuv, lod + 1.7, radius * 3.2);
+	vec3 wide = soft(wuv, lod + 2.3, radius * 1.6);
 	float wl = dot(wide, LUMA);
 
 	vec3 col = base;
@@ -192,25 +208,24 @@ void fragment() {
 	col = 1.0 - (1.0 - col) * (1.0 - wide * glow * k);
 
 	// Destello horizontal: las luces fuertes se estiran hacia los costados.
-	vec3 line = vec3(0.0);
-	for (int i = 1; i <= 3; i++) {
-		float o = float(i) * 0.07 / aspect;
-		float w = 1.0 - float(i) * 0.25;
-		line += (textureLod(screen_tex, vec2(wuv.x + o, wuv.y), lod + 1.0).rgb
-			+ textureLod(screen_tex, vec2(wuv.x - o, wuv.y), lod + 1.0).rgb) * w;
-	}
-	line /= 3.0;
+	float o1 = 0.05 / aspect;
+	float o2 = 0.13 / aspect;
+	vec3 line = (textureLod(screen_tex, vec2(wuv.x + o1, wuv.y), lod + 2.0).rgb
+		+ textureLod(screen_tex, vec2(wuv.x - o1, wuv.y), lod + 2.0).rgb) * 0.75
+		+ (textureLod(screen_tex, vec2(wuv.x + o2, wuv.y), lod + 2.0).rgb
+		+ textureLod(screen_tex, vec2(wuv.x - o2, wuv.y), lod + 2.0).rgb) * 0.5;
+	line /= 2.5;
 	float ll = dot(line, LUMA);
 	col += vivid(line) * max(ll - 0.55, 0.0) * streak * k;
 
 	// Manchas grandes de color que flotan (se suman "en pantalla").
-	vec3 leak = light_leaks(uv, aspect, t, lod + 3.0);
+	vec3 scene_light = vivid(wide);
+	vec3 leak = light_leaks(uv, aspect, t, scene_light);
 	col = 1.0 - (1.0 - col) * (1.0 - clamp(leak * leaks * k, 0.0, 1.0));
 
 	// Luces redondas fuera de foco, en tres capas que suben a distinto ritmo
 	// (las grandes, más difusas). Más fuertes donde la escena brilla.
 	vec2 bp = uv * vec2(aspect, 1.0);
-	vec3 scene_light = vivid(wide);
 	vec3 spots = bokeh_layer(bp * 7.0 + vec2(sin(t * 0.3) * 0.4, t * 0.3), 0.0, t, scene_light, 0.2) * 0.45
 		+ bokeh_layer(bp * 4.0 + vec2(t * 0.06, t * 0.16), 11.0, t, scene_light, 0.3) * 0.6
 		+ bokeh_layer(bp * 2.2 + vec2(-t * 0.04, t * 0.08), 23.0, t, scene_light, 0.55) * 0.5;
@@ -235,7 +250,7 @@ void fragment() {
 	col *= mix(1.0, vig, k);
 
 	// Grano finito: evita los "escalones" en los degradés tan suaves.
-	float grain = fx_hash(FRAGCOORD.xy + fract(t * 7.0) * 61.0) - 0.5;
+	float grain = hash4(FRAGCOORD.xy + fract(t * 7.0) * 61.0).x - 0.5;
 	col += grain * (2.5 / 255.0) * k;
 
 	COLOR = vec4(col, 1.0);
