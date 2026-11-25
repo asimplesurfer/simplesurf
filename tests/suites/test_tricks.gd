@@ -79,6 +79,16 @@ func _test_match() -> void:
 	_check(not r.free_ride, "avanza solo, como en una carrera")
 	var hud := (m.get_node("Views") as SplitScreen).huds[0]
 	_check(hud._tricks_box.visible and not hud._nitro_box.visible, "el HUD muestra reloj y puntos, sin nitro")
+	_check(hud._wave_map.visible, "abajo a la izquierda, el minimapa de las olas")
+	var vp: Vector2 = hud._wave_map.get_viewport_rect().size
+	var map_rect: Rect2 = hud._wave_map.get_global_rect()
+	_check(map_rect.position.x < vp.x * 0.25 and map_rect.end.y > vp.y * 0.75, "el minimapa está abajo a la izquierda (%s)" % str(map_rect))
+	# Gira con la cámara: lo de adelante, arriba; lo de la derecha, a la derecha.
+	var ahead := WaveMinimap.map_offset(Vector2(0.0, -10.0), Vector2.ZERO, Vector2(0.0, -1.0))
+	var right := WaveMinimap.map_offset(Vector2(10.0, 0.0), Vector2.ZERO, Vector2(0.0, -1.0))
+	var turned := WaveMinimap.map_offset(Vector2(10.0, 0.0), Vector2.ZERO, Vector2(1.0, 0.0))
+	_check(ahead.is_equal_approx(Vector2(0.0, -10.0)) and right.is_equal_approx(Vector2(10.0, 0.0)) and turned.is_equal_approx(Vector2(0.0, -10.0)),
+		"el minimapa gira con la cámara: adelante queda arriba (%s, %s, %s)" % [ahead, right, turned])
 
 	# Cuenta regresiva: quieto y el reloj no corre.
 	_check(session.state == TrickAttack.State.COUNTDOWN and r.controls_locked, "arranca con cuenta regresiva")
@@ -632,6 +642,7 @@ func _test_tube() -> void:
 	giant.half_length = 55.0
 	giant.age = giant.grow_time + TrickAttack.TUBE_AFTER - 1.0
 	_check(not session.ready_for_tube(giant), "una gigante recién formada todavía no")
+	_check(WaveMinimap.shows(giant) and not WaveMinimap.shows(mid), "el minimapa muestra las gigantes (no las medianas)")
 	# El surfista, lejos detrás de la ola, hacia un costado (w > 0).
 	r.position = Vector3(400.0, _water.height_at(400.0, -470.0), -470.0)
 	r.controls_locked = true
