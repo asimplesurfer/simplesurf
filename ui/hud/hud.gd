@@ -143,6 +143,11 @@ var _lip_meter: LipMeter
 var _focus_label: Label
 ## Para probar: flecha hacia la ola de borde (ver TrickAttack.SHOW_LIP_POINTER).
 var _lip_pointer: LipPointer
+## Modo trucos: el minimapa de las olas gigantes y el tubo, abajo a la izquierda.
+var _wave_map: WaveMinimap
+## Lado del minimapa de olas (px) y su distancia a los bordes.
+const WAVE_MAP_SIDE := 220.0
+const WAVE_MAP_MARGIN := 20.0
 var _message_time: float = 0.0
 ## Contador de vueltas del truco mientras está en el aire (x1, x2...).
 var _trick_label: Label
@@ -251,6 +256,7 @@ func _ready() -> void:
 			tricks.lip_wave_spawned.connect(func(_w: Swell) -> void: show_message("¡Ola de borde!", PROMPT_COLOR))
 		tricks.finished.connect(func(_score: int, _rank: int) -> void: show_center("¡TIEMPO!", PROMPT_COLOR, 1.5))
 		_tricks_box.visible = true
+		_wave_map.visible = true
 		# Sin nitro: los trucos dan puntos.
 		_nitro_box.visible = false
 	if race:
@@ -1191,14 +1197,27 @@ func _build() -> void:
 	_style_number(_gain_label, 30)
 	_tricks_box.add_child(_gain_label)
 
-	# Modo trucos: la concentración (texto y porcentaje), abajo a la izquierda.
+	# Modo trucos: el minimapa de las olas, abajo a la izquierda.
+	_wave_map = WaveMinimap.new()
+	_wave_map.name = "WaveMap"
+	_wave_map.hud = self
+	_wave_map.anchor_top = 1.0
+	_wave_map.anchor_bottom = 1.0
+	_wave_map.offset_left = WAVE_MAP_MARGIN
+	_wave_map.offset_right = WAVE_MAP_MARGIN + WAVE_MAP_SIDE
+	_wave_map.offset_top = -WAVE_MAP_MARGIN - WAVE_MAP_SIDE
+	_wave_map.offset_bottom = -WAVE_MAP_MARGIN
+	_wave_map.visible = false
+	root.add_child(_wave_map)
+
+	# Modo trucos: la concentración (texto y porcentaje), arriba del minimapa.
 	_focus_label = _make_label(30, Color.WHITE)
 	_focus_label.anchor_top = 1.0
 	_focus_label.anchor_bottom = 1.0
 	_focus_label.offset_left = 24.0
 	_focus_label.offset_right = 400.0
-	_focus_label.offset_top = -70.0
-	_focus_label.offset_bottom = -24.0
+	_focus_label.offset_top = -WAVE_MAP_MARGIN - WAVE_MAP_SIDE - 54.0
+	_focus_label.offset_bottom = -WAVE_MAP_MARGIN - WAVE_MAP_SIDE - 8.0
 	_focus_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_style_number(_focus_label, 30)
 	_focus_label.visible = false
