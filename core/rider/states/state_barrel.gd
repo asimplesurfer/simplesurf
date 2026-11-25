@@ -53,8 +53,8 @@ const TURN_TIME := 0.4
 ## suave) y él cae adentro del tubo, sin golpe (m/s para arriba y para abajo).
 const ENTRY_RISE := 28.0
 const ENTRY_DROP := 14.0
-## Desde qué forma (Swell.curl) el tubo ya está armado: hasta ahí la ola no lo
-## empuja (se está formando encima).
+## Desde qué forma (Swell.curl) el tubo ya está armado y lo tapa: hasta ahí
+## (se está formando encima) la ola lo empuja pero no lo puede tirar.
 const FORMED := 0.9
 ## El espacio de adentro es el que se ve (Swell.tube_band): con el equilibrio
 ## al máximo toca la pared (o queda bajo la punta del labio). BODY_MARGIN: la
@@ -85,8 +85,9 @@ var wave: Swell
 var rel: float = POCKET
 ## Equilibrio: 0 en el medio, +1 tapado por el labio, -1 escupido por la espuma.
 var balance: float = 0.0
-## Dónde empezó y dónde termina (punto de rotura + rel, a lo largo de la
-## cresta): para el progreso.
+## Dónde empezó (punto de rotura + rel, a lo largo de la cresta), para el
+## progreso: sin contar lo que se alargó la ola después (ver Swell.grown y
+## `_start`).
 var _from: float = 0.0
 var _push: float = 0.0
 ## Por dónde venía al entrar (m hacia adelante de la ola) y hacia dónde
@@ -126,7 +127,7 @@ func enter(_previous: StringName) -> void:
 		var uw := wave.local_coords(Vector2(rider.position.x, rider.position.z))
 		rel = clampf((uw.y - wave.peel_w) * wave.peel_dir, -wave.barrel_len, 0.0)
 		_entry_u = uw.x
-		_from = _along()
+		_from = along() + wave.grown * 0.5
 	rider.set_recovery_stage(Rider.RecoveryStage.STANDING)
 	rider.grounded = true
 	rider.vertical_speed = 0.0
@@ -169,12 +170,12 @@ func update(delta: float, input: RiderInput) -> void:
 	if absf(balance) >= 1.0:
 		_wipe_out()
 		return
-	if _along() >= _end():
+	if along() >= _end():
 		_complete()
 
 
 ## Dónde está a lo largo de la cresta (m desde el medio, hacia donde avanza la rotura).
-func _along() -> float:
+func along() -> float:
 	return wave.peel_w * wave.peel_dir + rel
 
 
@@ -209,7 +210,7 @@ func line_u() -> float:
 
 ## true en el tramo final: acelera hacia el ojo del tubo.
 func rushing() -> bool:
-	return wave != null and _end() - _along() < EXIT_RUSH_AT and wave.curl >= FORMED
+	return wave != null and _end() - along() < EXIT_RUSH_AT and wave.curl >= FORMED
 
 
 ## Hasta dónde llega (antes de la punta de la ola).
@@ -219,14 +220,28 @@ func _end() -> float:
 
 ## 0 al entrar .. 1 al llegar a la punta.
 func progress() -> float:
-	var span := maxf(_end() - _from, 1.0)
-	return clampf((_along() - _from) / span, 0.0, 1.0)
+	var span := maxf(_end() - _start(), 1.0)
+	return clampf((along() - _start()) / span, 0.0, 1.0)
+
+
+## Dónde entró, en las coordenadas de ahora: cuando la ola se alarga hacia
+## adelante (Swell.extend_front) el medio se corre la mitad.
+func _start() -> float:
+	return _from - wave.grown * 0.5
+
+
+## true cuando el tubo ya lo tapó y está en su lugar adentro: desde ahí ve
+## para dónde moverse (y recién ahí corre la gracia, ver _update_balance).
+func covered() -> bool:
+	return wave != null and wave.curl >= FORMED and _t_in >= ENTRY_TIME
 
 
 func _update_balance(delta: float, input: RiderInput) -> void:
-	# El stick que cuenta (ver ExoticGrace: el primer segundo no se cae y el
-	# stick que traía apretado no cuenta hasta que lo suelta).
-	var steer := _grace.steer(input.steer, delta)
+	# El stick que cuenta (ver ExoticGrace: no se cae y el stick que traía
+	# apretado no cuenta hasta que lo suelta). La gracia recién empieza a correr
+	# cuando el tubo lo tapó (covered): mientras se forma, la ola igual lo
+	# empuja (se ve para dónde) pero no lo puede tirar.
+	var steer := _grace.steer(input.steer, delta, covered())
 	rider.steer_amount = input.steer * 0.6
 	_push_timer -= delta
 	if _push_timer <= 0.0:

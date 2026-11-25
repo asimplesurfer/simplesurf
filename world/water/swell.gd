@@ -72,6 +72,8 @@ var tube_close: float = 0.0
 ## TUBE_WALL_BACK).
 const TUBE_WALL_CLOSE := 0.5
 var peel_speed: float = 0.0
+## Cuánto se alargó hacia adelante mientras rompe (m; ver `extend_front`).
+var grown: float = 0.0
 var barrel_len: float = 22.0
 const BARREL_THROAT := 10.0
 const BARREL_COLLAPSE := 16.0
@@ -146,6 +148,20 @@ func is_dead() -> bool:
 
 
 ## Distancias en el sistema local de la ola: (u a lo largo, w a lo ancho).
+## Se alarga `d` m hacia donde rompe (peel_dir), como una ola de verdad que
+## sigue creciendo de un lado mientras rompe del otro: la punta de adelante
+## avanza y la de atrás queda donde estaba (el medio se corre d/2). Lo que va
+## a lo ancho (peel_w, peel_from) se corre igual: en el mundo nada se mueve.
+func extend_front(d: float) -> void:
+	var perp := Vector2(-direction.y, direction.x)
+	center += perp * peel_dir * d * 0.5
+	half_length += d * 0.5
+	peel_w -= peel_dir * d * 0.5
+	if not is_inf(peel_from):
+		peel_from -= peel_dir * d * 0.5
+	grown += d
+
+
 func local_coords(p: Vector2) -> Vector2:
 	var rel := p - center
 	return Vector2(rel.dot(direction), rel.dot(Vector2(-direction.y, direction.x)))

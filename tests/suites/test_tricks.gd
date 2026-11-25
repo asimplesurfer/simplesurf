@@ -756,11 +756,17 @@ func _test_tube() -> void:
 	_check(back0.y == 0.0, "detrás de donde empezó, la ola no se cae de golpe")
 	var c0 := giant.center
 	var p0 := giant.peel_w
+	var grown0 := giant.grown
+	var back_end0 := giant.center - perp * giant.peel_dir * giant.half_length
 	var y_jump := 0.0
 	var last_y := r.position.y
 	var formed_at := -1.0
+	# Cuánto dura el tubo armado (desde que lo tapa hasta el tramo final).
+	var covered_for := 0.0
 	for i in int((TrickAttack.BARREL_START + 0.3) * 60.0):
 		_hold_tube_balance(r)
+		if r.in_tube() and r.state_machine.current.call("covered"):
+			covered_for += 1.0 / 60.0
 		await get_tree().physics_frame
 		y_jump = maxf(y_jump, absf(r.position.y - last_y))
 		last_y = r.position.y
@@ -770,7 +776,10 @@ func _test_tube() -> void:
 	_check(formed_at > 1.5, "el tubo se forma despacio, no de golpe (%.1f s)" % formed_at)
 	_check(r.in_tube(), "mientras se forma sigue adentro (sin caerse)")
 	_check(giant.center.distance_to(c0) > 2.0, "la ola sigue avanzando (no se queda quieta)")
-	_check((giant.peel_w - p0) * giant.peel_dir > 12.0, "el punto de rotura corre por la cresta (%.1f m)" % ((giant.peel_w - p0) * giant.peel_dir))
+	# (Si la ola se alargó, lo que va a lo ancho se corrió la mitad: ver
+	# Swell.extend_front.)
+	var ran := (giant.peel_w - p0) * giant.peel_dir + (giant.grown - grown0) * 0.5
+	_check(ran > 12.0, "el punto de rotura corre por la cresta (%.1f m)" % ran)
 	# A lo largo de la cresta: hombro entero adelante, tubo detrás.
 	var ahead := giant.barrel_at(giant.peel_w + giant.peel_dir * (Swell.BARREL_THROAT + 4.0))
 	var inside_b := giant.barrel_at(giant.peel_w - giant.peel_dir * 8.0)
@@ -819,10 +828,16 @@ func _test_tube() -> void:
 	var late_width := -1.0
 	var moved := 0.0
 	var last := r.position
+	var rushed := false
 	while r.in_tube() and guard < 60 * 20:
 		if r.position.y - _water.waves.height_at(r.position.x, r.position.z, _water.time) > giant.max_amplitude * 0.45:
 			low = false
 		_hold_tube_balance(r)
+		var st_now := r.state_machine.current
+		if st_now.has_method("rushing") and st_now.call("rushing"):
+			rushed = true
+		elif not rushed and st_now.has_method("covered") and st_now.call("covered"):
+			covered_for += 1.0 / 60.0
 		await get_tree().physics_frame
 		if r.in_tube() and r.state_machine.current.has_method("progress") and float(r.state_machine.current.call("progress")) > 0.8:
 			var wr := giant.local_coords(Vector2(r.position.x, r.position.z)).y
@@ -833,6 +848,11 @@ func _test_tube() -> void:
 	_set_action(&"p1_right", false)
 	_set_action(&"p1_left", false)
 	_check(exited[0] and not r.is_fallen(), "aguantando el equilibrio, sale por la punta")
+	_check(covered_for > TrickAttack.TUBE_RIDE - 0.3,
+		"el tubo armado dura (%.1f s tapado antes del tramo final)" % covered_for)
+	var back_end := giant.center - perp * giant.peel_dir * giant.half_length
+	_check(giant.grown > 5.0 and absf((back_end - back_end0).dot(perp)) < 0.01,
+		"si no quedaba ola, se alargó hacia adelante (%.0f m) y la otra punta quedó donde estaba" % giant.grown)
 	_check(late_width > 0.0 and late_width < width0 * 0.8,
 		"mientras más dura adentro, más se cierra el tubo (%.1f m al entrar, %.1f m al final)" % [width0, late_width])
 	var motivated_now := r.motivation_timer > 0.0
@@ -862,9 +882,9 @@ func _test_tube() -> void:
 	await process_frame
 
 
-## Tubo con el stick apretado desde antes: el primer segundo no se cae; si
-## sigue apretando hacia la pared, el labio lo tapa y la ola lo escupe afuera
-## (no queda debajo del labio).
+## Tubo con el stick apretado desde antes: mientras el tubo se forma y el
+## primer segundo tapado no se cae; si sigue apretando hacia la pared, el
+## labio lo tapa y la ola lo escupe afuera (no queda debajo del labio).
 func _test_tube_grace() -> void:
 	var config := RaceConfig.tricks()
 	config.trick_seconds = 300
@@ -904,14 +924,27 @@ func _test_tube_grace() -> void:
 		if r.in_tube():
 			break
 	_check(r.in_tube(), "entra al tubo con el stick apretado")
+	# Mientras el tubo se forma encima no se puede caer (todavía no ve para
+	# dónde moverse); la ola igual lo empuja.
 	var t := 0.0
 	var grace_worst := 0.0
+	var st := r.state_machine.current
+	var moves := false
+	while r.in_tube() and not st.call("covered") and t < 6.0:
+		await get_tree().physics_frame
+		t += 1.0 / 60.0
+		grace_worst = maxf(grace_worst, absf(r.tube_balance))
+		moves = moves or absf(r.tube_balance) > 0.05
+	_check(r.in_tube() and st.call("covered") and t > 1.5 and grace_worst <= ExoticGrace.LIMIT + 0.001 and moves,
+		"hasta que el tubo lo tapa no se cae (%.1f s; equilibrio hasta %.2f, pero se mueve)" % [t, grace_worst])
+	# Ya tapado: un segundo más para acomodar el stick.
+	t = 0.0
 	while r.in_tube() and t < ExoticGrace.TIME - 0.1:
 		await get_tree().physics_frame
 		t += 1.0 / 60.0
 		grace_worst = maxf(grace_worst, absf(r.tube_balance))
 	_check(r.in_tube() and grace_worst <= ExoticGrace.LIMIT + 0.001,
-		"el primer segundo no se cae, aunque deje el stick apretado (equilibrio hasta %.2f)" % grace_worst)
+		"y después, el primer segundo tapado tampoco, aunque deje el stick apretado (equilibrio hasta %.2f)" % grace_worst)
 	var wiped := [false, false]
 	r.tube_wiped_out.connect(func(lip: bool) -> void: wiped[0] = true; wiped[1] = lip, CONNECT_ONE_SHOT)
 	t = 0.0
