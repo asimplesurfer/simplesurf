@@ -4,16 +4,31 @@ extends CanvasLayer
 ## el volumen de la música y de los efectos por separado (se guardan), seguir,
 ## reiniciar o volver al menú. Se maneja con flechas / stick y A / ESPACIO;
 ## B / ESC vuelve al juego.
+##
+## Atrás, el juego se sigue viendo en vivo pero fuera de foco y luminoso (ver
+## ui/shaders/pause_backdrop.gdshader): al abrir, el foco se va de a poco; al
+## cerrar, vuelve de a poco mientras el juego ya sigue. El panel va encima,
+## nítido.
 
 const YELLOW := Palette.BUTTER
 ## Paso de las barras de volumen (0..100).
 const VOLUME_STEP := 10.0
+const BACKDROP_SHADER := preload("res://ui/shaders/pause_backdrop.gdshader")
+## Segundos que tarda el fondo en desenfocarse al abrir y en volver al cerrar.
+const OPEN_TIME := 0.5
+const CLOSE_TIME := 0.35
 
 var session: GameSession
 var music_slider: HSlider
 var sfx_slider: HSlider
+## Fondo desenfocado (lee la pantalla de atrás).
+var backdrop: ColorRect
+var _menu: Control
 var _first: Button
 var _opened_frame: int = -1
+var _open: bool = false
+var _amount: float = 0.0
+var _fade: Tween
 
 
 func _init() -> void:
@@ -27,30 +42,68 @@ func _ready() -> void:
 
 
 func is_open() -> bool:
-	return visible
+	return _open
+
+
+## Cuánto está desenfocado el fondo (0 nítido, 1 del todo).
+func blur_amount() -> float:
+	return _amount
 
 
 func open() -> void:
-	if visible:
+	if _open:
 		return
+	_open = true
 	visible = true
 	_opened_frame = Engine.get_process_frames()
 	get_tree().paused = true
 	music_slider.set_value_no_signal(GameSettings.music_volume * 100.0)
 	sfx_slider.set_value_no_signal(GameSettings.sfx_volume * 100.0)
+	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	_menu.visible = true
+	_menu.modulate.a = 0.0
 	_first.grab_focus()
+	_animate(1.0, OPEN_TIME)
 
 
+## Vuelve al juego enseguida; el fondo recupera el foco de a poco.
 func close() -> void:
-	if not visible:
+	if not _open:
 		return
-	visible = false
+	_open = false
+	_menu.visible = false
+	backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	get_tree().paused = false
 	GameSettings.save_settings()
+	_animate(0.0, CLOSE_TIME)
+
+
+## Lleva el desenfoque hasta `target` (y el panel aparece al abrir). Si se
+## abre o se cierra a mitad de camino, sigue desde donde estaba.
+func _animate(target: float, seconds: float) -> void:
+	if _fade:
+		_fade.kill()
+	_fade = create_tween()
+	var opening := target > _amount
+	_fade.set_trans(Tween.TRANS_SINE if opening else Tween.TRANS_QUAD)
+	_fade.set_ease(Tween.EASE_OUT if opening else Tween.EASE_IN_OUT)
+	_fade.tween_method(_set_amount, _amount, target, maxf(seconds * absf(target - _amount), 0.01))
+	if opening:
+		_fade.parallel().tween_property(_menu, "modulate:a", 1.0, seconds * 0.6).set_delay(seconds * 0.15)
+	else:
+		_fade.tween_callback(func() -> void:
+			if not _open:
+				visible = false
+		)
+
+
+func _set_amount(value: float) -> void:
+	_amount = value
+	(backdrop.material as ShaderMaterial).set_shader_parameter("amount", value)
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not visible or Engine.get_process_frames() == _opened_frame:
+	if not _open or Engine.get_process_frames() == _opened_frame:
 		return
 	if event.is_action_pressed("ui_cancel") or _is_toggle(event):
 		get_viewport().set_input_as_handled()
@@ -94,14 +147,21 @@ static func _is_toggle(event: InputEvent) -> bool:
 
 
 func _build() -> void:
-	var dim := ColorRect.new()
-	dim.color = Color(0.0, 0.0, 0.0, 0.45)
-	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dim.mouse_filter = Control.MOUSE_FILTER_STOP
-	add_child(dim)
+	backdrop = ColorRect.new()
+	backdrop.name = "Backdrop"
+	backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
+	backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var mat := ShaderMaterial.new()
+	mat.shader = BACKDROP_SHADER
+	backdrop.material = mat
+	add_child(backdrop)
+	_set_amount(0.0)
 	var center := CenterContainer.new()
+	center.name = "Menu"
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(center)
+	_menu = center
 	var panel := PanelContainer.new()
 	var style := StyleBoxFlat.new()
 	style.bg_color = Palette.UI_PANEL
