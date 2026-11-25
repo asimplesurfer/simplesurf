@@ -635,11 +635,8 @@ func _update_tricks(delta: float) -> void:
 func _update_lip_pointer(tricks: TrickAttack) -> void:
 	var w := tricks.lip_wave
 	var cam := get_viewport().get_camera_3d()
-	# Una ola rompiendo en tubo: la flecha apunta al bolsillo (adonde meterse).
-	if tricks.barrel_wave and not rider.in_tube() and cam:
-		_lip_pointer.label = "Tubo"
-		_lip_pointer.point_to(cam, tricks.barrel_pocket(), rider.global_position)
-		return
+	# (El tubo no lleva flecha: empieza con el surfista adentro y el minimapa
+	# lo muestra.)
 	_lip_pointer.label = "Ola de borde"
 	if not TrickAttack.SHOW_LIP_POINTER or w == null or w.lip_used or rider.on_lip() or cam == null:
 		_lip_pointer.visible = false
