@@ -27,8 +27,15 @@ const END_MARGIN := 4.0
 ## la altura): ni con el equilibrio al máximo llega al pie de la pared.
 const LINE := 1.6
 const REACH := 0.2
-## Al salir, en diagonal hacia afuera (rad), por el hueco de adelante.
-const EXIT_TURN := 0.8
+## Al final, el ojo: cuando le faltan EXIT_RUSH_AT m acelera (EXIT_RUSH m/s de
+## más) hasta pasar adelante del punto de rotura más allá de donde el labio se
+## achica (EXIT_REL m: más que Swell.BARREL_THROAT), donde la ola queda abierta
+## (ver Swell.BARREL_SHOULDER_HOLD), y sale derecho y rápido por ahí, apenas
+## hacia afuera (EXIT_TURN rad): no atraviesa la cortina del labio.
+const EXIT_RUSH_AT := 30.0
+const EXIT_RUSH := 16.0
+const EXIT_REL := 11.0
+const EXIT_TURN := 0.15
 ## Al entrar, un ratito sin empujones (para acomodarse).
 const SETTLE_TIME := 1.0
 ## Al entrar, de dónde venía (por la cara de adelante) pasa a su línea adentro
@@ -115,8 +122,12 @@ func update(delta: float, input: RiderInput) -> void:
 		state_machine.transition_to(&"riding")
 		return
 	_t_in += delta
-	# Alcanza el bolsillo (si entró más atrás) y va con la rotura.
-	rel = move_toward(rel, POCKET, CATCH_UP * delta)
+	# Alcanza el bolsillo (si entró más atrás) y va con la rotura; al final
+	# acelera hacia el ojo.
+	if rushing():
+		rel = move_toward(rel, EXIT_REL, EXIT_RUSH * delta)
+	else:
+		rel = move_toward(rel, POCKET, CATCH_UP * delta)
 	rider.update_exotic(progress())
 	_update_balance(delta, input)
 	_place(delta)
@@ -130,6 +141,11 @@ func update(delta: float, input: RiderInput) -> void:
 ## Dónde está a lo largo de la cresta (m desde el medio, hacia donde avanza la rotura).
 func _along() -> float:
 	return wave.peel_w * wave.peel_dir + rel
+
+
+## true en el tramo final: acelera hacia el ojo del tubo.
+func rushing() -> bool:
+	return wave != null and _end() - _along() < EXIT_RUSH_AT and wave.curl >= FORMED
 
 
 ## Hasta dónde llega (antes de la punta de la ola).
@@ -190,7 +206,7 @@ func _place(delta: float) -> void:
 	var f := perp * wave.peel_dir
 	rider.heading = lerp_angle(_entry_heading, atan2(-f.x, -f.y), smoothstep(0.0, TURN_TIME, _t_in))
 	rider.rotation.y = rider.heading
-	rider.speed = wave.peel_speed
+	rider.speed = wave.peel_speed + (EXIT_RUSH if rushing() else 0.0)
 	rider.water_normal = Vector3.UP
 	rider.grounded = true
 	rider.vertical_speed = 0.0
@@ -212,7 +228,7 @@ func _wipe_out() -> void:
 	rider.fall()
 
 
-## Llegó a la punta: sale disparado en diagonal por el hueco de adelante.
+## Llegó a la punta: sale disparado por el ojo, derecho (apenas hacia afuera).
 func _complete() -> void:
 	var f := Vector2(-wave.direction.y, wave.direction.x) * wave.peel_dir
 	var a1 := f.rotated(EXIT_TURN)

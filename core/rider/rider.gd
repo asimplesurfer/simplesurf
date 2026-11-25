@@ -819,6 +819,10 @@ func _check_wave_punch() -> void:
 	var face := visual.face_position()
 	# Primero lo barato (¿hay una ola grande cerca?); lo caro solo si hay.
 	var inside := water.big_wave_near(face) and water.face_in_wave(face)
+	# En el hueco de un tubo (con el labio encima y el piso abajo) no está
+	# adentro del agua, aunque tenga agua arriba.
+	if inside and water.under_roof(face.x, face.z, face.y) and face.y > water.floor_height_at(face.x, face.z):
+		inside = false
 	# Cada vez que la cara entra al agua (un mínimo de tiempo entre una y otra
 	# para que el borde de la superficie no lo dispare a cada cuadro).
 	if inside and not _face_in_wave and _punch_cooldown <= 0.0:

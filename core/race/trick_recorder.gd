@@ -140,6 +140,8 @@ func mark() -> Dictionary:
 			var why: String = wave_problem if wave_problem != "" else str(check.problem)
 			if session.barrel_wave != null and session.barrel_wave != s:
 				why = "ya hay otro tubo"
+			elif me.barrel_wave == s:
+				why = "estás adentro de su tubo"
 			row["tube"] = why if why != "" else "engancha"
 			row["tube_check"] = _rounded(check)
 			if s == near:
@@ -233,6 +235,8 @@ func _tube_row(r: Rider) -> Array:
 		why = str(session.tube_check(r, s).problem)
 	if session.barrel_wave != null and session.barrel_wave != s:
 		why = "ya hay otro tubo"
+	elif r.barrel_wave == s:
+		why = "estás adentro de su tubo"
 	return [_id(s), why]
 
 

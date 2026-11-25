@@ -69,7 +69,7 @@ const TUBE_MIN_HEIGHT := 6.0
 ## del labio, no arriba: arriba engancha la ola de borde). Andando a lo largo
 ## de la ola (el ángulo con la cresta, de frente o de espaldas, como mucho
 ## TUBE_CATCH_ANGLE rad) y con al menos TUBE_ROOM m de cresta por delante.
-const TUBE_CATCH_FRONT := 0.45
+const TUBE_CATCH_FRONT := 0.35
 const TUBE_CATCH_LOW := 0.6
 const TUBE_CATCH_ANGLE := 1.0
 const TUBE_ROOM := 18.0
@@ -83,7 +83,7 @@ const BARREL_LEN := 28.0
 ## parte en que la cara se para no es de golpe. Y cuánto tarda en deshacerse
 ## al final.
 const BARREL_START := 2.4
-const BARREL_FORM_POW := 1.6
+const BARREL_FORM_POW := 1.3
 const TUBE_FADE := 2.5
 ## Concentración: yendo hacia una ola más o menos en línea recta (a menos de
 ## FOCUS_RANGE m; hacia algún punto de su cresta, sin desviarse más de
@@ -484,15 +484,6 @@ func start_barrel(s: Swell, r: Rider, side: float) -> void:
 	get_parent().add_child(spray)
 	spray.setup(s, water)
 	barrel_started.emit(s)
-
-
-## Dónde está el bolsillo del tubo (adonde ir), en el mundo.
-func barrel_pocket() -> Vector3:
-	var s := barrel_wave
-	var perp := Vector2(-s.direction.y, s.direction.x)
-	var w := s.peel_w - 7.0 * s.peel_dir
-	var p := s.center + s.direction * (BarrelState.LINE * s.max_amplitude) + perp * w
-	return Vector3(p.x, s.max_amplitude * 0.5, p.y)
 
 
 ## Concentración: si va derecho hacia una ola, la velocidad sube de a poco.

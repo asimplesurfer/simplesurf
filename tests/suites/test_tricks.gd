@@ -662,6 +662,35 @@ func _test_tube() -> void:
 	giant.age = 4.0
 	giant.update(0.0)
 	_check(session.ready_for_tube(giant), "una gigante ya crecida puede romper en tubo")
+	# Al formarse, la cara de adelante se retira (baja): el labio sale de la
+	# cresta, el agua no sube desde abajo.
+	var probe := _make_swell(Vector2(900.0, 900.0), 11.0)
+	probe.age = 4.0
+	probe.update(0.0)
+	probe.peel_w = 10.0
+	probe.peel_dir = 1.0
+	probe.barrel_len = TrickAttack.BARREL_LEN
+	var rises := 0.0
+	for du in [3.0, 6.0, 9.0]:
+		var prev := INF
+		for i in 21:
+			probe.curl = maxf(i * 0.05, 0.0001)
+			var hs := probe.tube_heights(probe.crest_u() + du, 0.0)
+			# La superficie de abajo (la cara o el piso) a esa distancia de la cresta.
+			if prev < INF:
+				rises = maxf(rises, hs[0] - prev)
+			prev = hs[0]
+	_check(rises < 0.1, "al formarse el tubo, la cara de adelante solo baja (sube %.2f m)" % rises)
+	# Adelante de la rotura, a la altura del que va adentro: abierto (el ojo).
+	probe.curl = 1.0
+	var line_u := TrickAttack.BarrelState.LINE * probe.max_amplitude
+	var eye_ok := true
+	for ahead_m in [Swell.BARREL_THROAT - 2.0, Swell.BARREL_THROAT + 2.0, Swell.BARREL_SHOULDER_HOLD]:
+		var hs := probe.tube_heights(line_u, probe.peel_w + ahead_m)
+		if hs.size() != 1 or hs[0] > probe.max_amplitude * 0.3:
+			eye_ok = false
+	_check(eye_ok, "adelante de la rotura la ola queda abierta: desde adentro se ve la salida")
+	_water.swells.erase(probe)
 	# Lejos de la ola: no rompe sola.
 	r.position = Vector3(400.0, _water.height_at(400.0, -470.0), -470.0)
 	r.controls_locked = true
@@ -768,6 +797,12 @@ func _test_tube() -> void:
 	_set_action(&"p1_right", false)
 	_set_action(&"p1_left", false)
 	_check(exited[0] and not r.is_fallen(), "aguantando el equilibrio, sale por la punta")
+	var along_exit := absf(r.forward().dot(Vector3(perp.x, 0.0, perp.y)))
+	_check(along_exit > cos(0.3), "sale derecho por el ojo (no en diagonal por la cortina del labio)")
+	var punched := [0]
+	r.wave_punched.connect(func() -> void: punched[0] += 1)
+	await _wait(1.0)
+	_check(punched[0] == 0, "y no atraviesa agua al salir")
 	_check(low, "adentro va por el piso, debajo del labio (no arriba)")
 	_check(moved > 30.0, "adentro va con la rotura, a lo largo de la ola (%.0f m)" % moved)
 	var gained := session.score_of(r) - before
