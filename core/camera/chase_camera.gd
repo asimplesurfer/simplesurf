@@ -21,9 +21,17 @@ var target: Rider
 const MIN_ABOVE_WATER := 1.5
 
 var _water: Water
-## Cuánto sigue la altura del personaje: poco en el agua (para no marear con
-## cada ola) y todo en el aire (para no perderlo cuando sube mucho).
-var _follow_y: float = 0.6
+## La altura del personaje que sigue la cámara: la suya, sin retraso (así
+## va siempre igual respecto de él, con el mismo ángulo, abajo o arriba de
+## una ola gigante, subiendo o bajando), salvo las olitas del mar de fondo,
+## que se siguen suavizadas (si no, la cámara se mece y marea).
+var _ride_y: float = 0.0
+var _chop: float = 0.0
+## 0 en el agua, 1 en el aire o en el borde de una ola: ahí sigue su altura
+## exacta (sin descontar las olitas).
+var _air_k: float = 0.0
+## Qué tan rápido sigue las olitas del mar de fondo (1/s).
+const CHOP_RATE := 1.5
 
 ## Sacudón (al atravesar una ola): se va apagando solo.
 var _shake: float = 0.0
@@ -86,6 +94,9 @@ func _ready() -> void:
 		target.tube_exited.connect(func(success: bool) -> void: shake(0.45 if success else 0.3))
 	_water = GameSession.find_in_scene(self, "water") as Water
 	if target:
+		_ride_y = target.global_position.y
+		if _water and _water.waves:
+			_chop = _water.waves.height_at(target.global_position.x, target.global_position.z, _water.time)
 		global_position = _desired_position()
 		look_at(_look_point(), Vector3.UP)
 
@@ -93,9 +104,15 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if target == null:
 		return
-	# En el borde de una ola (modo trucos) va alto: se sigue toda la altura.
-	var follow_target := 0.6 if target.grounded and not target.on_lip() else 1.0
-	_follow_y = lerpf(_follow_y, follow_target, 1.0 - exp(-3.0 * delta))
+	# La altura que sigue: la del personaje, con las olitas del mar de fondo
+	# suavizadas en el agua; en el aire y en el borde de una ola (modo trucos),
+	# la exacta.
+	var on_water := target.grounded and not target.on_lip()
+	var at := target.render_transform().origin
+	var chop := _water.waves.height_at(at.x, at.z, _water.time) if _water and _water.waves else 0.0
+	_chop = lerpf(_chop, chop, 1.0 - exp(-CHOP_RATE * minf(delta, 0.1)))
+	_ride_y = at.y - chop + _chop
+	_air_k = lerpf(_air_k, 0.0 if on_water else 1.0, 1.0 - exp(-3.0 * delta))
 	var w := 1.0 - exp(-follow_sharpness * minf(delta, 0.1))
 	var boosting_now := boosting()
 	# Concentración (modo trucos): se aleja de a poco, según cuánto subió la
@@ -150,21 +167,19 @@ func _process(delta: float) -> void:
 		desired = _desired_position()
 		global_position = desired
 	global_position = global_position.lerp(desired, w)
+	# La altura, sin retraso (el mismo ángulo siempre; las olitas ya vienen
+	# suavizadas en _ride_y).
+	global_position.y = desired.y
 	if _tube_blend > 0.0 and not _tube_frame.is_empty():
 		# Adentro del tubo va pegada (sin el retraso de siempre: a esta velocidad
 		# quedaría afuera del tubo).
 		var k := smoothstep(0.0, 1.0, _tube_blend)
 		global_position = global_position.lerp(_tube_frame[0], k)
-	# En el aire, la altura se sigue más rápido para que no se escape de cuadro.
-	if not target.grounded:
-		var wy := 1.0 - exp(-follow_sharpness * 2.0 * minf(delta, 0.1))
-		global_position.y = lerpf(global_position.y, desired.y, wy)
-	# Nunca debajo del agua (con olas grandes, la cámara podía quedar adentro).
-	if _water and _tube_blend <= 0.0:
-		var h := _water.height_below(global_position.x, global_position.z, global_position.y) + MIN_ABOVE_WATER
-		if global_position.y < h:
-			global_position.y = h
 	var look := _look_point()
+	# Nunca debajo del agua (con olas grandes, la cámara podía quedar adentro):
+	# se acerca al personaje por la misma línea (mismo ángulo), sin subir.
+	if _water and _tube_blend <= 0.0:
+		global_position = _above_water(global_position, look)
 	if _tube_blend > 0.0 and not _tube_frame.is_empty():
 		look = look.lerp(_tube_frame[1], smoothstep(0.0, 1.0, _tube_blend))
 	look_at(look, Vector3.UP)
@@ -176,6 +191,34 @@ func _process(delta: float) -> void:
 		global_position += Vector3(randf_range(-1, 1), randf_range(-1, 1), 0.0) * 0.25 * s
 	# Más ángulo de visión con turbo / motivación: sensación de velocidad.
 	fov = lerpf(fov, lerpf(BASE_FOV, BOOST_FOV, maxf(1.0 if boosting_now else 0.0, target.focus)), 1.0 - exp(-4.0 * delta))
+
+
+## Si `cam` queda debajo del agua, lo más lejos que puede ir sobre la línea
+## hasta `look` sin quedar adentro (así no cambia el ángulo). Si ni pegada al
+## personaje alcanza, sube (como antes).
+const ABOVE_STEPS := 12
+
+
+func _above_water(cam: Vector3, look: Vector3) -> Vector3:
+	if _clear_of_water(cam):
+		return cam
+	var lo := 0.0
+	var hi := 1.0
+	if not _clear_of_water(look.lerp(cam, 0.15)):
+		var h := _water.height_below(cam.x, cam.z, cam.y) + MIN_ABOVE_WATER
+		return Vector3(cam.x, maxf(cam.y, h), cam.z)
+	lo = 0.15
+	for i in ABOVE_STEPS:
+		var mid := (lo + hi) * 0.5
+		if _clear_of_water(look.lerp(cam, mid)):
+			lo = mid
+		else:
+			hi = mid
+	return look.lerp(cam, lo)
+
+
+func _clear_of_water(q: Vector3) -> bool:
+	return q.y >= _water.height_below(q.x, q.z, q.y) + MIN_ABOVE_WATER
 
 
 ## Dónde va la cámara adentro del tubo: [posición, a dónde mira].
@@ -259,7 +302,7 @@ func _desired_position() -> Vector3:
 	var xf := target.render_transform()
 	var base := xf.origin
 	var fwd := -xf.basis.z
-	base.y *= _follow_y
+	base.y = lerpf(_ride_y, base.y, _air_k)
 	if looking_back:
 		# Adelante del Rider, mirando hacia atrás (un poco más alta para ver a los de atrás).
 		return base + fwd * maxf(dist, LOOK_BACK_DISTANCE) + Vector3.UP * (h + 0.4)
@@ -269,7 +312,7 @@ func _desired_position() -> Vector3:
 func _look_point() -> Vector3:
 	var xf := target.render_transform()
 	var p := xf.origin
-	p.y = p.y * lerpf(0.5, 1.0, (_follow_y - 0.6) / 0.4) + look_height
+	p.y = lerpf(_ride_y, p.y, _air_k) + look_height
 	if looking_back:
 		# Mirando hacia atrás: hacia el horizonte (lejos, detrás del personaje),
 		# así se ve bien quiénes vienen; el personaje queda abajo en la imagen.

@@ -63,13 +63,13 @@ const SHOW_LIP_POINTER := true
 ## ExoticTrick). Rompe como un pico, para los dos lados (ver Swell.peel_from):
 ## el punto de rotura corre por la cresta (PEEL_SPEED) hacia donde iba él, con
 ## el tubo abierto detrás (BARREL_LEN) y la ola que se cae más atrás.
-const TUBE_MIN_HEIGHT := 10.0
+const TUBE_MIN_HEIGHT := 6.0
 ## Dónde engancha: delante de la cresta, hasta TUBE_CATCH_FRONT veces el ancho
 ## de la ola, donde el agua está a menos de TUBE_CATCH_LOW de la altura (abajo
 ## del labio, no arriba: arriba engancha la ola de borde). Andando a lo largo
 ## de la ola (el ángulo con la cresta, de frente o de espaldas, como mucho
 ## TUBE_CATCH_ANGLE rad) y con al menos TUBE_ROOM m de cresta por delante.
-const TUBE_CATCH_FRONT := 0.8
+const TUBE_CATCH_FRONT := 0.45
 const TUBE_CATCH_LOW := 0.6
 const TUBE_CATCH_ANGLE := 1.0
 const TUBE_ROOM := 18.0
@@ -77,9 +77,13 @@ const PEEL_SPEED := 10.0
 ## El estado del tubo (dónde va el bolsillo y dónde termina).
 const BarrelState := preload("res://core/rider/states/state_barrel.gd")
 const BARREL_LEN := 28.0
-## Cuánto tarda en empezar a romper (s: el labio crece de a poco) y en
-## deshacerse al final.
-const BARREL_START := 1.0
+## Cuánto tarda en formarse el tubo (s): primero la ola se para (la cara sube
+## hasta hacerse pared) y después el labio se tira hacia adelante y cae. La
+## forma (Swell.curl) sigue BARREL_FORM_POW: despacio al principio, así la
+## parte en que la cara se para no es de golpe. Y cuánto tarda en deshacerse
+## al final.
+const BARREL_START := 2.4
+const BARREL_FORM_POW := 1.6
 const TUBE_FADE := 2.5
 ## Concentración: yendo hacia una ola más o menos en línea recta (a menos de
 ## FOCUS_RANGE m; hacia algún punto de su cresta, sin desviarse más de
@@ -135,10 +139,18 @@ var _exotic_points: Dictionary = {}
 signal barrel_started(wave: Swell)
 ## La ola que está rompiendo en tubo (null si no hay).
 var barrel_wave: Swell = null
+## Cuánto se formó el tubo que está rompiendo (0..1, en BARREL_START s).
+var _barrel_form: float = 0.0
 ## Concentración: cuánto hace que va derecho hacia una ola (por surfista).
 var _focus_time: Dictionary = {}
 ## Empezó la concentración (el HUD avisa).
 signal focus_started(rider: Rider)
+## Registro (ver TrickRecorder): se marcó un momento (Tab: número y qué pasa
+## con el tubo en la ola más cerca) y se descargó (L: dónde quedó).
+signal report_marked(n: int, tube: String)
+signal record_downloaded(where: String)
+## Registro de la partida (tecla L: descargar; Tab: marcar un momento).
+var recorder: TrickRecorder
 
 
 func default_config() -> RaceConfig:
@@ -172,10 +184,33 @@ func _ready() -> void:
 		# Los tamaños son los del modo trucos (TRICK_SIZES), sin escalar.
 		waves.set_amplitude_scale(1.0, true)
 	DayTime.apply(get_parent(), config.time_of_day)
+	recorder = TrickRecorder.new()
+	recorder.name = "Recorder"
+	recorder.session = self
+	add_child(recorder)
 	var audio := get_node_or_null("/root/AudioManager")
 	if audio:
 		audio.race_started()
 		audio.connect_race(self)
+
+
+## Tab: marca este momento en el registro (para contar después qué pasó: "en
+## la marca 4 la ola tendría que haber hecho tubo"). Devuelve la marca.
+func mark_report() -> Dictionary:
+	if recorder == null:
+		return {}
+	var m := recorder.mark()
+	report_marked.emit(int(m.n), str(m.tube))
+	return m
+
+
+## L: descarga el registro (con las marcas). Devuelve dónde quedó.
+func download_record() -> String:
+	if recorder == null:
+		return ""
+	var where := recorder.download()
+	record_downloaded.emit(where)
+	return where
 
 
 ## Sin nitro (los trucos dan puntos), sin techo invisible en los saltos, y
@@ -289,7 +324,8 @@ func _update_tubes(delta: float) -> void:
 		if not water.swells.has(barrel_wave):
 			barrel_wave = null
 			return
-		barrel_wave.curl = move_toward(barrel_wave.curl, 1.0, delta / BARREL_START)
+		_barrel_form = move_toward(_barrel_form, 1.0, delta / BARREL_START)
+		barrel_wave.curl = maxf(pow(_barrel_form, BARREL_FORM_POW), 0.01)
 		for r in racers:
 			try_enter_barrel(r)
 		# Ya rompió toda: se deshace (si nadie sigue adentro).
@@ -332,41 +368,80 @@ func try_enter_barrel(r: Rider) -> bool:
 	return true
 
 
-## true si la ola ya puede romper en tubo (gigante, crecida, sin usar).
+## true si la ola ya puede romper en tubo (grande, crecida, sin usar).
 func ready_for_tube(s: Swell) -> bool:
-	return (
-		s.max_amplitude >= TUBE_MIN_HEIGHT
-		and not s.keep
-		and not s.lip_used
-		and s.amplitude >= s.max_amplitude * 0.95
-		and s.breaking >= 1.0
-		and s.lifetime - s.age > s.fade_time + 1.0
-	)
+	return tube_wave_problem(s) == ""
+
+
+## Por qué la ola todavía no puede romper en tubo ("" si puede). Para el
+## registro (ver TrickRecorder y la tecla Tab).
+func tube_wave_problem(s: Swell) -> String:
+	if s.max_amplitude < TUBE_MIN_HEIGHT:
+		return "ola chica (%.1f m; mínimo %.0f m)" % [s.max_amplitude, TUBE_MIN_HEIGHT]
+	if s.keep or s.lip_used:
+		return "la ola ya se usó (borde o tubo)"
+	if s.amplitude < s.max_amplitude * 0.95:
+		return "todavía crece (%.0f%%)" % (100.0 * s.amplitude / s.max_amplitude)
+	if s.breaking < 1.0:
+		return "todavía no rompió"
+	if s.lifetime - s.age <= s.fade_time + 1.0:
+		return "se está por ir"
+	return ""
 
 
 ## Hacia dónde rompería la ola si `r` pasara por ahí (+1 / -1 a lo ancho: hacia
 ## donde va él), o 0 si no está pasando de costado por debajo del labio.
 func tube_side(r: Rider, s: Swell) -> float:
-	if r.is_fallen() or not r.grounded or r.in_tube() or r.on_lip() or r.controls_locked or r.trick_angle > 0.0:
-		return 0.0
+	return tube_check(r, s).side
+
+
+## Si `r` está pasando de costado por debajo del labio de `s` (sin mirar si la
+## ola ya puede romper): {side: +1 / -1 / 0, problem: por qué no ("" si sí),
+## y los números que se miran}. Para el registro también (ver TrickRecorder).
+func tube_check(r: Rider, s: Swell) -> Dictionary:
 	var p := Vector2(r.position.x, r.position.z)
 	var uw := s.local_coords(p)
 	var from_crest := uw.x - s.crest_u()
-	if from_crest < 0.0 or from_crest > s.width * TUBE_CATCH_FRONT:
-		return 0.0
-	if s.height_at(p) > s.amplitude * TUBE_CATCH_LOW:
-		return 0.0
-	# A lo largo de la ola (no de frente contra ella).
 	var f := Vector2(r.forward().x, r.forward().z)
 	var along := f.dot(Vector2(-s.direction.y, s.direction.x))
-	if absf(along) < cos(TUBE_CATCH_ANGLE):
-		return 0.0
-	var side := signf(along)
-	# Que quede cresta por recorrer hacia donde va.
+	var height := s.height_at(p) / maxf(s.amplitude, 0.01)
+	var side := signf(along) if along != 0.0 else 1.0
 	var end := s.half_length - s.edge - BarrelState.END_MARGIN
-	if end - uw.y * side < TUBE_ROOM or absf(uw.y) > s.half_length - s.edge:
-		return 0.0
-	return side
+	var room := end - uw.y * side
+	var out := {
+		"side": 0.0, "problem": "",
+		"from_crest": from_crest, "front_max": s.width * TUBE_CATCH_FRONT,
+		"height": height, "height_max": TUBE_CATCH_LOW,
+		"angle": rad_to_deg(acos(clampf(absf(along), 0.0, 1.0))), "angle_max": rad_to_deg(TUBE_CATCH_ANGLE),
+		"room": room, "room_min": TUBE_ROOM, "w": uw.y,
+	}
+	var problem := ""
+	if r.is_fallen():
+		problem = "está caído"
+	elif r.in_tube() or r.on_lip():
+		problem = "ya está en un tubo o un borde"
+	elif not r.grounded:
+		problem = "en el aire"
+	elif r.controls_locked:
+		problem = "sin control"
+	elif r.trick_angle > 0.0:
+		problem = "haciendo un truco"
+	elif from_crest < 0.0:
+		problem = "detrás de la cresta (%.1f m)" % -from_crest
+	elif from_crest > out.front_max:
+		problem = "muy adelante de la ola (%.1f m; hasta %.1f)" % [from_crest, out.front_max]
+	elif height > TUBE_CATCH_LOW:
+		problem = "muy arriba en la cara (%.0f%% de la altura; hasta %.0f%%)" % [height * 100.0, TUBE_CATCH_LOW * 100.0]
+	elif out.angle > out.angle_max:
+		problem = "no va de costado (%.0f grados; hasta %.0f)" % [out.angle, out.angle_max]
+	elif absf(uw.y) > s.half_length - s.edge:
+		problem = "en la punta de la ola"
+	elif room < TUBE_ROOM:
+		problem = "casi en la punta (quedan %.0f m; hacen falta %.0f)" % [room, TUBE_ROOM]
+	out.problem = problem
+	if problem == "":
+		out.side = side
+	return out
 
 
 ## Si `r` pasa de costado por debajo del labio de una ola gigante, la ola
@@ -388,6 +463,7 @@ func try_start_tube(r: Rider, s: Swell) -> bool:
 ## que queda en el bolsillo. Dura lo que tarda en recorrer la ola.
 func start_barrel(s: Swell, r: Rider, side: float) -> void:
 	barrel_wave = s
+	_barrel_form = 0.0
 	s.keep = true
 	s.lip_used = true
 	s.curl = 0.01
@@ -415,7 +491,7 @@ func barrel_pocket() -> Vector3:
 	var s := barrel_wave
 	var perp := Vector2(-s.direction.y, s.direction.x)
 	var w := s.peel_w - 7.0 * s.peel_dir
-	var p := s.center + s.direction * (1.4 * s.max_amplitude) + perp * w
+	var p := s.center + s.direction * (BarrelState.LINE * s.max_amplitude) + perp * w
 	return Vector3(p.x, s.max_amplitude * 0.5, p.y)
 
 
@@ -617,6 +693,14 @@ static func format_clock(t: float) -> String:
 ## vez y C: al menú. (Sin teclas de prueba: el visor de trucos o la cámara
 ## lenta harían trampa; tampoco cambiar la cantidad de jugadores, por ahora.)
 func _handle_common_key(key: InputEventKey) -> bool:
+	match key.physical_keycode:
+		KEY_L:
+			download_record()
+			return true
+		KEY_TAB:
+			if state != State.COUNTDOWN:
+				mark_report()
+			return true
 	if state == State.FINISHED:
 		match key.physical_keycode:
 			KEY_R, KEY_ENTER, KEY_KP_ENTER:
