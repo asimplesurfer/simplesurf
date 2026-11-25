@@ -104,6 +104,9 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if target == null:
 		return
+	# Se sigue desde donde iría sin agua en el medio (ver _occlude).
+	if _has_free:
+		global_position = _free_pos
 	# La altura que sigue: la del personaje, con las olitas del mar de fondo
 	# suavizadas en el agua; en el aire y en el borde de una ola (modo trucos),
 	# la exacta.
@@ -176,10 +179,11 @@ func _process(delta: float) -> void:
 		var k := smoothstep(0.0, 1.0, _tube_blend)
 		global_position = global_position.lerp(_tube_frame[0], k)
 	var look := _look_point()
-	# Nunca debajo del agua (con olas grandes, la cámara podía quedar adentro):
-	# se acerca al personaje por la misma línea (mismo ángulo), sin subir.
+	# Nunca debajo del agua ni con agua entre la cámara y el personaje (con
+	# olas grandes y tubos): se acerca por la misma línea (mismo ángulo), suave.
+	_has_free = false
 	if _water and _tube_blend <= 0.0:
-		global_position = _above_water(global_position, look)
+		_occlude(look, delta)
 	if _tube_blend > 0.0 and not _tube_frame.is_empty():
 		look = look.lerp(_tube_frame[1], smoothstep(0.0, 1.0, _tube_blend))
 	look_at(look, Vector3.UP)
@@ -193,30 +197,58 @@ func _process(delta: float) -> void:
 	fov = lerpf(fov, lerpf(BASE_FOV, BOOST_FOV, maxf(1.0 if boosting_now else 0.0, target.focus)), 1.0 - exp(-4.0 * delta))
 
 
-## Si `cam` queda debajo del agua, lo más lejos que puede ir sobre la línea
-## hasta `look` sin quedar adentro (así no cambia el ángulo). Si ni pegada al
-## personaje alcanza, sube (como antes).
-const ABOVE_STEPS := 12
+## Agua entre la cámara y el personaje: la cámara va sobre la misma línea
+## (mismo ángulo) hasta donde no hay agua en el medio. Se acerca rápido
+## (BOOM_IN 1/s) pero no de golpe, y se vuelve a alejar despacio (BOOM_OUT).
+## Si ni pegada al personaje alcanza, sube (como antes).
+const SIGHT_STEPS := 8
+const SIGHT_REFINE := 5
+const BOOM_MIN := 0.15
+const BOOM_IN := 7.0
+const BOOM_OUT := 1.5
 ## Lo mínimo entre la cámara y el labio de un tubo, por encima (m).
 const ROOF_MARGIN := 0.6
+## Cuánto de la línea usa (1: toda) y dónde iría sin agua en el medio.
+var _boom: float = 1.0
+var _free_pos := Vector3.ZERO
+var _has_free: bool = false
 
 
-func _above_water(cam: Vector3, look: Vector3) -> Vector3:
-	if _clear_of_water(cam):
-		return cam
-	var lo := 0.0
-	var hi := 1.0
-	if not _clear_of_water(look.lerp(cam, 0.15)):
-		var h := _water.height_below(cam.x, cam.z, cam.y) + MIN_ABOVE_WATER
-		return Vector3(cam.x, maxf(cam.y, h), cam.z)
-	lo = 0.15
-	for i in ABOVE_STEPS:
-		var mid := (lo + hi) * 0.5
-		if _clear_of_water(look.lerp(cam, mid)):
-			lo = mid
-		else:
-			hi = mid
-	return look.lerp(cam, lo)
+func _occlude(look: Vector3, delta: float) -> void:
+	var free := global_position
+	var k := _sight_fraction(free, look)
+	if k < 0.0:
+		var h := _water.height_below(free.x, free.z, free.y) + MIN_ABOVE_WATER
+		global_position = Vector3(free.x, maxf(free.y, h), free.z)
+		_boom = 1.0
+		return
+	_boom = move_toward(_boom, k, (BOOM_IN if k < _boom else BOOM_OUT) * delta)
+	_free_pos = free
+	_has_free = true
+	global_position = look.lerp(free, _boom)
+
+
+## Hasta qué parte de la línea (de `look` a `cam`, 0..1) no hay agua en el
+## medio; -1 si ya hay agua pegada al personaje.
+func _sight_fraction(cam: Vector3, look: Vector3) -> float:
+	var prev := 0.0
+	for i in range(1, SIGHT_STEPS + 1):
+		var f := float(i) / SIGHT_STEPS
+		if _clear_of_water(look.lerp(cam, f)):
+			prev = f
+			continue
+		if prev <= 0.0:
+			return -1.0
+		var lo := prev
+		var hi := f
+		for j in SIGHT_REFINE:
+			var mid := (lo + hi) * 0.5
+			if _clear_of_water(look.lerp(cam, mid)):
+				lo = mid
+			else:
+				hi = mid
+		return maxf(lo, BOOM_MIN)
+	return 1.0
 
 
 func _clear_of_water(q: Vector3) -> bool:
