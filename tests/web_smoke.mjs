@@ -154,9 +154,13 @@ await shot('8g_gotas_tarde');
 await tap('F7');
 
 
-// Volver al menú y no tocar nada: arranca la demo de bots con pantalla dividida.
+// Pausa: el juego queda atrás desenfocado y con luces (y el menú encima).
 await tap('Escape');
-await sleep(26000);
+await sleep(1500);
+await shot('8h_pausa');
+
+// Volver al menú y no tocar nada: arranca la demo de bots con pantalla dividida.
+await sleep(24500);
 await shot('9_demo');
 await sleep(8000);
 await shot('9b_demo');
