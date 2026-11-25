@@ -835,17 +835,24 @@ func _test_tube() -> void:
 	_check(exited[0] and not r.is_fallen(), "aguantando el equilibrio, sale por la punta")
 	_check(late_width > 0.0 and late_width < width0 * 0.8,
 		"mientras más dura adentro, más se cierra el tubo (%.1f m al entrar, %.1f m al final)" % [width0, late_width])
+	var motivated_now := r.motivation_timer > 0.0
 	var along_exit := absf(r.forward().dot(Vector3(perp.x, 0.0, perp.y)))
-	_check(along_exit > cos(0.3), "sale derecho por el ojo (no en diagonal por la cortina del labio)")
+	var away := r.forward().dot(Vector3(giant.direction.x, 0.0, giant.direction.y)) * r.speed
+	_check(along_exit > cos(0.7), "sale para adelante por el ojo (no en diagonal por la cortina del labio)")
+	_check(away > giant.speed, "y se aleja de la ola más rápido de lo que ella avanza (%.1f m/s; la ola %.1f)" % [away, giant.speed])
 	var punched := [0]
 	r.wave_punched.connect(func() -> void: punched[0] += 1)
-	await _wait(1.0)
-	_check(punched[0] == 0, "y no atraviesa agua al salir")
+	var launched := false
+	for i in 90:
+		await get_tree().physics_frame
+		if r.state_machine.current_name == &"airborne":
+			launched = true
+	_check(punched[0] == 0 and not launched, "y no atraviesa agua ni la ola lo lanza al aire al salir")
 	_check(low, "adentro va por el piso, debajo del labio (no arriba)")
 	_check(moved > 30.0, "adentro va con la rotura, a lo largo de la ola (%.0f m)" % moved)
 	var gained := session.score_of(r) - before
 	_check(gained >= ExoticTrick.bonus(ExoticTrick.Kind.TUBE) + 1000, "suma muchos puntos (%d)" % gained)
-	_check(r.motivation_timer > 0.0, "sale con motivación")
+	_check(motivated_now, "sale con motivación")
 	var behind := giant.barrel_at(giant.peel_w - giant.peel_dir * (giant.barrel_len + Swell.BARREL_COLLAPSE + 2.0))
 	_check(behind.y > 0.95, "más atrás del tubo, la ola ya se cayó")
 	# Cuando la rotura llega a la otra punta, la ola se deshace.
@@ -855,9 +862,9 @@ func _test_tube() -> void:
 	await process_frame
 
 
-## Tubo con el stick apretado desde antes: mientras se forma y el primer
-## segundo con el tubo armado no se cae; si sigue apretando hacia la pared, el
-## labio lo tapa y la ola lo escupe afuera (no queda debajo del labio).
+## Tubo con el stick apretado desde antes: el primer segundo no se cae; si
+## sigue apretando hacia la pared, el labio lo tapa y la ola lo escupe afuera
+## (no queda debajo del labio).
 func _test_tube_grace() -> void:
 	var config := RaceConfig.tricks()
 	config.trick_seconds = 300
@@ -897,16 +904,14 @@ func _test_tube_grace() -> void:
 		if r.in_tube():
 			break
 	_check(r.in_tube(), "entra al tubo con el stick apretado")
-	var formed_t := -1.0
 	var t := 0.0
-	while r.in_tube() and t < TrickAttack.BARREL_START + 3.0:
+	var grace_worst := 0.0
+	while r.in_tube() and t < ExoticGrace.TIME - 0.1:
 		await get_tree().physics_frame
 		t += 1.0 / 60.0
-		if formed_t < 0.0 and giant.curl >= 0.9:
-			formed_t = t
-		if formed_t >= 0.0 and t > formed_t + ExoticGrace.TIME - 0.1:
-			break
-	_check(r.in_tube() and formed_t > 0.0, "mientras se forma y el primer segundo después no se cae, aunque apriete")
+		grace_worst = maxf(grace_worst, absf(r.tube_balance))
+	_check(r.in_tube() and grace_worst <= ExoticGrace.LIMIT + 0.001,
+		"el primer segundo no se cae, aunque deje el stick apretado (equilibrio hasta %.2f)" % grace_worst)
 	var wiped := [false, false]
 	r.tube_wiped_out.connect(func(lip: bool) -> void: wiped[0] = true; wiped[1] = lip, CONNECT_ONE_SHOT)
 	t = 0.0

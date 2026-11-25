@@ -31,8 +31,8 @@ func active() -> bool:
 
 
 ## El stick que cuenta: el que venía apretado de antes no, mientras dura la
-## gracia. `running`: si la gracia corre (el tubo la empieza cuando ya está
-## armado; mientras se forma solo se mira si soltó el stick).
+## gracia. `running`: si la gracia corre (si no, solo se mira si soltó el
+## stick).
 func steer(raw: float, delta: float, running: bool = true) -> float:
 	if running:
 		time += delta
