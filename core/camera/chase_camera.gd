@@ -197,6 +197,8 @@ func _process(delta: float) -> void:
 ## hasta `look` sin quedar adentro (así no cambia el ángulo). Si ni pegada al
 ## personaje alcanza, sube (como antes).
 const ABOVE_STEPS := 12
+## Lo mínimo entre la cámara y el labio de un tubo, por encima (m).
+const ROOF_MARGIN := 0.6
 
 
 func _above_water(cam: Vector3, look: Vector3) -> Vector3:
@@ -218,7 +220,10 @@ func _above_water(cam: Vector3, look: Vector3) -> Vector3:
 
 
 func _clear_of_water(q: Vector3) -> bool:
-	return q.y >= _water.height_below(q.x, q.z, q.y) + MIN_ABOVE_WATER
+	if q.y < _water.height_below(q.x, q.z, q.y) + MIN_ABOVE_WATER:
+		return false
+	# Adentro de un tubo: tampoco metida en el labio (ni pegada a él).
+	return not _water.in_water(q.x, q.z, q.y + ROOF_MARGIN)
 
 
 ## Dónde va la cámara adentro del tubo: [posición, a dónde mira].

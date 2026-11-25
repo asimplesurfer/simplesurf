@@ -64,6 +64,13 @@ var curl: float = 0.0
 var peel_w: float = -1.0e9
 var peel_dir: float = 1.0
 var peel_from: float = INF
+## Cuánto se cerró el tubo (0..1): mientras más dura adentro, el labio baja y
+## la pared se acerca (el hueco se achica: más difícil). Lo pone el estado
+## `barrel` según el progreso. Igual en water_surface.gdshaderinc (barrel_close).
+var tube_close: float = 0.0
+## Con el tubo cerrado del todo, cuánto se adelanta la pared (parte de
+## TUBE_WALL_BACK).
+const TUBE_WALL_CLOSE := 0.5
 var peel_speed: float = 0.0
 var barrel_len: float = 22.0
 const BARREL_THROAT := 10.0
@@ -368,7 +375,7 @@ func profile(u0: float, w: float) -> Vector2:
 	var drop := 1.0 - BARREL_DROP * bq.y
 	if (bq.x <= 0.0 and bq.w <= 0.0) or u0 <= 0.0 or u0 >= TUBE_REACH * width:
 		return Vector2(off, h * drop)
-	var t := tube_shape(u0, bq.x, bq.w, land_at(w), bq.z, e)
+	var t := tube_shape(u0, bq.x, bq.w, maxf(land_at(w), tube_close), bq.z, e, tube_close)
 	return Vector2(t.x - u0, t.y * drop)
 
 
@@ -382,7 +389,7 @@ func profile(u0: float, w: float) -> Vector2:
 ## y empieza donde termina el labio por adentro. `fill`: cuánto se llenó el
 ## hueco (0: abierto; 1: macizo, ver barrel_at). Igual en
 ## water_surface.gdshaderinc.
-func tube_shape(u0: float, lip_k: float, hollow: float, land: float = 0.0, fill: float = 0.0, e: float = 1.0) -> Vector2:
+func tube_shape(u0: float, lip_k: float, hollow: float, land: float = 0.0, fill: float = 0.0, e: float = 1.0, close: float = 0.0) -> Vector2:
 	var reach := TUBE_REACH * width
 	var s2: float = TUBE_S[2]
 	var lip_len := lip_k * s2 * reach
@@ -398,11 +405,11 @@ func tube_shape(u0: float, lip_k: float, hollow: float, land: float = 0.0, fill:
 		var lp := _lip_point(u0 / lip_len * s2, lip_k, land, fill)
 		return Vector2(lp.x, lp.y * e)
 	var t := (u0 - lip_len) / (reach - lip_len)
-	var m := _plain_point(t * reach, e).lerp(_face_point(t, fill, e), hollow)
+	var m := _plain_point(t * reach, e).lerp(_face_point(t, fill, e, close), hollow)
 	# Que empiece donde termina el labio por adentro (se corrige de a poco).
 	var back := _lip_point(s2, lip_k, land, fill)
 	back.y *= e
-	var m0 := _plain_point(0.0, e).lerp(_face_point(0.0, fill, e), hollow)
+	var m0 := _plain_point(0.0, e).lerp(_face_point(0.0, fill, e, close), hollow)
 	return m + (back - m0) * (1.0 - t) * (1.0 - t)
 
 
@@ -437,7 +444,7 @@ func _plain_point(u0: float, e: float) -> Vector2:
 
 ## La pared y el piso del tubo entero (`t`: 0 donde termina el labio por
 ## adentro .. 1 al final de la cara), ya con las puntas (`e`).
-func _face_point(t: float, fill: float, e: float) -> Vector2:
+func _face_point(t: float, fill: float, e: float, close: float = 0.0) -> Vector2:
 	var a := amplitude
 	var full_lean := 1.3 * a
 	var s2: float = TUBE_S[2]
@@ -446,7 +453,7 @@ func _face_point(t: float, fill: float, e: float) -> Vector2:
 	var c := Vector2(full_lean + 0.05 * a, a - TUBE_RY * a)
 	var top := c + Vector2(cos(TUBE_BACK_ANGLE) * (TUBE_RX - TUBE_THICK) * a * (1.0 - fill),
 		sin(TUBE_BACK_ANGLE) * (TUBE_RY - TUBE_THICK) * a * (1.0 - fill))
-	var base := Vector2(full_lean - TUBE_WALL_BACK * a, TUBE_FLOOR_Y * a)
+	var base := Vector2(full_lean - TUBE_WALL_BACK * (1.0 - TUBE_WALL_CLOSE * close) * a, TUBE_FLOOR_Y * a)
 	# La cara (la pared de atrás del tubo) es cóncava: baja empinada y se va
 	# curvando hasta el agua de adelante (sin esquina).
 	var foot := base + Vector2(TUBE_FOOT * a, 0.0)
@@ -524,6 +531,35 @@ func tube_floor_source(u: float, w: float) -> float:
 		prev_u = cu
 		prev_f = cf
 	return best_u
+
+
+## Ola rompiendo en tubo: el espacio de adentro en `w`, a lo largo de u (desde
+## el centro de la ola): Vector2(de la pared, hasta la punta del labio), donde
+## hay techo encima con al menos `clearance` m sobre el piso y el piso no sube
+## más de `hip` m por la pared. Es lo que se ve: con el equilibrio al máximo,
+## el surfista toca la pared (o queda bajo la punta). Vector2.ZERO si no hay.
+const BAND_STEPS := 36
+
+
+func tube_band(w: float, clearance: float = 2.0, hip: float = 1.0) -> Vector2:
+	var a := amplitude
+	var floor_top := TUBE_FLOOR_Y * a * _edge(absf(w)) + hip
+	var lo := 0.7 * a
+	var hi := 2.1 * a
+	var best := Vector2.ZERO
+	var start := NAN
+	for i in BAND_STEPS + 1:
+		var u := lerpf(lo, hi, float(i) / BAND_STEPS)
+		var hs := tube_heights(u, w)
+		var inside := hs.size() >= 3 and hs[1] - hs[0] >= clearance and hs[0] <= floor_top
+		if inside and is_nan(start):
+			start = u
+		if (not inside or i == BAND_STEPS) and not is_nan(start):
+			var end := u if inside else lerpf(lo, hi, float(i - 1) / BAND_STEPS)
+			if end - start > best.y - best.x:
+				best = Vector2(start, end)
+			start = NAN
+	return best
 
 
 ## Lo que hay a lo largo de la ola (de atrás hacia adelante) que puede tener

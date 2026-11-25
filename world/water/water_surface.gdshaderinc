@@ -30,6 +30,8 @@ uniform vec4 swell_a7; uniform vec4 swell_b7;
 // a lo ancho, hacia dónde avanza ±1, largo del tubo abierto, cuánto corrió
 // desde donde empezó: rompe para los dos lados, ver swell.gd peel_s).
 uniform vec4 barrel = vec4(-1.0e9, 1.0, 22.0, 0.0);
+// Cuánto se cerró ese tubo (swell.gd tube_close): el labio baja y la pared se acerca.
+uniform float barrel_close = 0.0;
 // Ola constante (ver ring_wave.gd). a = (centro.x, centro.z, radio, ancho); b = (amplitud, base, lóbulos, fase)
 uniform vec4 ring_a = vec4(0.0, 0.0, 1.0, 1.0);
 uniform vec4 ring_b = vec4(0.0);
@@ -86,6 +88,7 @@ const float TUBE_FOOT = 0.4;
 const float TUBE_TIP_BAND = 0.78;
 const float TUBE_TIP_RAMP = 1.2;
 
+const float TUBE_WALL_CLOSE = 0.5;
 const float BARREL_SHOULDER_HOLD = 16.0;
 const float BARREL_SHOULDER_END = 40.0;
 
@@ -117,13 +120,13 @@ vec2 tube_plain_point(float u0, float a, float width, float lean, float e) {
 }
 
 // La pared y el piso del tubo entero (t: 0..1), con las puntas (swell.gd _face_point).
-vec2 tube_face_point(float t, float a, float width, float fill, float e) {
+vec2 tube_face_point(float t, float a, float width, float fill, float e, float close) {
 	float full_lean = 1.3 * a;
 	float s = TUBE_S.z + t * (1.0 - TUBE_S.z);
 	vec2 c = vec2(full_lean + 0.05 * a, a - TUBE_RY * a);
 	vec2 top = c + vec2(cos(TUBE_BACK_ANGLE) * (TUBE_RX - TUBE_THICK) * a * (1.0 - fill),
 		sin(TUBE_BACK_ANGLE) * (TUBE_RY - TUBE_THICK) * a * (1.0 - fill));
-	vec2 base = vec2(full_lean - TUBE_WALL_BACK * a, TUBE_FLOOR_Y * a);
+	vec2 base = vec2(full_lean - TUBE_WALL_BACK * (1.0 - TUBE_WALL_CLOSE * close) * a, TUBE_FLOOR_Y * a);
 	// La cara es cóncava: baja empinada y se curva hasta el agua de adelante.
 	vec2 foot = base + vec2(TUBE_FOOT * a, 0.0);
 	vec2 p;
@@ -142,7 +145,7 @@ vec2 tube_face_point(float t, float a, float width, float fill, float e) {
 // altura), con las puntas. El labio sale de la cresta y se enrolla con el agua
 // de arriba de la cara; el resto de la cara se retira hasta ser la pared y el
 // piso (ver swell.gd tube_shape).
-vec2 tube_shape(float u0, float a, float width, float lean, float lip_k, float hollow, float land, float fill, float e) {
+vec2 tube_shape(float u0, float a, float width, float lean, float lip_k, float hollow, float land, float fill, float e, float close) {
 	float reach = TUBE_REACH * width;
 	float lip_len = lip_k * TUBE_S.z * reach;
 	if (u0 <= lip_len) {
@@ -159,11 +162,11 @@ vec2 tube_shape(float u0, float a, float width, float lean, float lip_k, float h
 		return vec2(lp.x, lp.y * e);
 	}
 	float t = (u0 - lip_len) / (reach - lip_len);
-	vec2 m = mix(tube_plain_point(t * reach, a, width, lean, e), tube_face_point(t, a, width, fill, e), hollow);
+	vec2 m = mix(tube_plain_point(t * reach, a, width, lean, e), tube_face_point(t, a, width, fill, e, close), hollow);
 	// Que empiece donde termina el labio por adentro (se corrige de a poco).
 	vec2 back = tube_lip_point(TUBE_S.z, a, lip_k, land, fill);
 	back.y *= e;
-	vec2 m0 = mix(tube_plain_point(0.0, a, width, lean, e), tube_face_point(0.0, a, width, fill, e), hollow);
+	vec2 m0 = mix(tube_plain_point(0.0, a, width, lean, e), tube_face_point(0.0, a, width, fill, e, close), hollow);
 	return m + (back - m0) * (1.0 - t) * (1.0 - t);
 }
 
@@ -181,7 +184,7 @@ float tube_s(float u0, float width, float lip_k) {
 
 // Cómo se dibuja el punto u0 de la loma: (corrimiento hacia adelante, altura).
 // Con tubo (lip_k, hollow), la cara de adelante se vuelve labio, pared y piso.
-vec2 swell_profile(float u0, float amp, float width, float breaking, float lip_k, float hollow, float land, float fill, float e) {
+vec2 swell_profile(float u0, float amp, float width, float breaking, float lip_k, float hollow, float land, float fill, float e, float close) {
 	float n = exp(-(u0 * u0) / (width * width)) * e;
 	float lean = (0.35 + 0.95 * breaking) * amp;
 	float off = lean * n * n * n;
@@ -189,7 +192,7 @@ vec2 swell_profile(float u0, float amp, float width, float breaking, float lip_k
 	if ((lip_k <= 0.0 && hollow <= 0.0) || u0 <= 0.0 || u0 >= TUBE_REACH * width) {
 		return vec2(off, hh);
 	}
-	vec2 t = tube_shape(u0, amp, width, lean, lip_k, hollow, land, fill, e);
+	vec2 t = tube_shape(u0, amp, width, lean, lip_k, hollow, land, fill, e, close);
 	return vec2(t.x - u0, t.y);
 }
 
@@ -232,7 +235,7 @@ void add_swell(vec4 a, vec4 b, vec2 p, inout float h, inout vec2 g, inout vec2 d
 	if (curl > 0.0) {
 		float ps = (w - barrel.x) * barrel.y;
 		ps = max(ps, -ps - 2.0 * barrel.w);
-		land = smoothstep(0.0, barrel.z + BARREL_COLLAPSE * 0.5, -ps);
+		land = max(smoothstep(0.0, barrel.z + BARREL_COLLAPSE * 0.5, -ps), barrel_close);
 		if (ps > 0.0) {
 			lip_k = curl * (1.0 - smoothstep(0.0, BARREL_THROAT, ps));
 			hollow = curl * (1.0 - smoothstep(BARREL_SHOULDER_HOLD, BARREL_SHOULDER_END, ps));
@@ -268,7 +271,7 @@ void add_swell(vec4 a, vec4 b, vec2 p, inout float h, inout vec2 g, inout vec2 d
 	float dh_du = amp * dn_du / stretch * drop;
 	if (lip_k > 0.0 || hollow > 0.0) {
 		// Cerrándose en tubo: la forma de swell_profile; la pendiente, de dos puntos.
-		vec2 pr = swell_profile(u, amp, width, breaking, lip_k, hollow, land, fill, e);
+		vec2 pr = swell_profile(u, amp, width, breaking, lip_k, hollow, land, fill, e, barrel_close);
 		// Cuánto es parte del tubo (labio, techo por adentro y pared): para
 		// pintarlo como agua que deja pasar la luz.
 		float ts = tube_s(u, width, lip_k);
@@ -276,7 +279,7 @@ void add_swell(vec4 a, vec4 b, vec2 p, inout float h, inout vec2 g, inout vec2 d
 			// Todo en el labio; bajando por la pared se va apagando.
 			tube = max(tube, kk * e * (1.0 - smoothstep(TUBE_S.z, TUBE_S.w, ts)));
 		}
-		vec2 pr2 = swell_profile(u + 0.3, amp, width, breaking, lip_k, hollow, land, fill, e);
+		vec2 pr2 = swell_profile(u + 0.3, amp, width, breaking, lip_k, hollow, land, fill, e, barrel_close);
 		h += pr.y * drop;
 		disp += dir * pr.x;
 		float dx = 0.3 + pr2.x - pr.x;

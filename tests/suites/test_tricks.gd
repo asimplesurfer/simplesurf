@@ -21,6 +21,7 @@ func run() -> void:
 	await _test_launches()
 	await _test_waves_and_lip()
 	await _test_tube()
+	await _test_tube_grace()
 	await _test_record()
 	await _test_menu()
 
@@ -362,10 +363,22 @@ func _test_waves_and_lip() -> void:
 	await _wait(1.0)
 	var other := _tall_wave(r, 9.0)
 	await _wait(0.2)
+	# Engancha con el stick apretado (venía doblando): el primer segundo no se
+	# cae (período de gracia).
+	_set_action(&"p1_left", true)
 	_place_on(other, -1.0, -(other.half_length - other.edge - 5.0))
 	await _wait(0.1)
 	_check(r.on_lip(), "engancha otra")
 	before = session.score_of(r)
+	var grace_worst := 0.0
+	var t_grace := 0.0
+	while t_grace < ExoticGrace.TIME - 0.15 and r.on_lip():
+		await get_tree().physics_frame
+		t_grace += 1.0 / 60.0
+		grace_worst = maxf(grace_worst, absf(r.lip_balance))
+	_check(r.on_lip() and grace_worst <= ExoticGrace.LIMIT + 0.001,
+		"con el stick apretado desde antes, el primer segundo no se cae (equilibrio hasta %.2f)" % grace_worst)
+	_set_action(&"p1_left", false)
 	await _wait(9.0)
 	_check(r.is_fallen(), "sin corregir con el stick pierde el equilibrio y se cae")
 	_check(session.score_of(r) > before and session.score_of(r) - before < ExoticTrick.bonus(ExoticTrick.Kind.LIP), "se queda con los puntos que hizo, sin bonus (%d)" % (session.score_of(r) - before))
@@ -779,11 +792,31 @@ func _test_tube() -> void:
 	var hs := giant.tube_heights(1.45 * giant.max_amplitude, w_in)
 	_check(hs.size() >= 3 and hs[hs.size() - 1] - hs[0] > giant.max_amplitude * 0.5,
 		"adentro hay piso y techo (%s)" % str(Array(hs).map(func(v: float) -> float: return snappedf(v, 0.1))))
+	# El espacio de adentro es el que se ve: con el equilibrio al máximo hacia
+	# la pared, queda pegado a la pared dibujada.
+	var st0 := r.state_machine.current
+	var w_r := giant.local_coords(Vector2(r.position.x, r.position.z)).y
+	var band0 := giant.tube_band(w_r)
+	var bal0: float = st0.get("balance")
+	st0.set("balance", 1.0)
+	var u_wall: float = st0.call("line_u")
+	st0.set("balance", -1.0)
+	var u_open: float = st0.call("line_u")
+	st0.set("balance", bal0)
+	var margin := TrickAttack.BarrelState.BODY_MARGIN
+	_check(absf(u_wall - (band0.x + margin)) < 0.6 and absf(u_open - (band0.y - margin)) < 0.6,
+		"con el equilibrio al máximo toca la pared que se ve (o queda bajo la punta del labio)")
+	var hs_wall := giant.tube_heights(band0.x - 0.8, w_r)
+	var floor_top := giant.max_amplitude * Swell.TUBE_FLOOR_Y + 1.0
+	_check(hs_wall.size() < 3 or hs_wall[1] - hs_wall[0] < 2.0 or hs_wall[0] > floor_top,
+		"y más allá de ese borde ya no hay lugar (la pared)")
+	var width0 := band0.y - band0.x
 	# Mantiene el equilibrio hasta que sale por la punta.
 	var exited := [false]
 	r.tube_exited.connect(func(ok: bool) -> void: exited[0] = ok, CONNECT_ONE_SHOT)
 	var guard := 0
 	var low := true
+	var late_width := -1.0
 	var moved := 0.0
 	var last := r.position
 	while r.in_tube() and guard < 60 * 20:
@@ -791,12 +824,17 @@ func _test_tube() -> void:
 			low = false
 		_hold_tube_balance(r)
 		await get_tree().physics_frame
+		if r.in_tube() and r.state_machine.current.has_method("progress") and float(r.state_machine.current.call("progress")) > 0.8:
+			var wr := giant.local_coords(Vector2(r.position.x, r.position.z)).y
+			late_width = (giant.tube_band(wr).y - giant.tube_band(wr).x) if late_width < 0.0 else late_width
 		moved += r.position.distance_to(last)
 		last = r.position
 		guard += 1
 	_set_action(&"p1_right", false)
 	_set_action(&"p1_left", false)
 	_check(exited[0] and not r.is_fallen(), "aguantando el equilibrio, sale por la punta")
+	_check(late_width > 0.0 and late_width < width0 * 0.8,
+		"mientras más dura adentro, más se cierra el tubo (%.1f m al entrar, %.1f m al final)" % [width0, late_width])
 	var along_exit := absf(r.forward().dot(Vector3(perp.x, 0.0, perp.y)))
 	_check(along_exit > cos(0.3), "sale derecho por el ojo (no en diagonal por la cortina del labio)")
 	var punched := [0]
@@ -813,6 +851,72 @@ func _test_tube() -> void:
 	# Cuando la rotura llega a la otra punta, la ola se deshace.
 	await _wait((Swell.BARREL_THROAT + 20.0) / TrickAttack.PEEL_SPEED)
 	_check(session.barrel_wave == null and giant.lifetime - giant.age <= TrickAttack.TUBE_FADE + 0.1, "al terminar de romper, la ola se deshace")
+	m.queue_free()
+	await process_frame
+
+
+## Tubo con el stick apretado desde antes: mientras se forma y el primer
+## segundo con el tubo armado no se cae; si sigue apretando hacia la pared, el
+## labio lo tapa y la ola lo escupe afuera (no queda debajo del labio).
+func _test_tube_grace() -> void:
+	var config := RaceConfig.tricks()
+	config.trick_seconds = 300
+	var m: Node = load("res://tricks.tscn").instantiate()
+	(m.get_node("Session") as GameSession).config = config
+	root.add_child(m)
+	await process_frame
+	await process_frame
+	var session := m.get_node("Session") as TrickAttack
+	var waves := m.get_node("WaveManager") as WaveManager
+	_water = m.get_node("Water") as Water
+	var r := session.racers[0]
+	_rider = r
+	session._lip_timer = 1e9
+	waves.enabled = false
+	session.start()
+	await _wait(0.2)
+	_water.clear_swells()
+	var giant := _make_swell(Vector2(500.0, -500.0), 11.0)
+	giant.half_length = 70.0
+	giant.age = 4.0
+	giant.update(0.0)
+	var perp := Vector2(-giant.direction.y, giant.direction.x)
+	var p := giant.center + giant.direction * (giant.crest_u() + 6.0) + perp * -45.0
+	# Hacia qué lado queda la pared (para apretar hacia ella).
+	var right := Vector2(cos(atan2(-perp.x, -perp.y)), -sin(atan2(-perp.x, -perp.y)))
+	var toward_wall := &"p1_right" if right.dot(-giant.direction) >= 0.0 else &"p1_left"
+	_set_action(toward_wall, true)
+	r.position = Vector3(p.x, _water.height_at(p.x, p.y), p.y)
+	r.heading = atan2(-perp.x, -perp.y)
+	r.rotation.y = r.heading
+	r.set_recovery_stage(Rider.RecoveryStage.STANDING)
+	r.grounded = true
+	r.state_machine.transition_to(&"riding")
+	for i in 10:
+		await get_tree().physics_frame
+		if r.in_tube():
+			break
+	_check(r.in_tube(), "entra al tubo con el stick apretado")
+	var formed_t := -1.0
+	var t := 0.0
+	while r.in_tube() and t < TrickAttack.BARREL_START + 3.0:
+		await get_tree().physics_frame
+		t += 1.0 / 60.0
+		if formed_t < 0.0 and giant.curl >= 0.9:
+			formed_t = t
+		if formed_t >= 0.0 and t > formed_t + ExoticGrace.TIME - 0.1:
+			break
+	_check(r.in_tube() and formed_t > 0.0, "mientras se forma y el primer segundo después no se cae, aunque apriete")
+	var wiped := [false, false]
+	r.tube_wiped_out.connect(func(lip: bool) -> void: wiped[0] = true; wiped[1] = lip, CONNECT_ONE_SHOT)
+	t = 0.0
+	while r.in_tube() and t < 4.0:
+		await get_tree().physics_frame
+		t += 1.0 / 60.0
+	_set_action(toward_wall, false)
+	_check(wiped[0] and wiped[1], "si sigue apretando hacia la pared, el labio lo tapa")
+	_check(not _water.under_roof(r.position.x, r.position.z, r.position.y),
+		"y la ola lo escupe afuera del tubo (no queda debajo del labio)")
 	m.queue_free()
 	await process_frame
 
