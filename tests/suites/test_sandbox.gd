@@ -171,6 +171,11 @@ func _test_sandbox() -> void:
 		is_equal_approx(pause.blur_amount(), 1.0) and is_equal_approx(float(backdrop_mat.get_shader_parameter("amount")), 1.0),
 		"en medio segundo el fondo queda del todo desenfocado"
 	)
+	var game_views := (m.get_node("Views") as SplitScreen).views
+	_check(
+		not game_views.is_empty() and game_views.all(func(v: SubViewport) -> bool: return v.render_target_update_mode == SubViewport.UPDATE_DISABLED),
+		"con la pausa abierta, el 3D no se vuelve a dibujar (en pausa no cambia)"
+	)
 	var panel_box := pause.get_node("Menu") as Control
 	_check(
 		panel_box.get_index() > backdrop.get_index() and panel_box.material == null and not backdrop.is_ancestor_of(panel_box),
@@ -180,6 +185,10 @@ func _test_sandbox() -> void:
 	await process_frame
 	_check(not root.get_tree().paused, "al seguir, el juego sigue")
 	_check(pause.visible and pause.blur_amount() > 0.0, "al cerrar, el desenfoque se va de a poco")
+	_check(
+		game_views.all(func(v: SubViewport) -> bool: return v.render_target_update_mode != SubViewport.UPDATE_DISABLED),
+		"y el 3D se vuelve a dibujar enseguida"
+	)
 	for i in 30:
 		await process_frame
 	_check(not pause.visible and pause.blur_amount() == 0.0, "y después el fondo queda nítido (sin efecto)")

@@ -11,6 +11,9 @@ extends SceneTree
 ## abrir la pausa, el fondo moviéndose (sin el panel a la mitad) y cerrarla.
 ## Con ffmpeg se arma el video:
 ##   ffmpeg -framerate 30 -i carpeta/cuadro_%04d.png -pix_fmt yuv420p pausa.mp4
+##
+## Con "medir" (en vez de "video"): cuánto tarda cada cuadro jugando y con la
+## pausa abierta (con OpenGL por software cuenta todo lo que dibuja la placa).
 
 func _initialize() -> void:
 	_run.call_deferred()
@@ -36,6 +39,10 @@ func _run() -> void:
 	root.add_child(m)
 	for i in 420:
 		await process_frame
+	if args.size() > 5 and args[5] == "medir":
+		await _measure(race)
+		quit()
+		return
 	if args.size() > 5 and args[5] == "video":
 		await _video(out, race)
 		quit()
@@ -59,6 +66,24 @@ func _run() -> void:
 		await process_frame
 	await _shot(out.path_join("pausa_4_cerrando.png"))
 	quit()
+
+
+func _measure(race: Node) -> void:
+	var playing := await _frame_ms(90)
+	race.toggle_pause()
+	for i in 60:
+		await process_frame
+	var paused := await _frame_ms(90)
+	print("MEDIDA jugando: %.1f ms por cuadro, con la pausa: %.1f ms por cuadro" % [playing, paused])
+
+
+## Promedio de milisegundos por cuadro durante `frames` cuadros.
+func _frame_ms(frames: int) -> float:
+	await RenderingServer.frame_post_draw
+	var start := Time.get_ticks_usec()
+	for i in frames:
+		await RenderingServer.frame_post_draw
+	return (Time.get_ticks_usec() - start) / 1000.0 / frames
 
 
 func _video(out: String, race: Node) -> void:

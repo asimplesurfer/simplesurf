@@ -12,12 +12,15 @@ extends Control
 ## Tope de píxeles que se dibujan en 3D (sumando todas las vistas, se reparte
 ## por el tamaño de cada una). Unos 1920x1200.
 const MAX_PIXELS := 2300000.0
+## Grupo de todas las vistas (la pausa las congela mientras está abierta).
+const GROUP := &"sharp_views"
 
 var viewport: SubViewport
 var _box: SubViewportContainer
 
 
 func _init() -> void:
+	add_to_group(GROUP)
 	_box = SubViewportContainer.new()
 	_box.stretch = true
 	_box.mouse_filter = Control.MOUSE_FILTER_IGNORE

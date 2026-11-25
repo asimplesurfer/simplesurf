@@ -9,6 +9,10 @@ extends CanvasLayer
 ## ui/shaders/pause_backdrop.gdshader): al abrir, el foco se va de a poco; al
 ## cerrar, vuelve de a poco mientras el juego ya sigue. El panel va encima,
 ## nítido.
+##
+## Con el juego en pausa la escena no cambia: cuando el fondo termina de
+## desenfocarse, las vistas 3D dejan de dibujarse (queda su última imagen) y
+## solo se mueve el efecto. Al cerrar vuelven a dibujarse enseguida.
 
 const YELLOW := Palette.BUTTER
 ## Paso de las barras de volumen (0..100).
@@ -29,6 +33,8 @@ var _opened_frame: int = -1
 var _open: bool = false
 var _amount: float = 0.0
 var _fade: Tween
+## Vistas congeladas mientras la pausa está abierta -> cómo se actualizaban.
+var _frozen: Dictionary = {}
 
 
 func _init() -> void:
@@ -71,6 +77,7 @@ func close() -> void:
 	if not _open:
 		return
 	_open = false
+	_freeze_views(false)
 	_menu.visible = false
 	backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	get_tree().paused = false
@@ -90,11 +97,37 @@ func _animate(target: float, seconds: float) -> void:
 	_fade.tween_method(_set_amount, _amount, target, maxf(seconds * absf(target - _amount), 0.01))
 	if opening:
 		_fade.parallel().tween_property(_menu, "modulate:a", 1.0, seconds * 0.6).set_delay(seconds * 0.15)
+		_fade.tween_callback(func() -> void:
+			if _open:
+				_freeze_views(true)
+		)
 	else:
 		_fade.tween_callback(func() -> void:
 			if not _open:
 				visible = false
 		)
+
+
+## Deja de dibujar (o vuelve a dibujar) las vistas 3D del juego. En pausa no
+## cambian, y redibujarlas es lo que más le cuesta a la placa de video.
+func _freeze_views(on: bool) -> void:
+	if on:
+		for node in get_tree().get_nodes_in_group(SharpView.GROUP):
+			var vp := (node as SharpView).viewport
+			if vp.render_target_update_mode != SubViewport.UPDATE_DISABLED:
+				_frozen[vp] = vp.render_target_update_mode
+				vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
+		return
+	for vp in _frozen:
+		if is_instance_valid(vp):
+			(vp as SubViewport).render_target_update_mode = _frozen[vp]
+	_frozen.clear()
+
+
+## Si la pausa desaparece abierta (por ejemplo, al cambiar de escena), las
+## vistas no quedan congeladas.
+func _exit_tree() -> void:
+	_freeze_views(false)
 
 
 func _set_amount(value: float) -> void:
