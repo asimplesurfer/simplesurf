@@ -56,15 +56,26 @@ const LIP_EVERY := 20.0
 ## (y un cartel cuando sale). La idea es sacarla: con el rocío de la cresta
 ## (LipWaveSpray) ya se tiene que reconocer.
 const SHOW_LIP_POINTER := true
-## Tubos: una ola de TUBE_MIN_HEIGHT m o más, después de TUBE_AFTER segundos
-## entera, rompe en tubo de a poco, como una ola de verdad: el punto de rotura
-## corre por la cresta (PEEL_SPEED) desde una punta hasta la otra, con el tubo
-## abierto detrás (BARREL_LEN) y la ola que se cae más atrás (ver
-## Swell.peel_w). Pasando por debajo del labio se entra (estado `barrel`): es
-## un truco exótico (ver ExoticTrick).
+## Tubos: una ola de TUBE_MIN_HEIGHT m o más no rompe sola. Si el surfista
+## pasa de costado por debajo del labio (por la cara de adelante, abajo de la
+## cresta, andando a lo largo de la ola), la ola rompe en tubo ahí mismo, justo
+## delante de él, y queda adentro (estado `barrel`, un truco exótico: ver
+## ExoticTrick). Rompe como un pico, para los dos lados (ver Swell.peel_from):
+## el punto de rotura corre por la cresta (PEEL_SPEED) hacia donde iba él, con
+## el tubo abierto detrás (BARREL_LEN) y la ola que se cae más atrás.
 const TUBE_MIN_HEIGHT := 10.0
-const TUBE_AFTER := 6.0
+## Dónde engancha: delante de la cresta, hasta TUBE_CATCH_FRONT veces el ancho
+## de la ola, donde el agua está a menos de TUBE_CATCH_LOW de la altura (abajo
+## del labio, no arriba: arriba engancha la ola de borde). Andando a lo largo
+## de la ola (el ángulo con la cresta, de frente o de espaldas, como mucho
+## TUBE_CATCH_ANGLE rad) y con al menos TUBE_ROOM m de cresta por delante.
+const TUBE_CATCH_FRONT := 0.8
+const TUBE_CATCH_LOW := 0.6
+const TUBE_CATCH_ANGLE := 1.0
+const TUBE_ROOM := 18.0
 const PEEL_SPEED := 10.0
+## El estado del tubo (dónde va el bolsillo y dónde termina).
+const BarrelState := preload("res://core/rider/states/state_barrel.gd")
 const BARREL_LEN := 28.0
 ## Cuánto tarda en empezar a romper (s: el labio crece de a poco) y en
 ## deshacerse al final.
@@ -268,9 +279,9 @@ func add_lip_spray(wave: Swell) -> LipWaveSpray:
 	return spray
 
 
-## Tubos: una ola gigante que ya lleva un rato entera rompe en tubo (una a la
-## vez). Mientras rompe, el que pasa por debajo del labio entra. Cuando la
-## rotura llega a la otra punta, la ola se deshace.
+## Tubos (uno a la vez): una ola gigante rompe en tubo cuando alguien pasa de
+## costado por debajo del labio. Mientras rompe, otro que pase por debajo
+## también entra. Cuando la rotura llega a la punta, la ola se deshace.
 func _update_tubes(delta: float) -> void:
 	if water == null:
 		return
@@ -293,10 +304,10 @@ func _update_tubes(delta: float) -> void:
 			barrel_wave.retire()
 			barrel_wave = null
 		return
-	for sw in water.swells:
-		if ready_for_tube(sw):
-			start_barrel(sw)
-			return
+	for r in racers:
+		for sw in water.swells:
+			if try_start_tube(r, sw):
+				return
 
 
 ## Entrar al tubo: el que anda por el piso de adentro, debajo del labio (pasó
@@ -321,41 +332,75 @@ func try_enter_barrel(r: Rider) -> bool:
 	return true
 
 
-## true si la ola ya puede romper en tubo.
+## true si la ola ya puede romper en tubo (gigante, crecida, sin usar).
 func ready_for_tube(s: Swell) -> bool:
 	return (
 		s.max_amplitude >= TUBE_MIN_HEIGHT
 		and not s.keep
 		and not s.lip_used
-		and s.age >= s.grow_time + TUBE_AFTER
 		and s.amplitude >= s.max_amplitude * 0.95
 		and s.breaking >= 1.0
 		and s.lifetime - s.age > s.fade_time + 1.0
 	)
 
 
-## Empieza a romper en tubo: la rotura arranca en una punta y va hacia el lado
-## donde está el surfista (así el tubo le llega). Dura lo que tarda en
-## recorrer la ola.
-func start_barrel(s: Swell) -> void:
+## Hacia dónde rompería la ola si `r` pasara por ahí (+1 / -1 a lo ancho: hacia
+## donde va él), o 0 si no está pasando de costado por debajo del labio.
+func tube_side(r: Rider, s: Swell) -> float:
+	if r.is_fallen() or not r.grounded or r.in_tube() or r.on_lip() or r.controls_locked or r.trick_angle > 0.0:
+		return 0.0
+	var p := Vector2(r.position.x, r.position.z)
+	var uw := s.local_coords(p)
+	var from_crest := uw.x - s.crest_u()
+	if from_crest < 0.0 or from_crest > s.width * TUBE_CATCH_FRONT:
+		return 0.0
+	if s.height_at(p) > s.amplitude * TUBE_CATCH_LOW:
+		return 0.0
+	# A lo largo de la ola (no de frente contra ella).
+	var f := Vector2(r.forward().x, r.forward().z)
+	var along := f.dot(Vector2(-s.direction.y, s.direction.x))
+	if absf(along) < cos(TUBE_CATCH_ANGLE):
+		return 0.0
+	var side := signf(along)
+	# Que quede cresta por recorrer hacia donde va.
+	var end := s.half_length - s.edge - BarrelState.END_MARGIN
+	if end - uw.y * side < TUBE_ROOM or absf(uw.y) > s.half_length - s.edge:
+		return 0.0
+	return side
+
+
+## Si `r` pasa de costado por debajo del labio de una ola gigante, la ola
+## rompe en tubo ahí mismo y él queda adentro.
+func try_start_tube(r: Rider, s: Swell) -> bool:
+	if barrel_wave != null or not ready_for_tube(s):
+		return false
+	var side := tube_side(r, s)
+	if side == 0.0:
+		return false
+	start_barrel(s, r, side)
+	r.barrel_wave = s
+	r.state_machine.transition_to(&"barrel")
+	return true
+
+
+## Empieza a romper en tubo justo delante de `r` (que va hacia `side` a lo
+## ancho de la ola): el labio se tira ahí y la rotura corre hacia donde va él,
+## que queda en el bolsillo. Dura lo que tarda en recorrer la ola.
+func start_barrel(s: Swell, r: Rider, side: float) -> void:
 	barrel_wave = s
 	s.keep = true
 	s.lip_used = true
 	s.curl = 0.01
 	s.peel_speed = PEEL_SPEED
 	s.barrel_len = BARREL_LEN
-	var side := 1.0
-	var near := INF
-	for r in racers:
-		var p := Vector2(r.position.x, r.position.z)
-		var d := p.distance_to(s.center)
-		if d < near:
-			near = d
-			var w := s.local_coords(p).y
-			side = signf(w) if absf(w) > 1.0 else 1.0
 	s.peel_dir = side
-	s.peel_w = -side * (s.half_length - s.edge * 0.5)
-	var travel := 2.0 * s.half_length + Swell.BARREL_THROAT + BARREL_LEN + Swell.BARREL_COLLAPSE
+	var w := s.local_coords(Vector2(r.position.x, r.position.z)).y
+	# Arranca un poco delante de él: queda justo en el bolsillo.
+	s.peel_from = w - side * BarrelState.POCKET
+	s.peel_w = s.peel_from
+	# Hasta la punta más lejana (rompe para los dos lados).
+	var far := s.half_length + absf(s.peel_from)
+	var travel := far + Swell.BARREL_THROAT + BARREL_LEN + Swell.BARREL_COLLAPSE
 	s.lifetime = maxf(s.lifetime, s.age + travel / PEEL_SPEED + s.fade_time + 2.0)
 	# La espuma que salta donde cae el labio y en la garganta.
 	var spray := BarrelSpray.new()

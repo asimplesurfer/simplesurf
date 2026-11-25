@@ -6,7 +6,7 @@ extends Control
 ##     rompen en tubo), como una raya celeste en la cresta con una flechita
 ##     hacia donde avanzan;
 ##   - la que está rompiendo en tubo: el hombro todavía entero, el tubo abierto
-##     en naranja (titila: es adonde meterse) y lo que ya se cayó como espuma.
+##     en naranja (titila) y lo que ya se cayó como espuma.
 ## Las chicas y medianas no se dibujan, así se lee de un vistazo.
 ##
 ## El surfista va en el medio (flecha amarilla) y el mapa gira con la cámara:
@@ -28,6 +28,8 @@ const SAND := Color(0.93, 0.85, 0.62)
 ## Grosor de la cresta (px): ola gigante y tubo abierto.
 const CREST := 5.0
 const TUBE_CREST := 8.0
+## En cuántos tramos se mira la cresta de una ola que rompe en tubo.
+const TUBE_SAMPLES := 64
 
 ## La HUD que lo tiene (de ahí salen el surfista y la partida).
 var hud: Hud
@@ -135,27 +137,38 @@ func _draw_wave(s: Swell, tricks: TrickAttack) -> void:
 		_segment(a, b, CREST, col)
 		_draw_heading(s, crest, col, ink)
 		return
-	# Rompiendo en tubo: por tramos a lo ancho (w), desde el punto de rotura.
-	var dir := s.peel_dir
-	var open_end := s.peel_w - dir * s.barrel_len
-	var t_peel := (clampf(s.peel_w, -half, half) + half) / (2.0 * half)
-	var t_open := (clampf(open_end, -half, half) + half) / (2.0 * half)
-	var t_front := 1.0 if dir > 0.0 else 0.0
-	var t_back := 1.0 - t_front
+	# Rompiendo en tubo: por tramos a lo ancho (w), según cuánto hace que
+	# rompió cada parte (Swell.peel_s; puede romper para los dos lados).
 	var tube := _tube_color()
 	tube.a = alpha
 	var foam := FOAM
 	foam.a *= alpha
-	# Lo que ya se cayó: espuma, finita.
-	_part(a, b, t_open, t_back, CREST * 0.6, foam, ink)
-	# El hombro (todavía entero, adelante de la rotura).
-	_part(a, b, t_peel, t_front, CREST, col, ink)
-	# El tubo abierto.
-	_part(a, b, t_open, t_peel, TUBE_CREST, tube, ink)
+	var runs := [[], [], []]
+	var kind := -1
+	var t0 := 0.0
+	for i in TUBE_SAMPLES + 1:
+		var t := float(i) / TUBE_SAMPLES
+		var ps := s.peel_s(-half + 2.0 * half * t)
+		var k := 0 if ps > 0.0 else (1 if ps > -s.barrel_len else 2)
+		if i == TUBE_SAMPLES or (k != kind and kind >= 0):
+			if kind >= 0:
+				runs[kind].append(Vector2(t0, t))
+			t0 = t
+		kind = k
+	# Lo que ya se cayó, espuma finita; el hombro (todavía entero) y el tubo
+	# abierto, encima.
+	for r in runs[2]:
+		_part(a, b, r.x, r.y, CREST * 0.6, foam, ink)
+	for r in runs[0]:
+		_part(a, b, r.x, r.y, CREST, col, ink)
+	for r in runs[1]:
+		_part(a, b, r.x, r.y, TUBE_CREST, tube, ink)
 	_draw_heading(s, crest, col, ink)
-	# El cartel, detrás del tubo abierto (del lado de donde viene la ola).
-	if s == tricks.barrel_wave and t_peel != t_open:
-		var mid := a.lerp(b, (t_open + t_peel) * 0.5)
+	# El cartel, detrás del tubo que sigue el surfista (del lado de donde
+	# viene la ola).
+	if s == tricks.barrel_wave and not runs[1].is_empty():
+		var w_mid := clampf(s.peel_w - s.peel_dir * s.barrel_len * 0.5, -half, half)
+		var mid := a.lerp(b, (w_mid + half) / (2.0 * half))
 		var back := (to_map(crest - s.direction * 10.0) - to_map(crest)).normalized()
 		_label("TUBO", mid + back * 16.0, TUBE)
 

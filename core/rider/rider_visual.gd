@@ -118,6 +118,9 @@ func setup(p_rider: Rider) -> void:
 	)
 	rider.drift_hit.connect(func(_victim: Rider) -> void: _body.cheer())
 	_trail.setup(rider)
+	# Al entrar a un tubo la estela vuelve a empezar (la de afuera iba por la
+	# cara de la ola, más arriba que el piso de adentro).
+	rider.tube_entered.connect(_trail.clear)
 	_last_stage = rider.recovery_stage
 	_snap_to(rider.recovery_stage)
 
